@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — Submit findings to GitHub (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* 同 diff-review 的两轴配色系统(data-mode × data-theme) */
+:root{
+  color-scheme:dark;
+  --bg:#0b0d12; --surface:#12151d; --surface-2:#171b24; --surface-3:#1c212c;
+  --border:#232834; --border-soft:#1b2028;
+  --text:#e7eaf1; --text-dim:#9aa3b2; --text-faint:#5f6877;
+  --agent:oklch(.72 .14 245); --agent-2:oklch(.82 .11 240); --agent-soft:color-mix(in oklab,var(--agent) 14%,transparent); --agent-line:color-mix(in oklab,var(--agent) 38%,transparent);
+  --accent-solid:oklch(.585 .16 245); --on-solid:#fff;
+  --human:#e8a24d; --human-soft:rgba(232,162,77,.13); --human-line:rgba(232,162,77,.4);
+  --on-accent:#07141d; --hover:rgba(255,255,255,.02);
+  --scroll:#262c38; --scroll-h:#323a48; --shadow:0 8px 24px -14px rgba(0,0,0,.7);
+  --glow1:color-mix(in oklab,var(--agent) 9%,transparent); --glow2:rgba(232,162,77,.045);
+  --del:#ff7085; --del-bg:rgba(255,90,110,.09); --del-gutter:rgba(255,90,110,.22);
+  --add:#57e39a; --add-bg:rgba(64,196,132,.10); --add-gutter:rgba(64,196,132,.22);
+  --sev-high:#ff7085; --sev-med:#e8a24d; --sev-low:#8b9bff;
+  --mono:"IBM Plex Mono",ui-monospace,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif;
+}
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+:root[data-mode="light"]{
+  color-scheme:light;
+  --bg:#ffffff; --surface:#f6f8fa; --surface-2:#eef1f4; --surface-3:#e6eaee;
+  --border:#d6dde3; --border-soft:#e6eaee;
+  --text:#1f2328; --text-dim:#57606a; --text-faint:#8b949e;
+  --agent:oklch(.52 .13 245); --agent-2:oklch(.46 .14 246); --agent-soft:color-mix(in oklab,var(--agent) 10%,transparent); --agent-line:color-mix(in oklab,var(--agent) 28%,transparent);
+  --human:#b7791f; --human-soft:rgba(183,121,31,.12); --human-line:rgba(183,121,31,.35);
+  --on-accent:#fff; --hover:rgba(31,35,40,.03);
+  --scroll:#d0d7de; --scroll-h:#b9c1ca; --shadow:0 10px 26px -16px rgba(31,35,40,.28);
+  --glow1:color-mix(in oklab,var(--agent) 6%,transparent); --glow2:rgba(183,121,31,.045);
+  --del:#cf222e; --del-bg:#ffeef0; --del-gutter:rgba(207,34,46,.2);
+  --add:#1a7f37; --add-bg:#e9fbef; --add-gutter:rgba(26,127,55,.2);
+  --sev-high:#cf222e; --sev-med:#9a6700; --sev-low:#4f57d6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 78% -10%,var(--glow1),transparent 60%),radial-gradient(900px 500px at 5% 108%,var(--glow2),transparent 55%)}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+/* topbar */
+.topbar{display:flex;align-items:center;gap:16px;height:48px;padding:0 14px;background:linear-gradient(180deg,var(--surface-2),var(--surface));border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:2px;padding-right:14px;border-right:1px solid var(--border)}
+.brand .mark{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px;color:var(--text);display:flex;align-items:center} .brand .mark i{font-style:normal;color:var(--agent-2)}
+.brand .mark .cur{color:var(--human);font-weight:400;margin-left:1px;animation:blink 1.15s step-end infinite}
+.pr-chip{display:flex;align-items:center;gap:7px;background:var(--surface-3);border:1px solid var(--border);padding:4px 10px;border-radius:999px;font-weight:500}
+.pr-chip .gh{color:var(--text-dim)} .pr-chip b{color:var(--agent-2)}
+.crumb{color:var(--text-dim);font-size:12px} .crumb b{color:var(--text);font-weight:600}
+.back{color:var(--text-dim);font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;border:1px solid var(--border)}
+.back:hover{color:var(--text);border-color:var(--agent-line)}
+.spacer{flex:1}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+
+/* main split */
+.main{display:grid;grid-template-columns:minmax(0,1fr) 388px;min-height:0}
+.pane{min-height:0;overflow:auto}
+.pane::-webkit-scrollbar{width:10px} .pane::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+
+/* left: curation list */
+.curate{padding:20px 22px 40px}
+.c-head{display:flex;align-items:flex-end;gap:14px;margin-bottom:4px}
+.c-head h1{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:-.4px}
+.c-head .to{color:var(--text-faint);font-size:13px;padding-bottom:5px}
+.c-head .to b{color:var(--agent-2)}
+.c-sub{color:var(--text-dim);font-size:12.5px;margin:6px 0 16px}
+.bulkbar{display:flex;align-items:center;gap:12px;padding:9px 13px;border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-bottom:14px}
+.chk{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--text-faint);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none;color:transparent;font-size:11px;font-weight:800}
+.chk.on{background:var(--agent);border-color:var(--agent);color:var(--on-accent)}
+.chk.dash{border-color:var(--agent);color:var(--agent)}
+.bulkbar .lbl{font-weight:500} .bulkbar .muted{color:var(--text-faint);font-size:12px}
+.tally{margin-left:auto;display:flex;gap:8px;font-family:var(--mono);font-size:11px}
+.tally span{padding:2px 8px;border-radius:6px;border:1px solid var(--border);color:var(--text-dim)}
+.tally .keep{color:var(--agent-2);border-color:var(--agent-line);background:var(--agent-soft)}
+.tally .drop{color:var(--text-faint)}
+
+.finding{display:flex;gap:12px;padding:13px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface);margin-bottom:10px;position:relative}
+.finding.kept{border-left:3px solid var(--agent)}
+.finding.dismissed{opacity:.5;border-style:dashed}
+.finding.dismissed .f-title{text-decoration:line-through;color:var(--text-faint)}
+.f-main{flex:1;min-width:0}
+.f-top{display:flex;align-items:center;gap:9px;margin-bottom:6px;flex-wrap:wrap}
+.sev{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px 2px 7px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.sev .car{opacity:.6;font-size:8px}
+.sev.high{color:var(--sev-high);background:var(--del-bg);border:1px solid var(--del-gutter)}
+.sev.med{color:var(--sev-med);background:var(--human-soft);border:1px solid var(--human-line)}
+.sev.low{color:var(--sev-low);background:var(--agent-soft);border:1px solid var(--agent-line)}
+.f-title{font-weight:600;font-size:13.5px;color:var(--text)}
+.f-anchor{font-family:var(--mono);font-size:11px;color:var(--text-faint)}
+.f-anchor b{color:var(--text-dim);font-weight:500}
+.origin{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);display:inline-flex;align-items:center;gap:5px}
+.origin .d{width:6px;height:6px;border-radius:50%}
+.origin.agent .d{background:var(--agent)} .origin.human .d{background:var(--human)}
+.f-body{font-size:12.5px;color:var(--text-dim);line-height:1.6}
+.f-body code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);padding:1px 5px;border-radius:4px;color:var(--agent-2)}
+.f-sugg{margin-top:9px;border:1px solid var(--border-soft);border-radius:8px;overflow:hidden;background:var(--bg)}
+.f-sugg .h{font-family:var(--mono);font-size:10.5px;color:var(--add);padding:4px 10px;background:var(--add-bg);border-bottom:1px solid var(--border-soft)}
+.f-sugg pre{font-family:var(--mono);font-size:11.5px;padding:8px 10px;color:var(--text);white-space:pre-wrap}
+.f-refined{margin-top:8px;font-size:11px;color:var(--agent-2);display:flex;align-items:center;gap:6px}
+.f-actions{display:flex;flex-direction:column;gap:6px;align-items:center}
+.ibtn{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px}
+.ibtn:hover{color:var(--text);border-color:var(--agent-line)}
+.ibtn.danger:hover{color:var(--del);border-color:var(--del-gutter)}
+.restore{font-size:11px;color:var(--agent-2);cursor:pointer;border:1px solid var(--agent-line);background:var(--agent-soft);padding:3px 8px;border-radius:6px}
+
+.nullbox{margin-top:6px;padding:11px 13px;border:1px dashed var(--border);border-radius:10px;background:var(--surface);font-size:12px;color:var(--text-dim)}
+.nullbox b{color:var(--text)}
+
+/* right: finish review */
+.finish{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.finish .h{padding:16px 16px 10px;border-bottom:1px solid var(--border)}
+.finish .h .t{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px}
+.finish .h .s{color:var(--text-faint);font-size:11.5px;margin-top:3px}
+.finish-body{flex:1;overflow:auto;padding:14px 16px}
+.field-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);font-weight:600;margin:2px 0 7px}
+.summary{border:1px solid var(--border);border-radius:10px;background:var(--surface-2);padding:11px 12px;font-size:12.5px;color:var(--text-dim);line-height:1.6}
+.summary:focus-within{border-color:var(--agent-line)}
+.summary b{color:var(--text)} .summary .mut{color:var(--text-faint)}
+.summary .autoline{margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);font-size:11.5px;color:var(--text-faint)}
+.events{display:flex;flex-direction:column;gap:8px;margin:18px 0 6px}
+.event{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;background:var(--surface-2)}
+.event.on{border-color:var(--agent-line);background:var(--agent-soft)}
+.radio{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--text-faint);flex:none;margin-top:1px;position:relative}
+.event.on .radio{border-color:var(--agent)}
+.event.on .radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--agent)}
+.event .et{font-weight:600;font-size:12.5px} .event.on .et{color:var(--agent-2)}
+.event .ed{color:var(--text-faint);font-size:11.5px;margin-top:1px}
+.finish-foot{border-top:1px solid var(--border);padding:12px 16px}
+.submit{width:100%;background:var(--accent-solid);color:var(--on-solid);font-weight:600;border:0;border-radius:10px;padding:11px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px}
+.submit:hover{filter:brightness(1.06)}
+.foot-note{margin-top:9px;font-size:11px;color:var(--text-faint);display:flex;align-items:center;gap:6px;justify-content:center}
+.foot-note code{font-family:var(--mono);color:var(--text-dim)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
+    <a class="back" href="diff-review.html" title="返回 diff review">← 返回 diff</a>
+    <span class="pr-chip"><span class="gh">⎇ GitHub</span> <b>#482</b></span>
+    <span class="crumb">Review · <b>提交 findings</b></span>
+    <div class="spacer"></div>
+    <div class="seg"><button title="浅色">☀</button><button class="on" title="深色">☾</button></div>
+  </div>
+
+  <div class="main">
+    <!-- ============ LEFT: curate ============ -->
+    <div class="pane curate">
+      <div class="c-head">
+        <h1>Submit review</h1>
+        <span class="to">提交到 <b>GitHub PR #482</b> · xieziyu/podcast-go</span>
+      </div>
+      <div class="c-sub">勾选要提交的 findings,剔除无用项。有行锚点的作为 inline 行评论,无锚点的归入 review 摘要。</div>
+
+      <div class="bulkbar">
+        <span class="chk dash" title="部分选中">–</span>
+        <span class="lbl">全选</span>
+        <span class="muted">agent 报告 3 · 你手动新增 0</span>
+        <div class="tally"><span class="keep">保留 2</span><span class="drop">剔除 1</span></div>
+      </div>
+
+      <!-- kept, high, agent, refined via discussion -->
+      <div class="finding kept">
+        <span class="chk on">✓</span>
+        <div class="f-main">
+          <div class="f-top">
+            <span class="sev high">high · concurrency <span class="car">▾</span></span>
+            <span class="f-title">Cell&lt;usize&gt; 跨 spawn 共享导致数据竞争</span>
+          </div>
+          <div class="f-top">
+            <span class="f-anchor">📍 <b>pipeline.rs</b>:121</span>
+            <span class="origin agent"><span class="d"></span> codex · report_finding</span>
+          </div>
+          <div class="f-body">每个 task 在独立线程执行,<code>Cell</code> 既非 <code>Sync</code> 也无原子性(实则编译不过)。改用 <code>Arc&lt;AtomicUsize&gt;</code> + <code>fetch_add(1, Ordering::Relaxed)</code>。</div>
+          <div class="f-sugg"><div class="h">suggestion · 将作为 GitHub suggestion 块</div><pre>let counter = Arc::new(AtomicUsize::new(0));
+counter.fetch_add(1, Ordering::Relaxed);</pre></div>
+          <div class="f-refined">◆ 已在 discussion 中和你确认「近似进度用 Relaxed 即可」,body 已更新</div>
+        </div>
+        <div class="f-actions">
+          <span class="ibtn" title="编辑 severity/标题/正文/建议">✎</span>
+          <span class="ibtn danger" title="剔除,不提交">🗑</span>
+        </div>
+      </div>
+
+      <!-- kept, medium, agent -->
+      <div class="finding kept">
+        <span class="chk on">✓</span>
+        <div class="f-main">
+          <div class="f-top">
+            <span class="sev med">medium · error-handling <span class="car">▾</span></span>
+            <span class="f-title">join_next 的 panic 被 unwrap 直接放大</span>
+          </div>
+          <div class="f-top">
+            <span class="f-anchor">📍 <b>pipeline.rs</b>:146</span>
+            <span class="origin agent"><span class="d"></span> codex · report_finding</span>
+          </div>
+          <div class="f-body"><code>res.unwrap()</code> 会把单个 segment 的 panic 变成整个 pipeline 崩溃。建议 <code>?</code> 上抛并附带 segment 上下文。</div>
+        </div>
+        <div class="f-actions">
+          <span class="ibtn" title="编辑">✎</span>
+          <span class="ibtn danger" title="剔除">🗑</span>
+        </div>
+      </div>
+
+      <!-- dismissed, low, agent -->
+      <div class="finding dismissed">
+        <span class="chk">✓</span>
+        <div class="f-main">
+          <div class="f-top">
+            <span class="sev low">low · style <span class="car">▾</span></span>
+            <span class="f-title">变量名 c 可读性差</span>
+          </div>
+          <div class="f-top">
+            <span class="f-anchor">📍 <b>pipeline.rs</b>:123</span>
+            <span class="origin agent"><span class="d"></span> codex · report_finding</span>
+            <span style="color:var(--text-faint);font-size:11px">· 已剔除,不提交</span>
+          </div>
+        </div>
+        <div class="f-actions">
+          <span class="restore" title="恢复">↩ 恢复</span>
+        </div>
+      </div>
+
+      <!-- file=null finding -->
+      <div class="nullbox">
+        ⓘ 1 条<b> 无行锚点 </b>的 finding(整体架构建议)将<b>归入下方 review 摘要</b>,而非行评论。
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: finish review ============ -->
+    <div class="pane finish">
+      <div class="h">
+        <div class="t">◆ Finish your review</div>
+        <div class="s">将组成 PR #482 的一次 review 提交</div>
+      </div>
+      <div class="finish-body">
+        <div class="field-lbl">Review 摘要(body)</div>
+        <div class="summary">
+          <b>整体:</b>并行 transcode 的方向没问题,但共享状态的线程安全需收口。<br>
+          建议合并前处理 2 处标注的 concurrency / error-handling 问题。
+          <div class="autoline">↳ 自动并入:1 条无锚点 finding「JoinSet 无背压,超大 job 可能占满内存」+ codex 审核总结</div>
+        </div>
+
+        <div class="field-lbl" style="margin-top:18px">提交类型(event)</div>
+        <div class="events">
+          <div class="event"><span class="radio"></span><div><div class="et">💬 Comment</div><div class="ed">仅评论,不表态</div></div></div>
+          <div class="event on"><span class="radio"></span><div><div class="et">✕ Request changes</div><div class="ed">要求修改后再合并</div></div></div>
+          <div class="event"><span class="radio"></span><div><div class="et">✓ Approve</div><div class="ed">批准合并</div></div></div>
+        </div>
+      </div>
+      <div class="finish-foot">
+        <button class="submit">提交到 GitHub · 2 行评论 + 摘要 →</button>
+        <div class="foot-note">经 <code>gh</code> CLI 提交 · 只读 sandbox 不影响</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+  document.documentElement.setAttribute('data-mode',b.title==='浅色'?'light':'dark');
+  document.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x===b));});
+document.querySelectorAll('.event').forEach(e=>e.onclick=()=>{
+  document.querySelectorAll('.event').forEach(x=>x.classList.remove('on'));e.classList.add('on');});
+</script>
+</body>
+</html>

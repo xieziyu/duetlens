@@ -30,8 +30,5 @@ dist-ssr/
 .env.*
 !.env.example
 
-# ---- Design mockups (WIP, 不入库) ----
-/mockup/
-
 # ---- Logs / temp ----
 *.log
