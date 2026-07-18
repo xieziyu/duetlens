@@ -29,6 +29,7 @@
 - 三种 source:**GitHub PR / 本地分支 / GitButler vbranch**
 - **多层级覆盖** 的审核规则提示词(project → global → builtin)—— 通过 `thread/start` 的 `baseInstructions` 注入
 - agent 审核 **总结概况**(summary)
+- **findings 筛选 + 提交到 GitHub**:勾选保留/剔除无用、提交前编辑,提交为 PR review 评论。核心流程见 [findings-submit](findings-submit.md)
 
 ## 暂不做,但保留抽象
 
