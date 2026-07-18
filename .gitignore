@@ -1,0 +1,37 @@
+# ---- Agent / AI tooling ----
+.claude/
+.codex/
+
+# ---- IDE / editors ----
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---- macOS ----
+.DS_Store
+
+# ---- Rust ----
+/target/
+**/target/
+# Cargo.lock 对二进制/应用应提交,故不忽略
+
+# ---- Node / frontend ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# ---- Tauri ----
+/src-tauri/gen/
+
+# ---- Env / secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Design mockups (WIP, 不入库) ----
+/mockup/
+
+# ---- Logs / temp ----
+*.log
