@@ -239,6 +239,50 @@ button{font-family:inherit}
 .footcta .gobtn{margin-left:auto}
 .gobtn{display:inline-flex;align-items:center;gap:8px;background:var(--accent-solid);color:var(--on-solid);border:0;border-radius:11px;padding:11px 20px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
 .gobtn:hover{filter:brightness(1.08)}
+
+/* ---------- 空态 / 错误态(预览态切换)---------- */
+.resolved.err,.pathfield.warn,.path-warn,.gh-auth,.empty-history{display:none}
+/* PR 解析失败 */
+body[data-state="pr-error"] .resolved.ok{display:none}
+body[data-state="pr-error"] .resolved.err{display:flex}
+body[data-state="pr-error"] .gh-normal .field{border-color:var(--del-gutter);box-shadow:0 0 0 3px var(--del-bg)}
+body[data-state="pr-error"] .cardfoot .footcta{opacity:.45;pointer-events:none}
+.resolved.err{border-color:var(--del-gutter);background:color-mix(in oklab,var(--del) 6%,var(--surface-2))}
+.resolved .ok.err{background:var(--del-bg);color:var(--sev-high);border-color:var(--del-gutter)}
+.resolved.err .ttl{color:var(--text)}
+.resolved.err .l2{color:var(--text-faint)}
+.resolved.err .emsg{color:var(--sev-high)}
+.resolved.err code{font-family:var(--mono);font-size:11px;background:var(--surface-3);padding:1px 5px;border-radius:4px;color:var(--text-dim)}
+/* 路径不匹配(软警告,不阻断) */
+body[data-state="path-mismatch"] .pathfield.ok{display:none}
+body[data-state="path-mismatch"] .pathfield.warn{display:flex}
+body[data-state="path-mismatch"] .path-warn{display:block}
+.pathfield.warn{border-color:var(--human-line)}
+.pf-tag.warn{color:var(--human);border-color:var(--human-line);background:var(--human-soft)}
+.path-warn{margin-top:8px;font-size:11.5px;color:var(--text-dim);line-height:1.55;padding:9px 11px;border:1px solid var(--human-line);border-radius:9px;background:var(--human-soft)}
+.path-warn code{font-family:var(--mono);font-size:11px;color:var(--human)}
+/* gh 未登录 */
+body[data-state="gh-auth"] .gh-normal{display:none}
+body[data-state="gh-auth"] .gh-auth{display:block}
+body[data-state="gh-auth"] .cardfoot .footcta{opacity:.45;pointer-events:none}
+.gh-auth{border:1px solid var(--human-line);border-radius:12px;background:var(--human-soft);padding:16px}
+.ga-head{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--text)}
+.ga-ic{width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:color-mix(in oklab,var(--human) 20%,transparent);color:var(--human);border:1px solid var(--human-line);font-size:12px;flex:none}
+.ga-body{font-size:12.5px;color:var(--text-dim);margin-top:11px;line-height:1.6}
+.ga-body code{font-family:var(--mono);font-size:11.5px;color:var(--human)}
+.ga-cmd{margin-top:11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--mono);font-size:12px;color:var(--agent-2)}
+.ga-actions{display:flex;align-items:center;gap:14px;margin-top:13px}
+.ga-retry{background:var(--accent-solid);color:var(--on-solid);border:0;border-radius:8px;padding:8px 15px;font-size:12px;font-weight:600;cursor:pointer}
+.ga-install{font-size:12px;color:var(--agent-2);text-decoration:none;cursor:pointer}
+.ga-alt{margin-top:13px;font-size:11.5px;color:var(--text-faint)}
+/* 首次无历史 */
+body[data-state="empty"] .recent{display:none}
+body[data-state="empty"] .section-head .count,body[data-state="empty"] .section-head .clear{display:none}
+body[data-state="empty"] .empty-history{display:flex}
+.empty-history{flex-direction:column;align-items:center;text-align:center;gap:7px;padding:34px 22px;border:1px dashed var(--border);border-radius:14px;background:var(--surface)}
+.empty-history .eh-ic{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--agent-soft);color:var(--agent-2);border:1px solid var(--agent-line);margin-bottom:3px}
+.empty-history .eh-t{font-size:14px;font-weight:600;color:var(--text)}
+.empty-history .eh-s{font-size:12.5px;color:var(--text-faint);max-width:360px;line-height:1.65}
 </style>
 </head>
 <body>
@@ -249,6 +293,15 @@ button{font-family:inherit}
     <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
     <div class="spacer"></div>
     <div class="switches">
+      <label class="syntax-sel">预览态
+        <select id="stateSel">
+          <option value="normal">正常</option>
+          <option value="empty">首次无历史</option>
+          <option value="gh-auth">gh 未登录</option>
+          <option value="pr-error">PR 解析失败</option>
+          <option value="path-mismatch">路径不匹配</option>
+        </select>
+      </label>
       <div class="seg" id="modeSeg">
         <button data-mode-val="light" title="浅色">☀</button>
         <button data-mode-val="dark" class="on" title="深色">☾</button>
@@ -296,6 +349,7 @@ button{font-family:inherit}
 
         <!-- GitHub panel -->
         <div class="panel" data-panel="github">
+         <div class="gh-normal">
           <div class="field">
             <span class="gh"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
             <input value="github.com/xieziyu/podcast-go/pull/482" spellcheck="false">
@@ -303,7 +357,7 @@ button{font-family:inherit}
           </div>
 
           <!-- resolved preview(粘贴/解析后)· 精简 -->
-          <div class="resolved">
+          <div class="resolved ok">
             <span class="ok">✓</span>
             <div class="info">
               <div class="l1"><span class="num">#482</span> <span class="ttl">feat: streaming transcode</span></div>
@@ -314,12 +368,28 @@ button{font-family:inherit}
             </div>
           </div>
 
+          <!-- 解析失败态 -->
+          <div class="resolved err">
+            <span class="ok err">!</span>
+            <div class="info">
+              <div class="l1"><span class="ttl">无法解析这个 PR</span></div>
+              <div class="l2"><span class="emsg">该 PR 不存在,或你没有访问权限。</span> 确认链接,或用 <code>owner/repo#123</code> 格式重试。</div>
+            </div>
+          </div>
+
           <!-- 可选:本地仓库路径,让 agent 读全量代码 -->
-          <label class="pathfield">
+          <label class="pathfield ok">
             <span class="pf-ic">⌂</span>
             <input placeholder="本地仓库路径(可选)· 让 agent 读全量代码,留空则临时 checkout" value="~/Projects/podcast-go" spellcheck="false">
             <span class="pf-tag">已匹配 ✓</span>
           </label>
+          <!-- 路径不匹配态 -->
+          <label class="pathfield warn">
+            <span class="pf-ic">⌂</span>
+            <input value="~/Projects/other-service" spellcheck="false">
+            <span class="pf-tag warn">remote 不匹配 ⚠</span>
+          </label>
+          <div class="path-warn">该目录的 remote 不是 <code>xieziyu/podcast-go</code>。继续将忽略本地路径、改用临时 checkout;或选对目录以复用本地全量代码。</div>
 
           <div class="orline">或从最近的 open PR 中选择</div>
           <div class="reporow">
@@ -347,6 +417,16 @@ button{font-family:inherit}
               <div class="m"><div class="t">refactor: extract feed builder into module</div><div class="s"><span>@ryan · 1d</span><span><span class="a">+310</span> <span class="d">−212</span></span></div></div>
               <span class="go">→</span>
             </div>
+          </div>
+         </div>
+
+          <!-- gh 未登录态 -->
+          <div class="gh-auth">
+            <div class="ga-head"><span class="ga-ic">⚠</span> <b>未检测到 GitHub CLI 登录</b></div>
+            <div class="ga-body">Duetlens 通过 <code>gh</code> CLI 拉取 PR diff、并在提交时回写 review。请先在终端登录:</div>
+            <div class="ga-cmd">$ gh auth login</div>
+            <div class="ga-actions"><button class="ga-retry">已登录,重试</button><a class="ga-install">安装 GitHub CLI ↗</a></div>
+            <div class="ga-alt">◇ 本地分支 / GitButler 来源无需 gh,可直接开始。</div>
           </div>
         </div>
 
@@ -447,6 +527,12 @@ button{font-family:inherit}
             <span class="arrow">→</span>
           </div>
         </div>
+        <!-- 首次无历史空态 -->
+        <div class="empty-history">
+          <div class="eh-ic">◇</div>
+          <div class="eh-t">还没有审核记录</div>
+          <div class="eh-s">在上面粘贴一个 PR 链接,或选择本地分支 / GitButler 来源,开始你的第一次协同 review。完成的审核会留在这里,随时可以恢复。</div>
+        </div>
       </div>
 
       <div class="foot"><span class="glyph"></span> codex · gpt-5.1-codex <span class="dot"></span> read-only sandbox <span class="dot"></span> app-server 常驻会话</div>
@@ -464,6 +550,12 @@ document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
 });
 // theme
 document.getElementById('themeSel').onchange=e=>root.setAttribute('data-theme',e.target.value);
+// 预览态(空态/错误态)。gh 相关态自动切到 GitHub tab
+document.getElementById('stateSel').onchange=e=>{
+  const v=e.target.value;
+  document.body.setAttribute('data-state',v);
+  if(['gh-auth','pr-error','path-mismatch'].includes(v))document.querySelector('#srcSeg button[data-src="github"]').click();
+};
 // source panels
 document.querySelectorAll('#srcSeg button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#srcSeg button').forEach(x=>x.classList.toggle('on',x===b));
