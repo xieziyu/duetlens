@@ -2,7 +2,7 @@
 
 > Duetlens 是 [better-review](https://github.com/xieziyu/better-review) 的 **2.0 全重写**:把 code review 从"人消费 agent 一次吐出的 findings"变成"**人与 agent 协同对话式** review"。
 >
-> 状态:设计定稿 · 关键技术假设已验证 · 骨架开发前 · 最后更新 2026-07-18
+> 状态:设计定稿 · 关键技术假设已验证 · 骨架开发前 · 最后更新 2026-07-19
 
 本索引是所有设计文档的**统一入口**。单篇文档只聚焦一个关注点,便于按需 recall。新增设计(如 UI 细化、持久化 schema、提示词系统)时新建分册并在下方"文档地图"登记一行。
 
@@ -15,7 +15,7 @@
 | [design/data-model.md](design/data-model.md) | Review / codex thread / discussion / findings 的数据结构与状态 | 改 schema / 数据流前 |
 | [design/findings-submit.md](design/findings-submit.md) | findings 筛选(保留/剔除)与提交到 GitHub PR review 的流程 | 碰提交流程 / finding 状态前 |
 | [design/codex-integration.md](design/codex-integration.md) | app-server 协议验证结论、MCP HTTP 注入、elicitation/sandbox/审批 | 碰 codex 集成 / MCP / 审批前 |
-| [design/ui.md](design/ui.md) | UI 方向(三栏 + 内联 discussion);后续扩充 | 做界面前 |
+| [design/ui.md](design/ui.md) | UI 方向 + 主题两轴 + 主入口/review 三 tab/扫描态/栏宽等屏与状态 | 做界面前 |
 | [design/open-questions.md](design/open-questions.md) | 待解决 / 风险点(开发中复审) | 遇到坑 / 排优先级时 |
 
 ## 命名约定(易踩)
