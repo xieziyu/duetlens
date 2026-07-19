@@ -267,6 +267,52 @@ body{
 .composer .scope b{color:var(--human)}
 .stagger{opacity:0;transform:translateY(6px);animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards}
 @keyframes rise{to{opacity:1;transform:none}}
+
+/* ---------- 首轮机审进行中(右栏初始态)---------- */
+.phase-seg button{width:auto;padding:0 9px;font-family:var(--mono);font-size:11px}
+.scanview{display:none;flex-direction:column;min-height:0;flex:1;overflow:auto}
+body.scan .convo .tabs,
+body.scan .convo .anchor-ref,
+body.scan .convo .thread,
+body.scan .convo .composer{display:none}
+body.scan .convo .scanview{display:flex}
+.scan-head{display:flex;align-items:center;gap:11px;padding:14px 14px 12px;border-bottom:1px solid var(--border-soft)}
+.scan-head .sglyph{width:26px;height:26px;border-radius:8px;flex:none;position:relative;
+  background:conic-gradient(from 210deg,var(--agent),var(--agent-2),var(--agent));box-shadow:0 0 0 1px var(--agent-line) inset}
+.scan-head .sglyph::after{content:"";position:absolute;inset:0;border-radius:8px;animation:pulse 2s infinite}
+.scan-head .sh-t{display:flex;flex-direction:column;gap:2px}
+.scan-head .sh-t b{font-size:13px;color:var(--text)}
+.scan-head .sh-s{font-size:11px;color:var(--text-faint);font-family:var(--mono)}
+.timeline{padding:14px 16px 6px;position:relative}
+.tl{display:flex;align-items:center;gap:11px;padding:7px 0;font-size:12.5px;position:relative}
+.tl::before{content:"";position:absolute;left:6px;top:24px;bottom:-7px;width:1.5px;background:var(--border)}
+.tl:last-child::before{display:none}
+.tl .dot{width:13px;height:13px;border-radius:50%;flex:none;border:1.5px solid var(--border);background:var(--surface);z-index:1;position:relative}
+.tl.done .dot{background:var(--agent);border-color:var(--agent);box-shadow:0 0 0 2px var(--agent-soft)}
+.tl.done .dot::after{content:"✓";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--on-solid)}
+.tl.done::before{background:var(--agent-line)}
+.tl.active .dot{border-color:var(--agent);background:var(--agent-soft);animation:pulse 1.6s infinite}
+.tl .tl-l{color:var(--text-dim)}
+.tl.done .tl-l,.tl.active .tl-l{color:var(--text)}
+.tl.pending{opacity:.55}
+.tl .tl-t{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-faint)}
+.tl.active .tl-t{color:var(--agent-2)}
+.scan-stream{padding:8px 14px 4px;border-top:1px solid var(--border-soft);margin-top:8px}
+.ss-head{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:10px}
+.ss-head .ss-n{background:var(--agent-soft);color:var(--agent-2);border:1px solid var(--agent-line);border-radius:5px;padding:0 6px;font-size:10px}
+.ss-head .typing{display:inline-flex;gap:3px;margin-left:2px}
+.ss-head .typing i{width:4px;height:4px;border-radius:50%;background:var(--agent);animation:blink 1.2s infinite}
+.ss-head .typing i:nth-child(2){animation-delay:.2s} .ss-head .typing i:nth-child(3){animation-delay:.4s}
+.sfind{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);margin-bottom:8px;cursor:pointer}
+.sfind:hover{border-color:var(--agent-line);background:var(--surface-3)}
+.sfind .m{flex:1;min-width:0}
+.sfind .ft{font-size:12px;color:var(--text);line-height:1.4}
+.sfind .fp{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);margin-top:3px}
+.sfind .go{color:var(--text-faint);font-size:14px;flex:none;align-self:center}
+.sfind:hover .go{color:var(--agent-2)}
+.scan-foot{margin:6px 14px 16px;padding:10px 12px;border:1px dashed var(--agent-line);border-radius:9px;
+  background:color-mix(in oklab,var(--agent) 4%,transparent);font-size:11.5px;color:var(--text-dim);display:flex;gap:8px;align-items:flex-start}
+.scan-foot .ic{color:var(--agent-2)}
 </style>
 </head>
 <body>
@@ -286,6 +332,10 @@ body{
       <span class="status"><span class="pulse"></span> Reviewing</span>
       <a class="submit-cta" href="submit-to-github.html" title="进入筛选并提交 review 到 GitHub">提交 review <span class="cta-badge">3</span></a>
       <div class="switches">
+        <div class="seg phase-seg" id="phaseSeg" title="demo:切换首轮机审进行中 / 已完成">
+          <button data-phase-val="scan">扫描中</button>
+          <button data-phase-val="done" class="on">已完成</button>
+        </div>
         <div class="seg" id="themeSeg">
           <button data-theme-val="light" title="浅色">☀</button>
           <button data-theme-val="dark" class="on" title="深色">☾</button>
@@ -405,6 +455,35 @@ body{
 
     <!-- ---------- RIGHT: conversation ---------- -->
     <div class="pane convo">
+
+      <!-- 首轮机审进行中:右栏初始态(扫描很久,不打断看 diff;进度与对话共用此区) -->
+      <div class="scanview">
+        <div class="scan-head">
+          <span class="sglyph"></span>
+          <div class="sh-t"><b>首轮机审</b><span class="sh-s">codex 正在通读整个 PR · gpt-5.1-codex</span></div>
+        </div>
+        <div class="timeline">
+          <div class="tl done"><span class="dot"></span><span class="tl-l">拉取 diff 与源码树</span><span class="tl-t">1.2s</span></div>
+          <div class="tl done"><span class="dot"></span><span class="tl-l">注入 per-thread MCP · 建立会话</span><span class="tl-t">0.3s</span></div>
+          <div class="tl active"><span class="dot"></span><span class="tl-l">通读 PR,上报 findings</span><span class="tl-t">3/6 files</span></div>
+          <div class="tl pending"><span class="dot"></span><span class="tl-l">就绪 · 可自由追问 / 框选提问</span><span class="tl-t"></span></div>
+        </div>
+        <div class="scan-stream">
+          <div class="ss-head">实时 findings <span class="ss-n">2</span> <span class="typing"><i></i><i></i><i></i></span></div>
+          <div class="sfind stagger" style="animation-delay:.1s">
+            <span class="sev high">high · concurrency</span>
+            <div class="m"><div class="ft">Cell&lt;usize&gt; 跨 spawn 共享非线程安全</div><div class="fp">pipeline.rs:121</div></div>
+            <span class="go">→</span>
+          </div>
+          <div class="sfind stagger" style="animation-delay:.45s">
+            <span class="sev high" style="color:var(--sev-med);background:var(--human-soft);border-color:var(--human-line)">med · error-handling</span>
+            <div class="m"><div class="ft">unwrap() 会在 join 时把 panic 直接传播</div><div class="fp">pipeline.rs:146</div></div>
+            <span class="go">→</span>
+          </div>
+        </div>
+        <div class="scan-foot"><span class="ic">◆</span> 扫描会跑一会儿 —— 期间可点开任一 finding,或在左侧框选代码直接向 codex 提问,无需等待机审结束。</div>
+      </div>
+
       <div class="tabs">
         <div class="tab active">Discussion <span class="n">2</span></div>
         <div class="tab">Findings <span class="n">3</span></div>
@@ -469,6 +548,13 @@ document.querySelectorAll('#themeSeg button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#themeSeg button').forEach(x=>x.classList.toggle('on',x===b));
 });
 document.getElementById('themeSel').onchange=e=>root.setAttribute('data-theme',e.target.value);
+document.querySelectorAll('#phaseSeg button').forEach(b=>b.onclick=()=>{
+  document.body.classList.toggle('scan',b.dataset.phaseVal==='scan');
+  document.querySelectorAll('#phaseSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  if(b.dataset.phaseVal==='scan'){ // 重启 stagger,让扫描态 finding 入场
+    document.querySelectorAll('.scanview .stagger').forEach(el=>{el.style.animation='none';el.offsetHeight;el.style.animation='';});
+  }
+});
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');});
 document.querySelectorAll('.file').forEach(f=>f.onclick=()=>{document.querySelectorAll('.file').forEach(x=>x.classList.remove('active'));f.classList.add('active');});
 </script>
