@@ -90,7 +90,7 @@ body{
   background-image:radial-gradient(1200px 600px at 78% -10%, var(--glow1), transparent 60%),
                    radial-gradient(900px 500px at 5% 108%, var(--glow2), transparent 55%);
 }
-:root{--mono:"IBM Plex Mono",ui-monospace,monospace;--sans:"IBM Plex Sans",system-ui,sans-serif;--r:8px}
+:root{--mono:"IBM Plex Mono",ui-monospace,monospace;--sans:"IBM Plex Sans",system-ui,sans-serif;--r:8px;--left-w:236px;--right-w:380px}
 ::selection{background:var(--sel)}
 .topbar,.tree,.diff,.convo,.card,.file-header,.src,.bubble,.composer .box,.mini,.btn,.status,.pr-chip,.seg,.syntax-sel select{
   transition:background-color .25s ease,color .2s ease,border-color .25s ease,box-shadow .2s ease}
@@ -133,14 +133,17 @@ body{
 .submit-cta .cta-badge{font-family:var(--mono);font-size:10px;background:rgba(255,255,255,.22);padding:1px 6px;border-radius:6px}
 
 /* ---------- main grid ---------- */
-.main{display:grid; grid-template-columns:236px minmax(0,1fr) 380px; min-height:0}
+.main{display:grid; grid-template-columns:var(--left-w) 5px minmax(0,1fr) 5px var(--right-w); min-height:0}
+.resizer{position:relative;cursor:col-resize;z-index:6}
+.resizer::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;transform:translateX(-50%);background:var(--border);transition:background .15s,width .15s,box-shadow .15s}
+.resizer:hover::before,.resizer.drag::before{width:2px;background:var(--agent);box-shadow:0 0 0 2px var(--agent-soft)}
 .pane{min-height:0; overflow:auto}
 .pane::-webkit-scrollbar{width:10px;height:10px}
 .pane::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .pane::-webkit-scrollbar-thumb:hover{background:var(--scroll-h);background-clip:content-box}
 
 /* ---------- left: file tree ---------- */
-.tree{background:var(--surface);border-right:1px solid var(--border)}
+.tree{background:var(--surface)}
 .tree .head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;position:sticky;top:0;background:var(--surface);z-index:2}
 .tree .head h3{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);font-weight:600}
 .tree .head .count{font-family:var(--mono);font-size:11px;color:var(--text-faint)}
@@ -229,7 +232,7 @@ body{
 .reply-hint{margin-left:auto;font-size:11px;color:var(--text-faint);align-self:center}
 
 /* ---------- right: conversation ---------- */
-.convo{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.convo{background:var(--surface);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;gap:2px;padding:10px 12px 0;border-bottom:1px solid var(--border)}
 .tab{font-family:var(--mono);padding:7px 12px 9px;font-size:12px;font-weight:500;color:var(--text-faint);cursor:pointer;border-bottom:2px solid transparent}
 .tab.active{color:var(--text);border-bottom-color:var(--agent)}
@@ -455,6 +458,9 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
       </div>
     </div>
 
+    <!-- 左侧 resizer -->
+    <div class="resizer" data-target="left" title="拖动调整文件树宽度 · 双击复位"></div>
+
     <!-- ---------- CENTER: diff ---------- -->
     <div class="pane diff">
       <div class="file-header">
@@ -530,6 +536,9 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
       </div>
       <div class="expander" title="展开未改动代码"><span class="exic">↕</span> 展开下方 34 行 · 至文件末尾 <span class="rng">150–183</span></div>
     </div>
+
+    <!-- 右侧 resizer -->
+    <div class="resizer" data-target="right" title="拖动调整会话栏宽度 · 双击复位"></div>
 
     <!-- ---------- RIGHT: conversation ---------- -->
     <div class="pane convo" data-tab="discussion">
@@ -753,6 +762,26 @@ document.querySelectorAll('.grp-seg button').forEach(b=>b.onclick=()=>{
   b.parentElement.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
 });
 document.querySelectorAll('.file').forEach(f=>f.onclick=()=>{document.querySelectorAll('.file').forEach(x=>x.classList.remove('active'));f.classList.add('active');});
+
+// 左右栏拖动(min/max 约束 + 双击复位)
+const LIM={left:[180,420],right:[300,560]},DEF={left:236,right:380};
+let drag=null,sx=0,sw=0;
+document.querySelectorAll('.resizer').forEach(r=>{
+  r.addEventListener('mousedown',e=>{
+    drag=r.dataset.target;sx=e.clientX;
+    sw=parseInt(getComputedStyle(root).getPropertyValue(drag==='left'?'--left-w':'--right-w'));
+    r.classList.add('drag');document.body.style.cursor='col-resize';document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  r.addEventListener('dblclick',()=>root.style.setProperty(r.dataset.target==='left'?'--left-w':'--right-w',DEF[r.dataset.target]+'px'));
+});
+window.addEventListener('mousemove',e=>{
+  if(!drag)return;
+  const [lo,hi]=LIM[drag],dx=e.clientX-sx;
+  const w=Math.min(hi,Math.max(lo,drag==='left'?sw+dx:sw-dx));
+  root.style.setProperty(drag==='left'?'--left-w':'--right-w',w+'px');
+});
+window.addEventListener('mouseup',()=>{if(drag){document.querySelectorAll('.resizer').forEach(r=>r.classList.remove('drag'));drag=null;document.body.style.cursor='';document.body.style.userSelect='';}});
 </script>
 </body>
 </html>
