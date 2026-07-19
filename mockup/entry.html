@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — Entry / Launcher (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* 复用 diff-review 的两轴配色系统(data-mode × data-theme) —— 此屏无代码,故只保留 chrome 变量 */
+:root{
+  color-scheme:dark;
+  --bg:#0b0d12; --surface:#12151d; --surface-2:#171b24; --surface-3:#1c212c;
+  --border:#232834; --border-soft:#1b2028;
+  --text:#e7eaf1; --text-dim:#9aa3b2; --text-faint:#5f6877;
+  --agent:oklch(.72 .14 245); --agent-2:oklch(.82 .11 240);
+  --agent-soft:color-mix(in oklab,var(--agent) 14%,transparent); --agent-line:color-mix(in oklab,var(--agent) 38%,transparent);
+  --accent-solid:oklch(.585 .16 245); --on-solid:#fff;
+  --human:#e8a24d; --human-soft:rgba(232,162,77,.13); --human-line:rgba(232,162,77,.4);
+  --hover:rgba(255,255,255,.02);
+  --scroll:#262c38; --scroll-h:#323a48; --shadow:0 18px 48px -22px rgba(0,0,0,.75);
+  --glow1:color-mix(in oklab,var(--agent) 9%,transparent); --glow2:rgba(232,162,77,.05);
+  --add:#57e39a; --del:#ff7085;
+  --sev-high:#ff7085; --sev-med:#e8a24d; --sev-low:#8b9bff;
+  --mono:"IBM Plex Mono",ui-monospace,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif; --r:10px;
+}
+:root[data-mode="light"]{
+  color-scheme:light;
+  --bg:#ffffff; --surface:#f6f8fa; --surface-2:#eef1f4; --surface-3:#e6eaee;
+  --border:#d6dde3; --border-soft:#e6eaee;
+  --text:#1f2328; --text-dim:#57606a; --text-faint:#8b949e;
+  --agent:oklch(.52 .13 245); --agent-2:oklch(.46 .14 246);
+  --agent-soft:color-mix(in oklab,var(--agent) 10%,transparent); --agent-line:color-mix(in oklab,var(--agent) 28%,transparent);
+  --accent-solid:oklch(.52 .15 245); --on-solid:#fff;
+  --human:#b7791f; --human-soft:rgba(183,121,31,.12); --human-line:rgba(183,121,31,.35);
+  --hover:rgba(31,35,40,.03);
+  --scroll:#d0d7de; --scroll-h:#b9c1ca; --shadow:0 20px 50px -26px rgba(31,35,40,.32);
+  --glow1:color-mix(in oklab,var(--agent) 6%,transparent); --glow2:rgba(183,121,31,.05);
+  --add:#1a7f37; --del:#cf222e;
+  --sev-high:#cf222e; --sev-med:#9a6700; --sev-low:#4f57d6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;
+  overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 640px at 82% -12%,var(--glow1),transparent 60%),
+                   radial-gradient(900px 520px at -4% 110%,var(--glow2),transparent 55%)}
+::selection{background:color-mix(in oklab,var(--agent) 28%,transparent)}
+@keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 var(--agent-line)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes rise{to{opacity:1;transform:none}}
+.stagger{opacity:0;transform:translateY(8px);animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+button{font-family:inherit}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px;
+  background:linear-gradient(180deg,var(--surface-2),var(--surface));border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:2px}
+.brand .mark{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px;color:var(--text);display:flex;align-items:center}
+.brand .mark i{font-style:normal;color:var(--agent-2)}
+.brand .mark .cur{color:var(--human);font-weight:400;margin-left:1px;animation:blink 1.15s step-end infinite}
+.spacer{flex:1}
+/* demo-only 状态切换 */
+.demo-toggle{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.demo-toggle button{border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:11px;font-family:var(--mono);padding:4px 10px}
+.demo-toggle button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+.switches{display:flex;align-items:center;gap:9px;padding-left:13px;margin-left:2px;border-left:1px solid var(--border)}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+.syntax-sel{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-faint)}
+.syntax-sel select{font-family:var(--mono);font-size:11px;background:var(--surface-3);color:var(--text-dim);border:1px solid var(--border);border-radius:7px;padding:4px 7px;cursor:pointer;outline:none}
+
+/* ---------- scroll shell ---------- */
+.scroll{overflow:auto;min-height:0}
+.scroll::-webkit-scrollbar{width:10px}
+.scroll::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+.scroll::-webkit-scrollbar-thumb:hover{background:var(--scroll-h);background-clip:content-box}
+.wrap{max-width:780px;margin:0 auto;padding:46px 24px 60px}
+
+/* ---------- hero ---------- */
+.hero{text-align:center;margin-bottom:26px}
+.hero .logo{font-family:var(--mono);font-size:30px;font-weight:600;letter-spacing:-1px;display:inline-flex;align-items:center}
+.hero .logo i{font-style:normal;color:var(--agent-2)}
+.hero .logo .cur{color:var(--human);font-weight:400;margin-left:2px;animation:blink 1.15s step-end infinite}
+.hero .tag{margin-top:9px;color:var(--text-dim);font-size:13.5px}
+.hero .tag .a{color:var(--agent-2);font-weight:500} .hero .tag .h{color:var(--human);font-weight:500}
+
+/* ---------- new-review card ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.card-top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border-soft);
+  background:linear-gradient(180deg,color-mix(in oklab,var(--agent) 5%,var(--surface)),var(--surface))}
+.card-top h2{font-size:13px;font-weight:600;color:var(--text)}
+.card-top .sub{font-size:11.5px;color:var(--text-faint)}
+/* source segmented */
+.srcseg{display:flex;gap:2px;margin-left:auto;background:var(--surface-3);border:1px solid var(--border);border-radius:9px;padding:3px}
+.srcseg button{display:flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--text-dim);border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;padding:5px 11px}
+.srcseg button svg{width:13px;height:13px;opacity:.8}
+.srcseg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.25),0 0 0 1px var(--agent-line) inset}
+.srcseg button.on svg{opacity:1;color:var(--agent-2)}
+
+.panel{padding:16px}
+.panel[hidden]{display:none}
+
+/* github: input row */
+.inputrow{display:flex;gap:10px;align-items:stretch}
+.field{flex:1;display:flex;align-items:center;gap:9px;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:0 12px;min-height:46px}
+.field:focus-within{border-color:var(--agent-line);box-shadow:0 0 0 3px var(--agent-soft)}
+.field .gh{color:var(--text-faint);display:flex}
+.field input{flex:1;border:0;background:transparent;color:var(--text);font-family:var(--mono);font-size:13px;outline:none}
+.field input::placeholder{color:var(--text-faint);font-family:var(--sans)}
+.field .paste{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer}
+.field .paste:hover{color:var(--agent-2);border-color:var(--agent-line)}
+.gobtn{display:flex;align-items:center;gap:8px;background:var(--accent-solid);color:var(--on-solid);border:0;border-radius:11px;padding:0 18px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.gobtn:hover{filter:brightness(1.08)}
+.gobtn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+
+/* resolved PR preview */
+.resolved{margin-top:12px;border:1px solid var(--agent-line);border-radius:12px;background:color-mix(in oklab,var(--agent) 5%,var(--surface-2));padding:12px 13px;display:flex;gap:12px;align-items:flex-start}
+.resolved .ok{width:20px;height:20px;border-radius:6px;background:var(--agent-soft);color:var(--agent-2);border:1px solid var(--agent-line);display:flex;align-items:center;justify-content:center;font-size:12px;flex:none;margin-top:1px}
+.resolved .info{flex:1;min-width:0}
+.resolved .l1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.resolved .num{font-family:var(--mono);font-weight:600;color:var(--agent-2)}
+.resolved .ttl{font-weight:600;color:var(--text)}
+.resolved .l2{margin-top:5px;display:flex;align-items:center;gap:12px;font-size:11.5px;color:var(--text-faint);flex-wrap:wrap}
+.resolved .l2 .av{width:16px;height:16px;border-radius:50%;background:linear-gradient(135deg,#c98,#a76);display:inline-block;vertical-align:-3px;margin-right:4px}
+.resolved .l2 code{font-family:var(--mono);color:var(--text-dim)}
+.resolved .l2 .a{color:var(--add)} .resolved .l2 .d{color:var(--del)}
+.resolved .l2 .base{font-family:var(--mono);color:var(--text-dim)}
+.resolved .l2 .chk{color:var(--add)}
+
+/* browse list */
+.orline{display:flex;align-items:center;gap:12px;margin:18px 2px 10px;color:var(--text-faint);font-size:11px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+.orline::before,.orline::after{content:"";flex:1;height:1px;background:var(--border-soft)}
+.reporow{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11.5px;color:var(--text-faint)}
+.reporow select{font-family:var(--mono);font-size:12px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px 9px;outline:none;cursor:pointer}
+.reporow select:hover{border-color:var(--agent-line)}
+.reporow .refresh{margin-left:auto;font-size:11px;color:var(--text-faint);cursor:pointer;display:flex;align-items:center;gap:5px}
+.reporow .refresh:hover{color:var(--agent-2)}
+.prlist{border:1px solid var(--border);border-radius:11px;overflow:hidden}
+.pritem{display:flex;align-items:center;gap:11px;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border-soft)}
+.pritem:last-child{border-bottom:0}
+.pritem:hover{background:var(--surface-2)}
+.pritem .num{font-family:var(--mono);font-size:12px;color:var(--agent-2);font-weight:600;min-width:44px}
+.pritem .m{flex:1;min-width:0}
+.pritem .t{color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pritem .s{font-size:11px;color:var(--text-faint);margin-top:2px;display:flex;gap:10px;font-family:var(--mono)}
+.pritem .s .a{color:var(--add)} .pritem .s .d{color:var(--del)}
+.pritem .go{color:var(--text-faint);font-size:15px;flex:none}
+.pritem:hover .go{color:var(--agent-2)}
+
+/* local / gitbutler shared list */
+.branchrow{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:9px;cursor:pointer}
+.branchrow:hover{border-color:var(--agent-line);background:var(--surface-2)}
+.branchrow .ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none}
+.branchrow .ic.b{background:var(--agent-soft);color:var(--agent-2);border:1px solid var(--agent-line)}
+.branchrow .ic.v{background:var(--human-soft);color:var(--human);border:1px solid var(--human-line)}
+.branchrow .m{flex:1;min-width:0}
+.branchrow .bn{font-family:var(--mono);font-size:12.5px;color:var(--text);font-weight:600}
+.branchrow .bd{font-size:11px;color:var(--text-faint);margin-top:2px}
+.branchrow .cmp{font-family:var(--mono);font-size:11px;color:var(--text-dim);background:var(--surface-3);border:1px solid var(--border);padding:3px 8px;border-radius:7px}
+.local-head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.local-head .lbl{font-size:11.5px;color:var(--text-faint)}
+.local-head select{font-family:var(--mono);font-size:12px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;outline:none;cursor:pointer}
+.local-head select:hover{border-color:var(--agent-line)}
+.gb-hint{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-faint);margin-bottom:12px;padding:8px 11px;border:1px dashed var(--human-line);border-radius:9px;background:var(--human-soft)}
+.gb-hint b{color:var(--human)}
+
+/* ---------- recent reviews ---------- */
+.section{margin-top:34px}
+.section-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:0 2px}
+.section-head h3{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);font-weight:600}
+.section-head .count{font-family:var(--mono);font-size:11px;color:var(--text-faint)}
+.section-head .clear{margin-left:auto;font-size:11px;color:var(--text-faint);cursor:pointer}
+.section-head .clear:hover{color:var(--text-dim)}
+.recent{display:flex;flex-direction:column;gap:9px}
+.rev{display:flex;align-items:center;gap:13px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;cursor:pointer;position:relative}
+.rev:hover{border-color:var(--agent-line);background:linear-gradient(180deg,var(--surface),color-mix(in oklab,var(--agent) 4%,var(--surface)))}
+.rev .srcbadge{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;border:1px solid var(--border);background:var(--surface-3);color:var(--text-dim);flex:none}
+.rev .srcbadge svg{width:12px;height:12px}
+.rev .srcbadge.gh b{color:var(--agent-2)}
+.rev .srcbadge.local{color:var(--text-dim)}
+.rev .srcbadge.gb{color:var(--human)}
+.rev .m{flex:1;min-width:0}
+.rev .t{color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rev .meta{font-size:11px;color:var(--text-faint);margin-top:3px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-family:var(--mono)}
+.rev .meta .dot{width:3px;height:3px;border-radius:50%;background:var(--text-faint)}
+.rev .meta .find{color:var(--sev-high)} .rev .meta .find.zero{color:var(--text-faint)}
+.rev .meta .sub{color:var(--add)}
+.rev .stat{display:flex;align-items:center;gap:6px;font-size:11px;flex:none}
+.rev .stat .pulse{width:7px;height:7px;border-radius:50%;background:var(--agent);animation:pulse 2s infinite}
+.rev .stat.review{color:var(--agent-2)}
+.rev .stat.done{color:var(--text-faint)}
+.rev .stat.submitted{color:var(--add)}
+.rev .arrow{color:var(--text-faint);font-size:16px;flex:none}
+.rev:hover .arrow{color:var(--agent-2)}
+
+/* footer */
+.foot{margin-top:30px;text-align:center;font-size:11px;color:var(--text-faint);font-family:var(--mono);display:flex;align-items:center;justify-content:center;gap:10px}
+.foot .glyph{width:14px;height:14px;border-radius:4px;background:conic-gradient(from 210deg,var(--agent),var(--agent-2),var(--agent));box-shadow:0 0 0 1px var(--agent-line) inset;display:inline-block}
+.foot .dot{width:3px;height:3px;border-radius:50%;background:var(--text-faint)}
+
+/* selected state for pickable rows */
+.pritem.sel,.branchrow.sel{background:color-mix(in oklab,var(--agent) 7%,var(--surface-2));box-shadow:inset 2px 0 0 var(--agent)}
+.branchrow.sel{border-color:var(--agent-line)}
+.pritem.sel .num,.branchrow.sel .bn{color:var(--agent-2)}
+
+/* optional local repo path */
+.pathfield{display:flex;align-items:center;gap:9px;margin-top:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:0 11px;min-height:40px}
+.pathfield:focus-within{border-color:var(--agent-line)}
+.pathfield .pf-ic{color:var(--text-faint);font-size:13px}
+.pathfield input{flex:1;border:0;background:transparent;color:var(--text-dim);font-family:var(--mono);font-size:12px;outline:none}
+.pathfield input::placeholder{color:var(--text-faint);font-family:var(--sans)}
+.pathfield .pf-tag{font-family:var(--mono);font-size:10px;color:var(--add);border:1px solid color-mix(in oklab,var(--add) 40%,transparent);background:color-mix(in oklab,var(--add) 10%,transparent);border-radius:6px;padding:2px 7px}
+
+/* ---------- shared card footer: context + CTA ---------- */
+.cardfoot{border-top:1px solid var(--border-soft);padding:13px 16px 16px;background:color-mix(in oklab,var(--agent) 2%,var(--surface))}
+.ctxtoggle{display:flex;width:100%;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;color:var(--text-dim);font-size:12.5px;cursor:pointer;padding:10px 12px;font-family:inherit}
+.ctxtoggle:hover{border-color:var(--agent-line);color:var(--text)}
+.ctxtoggle.open{border-color:var(--agent-line);border-bottom-left-radius:0;border-bottom-right-radius:0;color:var(--text)}
+.ctxtoggle .ci{width:22px;height:22px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:6px;background:var(--agent-soft);color:var(--agent-2);border:1px solid var(--agent-line);font-size:12px}
+.ctxtoggle .cl{flex:1;text-align:left;font-weight:500}
+.ctxtoggle .opt{color:var(--text-faint);font-weight:400;font-family:var(--mono);font-size:10.5px;margin-left:4px;border:1px solid var(--border);border-radius:5px;padding:1px 6px}
+.ctxtoggle .chev{font-size:10px;color:var(--text-faint);transition:transform .18s}
+.ctxtoggle.open .chev{transform:rotate(90deg);color:var(--agent-2)}
+.ctxbox{margin-top:-1px;border:1px solid var(--agent-line);border-top:0;border-radius:0 0 10px 10px;padding:11px 12px 12px;background:var(--surface-2)}
+.ctxbox[hidden]{display:none}
+.ctxbox textarea{width:100%;min-height:76px;resize:vertical;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-family:var(--sans);font-size:12.5px;line-height:1.55;outline:none}
+.ctxbox textarea:focus{border-color:var(--agent-line)}
+.ctxbox textarea::placeholder{color:var(--text-faint)}
+.ctxhint{margin-top:7px;font-size:11px;color:var(--text-faint);font-family:var(--mono)}
+.footcta{display:flex;align-items:center;gap:14px;margin-top:14px}
+.footcta .target{font-size:12px;color:var(--text-faint)}
+.footcta .target b{font-family:var(--mono);color:var(--agent-2);font-weight:600}
+.footcta .target .tsep{margin:0 3px;color:var(--text-faint)}
+.footcta #tgtTitle{color:var(--text-dim)}
+.footcta .gobtn{margin-left:auto}
+.gobtn{display:inline-flex;align-items:center;gap:8px;background:var(--accent-solid);color:var(--on-solid);border:0;border-radius:11px;padding:11px 20px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.gobtn:hover{filter:brightness(1.08)}
+
+/* ---------- 空态 / 错误态(预览态切换)---------- */
+.resolved.err,.pathfield.warn,.path-warn,.gh-auth,.empty-history{display:none}
+/* PR 解析失败 */
+body[data-state="pr-error"] .resolved.ok{display:none}
+body[data-state="pr-error"] .resolved.err{display:flex}
+body[data-state="pr-error"] .gh-normal .field{border-color:var(--del-gutter);box-shadow:0 0 0 3px var(--del-bg)}
+body[data-state="pr-error"] .cardfoot .footcta{opacity:.45;pointer-events:none}
+.resolved.err{border-color:var(--del-gutter);background:color-mix(in oklab,var(--del) 6%,var(--surface-2))}
+.resolved .ok.err{background:var(--del-bg);color:var(--sev-high);border-color:var(--del-gutter)}
+.resolved.err .ttl{color:var(--text)}
+.resolved.err .l2{color:var(--text-faint)}
+.resolved.err .emsg{color:var(--sev-high)}
+.resolved.err code{font-family:var(--mono);font-size:11px;background:var(--surface-3);padding:1px 5px;border-radius:4px;color:var(--text-dim)}
+/* 路径不匹配(软警告,不阻断) */
+body[data-state="path-mismatch"] .pathfield.ok{display:none}
+body[data-state="path-mismatch"] .pathfield.warn{display:flex}
+body[data-state="path-mismatch"] .path-warn{display:block}
+.pathfield.warn{border-color:var(--human-line)}
+.pf-tag.warn{color:var(--human);border-color:var(--human-line);background:var(--human-soft)}
+.path-warn{margin-top:8px;font-size:11.5px;color:var(--text-dim);line-height:1.55;padding:9px 11px;border:1px solid var(--human-line);border-radius:9px;background:var(--human-soft)}
+.path-warn code{font-family:var(--mono);font-size:11px;color:var(--human)}
+/* gh 未登录 */
+body[data-state="gh-auth"] .gh-normal{display:none}
+body[data-state="gh-auth"] .gh-auth{display:block}
+body[data-state="gh-auth"] .cardfoot .footcta{opacity:.45;pointer-events:none}
+.gh-auth{border:1px solid var(--human-line);border-radius:12px;background:var(--human-soft);padding:16px}
+.ga-head{display:flex;align-items:center;gap:9px;font-size:13.5px;color:var(--text)}
+.ga-ic{width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:color-mix(in oklab,var(--human) 20%,transparent);color:var(--human);border:1px solid var(--human-line);font-size:12px;flex:none}
+.ga-body{font-size:12.5px;color:var(--text-dim);margin-top:11px;line-height:1.6}
+.ga-body code{font-family:var(--mono);font-size:11.5px;color:var(--human)}
+.ga-cmd{margin-top:11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--mono);font-size:12px;color:var(--agent-2)}
+.ga-actions{display:flex;align-items:center;gap:14px;margin-top:13px}
+.ga-retry{background:var(--accent-solid);color:var(--on-solid);border:0;border-radius:8px;padding:8px 15px;font-size:12px;font-weight:600;cursor:pointer}
+.ga-install{font-size:12px;color:var(--agent-2);text-decoration:none;cursor:pointer}
+.ga-alt{margin-top:13px;font-size:11.5px;color:var(--text-faint)}
+/* 首次无历史 */
+body[data-state="empty"] .recent{display:none}
+body[data-state="empty"] .section-head .count,body[data-state="empty"] .section-head .clear{display:none}
+body[data-state="empty"] .empty-history{display:flex}
+.empty-history{flex-direction:column;align-items:center;text-align:center;gap:7px;padding:34px 22px;border:1px dashed var(--border);border-radius:14px;background:var(--surface)}
+.empty-history .eh-ic{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:20px;background:var(--agent-soft);color:var(--agent-2);border:1px solid var(--agent-line);margin-bottom:3px}
+.empty-history .eh-t{font-size:14px;font-weight:600;color:var(--text)}
+.empty-history .eh-s{font-size:12.5px;color:var(--text-faint);max-width:360px;line-height:1.65}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <div class="topbar">
+    <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
+    <div class="spacer"></div>
+    <div class="switches">
+      <label class="syntax-sel">预览态
+        <select id="stateSel">
+          <option value="normal">正常</option>
+          <option value="empty">首次无历史</option>
+          <option value="gh-auth">gh 未登录</option>
+          <option value="pr-error">PR 解析失败</option>
+          <option value="path-mismatch">路径不匹配</option>
+        </select>
+      </label>
+      <div class="seg" id="modeSeg">
+        <button data-mode-val="light" title="浅色">☀</button>
+        <button data-mode-val="dark" class="on" title="深色">☾</button>
+      </div>
+      <label class="syntax-sel">配色
+        <select id="themeSel">
+          <option value="duetlens">Duetlens</option>
+          <option value="github">GitHub</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <div class="scroll">
+    <div class="wrap">
+
+      <div class="hero">
+        <div class="logo">duet<i>lens</i><span class="cur">_</span></div>
+        <div class="tag">人与 <span class="a">agent</span> 协同的 code review<span class="h"> ·</span> 从一个 PR 开始</div>
+      </div>
+
+      <!-- ---- new review card ---- -->
+      <div class="card stagger" style="animation-delay:.05s">
+        <div class="card-top">
+          <div>
+            <h2>发起一次审核</h2>
+            <div class="sub">选择来源 · Duetlens 会拉取 diff 并启动 codex 会话做首轮机审</div>
+          </div>
+          <div class="srcseg" id="srcSeg">
+            <button data-src="github" class="on">
+              <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+              GitHub PR
+            </button>
+            <button data-src="local">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M8.4 6.6C13 6.6 18 6 18 10.5"/></svg>
+              本地分支
+            </button>
+            <button data-src="gitbutler">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M6 8l6-5 6 5M6 16l6 5 6-5"/></svg>
+              GitButler
+            </button>
+          </div>
+        </div>
+
+        <!-- GitHub panel -->
+        <div class="panel" data-panel="github">
+         <div class="gh-normal">
+          <div class="field">
+            <span class="gh"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
+            <input value="github.com/xieziyu/podcast-go/pull/482" spellcheck="false">
+            <span class="paste">⌘V</span>
+          </div>
+
+          <!-- resolved preview(粘贴/解析后)· 精简 -->
+          <div class="resolved ok">
+            <span class="ok">✓</span>
+            <div class="info">
+              <div class="l1"><span class="num">#482</span> <span class="ttl">feat: streaming transcode</span></div>
+              <div class="l2">
+                <span><span class="av"></span>@ryan</span>
+                <span><span class="a">+188</span> <span class="d">−41</span> · 6 files</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 解析失败态 -->
+          <div class="resolved err">
+            <span class="ok err">!</span>
+            <div class="info">
+              <div class="l1"><span class="ttl">无法解析这个 PR</span></div>
+              <div class="l2"><span class="emsg">该 PR 不存在,或你没有访问权限。</span> 确认链接,或用 <code>owner/repo#123</code> 格式重试。</div>
+            </div>
+          </div>
+
+          <!-- 可选:本地仓库路径,让 agent 读全量代码 -->
+          <label class="pathfield ok">
+            <span class="pf-ic">⌂</span>
+            <input placeholder="本地仓库路径(可选)· 让 agent 读全量代码,留空则临时 checkout" value="~/Projects/podcast-go" spellcheck="false">
+            <span class="pf-tag">已匹配 ✓</span>
+          </label>
+          <!-- 路径不匹配态 -->
+          <label class="pathfield warn">
+            <span class="pf-ic">⌂</span>
+            <input value="~/Projects/other-service" spellcheck="false">
+            <span class="pf-tag warn">remote 不匹配 ⚠</span>
+          </label>
+          <div class="path-warn">该目录的 remote 不是 <code>xieziyu/podcast-go</code>。继续将忽略本地路径、改用临时 checkout;或选对目录以复用本地全量代码。</div>
+
+          <div class="orline">或从最近的 open PR 中选择</div>
+          <div class="reporow">
+            <span>仓库</span>
+            <select>
+              <option>xieziyu/podcast-go</option>
+              <option>xieziyu/Duetlens</option>
+              <option>xieziyu/better-review</option>
+            </select>
+            <span class="refresh">⟳ 刷新</span>
+          </div>
+          <div class="prlist">
+            <div class="pritem sel" data-target="GitHub #482" data-title="feat: streaming transcode">
+              <span class="num">#482</span>
+              <div class="m"><div class="t">feat: streaming transcode</div><div class="s"><span>@ryan · 2h</span><span><span class="a">+188</span> <span class="d">−41</span></span></div></div>
+              <span class="go">→</span>
+            </div>
+            <div class="pritem" data-target="GitHub #479" data-title="fix: episode duration off-by-one">
+              <span class="num">#479</span>
+              <div class="m"><div class="t">fix: episode duration off-by-one on live cutover</div><div class="s"><span>@mia · 5h</span><span><span class="a">+24</span> <span class="d">−9</span></span></div></div>
+              <span class="go">→</span>
+            </div>
+            <div class="pritem" data-target="GitHub #475" data-title="refactor: extract feed builder">
+              <span class="num">#475</span>
+              <div class="m"><div class="t">refactor: extract feed builder into module</div><div class="s"><span>@ryan · 1d</span><span><span class="a">+310</span> <span class="d">−212</span></span></div></div>
+              <span class="go">→</span>
+            </div>
+          </div>
+         </div>
+
+          <!-- gh 未登录态 -->
+          <div class="gh-auth">
+            <div class="ga-head"><span class="ga-ic">⚠</span> <b>未检测到 GitHub CLI 登录</b></div>
+            <div class="ga-body">Duetlens 通过 <code>gh</code> CLI 拉取 PR diff、并在提交时回写 review。请先在终端登录:</div>
+            <div class="ga-cmd">$ gh auth login</div>
+            <div class="ga-actions"><button class="ga-retry">已登录,重试</button><a class="ga-install">安装 GitHub CLI ↗</a></div>
+            <div class="ga-alt">◇ 本地分支 / GitButler 来源无需 gh,可直接开始。</div>
+          </div>
+        </div>
+
+        <!-- Local branch panel -->
+        <div class="panel" data-panel="local" hidden>
+          <div class="local-head">
+            <span class="lbl">仓库</span>
+            <select><option>~/Projects/podcast-go</option><option>~/Projects/Duetlens</option><option>选择其它目录…</option></select>
+            <span class="lbl" style="margin-left:6px">对比 base</span>
+            <select><option>main</option><option>develop</option><option>release/2.0</option></select>
+          </div>
+          <div class="branchrow sel" data-target="本地 feat/stream-transcode" data-title="← main">
+            <span class="ic b"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M8.4 6.6C13 6.6 18 6 18 10.5"/></svg></span>
+            <div class="m"><div class="bn">feat/stream-transcode</div><div class="bd">HEAD · 4 commits ahead · 更新于 12 分钟前</div></div>
+            <span class="cmp">← main</span>
+          </div>
+          <div class="branchrow" data-target="本地 fix/feed-encoding" data-title="← main">
+            <span class="ic b"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M8.4 6.6C13 6.6 18 6 18 10.5"/></svg></span>
+            <div class="m"><div class="bn">fix/feed-encoding</div><div class="bd">2 commits ahead · 更新于 3 小时前</div></div>
+            <span class="cmp">← main</span>
+          </div>
+        </div>
+
+        <!-- GitButler panel -->
+        <div class="panel" data-panel="gitbutler" hidden>
+          <div class="gb-hint">⎇ 检测到 GitButler workspace · <b>~/Projects/podcast-go</b> · 3 个 virtual branch</div>
+          <div class="branchrow sel" data-target="vbranch virtual/streaming" data-title="未提交改动">
+            <span class="ic v"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M6 8l6-5 6 5M6 16l6 5 6-5"/></svg></span>
+            <div class="m"><div class="bn">virtual/streaming</div><div class="bd">7 files · 未提交改动 · 归属 2 个 commit</div></div>
+            <span class="cmp">vbranch</span>
+          </div>
+          <div class="branchrow" data-target="vbranch virtual/api-cleanup" data-title="未提交改动">
+            <span class="ic v"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M6 8l6-5 6 5M6 16l6 5 6-5"/></svg></span>
+            <div class="m"><div class="bn">virtual/api-cleanup</div><div class="bd">3 files · 未提交改动</div></div>
+            <span class="cmp">vbranch</span>
+          </div>
+        </div>
+
+        <!-- ---- shared footer: 附加上下文 + 单一 CTA ---- -->
+        <div class="cardfoot">
+          <button class="ctxtoggle" id="ctxToggle">
+            <span class="ci">✎</span>
+            <span class="cl">给 agent 附加上下文 <span class="opt">可选</span></span>
+            <span class="chev">▸</span>
+          </button>
+          <div class="ctxbox" id="ctxBox" hidden>
+            <textarea placeholder="首轮机审前一并发给 codex,可留空。例如:&#10;· 重点关注并发安全与错误处理&#10;· 本 PR 依赖 encoder crate 的 v2 API&#10;· 忽略 generated/ 下的文件"></textarea>
+            <div class="ctxhint">随首轮机审注入,agent 全程可见 · 不改变 read-only sandbox</div>
+          </div>
+          <div class="footcta">
+            <span class="target">将审核 <b id="tgtName">GitHub #482</b> <span class="tsep">·</span> <span id="tgtTitle">feat: streaming transcode</span></span>
+            <button class="gobtn" id="startBtn">开始审核 <span style="font-size:15px;line-height:1">→</span></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- recent reviews (会话历史) ---- -->
+      <div class="section stagger" style="animation-delay:.12s">
+        <div class="section-head">
+          <h3>最近的审核</h3><span class="count">4</span>
+          <span class="clear">全部历史 →</span>
+        </div>
+        <div class="recent">
+          <div class="rev">
+            <span class="srcbadge gh"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><b>#482</b></span>
+            <div class="m">
+              <div class="t">feat: streaming transcode</div>
+              <div class="meta"><span>podcast-go</span><span class="dot"></span><span class="find">3 findings</span><span class="dot"></span><span>2 discussions</span></div>
+            </div>
+            <span class="stat review"><span class="pulse"></span>审核中</span>
+            <span class="arrow">→</span>
+          </div>
+          <div class="rev">
+            <span class="srcbadge gh"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><b>#479</b></span>
+            <div class="m">
+              <div class="t">fix: episode duration off-by-one on live cutover</div>
+              <div class="meta"><span>podcast-go</span><span class="dot"></span><span class="find">5 findings</span><span class="dot"></span><span class="sub">4 已提交</span></div>
+            </div>
+            <span class="stat submitted">✓ 已提交</span>
+            <span class="arrow">→</span>
+          </div>
+          <div class="rev">
+            <span class="srcbadge local"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M8.4 6.6C13 6.6 18 6 18 10.5"/></svg>本地</span>
+            <div class="m">
+              <div class="t">fix/feed-encoding <span style="color:var(--text-faint);font-family:var(--mono);font-size:11px">← main</span></div>
+              <div class="meta"><span>podcast-go</span><span class="dot"></span><span class="find zero">0 findings</span><span class="dot"></span><span>本地导出 · 未提交</span></div>
+            </div>
+            <span class="stat done">已完成</span>
+            <span class="arrow">→</span>
+          </div>
+          <div class="rev">
+            <span class="srcbadge gb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M6 8l6-5 6 5M6 16l6 5 6-5"/></svg>vbranch</span>
+            <div class="m">
+              <div class="t">virtual/api-cleanup</div>
+              <div class="meta"><span>Duetlens</span><span class="dot"></span><span class="find">2 findings</span><span class="dot"></span><span>昨天</span></div>
+            </div>
+            <span class="stat done">已完成</span>
+            <span class="arrow">→</span>
+          </div>
+        </div>
+        <!-- 首次无历史空态 -->
+        <div class="empty-history">
+          <div class="eh-ic">◇</div>
+          <div class="eh-t">还没有审核记录</div>
+          <div class="eh-s">在上面粘贴一个 PR 链接,或选择本地分支 / GitButler 来源,开始你的第一次协同 review。完成的审核会留在这里,随时可以恢复。</div>
+        </div>
+      </div>
+
+      <div class="foot"><span class="glyph"></span> codex · gpt-5.1-codex <span class="dot"></span> read-only sandbox <span class="dot"></span> app-server 常驻会话</div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const root=document.documentElement;
+// mode
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
+  root.setAttribute('data-mode',b.dataset.modeVal);
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x===b));
+});
+// theme
+document.getElementById('themeSel').onchange=e=>root.setAttribute('data-theme',e.target.value);
+// 预览态(空态/错误态)。gh 相关态自动切到 GitHub tab
+document.getElementById('stateSel').onchange=e=>{
+  const v=e.target.value;
+  document.body.setAttribute('data-state',v);
+  if(['gh-auth','pr-error','path-mismatch'].includes(v))document.querySelector('#srcSeg button[data-src="github"]').click();
+};
+// source panels
+document.querySelectorAll('#srcSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#srcSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.panel').forEach(p=>p.hidden=p.dataset.panel!==b.dataset.src);
+  const s=document.querySelector('.panel:not([hidden]) .sel'); if(s) s.click();
+});
+// 目标选取(点击列表项 = 选中,更新底部 CTA 目标)
+document.querySelectorAll('[data-target]').forEach(el=>el.onclick=()=>{
+  const panel=el.closest('.panel');
+  panel.querySelectorAll('[data-target]').forEach(x=>x.classList.remove('sel'));
+  el.classList.add('sel');
+  document.getElementById('tgtName').textContent=el.dataset.target;
+  document.getElementById('tgtTitle').textContent=el.dataset.title;
+});
+// 附加上下文折叠
+const ctxToggle=document.getElementById('ctxToggle'),ctxBox=document.getElementById('ctxBox');
+ctxToggle.onclick=()=>{const open=ctxBox.hidden;ctxBox.hidden=!open;ctxToggle.classList.toggle('open',open);};
+// 开始审核 → 直接切到 review 屏(进度 timeline 在 review 内联展示)
+document.getElementById('startBtn').onclick=()=>{location.href='diff-review.html'};
+document.querySelectorAll('.rev').forEach(r=>r.onclick=()=>{location.href='diff-review.html'});
+</script>
+</body>
+</html>

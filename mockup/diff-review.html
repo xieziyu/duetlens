@@ -90,7 +90,7 @@ body{
   background-image:radial-gradient(1200px 600px at 78% -10%, var(--glow1), transparent 60%),
                    radial-gradient(900px 500px at 5% 108%, var(--glow2), transparent 55%);
 }
-:root{--mono:"IBM Plex Mono",ui-monospace,monospace;--sans:"IBM Plex Sans",system-ui,sans-serif;--r:8px}
+:root{--mono:"IBM Plex Mono",ui-monospace,monospace;--sans:"IBM Plex Sans",system-ui,sans-serif;--r:8px;--left-w:236px;--right-w:380px}
 ::selection{background:var(--sel)}
 .topbar,.tree,.diff,.convo,.card,.file-header,.src,.bubble,.composer .box,.mini,.btn,.status,.pr-chip,.seg,.syntax-sel select{
   transition:background-color .25s ease,color .2s ease,border-color .25s ease,box-shadow .2s ease}
@@ -133,14 +133,17 @@ body{
 .submit-cta .cta-badge{font-family:var(--mono);font-size:10px;background:rgba(255,255,255,.22);padding:1px 6px;border-radius:6px}
 
 /* ---------- main grid ---------- */
-.main{display:grid; grid-template-columns:236px minmax(0,1fr) 380px; min-height:0}
+.main{display:grid; grid-template-columns:var(--left-w) 5px minmax(0,1fr) 5px var(--right-w); min-height:0}
+.resizer{position:relative;cursor:col-resize;z-index:6}
+.resizer::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;transform:translateX(-50%);background:var(--border);transition:background .15s,width .15s,box-shadow .15s}
+.resizer:hover::before,.resizer.drag::before{width:2px;background:var(--agent);box-shadow:0 0 0 2px var(--agent-soft)}
 .pane{min-height:0; overflow:auto}
 .pane::-webkit-scrollbar{width:10px;height:10px}
 .pane::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .pane::-webkit-scrollbar-thumb:hover{background:var(--scroll-h);background-clip:content-box}
 
 /* ---------- left: file tree ---------- */
-.tree{background:var(--surface);border-right:1px solid var(--border)}
+.tree{background:var(--surface)}
 .tree .head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;position:sticky;top:0;background:var(--surface);z-index:2}
 .tree .head h3{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);font-weight:600}
 .tree .head .count{font-family:var(--mono);font-size:11px;color:var(--text-faint)}
@@ -229,7 +232,7 @@ body{
 .reply-hint{margin-left:auto;font-size:11px;color:var(--text-faint);align-self:center}
 
 /* ---------- right: conversation ---------- */
-.convo{background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.convo{background:var(--surface);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;gap:2px;padding:10px 12px 0;border-bottom:1px solid var(--border)}
 .tab{font-family:var(--mono);padding:7px 12px 9px;font-size:12px;font-weight:500;color:var(--text-faint);cursor:pointer;border-bottom:2px solid transparent}
 .tab.active{color:var(--text);border-bottom-color:var(--agent)}
@@ -267,6 +270,130 @@ body{
 .composer .scope b{color:var(--human)}
 .stagger{opacity:0;transform:translateY(6px);animation:rise .5s cubic-bezier(.2,.7,.3,1) forwards}
 @keyframes rise{to{opacity:1;transform:none}}
+
+/* ---------- 首轮机审进行中(右栏初始态)---------- */
+.phase-seg button{width:auto;padding:0 9px;font-family:var(--mono);font-size:11px}
+.scanview{display:none;flex-direction:column;min-height:0;flex:1;overflow:auto}
+body.scan .convo .tabs,
+body.scan .convo .anchor-ref,
+body.scan .convo .thread,
+body.scan .convo .composer{display:none}
+body.scan .convo .scanview{display:flex}
+.scan-head{display:flex;align-items:center;gap:11px;padding:14px 14px 12px;border-bottom:1px solid var(--border-soft)}
+.scan-head .sglyph{width:26px;height:26px;border-radius:8px;flex:none;position:relative;
+  background:conic-gradient(from 210deg,var(--agent),var(--agent-2),var(--agent));box-shadow:0 0 0 1px var(--agent-line) inset}
+.scan-head .sglyph::after{content:"";position:absolute;inset:0;border-radius:8px;animation:pulse 2s infinite}
+.scan-head .sh-t{display:flex;flex-direction:column;gap:2px}
+.scan-head .sh-t b{font-size:13px;color:var(--text)}
+.scan-head .sh-s{font-size:11px;color:var(--text-faint);font-family:var(--mono)}
+.timeline{padding:14px 16px 6px;position:relative}
+.tl{display:flex;align-items:center;gap:11px;padding:7px 0;font-size:12.5px;position:relative}
+.tl::before{content:"";position:absolute;left:6px;top:24px;bottom:-7px;width:1.5px;background:var(--border)}
+.tl:last-child::before{display:none}
+.tl .dot{width:13px;height:13px;border-radius:50%;flex:none;border:1.5px solid var(--border);background:var(--surface);z-index:1;position:relative}
+.tl.done .dot{background:var(--agent);border-color:var(--agent);box-shadow:0 0 0 2px var(--agent-soft)}
+.tl.done .dot::after{content:"✓";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--on-solid)}
+.tl.done::before{background:var(--agent-line)}
+.tl.active .dot{border-color:var(--agent);background:var(--agent-soft);animation:pulse 1.6s infinite}
+.tl .tl-l{color:var(--text-dim)}
+.tl.done .tl-l,.tl.active .tl-l{color:var(--text)}
+.tl.pending{opacity:.55}
+.tl .tl-t{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-faint)}
+.tl.active .tl-t{color:var(--agent-2)}
+.scan-stream{padding:8px 14px 4px;border-top:1px solid var(--border-soft);margin-top:8px}
+.ss-head{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:10px}
+.ss-head .ss-n{background:var(--agent-soft);color:var(--agent-2);border:1px solid var(--agent-line);border-radius:5px;padding:0 6px;font-size:10px}
+.ss-head .typing{display:inline-flex;gap:3px;margin-left:2px}
+.ss-head .typing i{width:4px;height:4px;border-radius:50%;background:var(--agent);animation:blink 1.2s infinite}
+.ss-head .typing i:nth-child(2){animation-delay:.2s} .ss-head .typing i:nth-child(3){animation-delay:.4s}
+.sfind{display:flex;align-items:flex-start;gap:9px;padding:9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2);margin-bottom:8px;cursor:pointer}
+.sfind:hover{border-color:var(--agent-line);background:var(--surface-3)}
+.sfind .m{flex:1;min-width:0}
+.sfind .ft{font-size:12px;color:var(--text);line-height:1.4}
+.sfind .fp{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);margin-top:3px}
+.sfind .go{color:var(--text-faint);font-size:14px;flex:none;align-self:center}
+.sfind:hover .go{color:var(--agent-2)}
+.scan-foot{margin:6px 14px 16px;padding:10px 12px;border:1px dashed var(--agent-line);border-radius:9px;
+  background:color-mix(in oklab,var(--agent) 4%,transparent);font-size:11.5px;color:var(--text-dim);display:flex;gap:8px;align-items:flex-start}
+.scan-foot .ic{color:var(--agent-2)}
+
+/* ---------- Findings tab:运行时列表 ---------- */
+.convo[data-tab="findings"] .anchor-ref,.convo[data-tab="findings"] .thread,.convo[data-tab="findings"] .composer,
+.convo[data-tab="summary"] .anchor-ref,.convo[data-tab="summary"] .thread,.convo[data-tab="summary"] .composer{display:none}
+.findings-panel,.summary-panel{display:none}
+.convo[data-tab="findings"] .findings-panel{display:flex;flex-direction:column;min-height:0;flex:1}
+.convo[data-tab="summary"] .summary-panel{display:flex;flex-direction:column;flex:1;min-height:0}
+body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!important}
+.sum-scroll{flex:1;overflow:auto;padding:14px 14px 10px}
+.sum-verdict{border:1px solid var(--border);border-radius:11px;padding:12px 13px;margin-bottom:14px}
+.sum-verdict.rc{border-color:var(--del-gutter);background:color-mix(in oklab,var(--del) 7%,var(--surface))}
+.sv-head{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim)}
+.sv-head b{color:var(--text);font-weight:600}
+.sv-ic{width:21px;height:21px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none;background:var(--del-bg);color:var(--sev-high);border:1px solid var(--del-gutter)}
+.sv-body{font-size:12.5px;color:var(--text-dim);line-height:1.6;margin-top:9px}
+.sv-meta{font-size:11px;color:var(--text-faint);margin-top:9px;font-family:var(--mono);display:flex;align-items:center;gap:6px}
+.sum-stats{display:flex;align-items:center;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);padding:11px 6px;margin-bottom:16px}
+.sum-stats .st{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.sum-stats .st-n{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text);line-height:1}
+.sum-stats .st-l{font-size:10px;color:var(--text-faint);font-family:var(--mono)}
+.sum-stats .st-div{width:1px;align-self:stretch;background:var(--border);margin:1px 7px}
+.sum-block{margin-bottom:16px}
+.sb-head{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:9px}
+.sb-head .sb-edit{color:var(--agent-2);cursor:pointer;text-transform:none;letter-spacing:0}
+.sb-head .sb-by{margin-left:auto;color:var(--text-faint);text-transform:none;letter-spacing:0;display:inline-flex;align-items:center;gap:5px}
+.sb-head .sb-by .gl{width:11px;height:11px;border-radius:3px;background:conic-gradient(from 210deg,var(--agent),var(--agent-2),var(--agent));box-shadow:0 0 0 1px var(--agent-line) inset}
+.sb-prose{font-size:12.5px;color:var(--text-dim);line-height:1.65;border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:11px 12px}
+.sb-prose p{margin-bottom:8px} .sb-prose p:last-child{margin-bottom:0}
+.sb-prose strong{color:var(--text);font-weight:600}
+.sb-prose code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);padding:1px 5px;border-radius:4px;color:var(--agent-2)}
+.theme{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface);margin-bottom:7px;cursor:pointer}
+.theme:hover{border-color:var(--agent-line);background:var(--surface-2)}
+.theme .th-dot{width:8px;height:8px;border-radius:3px;flex:none}
+.theme .th-dot.high{background:var(--sev-high)} .theme .th-dot.med{background:var(--sev-med)} .theme .th-dot.low{background:var(--sev-low)}
+.theme .th-cat{font-family:var(--mono);font-size:11.5px;color:var(--text);font-weight:500}
+.theme .th-note{font-size:11.5px;color:var(--text-faint);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.theme .th-n{font-family:var(--mono);font-size:10px;color:var(--text-faint);background:var(--surface-3);border:1px solid var(--border);border-radius:5px;padding:0 6px;flex:none}
+.sum-cov{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);padding:2px 2px 4px;line-height:1.7}
+.sum-foot{border-top:1px solid var(--border);padding:12px 14px}
+.sum-submit{width:100%;background:var(--accent-solid);color:var(--on-solid);font-weight:600;border:0;border-radius:10px;padding:11px;cursor:pointer;font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:7px}
+.sum-submit:hover{filter:brightness(1.08)}
+.sev.med{color:var(--sev-med);background:var(--human-soft);border:1px solid var(--human-line)}
+.sev.low{color:var(--sev-low);background:var(--agent-soft);border:1px solid var(--agent-line)}
+.fp-toolbar{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-soft)}
+.grp-seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:7px;padding:2px}
+.grp-seg button{border:0;background:transparent;color:var(--text-faint);border-radius:5px;cursor:pointer;font-size:11px;padding:3px 10px;font-family:var(--mono)}
+.grp-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--agent-line) inset}
+.fp-tally{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-faint)}
+.fp-tally b{color:var(--agent-2)}
+.fp-list{overflow:auto;padding:8px 12px 10px;flex:1;min-height:0}
+.fgroup{margin-bottom:4px}
+.fg-head{display:flex;align-items:center;gap:8px;padding:7px 1px 7px;position:sticky;top:0;background:var(--surface);z-index:1}
+.fg-head .fg-n{font-family:var(--mono);font-size:10px;color:var(--text-faint);background:var(--surface-3);border:1px solid var(--border);border-radius:5px;padding:0 6px}
+.fg-head .fg-line{flex:1;height:1px;background:var(--border-soft)}
+.frow{border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:10px 11px;margin-bottom:8px;cursor:pointer}
+.frow:hover{border-color:var(--agent-line);background:linear-gradient(180deg,var(--surface),color-mix(in oklab,var(--agent) 3%,var(--surface)))}
+.frow.kept{border-left:3px solid var(--agent)}
+.frow.submitted{border-left:3px solid var(--add)}
+.frow.dismissed{opacity:.5;border-style:dashed}
+.frow.dismissed .fr-title{text-decoration:line-through;color:var(--text-faint)}
+.fr-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.fr-top .origin{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-faint);display:inline-flex;align-items:center;gap:5px}
+.fr-top .origin .d{width:6px;height:6px;border-radius:50%}
+.fr-top .origin.agent .d{background:var(--agent)} .fr-top .origin.human .d{background:var(--human)}
+.fr-title{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.4}
+.fr-foot{display:flex;align-items:center;gap:9px;margin-top:9px}
+.fr-foot .anchor{font-family:var(--mono);font-size:10.5px;color:var(--text-faint)}
+.fr-foot .anchor b{color:var(--text-dim);font-weight:500}
+.fr-foot .sugg-tag{font-family:var(--mono);font-size:10px;color:var(--agent-2)}
+.fr-foot .subm{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--add);border:1px solid var(--add-gutter);background:var(--add-bg);border-radius:5px;padding:1px 7px}
+.triage{margin-left:auto;display:inline-flex;gap:4px}
+.triage button{border:1px solid var(--border);background:var(--surface-2);color:var(--text-faint);border-radius:6px;font-size:10.5px;padding:3px 9px;cursor:pointer;font-family:var(--sans)}
+.triage button:hover{color:var(--text);border-color:var(--agent-line)}
+.triage .t-keep.on{background:var(--agent-soft);border-color:var(--agent-line);color:var(--agent-2)}
+.triage .t-drop.on{background:var(--del-bg);border-color:var(--del-gutter);color:var(--del)}
+.fr-restore{margin-left:auto;font-size:10.5px;color:var(--agent-2);border:1px solid var(--agent-line);background:var(--agent-soft);border-radius:6px;padding:3px 9px;cursor:pointer;font-family:var(--sans)}
+.add-finding{margin:0 12px 14px;border:1px dashed var(--border);border-radius:9px;background:transparent;color:var(--text-dim);font-size:12px;padding:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--sans)}
+.add-finding:hover{border-color:var(--human-line);color:var(--human)}
 </style>
 </head>
 <body>
@@ -286,6 +413,10 @@ body{
       <span class="status"><span class="pulse"></span> Reviewing</span>
       <a class="submit-cta" href="submit-to-github.html" title="进入筛选并提交 review 到 GitHub">提交 review <span class="cta-badge">3</span></a>
       <div class="switches">
+        <div class="seg phase-seg" id="phaseSeg" title="demo:切换首轮机审进行中 / 已完成">
+          <button data-phase-val="scan">扫描中</button>
+          <button data-phase-val="done" class="on">已完成</button>
+        </div>
         <div class="seg" id="themeSeg">
           <button data-theme-val="light" title="浅色">☀</button>
           <button data-theme-val="dark" class="on" title="深色">☾</button>
@@ -326,6 +457,9 @@ body{
         <div><span class="sw" style="background:var(--human)"></span> your discussion</div>
       </div>
     </div>
+
+    <!-- 左侧 resizer -->
+    <div class="resizer" data-target="left" title="拖动调整文件树宽度 · 双击复位"></div>
 
     <!-- ---------- CENTER: diff ---------- -->
     <div class="pane diff">
@@ -403,12 +537,44 @@ body{
       <div class="expander" title="展开未改动代码"><span class="exic">↕</span> 展开下方 34 行 · 至文件末尾 <span class="rng">150–183</span></div>
     </div>
 
+    <!-- 右侧 resizer -->
+    <div class="resizer" data-target="right" title="拖动调整会话栏宽度 · 双击复位"></div>
+
     <!-- ---------- RIGHT: conversation ---------- -->
-    <div class="pane convo">
+    <div class="pane convo" data-tab="discussion">
+
+      <!-- 首轮机审进行中:右栏初始态(扫描很久,不打断看 diff;进度与对话共用此区) -->
+      <div class="scanview">
+        <div class="scan-head">
+          <span class="sglyph"></span>
+          <div class="sh-t"><b>首轮机审</b><span class="sh-s">codex 正在通读整个 PR · gpt-5.1-codex</span></div>
+        </div>
+        <div class="timeline">
+          <div class="tl done"><span class="dot"></span><span class="tl-l">拉取 diff 与源码树</span><span class="tl-t">1.2s</span></div>
+          <div class="tl done"><span class="dot"></span><span class="tl-l">注入 per-thread MCP · 建立会话</span><span class="tl-t">0.3s</span></div>
+          <div class="tl active"><span class="dot"></span><span class="tl-l">通读 PR,上报 findings</span><span class="tl-t">3/6 files</span></div>
+          <div class="tl pending"><span class="dot"></span><span class="tl-l">就绪 · 可自由追问 / 框选提问</span><span class="tl-t"></span></div>
+        </div>
+        <div class="scan-stream">
+          <div class="ss-head">实时 findings <span class="ss-n">2</span> <span class="typing"><i></i><i></i><i></i></span></div>
+          <div class="sfind stagger" style="animation-delay:.1s">
+            <span class="sev high">high · concurrency</span>
+            <div class="m"><div class="ft">Cell&lt;usize&gt; 跨 spawn 共享非线程安全</div><div class="fp">pipeline.rs:121</div></div>
+            <span class="go">→</span>
+          </div>
+          <div class="sfind stagger" style="animation-delay:.45s">
+            <span class="sev high" style="color:var(--sev-med);background:var(--human-soft);border-color:var(--human-line)">med · error-handling</span>
+            <div class="m"><div class="ft">unwrap() 会在 join 时把 panic 直接传播</div><div class="fp">pipeline.rs:146</div></div>
+            <span class="go">→</span>
+          </div>
+        </div>
+        <div class="scan-foot"><span class="ic">◆</span> 扫描会跑一会儿 —— 期间可点开任一 finding,或在左侧框选代码直接向 codex 提问,无需等待机审结束。</div>
+      </div>
+
       <div class="tabs">
-        <div class="tab active">Discussion <span class="n">2</span></div>
-        <div class="tab">Findings <span class="n">3</span></div>
-        <div class="tab">Summary</div>
+        <div class="tab active" data-tab="discussion">Discussion <span class="n">2</span></div>
+        <div class="tab" data-tab="findings">Findings <span class="n">4</span></div>
+        <div class="tab" data-tab="summary">Summary</div>
       </div>
       <div class="anchor-ref" title="跳到代码">
         <span class="bar"></span>
@@ -457,6 +623,107 @@ counter.<span class="fn">fetch_add</span>(<span class="n">1</span>, <span class=
         </div>
         <div class="scope">◆ 全局会话 · 已锚定 <b>pipeline.rs:121</b> · read-only sandbox</div>
       </div>
+
+      <!-- Findings tab:运行时列表(triage + 导航,submit 前的中心视图) -->
+      <div class="findings-panel">
+        <div class="fp-toolbar">
+          <div class="grp-seg"><button class="on">严重度</button><button>文件</button></div>
+          <span class="fp-tally">保留 <b>3</b> · 剔除 1</span>
+        </div>
+        <div class="fp-list">
+
+          <div class="fgroup">
+            <div class="fg-head"><span class="sev high">high</span><span class="fg-n">1</span><span class="fg-line"></span></div>
+            <div class="frow kept" title="跳到 diff / 打开 discussion">
+              <div class="fr-top"><span class="sev high">high · concurrency</span><span class="origin agent"><span class="d"></span>codex</span></div>
+              <div class="fr-title">Cell&lt;usize&gt; 跨 spawn 共享数据竞争</div>
+              <div class="fr-foot">
+                <span class="anchor">📍 <b>pipeline.rs</b>:121</span>
+                <span class="sugg-tag">◇ suggestion</span>
+                <span class="triage"><button class="t-keep on">保留</button><button class="t-drop">剔除</button></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="fgroup">
+            <div class="fg-head"><span class="sev med">med</span><span class="fg-n">2</span><span class="fg-line"></span></div>
+            <div class="frow kept" title="跳到 diff / 打开 discussion">
+              <div class="fr-top"><span class="sev med">med · error-handling</span><span class="origin human"><span class="d"></span>你 · 提升</span></div>
+              <div class="fr-title">join_next 的 panic 被 unwrap 直接放大</div>
+              <div class="fr-foot">
+                <span class="anchor">📍 <b>pipeline.rs</b>:146</span>
+                <span class="triage"><button class="t-keep on">保留</button><button class="t-drop">剔除</button></span>
+              </div>
+            </div>
+            <div class="frow submitted" title="已提交,不可再改">
+              <div class="fr-top"><span class="sev med">med · resource</span><span class="origin agent"><span class="d"></span>codex</span></div>
+              <div class="fr-title">JoinSet 无背压,超大 job 可能占满内存</div>
+              <div class="fr-foot">
+                <span class="anchor">📍 <b>handler.rs</b>:34</span>
+                <span class="subm">✓ 已提交 · #482</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="fgroup">
+            <div class="fg-head"><span class="sev low">low</span><span class="fg-n">1</span><span class="fg-line"></span></div>
+            <div class="frow dismissed" title="跳到 diff / 打开 discussion">
+              <div class="fr-top"><span class="sev low">low · style</span><span class="origin agent"><span class="d"></span>codex</span></div>
+              <div class="fr-title">变量名 c 可读性差</div>
+              <div class="fr-foot">
+                <span class="anchor">📍 <b>pipeline.rs</b>:123</span>
+                <button class="fr-restore">↩ 恢复</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <button class="add-finding">＋ 手动新增 finding</button>
+      </div>
+
+      <!-- Summary tab:codex 对整个 PR 的审核总结 -->
+      <div class="summary-panel">
+        <div class="sum-scroll">
+
+          <div class="sum-verdict rc">
+            <div class="sv-head"><span class="sv-ic">✕</span> codex 建议 <b>Request changes</b></div>
+            <div class="sv-body">并行 transcode 的方向可行,但共享状态的线程安全必须收口后再合并。</div>
+            <div class="sv-meta">◇ 仅建议 · 最终 event 在提交时确认</div>
+          </div>
+
+          <div class="sum-stats">
+            <div class="st"><span class="st-n" style="color:var(--sev-high)">1</span><span class="st-l">high</span></div>
+            <div class="st"><span class="st-n" style="color:var(--sev-med)">2</span><span class="st-l">med</span></div>
+            <div class="st"><span class="st-n" style="color:var(--sev-low)">1</span><span class="st-l">low</span></div>
+            <div class="st-div"></div>
+            <div class="st"><span class="st-n">3</span><span class="st-l">保留</span></div>
+            <div class="st"><span class="st-n">1</span><span class="st-l">已提交</span></div>
+            <div class="st"><span class="st-n">2</span><span class="st-l">讨论</span></div>
+          </div>
+
+          <div class="sum-block">
+            <div class="sb-head">总结 <span class="sb-edit">✎ 编辑</span> <span class="sb-by"><span class="gl"></span>codex 生成</span></div>
+            <div class="sb-prose">
+              <p>本 PR 将 transcode 从串行改为基于 <code>JoinSet</code> 的并行 encode,吞吐提升明显,方向正确。</p>
+              <p>主要风险集中在<strong>共享状态的并发安全</strong>:进度计数用了非线程安全的 <code>Cell</code>(实则编译不过),需改 <code>Arc&lt;AtomicUsize&gt;</code>;错误处理上 <code>join_next</code> 的 <code>unwrap</code> 会把单段 panic 放大为整体崩溃。</p>
+              <p>建议合并前处理 2 处 concurrency / error-handling 问题;资源占用(<code>JoinSet</code> 无背压)可后续跟进。</p>
+            </div>
+          </div>
+
+          <div class="sum-block">
+            <div class="sb-head">关注主题 <span class="sb-by">点击筛选 findings</span></div>
+            <div class="theme"><span class="th-dot high"></span><span class="th-cat">concurrency</span><span class="th-note">Cell 跨 spawn 数据竞争</span><span class="th-n">1</span></div>
+            <div class="theme"><span class="th-dot med"></span><span class="th-cat">error-handling</span><span class="th-note">join_next 的 panic 被放大</span><span class="th-n">1</span></div>
+            <div class="theme"><span class="th-dot med"></span><span class="th-cat">resource</span><span class="th-note">JoinSet 无背压 · 已提交</span><span class="th-n">1</span></div>
+          </div>
+
+          <div class="sum-cov">覆盖 6/6 文件 · +188 −41 · gpt-5.1-codex · ctx 82k · read-only sandbox</div>
+        </div>
+        <div class="sum-foot">
+          <a class="sum-submit" href="submit-to-github.html">提交 review · 保留 3 条 <span style="font-size:15px;line-height:1">→</span></a>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -469,8 +736,52 @@ document.querySelectorAll('#themeSeg button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('#themeSeg button').forEach(x=>x.classList.toggle('on',x===b));
 });
 document.getElementById('themeSel').onchange=e=>root.setAttribute('data-theme',e.target.value);
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');});
+document.querySelectorAll('#phaseSeg button').forEach(b=>b.onclick=()=>{
+  document.body.classList.toggle('scan',b.dataset.phaseVal==='scan');
+  document.querySelectorAll('#phaseSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  if(b.dataset.phaseVal==='scan'){ // 重启 stagger,让扫描态 finding 入场
+    document.querySelectorAll('.scanview .stagger').forEach(el=>{el.style.animation='none';el.offsetHeight;el.style.animation='';});
+  }
+});
+const convo=document.querySelector('.convo');
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  convo.setAttribute('data-tab',t.dataset.tab);
+});
+// triage 保留/剔除
+document.querySelectorAll('.triage').forEach(tr=>tr.querySelectorAll('button').forEach(b=>b.onclick=e=>{
+  e.stopPropagation();
+  tr.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  const row=tr.closest('.frow');
+  row.classList.toggle('kept',b.classList.contains('t-keep'));
+  row.classList.toggle('dismissed',b.classList.contains('t-drop'));
+}));
+document.querySelectorAll('.grp-seg button').forEach(b=>b.onclick=()=>{
+  b.parentElement.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+});
 document.querySelectorAll('.file').forEach(f=>f.onclick=()=>{document.querySelectorAll('.file').forEach(x=>x.classList.remove('active'));f.classList.add('active');});
+
+// 左右栏拖动(min/max 约束 + 双击复位)
+const LIM={left:[180,420],right:[300,560]},DEF={left:236,right:380};
+let drag=null,sx=0,sw=0;
+document.querySelectorAll('.resizer').forEach(r=>{
+  r.addEventListener('mousedown',e=>{
+    drag=r.dataset.target;sx=e.clientX;
+    sw=parseInt(getComputedStyle(root).getPropertyValue(drag==='left'?'--left-w':'--right-w'));
+    r.classList.add('drag');document.body.style.cursor='col-resize';document.body.style.userSelect='none';
+    e.preventDefault();
+  });
+  r.addEventListener('dblclick',()=>root.style.setProperty(r.dataset.target==='left'?'--left-w':'--right-w',DEF[r.dataset.target]+'px'));
+});
+window.addEventListener('mousemove',e=>{
+  if(!drag)return;
+  const [lo,hi]=LIM[drag],dx=e.clientX-sx;
+  const w=Math.min(hi,Math.max(lo,drag==='left'?sw+dx:sw-dx));
+  root.style.setProperty(drag==='left'?'--left-w':'--right-w',w+'px');
+});
+window.addEventListener('mouseup',()=>{if(drag){document.querySelectorAll('.resizer').forEach(r=>r.classList.remove('drag'));drag=null;document.body.style.cursor='';document.body.style.userSelect='';}});
 </script>
 </body>
 </html>
