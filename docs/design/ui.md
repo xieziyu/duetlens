@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽已落地(见「屏与状态」);空态/错误态、finding 就地编辑器待补。
+> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽/空态错误态已落地(见「屏与状态」);finding 就地编辑器、Summary 编辑态待补。
 
 - 整体重新设计。
 - **diff review 是主场**——用户交互最多的界面。
@@ -68,10 +68,18 @@
 - 三栏:文件树 / diff(主区,`minmax(0,1fr)` 自适应)/ 会话栏。
 - **左右栏可拖动调宽**:两条分隔线拖拽,带 min/max 约束(文件树 180–420 / 会话栏 300–560),双击复位;由 CSS var `--left-w` / `--right-w` 驱动。**栏宽应按用户持久化**(实现项)。
 
+### 空态 / 错误态(entry,`mockup/entry.html` 顶栏「预览态」可切)
+
+- **首次无历史**:会话历史区显示引导空态(还没有审核记录 + 如何开始),隐藏计数与「全部历史」。
+- **gh 未登录**:GitHub 面板替换为提示卡 —— 说明 Duetlens 依赖 `gh` CLI + `gh auth login` 命令 + 「已登录,重试 / 安装」,并提示**本地分支 / GitButler 来源无需 gh**;此时 CTA 禁用。
+- **PR 解析失败**:输入框标红 + 预览卡转错误态(不存在 / 无权限,附格式提示);CTA 禁用。
+- **仓库路径不匹配**:本地路径的 remote 与 PR 不符 —— **软警告、不阻断**(琥珀提示,继续则忽略本地路径改用临时 checkout),CTA 仍可用。
+- 原则:**硬错误(gh 未登录 / PR 解析失败)禁用 CTA;软警告(路径不匹配)放行**。
+
 ## 已有 mockup
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
 - `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + 两轴配色切换。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md))。
 
-> 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、组件清单、空态/错误态、finding 就地编辑器)在本目录新增分册,并在 [文档索引](../README.md) 登记。
+> 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、组件清单、finding 就地编辑器、Summary 编辑态)在本目录新增分册,并在 [文档索引](../README.md) 登记。
