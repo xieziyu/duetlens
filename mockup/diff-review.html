@@ -319,9 +319,41 @@ body.scan .convo .scanview{display:flex}
 .convo[data-tab="summary"] .anchor-ref,.convo[data-tab="summary"] .thread,.convo[data-tab="summary"] .composer{display:none}
 .findings-panel,.summary-panel{display:none}
 .convo[data-tab="findings"] .findings-panel{display:flex;flex-direction:column;min-height:0;flex:1}
-.convo[data-tab="summary"] .summary-panel{display:flex;flex:1;align-items:center;justify-content:center}
+.convo[data-tab="summary"] .summary-panel{display:flex;flex-direction:column;flex:1;min-height:0}
 body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!important}
-.sum-stub{font-family:var(--mono);font-size:12px;color:var(--text-faint)}
+.sum-scroll{flex:1;overflow:auto;padding:14px 14px 10px}
+.sum-verdict{border:1px solid var(--border);border-radius:11px;padding:12px 13px;margin-bottom:14px}
+.sum-verdict.rc{border-color:var(--del-gutter);background:color-mix(in oklab,var(--del) 7%,var(--surface))}
+.sv-head{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim)}
+.sv-head b{color:var(--text);font-weight:600}
+.sv-ic{width:21px;height:21px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none;background:var(--del-bg);color:var(--sev-high);border:1px solid var(--del-gutter)}
+.sv-body{font-size:12.5px;color:var(--text-dim);line-height:1.6;margin-top:9px}
+.sv-meta{font-size:11px;color:var(--text-faint);margin-top:9px;font-family:var(--mono);display:flex;align-items:center;gap:6px}
+.sum-stats{display:flex;align-items:center;border:1px solid var(--border);border-radius:11px;background:var(--surface-2);padding:11px 6px;margin-bottom:16px}
+.sum-stats .st{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.sum-stats .st-n{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text);line-height:1}
+.sum-stats .st-l{font-size:10px;color:var(--text-faint);font-family:var(--mono)}
+.sum-stats .st-div{width:1px;align-self:stretch;background:var(--border);margin:1px 7px}
+.sum-block{margin-bottom:16px}
+.sb-head{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:9px}
+.sb-head .sb-edit{color:var(--agent-2);cursor:pointer;text-transform:none;letter-spacing:0}
+.sb-head .sb-by{margin-left:auto;color:var(--text-faint);text-transform:none;letter-spacing:0;display:inline-flex;align-items:center;gap:5px}
+.sb-head .sb-by .gl{width:11px;height:11px;border-radius:3px;background:conic-gradient(from 210deg,var(--agent),var(--agent-2),var(--agent));box-shadow:0 0 0 1px var(--agent-line) inset}
+.sb-prose{font-size:12.5px;color:var(--text-dim);line-height:1.65;border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:11px 12px}
+.sb-prose p{margin-bottom:8px} .sb-prose p:last-child{margin-bottom:0}
+.sb-prose strong{color:var(--text);font-weight:600}
+.sb-prose code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);padding:1px 5px;border-radius:4px;color:var(--agent-2)}
+.theme{display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface);margin-bottom:7px;cursor:pointer}
+.theme:hover{border-color:var(--agent-line);background:var(--surface-2)}
+.theme .th-dot{width:8px;height:8px;border-radius:3px;flex:none}
+.theme .th-dot.high{background:var(--sev-high)} .theme .th-dot.med{background:var(--sev-med)} .theme .th-dot.low{background:var(--sev-low)}
+.theme .th-cat{font-family:var(--mono);font-size:11.5px;color:var(--text);font-weight:500}
+.theme .th-note{font-size:11.5px;color:var(--text-faint);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.theme .th-n{font-family:var(--mono);font-size:10px;color:var(--text-faint);background:var(--surface-3);border:1px solid var(--border);border-radius:5px;padding:0 6px;flex:none}
+.sum-cov{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);padding:2px 2px 4px;line-height:1.7}
+.sum-foot{border-top:1px solid var(--border);padding:12px 14px}
+.sum-submit{width:100%;background:var(--accent-solid);color:var(--on-solid);font-weight:600;border:0;border-radius:10px;padding:11px;cursor:pointer;font-size:13px;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:7px}
+.sum-submit:hover{filter:brightness(1.08)}
 .sev.med{color:var(--sev-med);background:var(--human-soft);border:1px solid var(--human-line)}
 .sev.low{color:var(--sev-low);background:var(--agent-soft);border:1px solid var(--agent-line)}
 .fp-toolbar{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border-soft)}
@@ -640,9 +672,47 @@ counter.<span class="fn">fetch_add</span>(<span class="n">1</span>, <span class=
         <button class="add-finding">＋ 手动新增 finding</button>
       </div>
 
-      <!-- Summary tab:占位,待单独设计 -->
+      <!-- Summary tab:codex 对整个 PR 的审核总结 -->
       <div class="summary-panel">
-        <div class="sum-stub">Summary（审核总结）· 下一屏设计</div>
+        <div class="sum-scroll">
+
+          <div class="sum-verdict rc">
+            <div class="sv-head"><span class="sv-ic">✕</span> codex 建议 <b>Request changes</b></div>
+            <div class="sv-body">并行 transcode 的方向可行,但共享状态的线程安全必须收口后再合并。</div>
+            <div class="sv-meta">◇ 仅建议 · 最终 event 在提交时确认</div>
+          </div>
+
+          <div class="sum-stats">
+            <div class="st"><span class="st-n" style="color:var(--sev-high)">1</span><span class="st-l">high</span></div>
+            <div class="st"><span class="st-n" style="color:var(--sev-med)">2</span><span class="st-l">med</span></div>
+            <div class="st"><span class="st-n" style="color:var(--sev-low)">1</span><span class="st-l">low</span></div>
+            <div class="st-div"></div>
+            <div class="st"><span class="st-n">3</span><span class="st-l">保留</span></div>
+            <div class="st"><span class="st-n">1</span><span class="st-l">已提交</span></div>
+            <div class="st"><span class="st-n">2</span><span class="st-l">讨论</span></div>
+          </div>
+
+          <div class="sum-block">
+            <div class="sb-head">总结 <span class="sb-edit">✎ 编辑</span> <span class="sb-by"><span class="gl"></span>codex 生成</span></div>
+            <div class="sb-prose">
+              <p>本 PR 将 transcode 从串行改为基于 <code>JoinSet</code> 的并行 encode,吞吐提升明显,方向正确。</p>
+              <p>主要风险集中在<strong>共享状态的并发安全</strong>:进度计数用了非线程安全的 <code>Cell</code>(实则编译不过),需改 <code>Arc&lt;AtomicUsize&gt;</code>;错误处理上 <code>join_next</code> 的 <code>unwrap</code> 会把单段 panic 放大为整体崩溃。</p>
+              <p>建议合并前处理 2 处 concurrency / error-handling 问题;资源占用(<code>JoinSet</code> 无背压)可后续跟进。</p>
+            </div>
+          </div>
+
+          <div class="sum-block">
+            <div class="sb-head">关注主题 <span class="sb-by">点击筛选 findings</span></div>
+            <div class="theme"><span class="th-dot high"></span><span class="th-cat">concurrency</span><span class="th-note">Cell 跨 spawn 数据竞争</span><span class="th-n">1</span></div>
+            <div class="theme"><span class="th-dot med"></span><span class="th-cat">error-handling</span><span class="th-note">join_next 的 panic 被放大</span><span class="th-n">1</span></div>
+            <div class="theme"><span class="th-dot med"></span><span class="th-cat">resource</span><span class="th-note">JoinSet 无背压 · 已提交</span><span class="th-n">1</span></div>
+          </div>
+
+          <div class="sum-cov">覆盖 6/6 文件 · +188 −41 · gpt-5.1-codex · ctx 82k · read-only sandbox</div>
+        </div>
+        <div class="sum-foot">
+          <a class="sum-submit" href="submit-to-github.html">提交 review · 保留 3 条 <span style="font-size:15px;line-height:1">→</span></a>
+        </div>
       </div>
 
     </div>
