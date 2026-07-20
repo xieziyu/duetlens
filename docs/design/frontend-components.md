@@ -4,7 +4,7 @@
 >
 > 状态:实现前设计。从稳定 mockup 抽组件层,定 UI 状态的分层与持久化,承接 [design-system](design-system.md) 的收敛 TODO。**mockup 内联样式 / JS 仍是唯一实现来源,本篇是搬到 React 时的目标结构,不是既有代码。**
 
-前端为 **React SPA**,承载于 Tauri webview(见 [architecture](architecture.md))。本篇定三件事:组件如何拆、状态放哪层、哪些状态要持久化。视觉 tokens 直接复用 `mockup/tokens.css`;组件承载的状态机见 [ui-states](ui-states.md)。
+前端为 **React SPA**,承载于 Electron renderer(见 [architecture](architecture.md))。本篇定三件事:组件如何拆、状态放哪层、哪些状态要持久化。视觉 tokens 直接复用 `mockup/tokens.css`;组件承载的状态机见 [ui-states](ui-states.md)。
 
 ## 组件树
 
@@ -61,7 +61,7 @@
 
 | 层 | 是什么 | 来源 | 生命周期 |
 | --- | --- | --- | --- |
-| **Server state** | review / discussions / findings / messages / summary / diff | Rust 后端(sqlite)+ codex 事件流,经 Tauri `invoke` 拉取、`event` 推送 | 权威数据,后端持久化 |
+| **Server state** | review / discussions / findings / messages / summary / diff | Node 后端(sqlite)+ codex 事件流,经 Electron IPC(`ipcRenderer.invoke` 拉取、`webContents.send` 推送)| 权威数据,后端持久化 |
 | **Persisted UI state** | 栏宽 / viewed / 上次 tab / 主题两轴 / diff 视图偏好 | 见下「持久化」 | 跨会话保留,但非业务数据 |
 | **Ephemeral UI state** | 卡片 edit 中的草稿、popover 显隐、hover、菜单开合 | 组件本地 `useState` | 随组件卸载即弃 |
 
@@ -70,25 +70,25 @@
 ### 数据流
 
 ```
-codex app-server ──JSON-RPC──▶ Rust (ConversationalAgent)
+codex app-server ──JSON-RPC──▶ Node (ConversationalAgent)
                                   │  ▲
                      MCP 工具调用  │  │ report_finding / update_finding
                                   ▼  │
-      Rust 后端 (sqlite) ◀────────────┘
+      Node 后端 (sqlite) ◀────────────┘
         │  ▲
- emit   │  │ invoke (query / command)
- event  ▼  │
+ IPC    │  │ ipcRenderer.invoke (query / command)
+ send   ▼  │
       React (server-state store)
         │
         ▼  props / context
       组件树
 ```
 
-agent 侧的 event / approval 不直接渗入 UI:`ConversationalAgent` 薄封装后,后端把 turn 事件、`report_finding` 等归一成 Duetlens 领域事件再 `emit` 给前端(对照 [architecture](architecture.md) 抽象层)。
+agent 侧的 event / approval 不直接渗入 UI:`ConversationalAgent` 薄封装后,后端把 turn 事件、`report_finding` 等归一成 Duetlens 领域事件再经 IPC 推给前端(对照 [architecture](architecture.md) 抽象层)。
 
 ## UI 状态持久化
 
-只持久化上表 **Persisted UI state**。核心问题是**粒度**(跟人还是跟这次 review)与**存哪**(后端 sqlite 还是 webview 本地),按下表定:
+只持久化上表 **Persisted UI state**。核心问题是**粒度**(跟人还是跟这次 review)与**存哪**(后端 sqlite 还是 renderer 本地),按下表定:
 
 | 状态 | 粒度 | 存储 | 理由 |
 | --- | --- | --- | --- |
@@ -99,7 +99,7 @@ agent 侧的 event / approval 不直接渗入 UI:`ConversationalAgent` 薄封装
 | diff 折叠 / off-diff banner 展开 | ephemeral | 不持久化 | 纯视图态,重开恢复默认无碍 |
 | 卡片 edit 草稿 | ephemeral | 不持久化(可选后端 draft) | 未保存的编辑;若要防丢可另存 draft,非本期必须 |
 
-**存储位置原则**:凡属**领域进度**(viewed 是这次 review 的一部分)一律进后端 sqlite,与 discussions/findings 同库、随会话历史恢复 —— 这样「打开最近的审核」能连同看过哪些文件一起还原。纯**设备级外观偏好**(主题、栏宽)也放后端 settings 表以求单一来源;不用 webview `localStorage`,避免多窗口 / 清缓存导致的漂移,也免去两套读写路径。
+**存储位置原则**:凡属**领域进度**(viewed 是这次 review 的一部分)一律进后端 sqlite,与 discussions/findings 同库、随会话历史恢复 —— 这样「打开最近的审核」能连同看过哪些文件一起还原。纯**设备级外观偏好**(主题、栏宽)也放后端 settings 表以求单一来源;不用 renderer `localStorage`,避免多窗口 / 清缓存导致的漂移,也免去两套读写路径。
 
 ### schema 草图
 
@@ -126,7 +126,7 @@ review_ui_state (per-review, 挂 review_id)
 
 1. 落 `mockup/tokens.css` 为 React 主题层(两轴挂根节点),先跑通 `<App>` 骨架 + 主题切换。
 2. 抽三块高复用组件:`<InlineCard>`(四态)、`<SelectionPopover>`、`<Composer>`,配状态机([ui-states](ui-states.md))与单测。
-3. 接 server-state store + Tauri `invoke`/`event`,先渲染只读 diff + findings。
+3. 接 server-state store + Electron IPC,先渲染只读 diff + findings。
 4. 补写路径命令(triage / edit / discussion)与 UI 持久化两张表。
 
 ## 关联索引
