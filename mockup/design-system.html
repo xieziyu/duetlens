@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* 配色 tokens 全部来自 tokens.css(单一来源);本页只做展示与组件清单 */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 78% -10%,var(--glow1),transparent 60%),radial-gradient(900px 500px at 5% 108%,var(--glow2),transparent 55%)}
+:root{--mono:"IBM Plex Mono",ui-monospace,monospace;--sans:"IBM Plex Sans",system-ui,sans-serif}
+a{color:var(--agent-2)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 24px 80px}
+
+/* topbar */
+.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:16px;padding:14px 24px;margin:0 -24px 8px;
+  background:color-mix(in oklab,var(--surface) 82%,transparent);border-bottom:1px solid var(--border);backdrop-filter:blur(8px)}
+.mark{font-family:var(--mono);font-size:16px;font-weight:600;letter-spacing:-.3px;color:var(--text)}
+.mark i{font-style:normal;color:var(--agent-2)} .mark .cur{color:var(--human);font-weight:400;animation:blink 1.15s step-end infinite}
+@keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+.top .sub{font-size:12px;color:var(--text-faint);font-family:var(--mono)}
+.switches{margin-left:auto;display:flex;align-items:center;gap:10px}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{min-width:28px;height:24px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px;padding:0 8px;font-family:var(--mono)}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+.sel-theme{font-family:var(--mono);font-size:11px;background:var(--surface-3);color:var(--text-dim);border:1px solid var(--border);border-radius:7px;padding:5px 8px;cursor:pointer;outline:none}
+
+/* section scaffolding */
+h1{font-size:22px;font-weight:700;letter-spacing:-.4px;margin:26px 0 4px}
+.lede{color:var(--text-dim);font-size:13px;max-width:70ch;margin-bottom:8px}
+section{margin-top:34px}
+h2{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);font-weight:600;
+  padding-bottom:8px;border-bottom:1px solid var(--border);margin-bottom:16px;display:flex;align-items:baseline;gap:10px}
+h2 .h-note{text-transform:none;letter-spacing:0;color:var(--text-faint);font-family:var(--sans);font-weight:400}
+h3{font-size:12px;color:var(--text-dim);font-weight:600;margin:16px 0 9px}
+.card{border:1px solid var(--border);border-radius:12px;background:var(--surface);padding:18px}
+.grid{display:grid;gap:20px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.note{font-size:11.5px;color:var(--text-faint);margin-top:8px}
+code.k{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);border:1px solid var(--border-soft);padding:1px 6px;border-radius:5px;color:var(--agent-2)}
+
+/* swatches */
+.sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:10px}
+.sw{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface-2)}
+.sw .chip{height:52px;border-bottom:1px solid var(--border-soft);background-image:
+  linear-gradient(45deg,var(--border-soft) 25%,transparent 25%),linear-gradient(-45deg,var(--border-soft) 25%,transparent 25%),
+  linear-gradient(45deg,transparent 75%,var(--border-soft) 75%),linear-gradient(-45deg,transparent 75%,var(--border-soft) 75%);
+  background-size:12px 12px;background-position:0 0,0 6px,6px -6px,-6px 0}
+.sw .chip i{display:block;height:100%}
+.sw .meta{padding:7px 9px}
+.sw .vn{font-family:var(--mono);font-size:11px;color:var(--text)}
+.sw .vv{font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* type scale */
+.type-row{display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid var(--border-soft)}
+.type-row:last-child{border-bottom:0}
+.type-row .lbl{font-family:var(--mono);font-size:11px;color:var(--text-faint);width:120px;flex:none}
+.mono-sample{font-family:var(--mono)}
+
+/* primitives: radius / elevation */
+.prim{display:flex;flex-wrap:wrap;gap:16px}
+.prim .box{width:96px;height:64px;background:var(--surface-2);border:1px solid var(--border);display:flex;align-items:flex-end;justify-content:center;padding:6px;font-family:var(--mono);font-size:10px;color:var(--text-faint)}
+.prim .box.r{border-radius:var(--r)}
+.prim .box.sh{box-shadow:var(--shadow);border-color:var(--border-soft)}
+
+/* ===== components(镜像 diff-review.html 的关键组件)===== */
+.btn{font-size:12px;font-weight:500;padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{color:var(--text);border-color:var(--agent-line)}
+.btn.primary{background:var(--agent-soft);border-color:var(--agent-line);color:var(--agent-2)}
+.btn.ok{color:var(--add);border-color:var(--add-gutter)}
+.btn.danger:hover{color:var(--del);border-color:var(--del-gutter)}
+.btn.promote{background:var(--human-soft);border-color:var(--human-line);color:var(--human)}
+.btn.solid{background:var(--accent-solid);color:var(--on-solid);border-color:transparent;font-weight:600}
+.btn.human-solid{background:var(--human);color:var(--on-accent);border-color:transparent;font-weight:600}
+.sev{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:5px}
+.sev.high{color:var(--sev-high);background:var(--del-bg);border:1px solid var(--del-gutter)}
+.sev.med{color:var(--sev-med);background:var(--human-soft);border:1px solid var(--human-line)}
+.sev.low{color:var(--sev-low);background:var(--agent-soft);border:1px solid var(--agent-line)}
+.tool-tag{font-family:var(--mono);font-size:10.5px;color:var(--text-faint)} .tool-tag b{color:var(--agent-2);font-weight:500}
+.origin{font-family:var(--mono);font-size:10px;color:var(--text-faint);display:inline-flex;align-items:center;gap:5px}
+.origin .d{width:6px;height:6px;border-radius:50%} .origin.agent .d{background:var(--agent)} .origin.human .d{background:var(--human)}
+.status{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border-radius:999px;background:var(--agent-soft);border:1px solid var(--agent-line);color:var(--agent-2);font-weight:500;font-size:12px}
+.status .pulse{width:7px;height:7px;border-radius:50%;background:var(--agent);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 var(--agent-line)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border)}
+.tab{font-family:var(--mono);padding:7px 12px 9px;font-size:12px;font-weight:500;color:var(--text-faint);cursor:pointer;border-bottom:2px solid transparent}
+.tab.active{color:var(--text);border-bottom-color:var(--agent)}
+.subm{font-family:var(--mono);font-size:10px;color:var(--add);border:1px solid var(--add-gutter);background:var(--add-bg);border-radius:5px;padding:1px 7px}
+.dia{color:var(--agent-2)}
+.fe-input{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:12.5px;outline:none;font-weight:600}
+.fe-input:focus{border-color:var(--agent-line)}
+.fe-sev{display:inline-flex;gap:4px}
+.fe-sev button{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-faint);cursor:pointer}
+.fe-sev button.on.high{color:var(--sev-high);background:var(--del-bg);border-color:var(--del-gutter)}
+.fe-sev button.on.med{color:var(--sev-med);background:var(--human-soft);border-color:var(--human-line)}
+.fe-sev button.on.low{color:var(--sev-low);background:var(--agent-soft);border-color:var(--agent-line)}
+/* mini finding/discussion 卡 */
+.mcard{border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow);max-width:420px}
+.mcard.agent{border-left:2px solid var(--agent)} .mcard.human{border-left:2px solid var(--human)}
+.mcard.submitted{border-left:2px solid var(--add)} .mcard.dismissed{border-style:dashed;opacity:.6}
+.mc-head{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--border-soft)}
+.who{display:flex;align-items:center;gap:7px;font-weight:600;font-size:12px;color:var(--text)}
+.av{width:19px;height:19px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.av.agent{background:var(--agent-soft);color:var(--agent-2);border:1px solid var(--agent-line)}
+.av.human{background:var(--human-soft);color:var(--human);border:1px solid var(--human-line)}
+.mc-body{padding:10px 12px;font-size:12.5px;color:var(--text-dim)} .mc-body strong{color:var(--text)}
+.mc-body code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);padding:1px 5px;border-radius:4px;color:var(--agent-2)}
+.mc-foot{display:flex;gap:8px;padding:2px 12px 12px}
+.dismbar{display:flex;align-items:center;gap:9px;padding:9px 12px;font-size:12px;color:var(--text-faint)}
+.dismbar .x{color:var(--del);font-weight:600} .dismbar .t{text-decoration:line-through;flex:1}
+/* popover */
+.selpop{display:inline-flex;align-items:center;gap:3px;padding:4px;background:var(--surface-3);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow)}
+.selpop .rng{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);padding:0 7px 0 5px;border-right:1px solid var(--border);align-self:stretch;display:flex;align-items:center}
+.selpop button{border:0;background:transparent;font-size:12px;padding:5px 9px;border-radius:6px;cursor:pointer}
+.selpop .disc{color:var(--human)} .selpop .ask{color:var(--agent-2)}
+/* file tree rows */
+.trow{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;max-width:300px;position:relative}
+.trow.active{background:var(--surface-3)} .trow.active::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;border-radius:2px;background:var(--agent)}
+.trow .nm{font-family:var(--mono);font-size:12px;color:var(--text);flex:1}
+.trow.viewed .nm{color:var(--text-faint);text-decoration:line-through;text-decoration-color:var(--border-soft)}
+.trow .badge{font-family:var(--mono);font-size:10px;min-width:16px;height:16px;padding:0 4px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;background:var(--del-bg);color:var(--sev-high);border:1px solid var(--del-gutter)}
+.trow .vtick{width:16px;height:16px;border-radius:5px;border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:transparent}
+.trow.viewed .vtick{background:var(--add-bg);border-color:var(--add-gutter);color:var(--add)}
+/* gutter anchors */
+.anchor{display:inline-block;width:9px;height:9px;border-radius:50%;border:2px solid var(--bg)}
+.anchor.agent{background:var(--agent)} .anchor.human{background:var(--human)}
+.inv{width:100%;border-collapse:collapse;font-size:12px}
+.inv th,.inv td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+.inv th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);font-weight:600}
+.inv td:first-child{font-weight:600;color:var(--text);white-space:nowrap}
+.inv .cls{font-family:var(--mono);font-size:11px;color:var(--agent-2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <span class="mark">duet<i>lens</i><span class="cur">_</span></span>
+    <span class="sub">design system</span>
+    <div class="switches">
+      <div class="seg" id="modeSeg"><button data-v="light">☀</button><button data-v="dark" class="on">☾</button></div>
+      <select class="sel-theme" id="themeSel"><option value="duetlens">Duetlens</option><option value="github">GitHub</option></select>
+    </div>
+  </div>
+
+  <h1>Design System</h1>
+  <p class="lede">从 <code class="k">diff-review.html</code> / <code class="k">entry.html</code> 稳定后抽出的 tokens 与组件清单。所有配色变量的单一来源是 <code class="k">tokens.css</code>,由两个正交轴驱动:<code class="k">data-mode</code>(明暗外壳)× <code class="k">data-theme</code>(配色主题,成套:语法 + diff + severity)。右上角可实时切换四种组合。</p>
+
+  <section>
+    <h2>Color tokens <span class="h-note">随上方 data-mode × data-theme 实时变化</span></h2>
+    <div id="swatches" class="grid"></div>
+  </section>
+
+  <section>
+    <h2>Typography <span class="h-note">IBM Plex Sans + Mono · 去手写体</span></h2>
+    <div class="card">
+      <div class="type-row"><span class="lbl">Sans / 正文</span><span style="font-size:13px">审核对话与说明正文 · The quick brown fox</span></div>
+      <div class="type-row"><span class="lbl">Mono / 结构</span><span class="mono-sample" style="font-size:12.5px">file:line · report_finding() · @@ -118,7 +118,12 @@</span></div>
+      <div class="type-row"><span class="lbl">22 / 700</span><span style="font-size:22px;font-weight:700;letter-spacing:-.4px">标题 Heading</span></div>
+      <div class="type-row"><span class="lbl">16 / 600 mono</span><span class="mono-sample" style="font-size:16px;font-weight:600">wordmark duetlens_</span></div>
+      <div class="type-row"><span class="lbl">13 / 正文</span><span style="font-size:13px">body 13px · line-height 1.5</span></div>
+      <div class="type-row"><span class="lbl">12.5 / code</span><span class="mono-sample" style="font-size:12.5px">代码 12.5px line-height 1.75</span></div>
+      <div class="type-row"><span class="lbl">11 / mono caps</span><span class="mono-sample" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint)">section label</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Radius · Elevation <span class="h-note">--r · --shadow</span></h2>
+    <div class="prim">
+      <div class="box r">--r 8px</div>
+      <div class="box sh r">--shadow</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Buttons</h2>
+    <div class="card row">
+      <button class="btn">默认</button>
+      <button class="btn primary">↳ 追问</button>
+      <button class="btn ok">✓ 保留</button>
+      <button class="btn danger">✕ 剔除</button>
+      <button class="btn promote">⬆ 转为 finding</button>
+      <button class="btn solid">提交 review</button>
+      <button class="btn human-solid">发送 ↵</button>
+    </div>
+    <p class="note">实心 CTA 用深一档 <code class="k">--accent-solid</code> + 白字(蓝底黑字已否决);human 动作用琥珀。</p>
+  </section>
+
+  <section>
+    <h2>Chips · Tags · Status</h2>
+    <div class="card">
+      <div class="row" style="margin-bottom:14px">
+        <span class="sev high">high · concurrency</span>
+        <span class="sev med">med · error-handling</span>
+        <span class="sev low">low · style</span>
+        <span class="subm">✓ 已提交 · #482</span>
+        <span class="dia">◇ suggestion</span>
+      </div>
+      <div class="row">
+        <span class="origin agent"><span class="d"></span>codex</span>
+        <span class="origin human"><span class="d"></span>你 · 提升</span>
+        <span class="tool-tag">via <b>report_finding()</b></span>
+        <span class="status"><span class="pulse"></span> Reviewing</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Segmented · Tabs</h2>
+    <div class="card row" style="gap:24px">
+      <div class="seg"><button class="on">Unified</button><button>Split</button></div>
+      <div class="seg"><button class="on">严重度</button><button>文件</button></div>
+      <div class="tabs"><span class="tab active">Discussion</span><span class="tab">Findings</span><span class="tab">Summary</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Inputs <span class="h-note">finding 就地编辑器字段</span></h2>
+    <div class="card grid" style="max-width:420px">
+      <div class="row"><span class="fe-sev"><button class="high on">high</button><button class="med">med</button><button class="low">low</button></span></div>
+      <input class="fe-input" value="Cell<usize> 跨 spawn 共享数据竞争">
+    </div>
+  </section>
+
+  <section>
+    <h2>Cards <span class="h-note">finding / discussion 的四态</span></h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">
+      <div class="mcard agent">
+        <div class="mc-head"><span class="who"><span class="av agent">◆</span> codex</span><span class="sev high">high · concurrency</span></div>
+        <div class="mc-body"><strong>Cell&lt;usize&gt; 不能跨 <code>spawn</code> 共享。</strong> 用 <code>Arc&lt;AtomicUsize&gt;</code> 替代。</div>
+        <div class="mc-foot"><button class="btn primary">↳ 追问</button><button class="btn">✎ 编辑</button><button class="btn danger">✕ 剔除</button></div>
+      </div>
+      <div class="mcard human">
+        <div class="mc-head"><span class="who"><span class="av human">你</span> 你的 discussion</span><span class="tool-tag">框选 pipeline.rs:146</span></div>
+        <div class="mc-body">这里 <code>unwrap()</code> 直接 panic,是否 <code>?</code> 上抛更好?</div>
+        <div class="mc-foot"><button class="btn promote">⬆ 转为 finding</button><button class="btn">↳ 继续对话</button></div>
+      </div>
+      <div class="mcard submitted">
+        <div class="mc-head"><span class="who"><span class="av agent">◆</span> codex</span><span class="sev med">med · resource</span><span class="subm" style="margin-left:auto">✓ 已提交 · #482</span></div>
+        <div class="mc-body">已随 review 提交给 author · 内容锁定。</div>
+      </div>
+      <div class="mcard dismissed">
+        <div class="dismbar"><span class="x">✕</span><span class="t">已剔除 · 变量名 c 可读性差</span><button class="btn">↩ 恢复</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Overlays · Diff bits</h2>
+    <div class="card row" style="gap:24px">
+      <div class="selpop"><span class="rng">pipeline.rs:121–123</span><button class="disc">⬆ 发起 discussion</button><button class="ask">◆ 追问 codex</button></div>
+      <div class="row" style="gap:14px">
+        <span class="row" style="gap:6px"><span class="anchor agent"></span> agent 锚点</span>
+        <span class="row" style="gap:6px"><span class="anchor human"></span> human 锚点</span>
+      </div>
+    </div>
+    <h3>文件树行(active / viewed / finding badge)</h3>
+    <div class="card" style="max-width:320px">
+      <div class="trow active"><span class="nm">pipeline.rs</span><span class="badge">2</span><span class="vtick">✓</span></div>
+      <div class="trow viewed"><span class="nm">segment.rs</span><span class="vtick">✓</span></div>
+      <div class="trow"><span class="nm">mod.rs</span><span class="vtick">✓</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>组件清单 <span class="h-note">component → 用途 → 关键 class(见 diff-review.html)</span></h2>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table class="inv">
+        <thead><tr><th>组件</th><th>用途</th><th>关键 class</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td>Top bar</td><td>来源 / 模型 / ctx / 提交 CTA / 主题切换</td><td class="cls">.topbar .brand .status .submit-cta</td><td>scan / reviewing</td></tr>
+          <tr><td>File tree</td><td>改动文件 + finding 徽标 + Viewed</td><td class="cls">.tree .file .badge .vtick</td><td>active / viewed</td></tr>
+          <tr><td>Diff</td><td>unified / split 代码 + 展开未改动</td><td class="cls">.code.unified .code.split .expander</td><td>unified / split / collapsed</td></tr>
+          <tr><td>Inline card</td><td>内联 finding / discussion</td><td class="cls">.card.agent .card.human</td><td>view / edit / submitted / dismissed</td></tr>
+          <tr><td>Finding editor</td><td>就地编辑 sev/cat/标题/正文/suggestion</td><td class="cls">.c-edit .fe-sev .fe-input .fe-textarea</td><td>editing</td></tr>
+          <tr><td>Selection popover</td><td>框选发起 discussion / 追问</td><td class="cls">.sel-pop .sp-disc .sp-ask</td><td>show</td></tr>
+          <tr><td>off-diff 区</td><td>非改动行锚点的 finding 集合</td><td class="cls">.offdiff .odf</td><td>open</td></tr>
+          <tr><td>Right tabs</td><td>Discussion / Findings / Summary</td><td class="cls">.tabs .tab .findings-panel .summary-panel</td><td>active</td></tr>
+          <tr><td>Findings list</td><td>运行时 triage 列表</td><td class="cls">.frow .triage .fg-head</td><td>kept / dismissed / submitted</td></tr>
+          <tr><td>Summary</td><td>结论卡 + 统计 + 可编辑正文</td><td class="cls">.sum-verdict .sum-stats .sb-editor</td><td>view / editing</td></tr>
+          <tr><td>Composer</td><td>追问 + @file + 引用选区</td><td class="cls">.composer .refchip .file-menu</td><td>—</td></tr>
+          <tr><td>Scan timeline</td><td>首轮机审进度</td><td class="cls">.scanview .timeline .tl</td><td>done / active / pending</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const root=document.documentElement;
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
+  root.setAttribute('data-mode',b.dataset.v);
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  renderSwatches();
+});
+document.getElementById('themeSel').onchange=e=>{root.setAttribute('data-theme',e.target.value);renderSwatches();};
+
+const GROUPS={
+  'Chrome · 明暗外壳':['--bg','--surface','--surface-2','--surface-3','--border','--border-soft','--text','--text-dim','--text-faint','--hover','--sel'],
+  'Brand · duet 双声道':['--agent','--agent-2','--agent-soft','--agent-line','--accent-solid','--on-solid','--human','--human-soft','--human-line','--on-accent'],
+  'Severity':['--sev-high','--sev-med','--sev-low'],
+  'Diff':['--add','--del','--add-bg','--del-bg','--add-gutter','--del-gutter','--code-hl'],
+  'Syntax · data-theme':['--code-text','--k','--fn','--s','--n','--c','--ty','--mac'],
+};
+function renderSwatches(){
+  const cs=getComputedStyle(root);
+  const host=document.getElementById('swatches');
+  host.innerHTML='';
+  for(const [name,vars] of Object.entries(GROUPS)){
+    const sec=document.createElement('div');
+    sec.innerHTML='<h3>'+name+'</h3>';
+    const grid=document.createElement('div');grid.className='sw-grid';
+    vars.forEach(v=>{
+      const val=cs.getPropertyValue(v).trim();
+      const el=document.createElement('div');el.className='sw';
+      el.innerHTML='<div class="chip"><i style="background:var('+v+')"></i></div>'
+        +'<div class="meta"><div class="vn">'+v+'</div><div class="vv" title="'+val+'">'+val+'</div></div>';
+      grid.appendChild(el);
+    });
+    sec.appendChild(grid);host.appendChild(sec);
+  }
+}
+document.querySelectorAll('.fe-sev button').forEach(b=>b.onclick=()=>{
+  b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+});
+renderSwatches();
+</script>
+</body>
+</html>

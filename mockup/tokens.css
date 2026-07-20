@@ -1,0 +1,83 @@
+/* =========================================================
+   Duetlens design tokens — 单一来源
+   两个正交的配色轴:
+     data-mode  = dark | light        (明暗模式 · 品牌外壳 chrome)
+     data-theme = duetlens | github   (配色主题 · 成套:语法 token + diff + severity + 代码高亮)
+   配色主题跟随 data-mode 自动切子模式(GitHub → Dark/Light)。
+   CHROME 变量与 THEME 变量分离,互不耦合;新增主题只补一组 THEME 变量。
+   所有 mockup 与实现共用本文件;勿在各页内联复制这些值。
+   ========================================================= */
+
+/* ---- 共享 primitives(与明暗/主题无关)---- */
+:root{
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+  --sans:"IBM Plex Sans",system-ui,sans-serif;
+  --r:8px;
+}
+
+:root{
+  color-scheme:dark;
+  /* ===== CHROME (data-mode) — dark · brand ===== */
+  --bg:#0b0d12; --surface:#12151d; --surface-2:#171b24; --surface-3:#1c212c;
+  --border:#232834; --border-soft:#1b2028;
+  --text:#e7eaf1; --text-dim:#9aa3b2; --text-faint:#5f6877;
+  /* 天蓝 accent(对齐 better-review brand · oklch hue 245) */
+  --agent:oklch(.72 .14 245); --agent-2:oklch(.82 .11 240); --agent-soft:color-mix(in oklab,var(--agent) 14%,transparent); --agent-line:color-mix(in oklab,var(--agent) 38%,transparent);
+  --accent-solid:oklch(.585 .16 245); --on-solid:#fff;   /* 实心按钮:深一档天蓝 + 白字 */
+  --human:#e8a24d; --human-soft:rgba(232,162,77,.13); --human-line:rgba(232,162,77,.4);
+  --on-accent:#07141d; --hover:rgba(255,255,255,.02);
+  --sel:color-mix(in oklab,var(--agent) 28%,transparent); --scroll:#262c38; --scroll-h:#323a48;
+  --shadow:0 8px 24px -14px rgba(0,0,0,.7);
+  --glow1:color-mix(in oklab,var(--agent) 9%,transparent); --glow2:rgba(232,162,77,.045);
+  /* ===== COLOR THEME (data-theme) — Duetlens · dark ===== */
+  --code-text:#cfd6e4;
+  --k:#c3b0ff; --fn:#7fd6ff; --s:#8ee6a8; --n:#f2b57a; --c:#5f6877; --ty:#e6c07b; --mac:#f19bd0;
+  --add:#57e39a; --del:#ff7085;
+  --add-bg:rgba(64,196,132,.10); --del-bg:rgba(255,90,110,.09);
+  --add-gutter:rgba(64,196,132,.22); --del-gutter:rgba(255,90,110,.22);
+  --code-hl:rgba(139,155,255,.10);          /* 代码内搜索/引用高亮 */
+  --sev-high:#ff7085; --sev-med:#e8a24d; --sev-low:#8b9bff;
+}
+/* ---- CHROME: light ---- */
+:root[data-mode="light"]{
+  color-scheme:light;
+  --bg:#ffffff; --surface:#f6f8fa; --surface-2:#eef1f4; --surface-3:#e6eaee;
+  --border:#d6dde3; --border-soft:#e6eaee;
+  --text:#1f2328; --text-dim:#57606a; --text-faint:#8b949e;
+  --agent:oklch(.52 .13 245); --agent-2:oklch(.46 .14 246); --agent-soft:color-mix(in oklab,var(--agent) 10%,transparent); --agent-line:color-mix(in oklab,var(--agent) 28%,transparent);
+  --human:#b7791f; --human-soft:rgba(183,121,31,.12); --human-line:rgba(183,121,31,.35);
+  --on-accent:#ffffff; --hover:rgba(31,35,40,.03);
+  --sel:color-mix(in oklab,var(--agent) 18%,transparent); --scroll:#d0d7de; --scroll-h:#b9c1ca;
+  --shadow:0 10px 26px -16px rgba(31,35,40,.28);
+  --glow1:color-mix(in oklab,var(--agent) 6%,transparent); --glow2:rgba(183,121,31,.045);
+}
+/* ---- THEME: Duetlens · light ---- */
+:root[data-mode="light"][data-theme="duetlens"]{
+  --code-text:#1f2328;
+  --k:#7c3aed; --fn:#0b84c4; --s:#1a8f5a; --n:#b45309; --c:#8b949e; --ty:#a16207; --mac:#c026a0;
+  --add:#1a7f37; --del:#cf222e;
+  --add-bg:#e9fbef; --del-bg:#ffeef0;
+  --add-gutter:rgba(26,127,55,.18); --del-gutter:rgba(207,34,46,.15);
+  --code-hl:rgba(79,87,214,.10);
+  --sev-high:#cf222e; --sev-med:#9a6700; --sev-low:#4f57d6;
+}
+/* ---- THEME: GitHub · dark ---- */
+:root[data-mode="dark"][data-theme="github"]{
+  --code-text:#e6edf3;
+  --k:#ff7b72; --fn:#d2a8ff; --s:#a5d6ff; --n:#79c0ff; --c:#8b949e; --ty:#ffa657; --mac:#7ee787;
+  --add:#3fb950; --del:#f85149;
+  --add-bg:rgba(46,160,67,.15); --del-bg:rgba(248,81,73,.13);
+  --add-gutter:rgba(46,160,67,.32); --del-gutter:rgba(248,81,73,.32);
+  --code-hl:rgba(187,128,9,.28);
+  --sev-high:#f85149; --sev-med:#d29922; --sev-low:#58a6ff;
+}
+/* ---- THEME: GitHub · light ---- */
+:root[data-mode="light"][data-theme="github"]{
+  --code-text:#1f2328;
+  --k:#cf222e; --fn:#8250df; --s:#0a3069; --n:#0550ae; --c:#6e7781; --ty:#953800; --mac:#116329;
+  --add:#1a7f37; --del:#cf222e;
+  --add-bg:#e6ffec; --del-bg:#ffebe9;
+  --add-gutter:rgba(26,127,55,.22); --del-gutter:rgba(207,34,46,.16);
+  --code-hl:rgba(84,174,255,.28);
+  --sev-high:#cf222e; --sev-med:#9a6700; --sev-low:#0969da;
+}
