@@ -16,7 +16,9 @@
 | [design/findings-submit.md](design/findings-submit.md) | findings 筛选(保留/剔除)与提交到 GitHub PR review 的流程 | 碰提交流程 / finding 状态前 |
 | [design/codex-integration.md](design/codex-integration.md) | app-server 协议验证结论、MCP HTTP 注入、elicitation/sandbox/审批 | 碰 codex 集成 / MCP / 审批前 |
 | [design/ui.md](design/ui.md) | UI 方向 + 主题两轴 + 主入口/review 三 tab/扫描态/栏宽等屏与状态 | 做界面前 |
+| [design/ui-states.md](design/ui-states.md) | 屏级流转 + 各组件状态机(scan / tab / card 四态 / finding 两轴 / diff / viewed / 空态) | 理状态迁移 / 接事件前 |
 | [design/design-system.md](design/design-system.md) | tokens 单一来源(`tokens.css`)+ 两轴分组 + 组件清单;可视化在 `mockup/design-system.html` | 抽组件 / 定 tokens 前 |
+| [design/frontend-components.md](design/frontend-components.md) | React 组件树 + 状态分层 + UI 状态持久化(粒度 / 存储 / schema) | 搭前端 / 定持久化前 |
 | [design/open-questions.md](design/open-questions.md) | 待解决 / 风险点(开发中复审) | 遇到坑 / 排优先级时 |
 
 ## 命名约定(易踩)

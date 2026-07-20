@@ -51,5 +51,5 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 ## 收敛 TODO(实现项)
 
 - `diff-review.html`、`entry.html`、`design-system.html` **均已改用 `tokens.css`**,不再内联配色变量;各页只留屏幕特有覆盖(如 diff-review 的 `--left-w/--right-w`、entry 的 `--r:10px` 圆角与更深阴影)。
-- 组件样式目前分散在各 mockup 内联;实现阶段按本清单抽成组件层(Tauri 前端),tokens.css 直接复用。
-- Viewed / 栏宽等 UI 状态的持久化(按用户 / PR)。
+- 组件样式目前分散在各 mockup 内联;实现阶段按本清单抽成组件层(React 前端),tokens.css 直接复用。组件树分解见 [frontend-components](frontend-components.md)。
+- Viewed / 栏宽等 UI 状态的持久化(按用户 / review):分层、粒度与 schema 见 [frontend-components](frontend-components.md)「UI 状态持久化」。
