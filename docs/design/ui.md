@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽/空态错误态已落地(见「屏与状态」);finding 就地编辑器、Summary 编辑态待补。
+> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽/空态错误态/finding 就地编辑器已落地(见「屏与状态」);Summary 编辑态待补。
 
 - 整体重新设计。
 - **diff review 是主场**——用户交互最多的界面。
@@ -63,6 +63,16 @@
 - **Findings**:运行时 triage 列表 —— 按严重度分组(可切按文件)+ tally;每行 sev·category / 标题 / `file:line` / origin(◆ agent vs ● 你·提升) / `◇ suggestion` 标记 / triage:保留(天蓝左条)· 剔除(虚线 + 删除线 + 恢复) / submitted passive(绿左条,锁定不可改);底部「＋ 手动新增 finding」。点行跳 diff / 开 discussion。
 - **Summary**:codex 审核总结 —— 结论卡(codex 建议的 review event,标注「仅建议 · 最终 event 在提交时确认」)+ 统计条(high/med/low + 保留/已提交/讨论)+ **可编辑的 codex 生成正文**(即提交屏 review body 的来源)+ 关注主题(按 category 聚合,点击筛 findings)+ 覆盖度行 + 「提交 review →」直达 [findings-submit](findings-submit.md)。
 
+### finding 就地编辑器(`mockup/diff-review.html` 内联 finding 卡)
+
+编辑发生在 finding 的**锚点处**——diff 主区的内联 finding 卡,而非另开面板;Findings tab 点行即跳到此处编辑。同一张卡有 view / edit / dismissed 三态切换:
+
+- **触发**:卡片 action 区 `✎ 编辑`,或悬停卡片按 `e`(沿用 1.0)。
+- **可编辑字段**:severity(high/med/low segmented)· category(mono 输入)· 标题 · 说明(textarea)· suggestion(开关控制是否附带;开启后为 mono 代码 textarea,提交时渲染为 GitHub suggestion 块)。
+- **保存/取消**:`保存`(`⌘↵`)写回卡片视图并同步 Findings tab / dismissed 摘要;`取消`(`Esc`)丢弃。编辑仅改本地 finding,与 codex 经 MCP `update_finding` 的回写互不冲突。
+- **submitted(已提交)· 只读**:绿左条 + `✓ 已提交 · #NNN` 徽标,无 action、内容锁定;footer 提示需在 GitHub 更新或撤回后重提。
+- **dismissed(剔除)· diff 内呈现**:整卡折叠为虚线细条(`✕ 已剔除 · 标题`,删除线)+ `↩ 恢复`,不占视觉重量但可召回。
+
 ### 布局与栏宽
 
 - 三栏:文件树 / diff(主区,`minmax(0,1fr)` 自适应)/ 会话栏。
@@ -79,7 +89,7 @@
 ## 已有 mockup
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
-- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + 两轴配色切换。
+- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ 两轴配色切换。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md))。
 
-> 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、组件清单、finding 就地编辑器、Summary 编辑态)在本目录新增分册,并在 [文档索引](../README.md) 登记。
+> 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、组件清单、Summary 编辑态)在本目录新增分册,并在 [文档索引](../README.md) 登记。
