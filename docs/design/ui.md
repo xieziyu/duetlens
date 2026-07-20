@@ -121,6 +121,19 @@
 - **仓库路径不匹配**:本地路径的 remote 与 PR 不符 —— **软警告、不阻断**(琥珀提示,继续则忽略本地路径改用临时 checkout),CTA 仍可用。
 - 原则:**硬错误(gh 未登录 / PR 解析失败)禁用 CTA;软警告(路径不匹配)放行**。
 
+### 设置 / 偏好面板(`mockup/settings.html`)
+
+- **左栏分组导航 + 右栏分节表单**,滚动定位联动高亮;每个设置一行(标题 + 说明 + 控件)。落地本地即时保存,底部 `恢复默认设置`。
+- **偏好(per-user)**对齐 `ui_settings`(见 [frontend-components](frontend-components.md#ui-状态持久化)):
+  - **外观**:明暗模式(跟随系统 / 浅 / 深)× 配色主题(Duetlens / GitHub)两正交轴,控件**实时驱动 `data-mode`/`data-theme`**;栏宽「重置为默认」。
+  - **审核默认**:默认 source / 默认 diff 视图(unified/split)/ 默认右栏 tab / Findings 默认分组 / 标记已看后自动折叠。措辞点明「单次审核内临时改动不写回默认」(区分 persisted 默认 vs ephemeral 覆盖)。
+  - **快捷键**:摘录常用绑定,完整列表指向审核屏 `?` 帮助层。
+- **环境配置**:
+  - **codex**:可执行文件路径(留空走 `PATH`)+ 选择 / 检测;app-server 连通状态胶囊;模型选择;**沙箱 read-only 锁定不可改**(标注)。
+  - **GitHub CLI**:`gh` 路径 + 登录状态(登出);重申本地 / GitButler 来源无需 gh。
+- **审核规则提示词**为独立编辑器入口(见下);**关于**块给版本 + 依赖版本 + 检查更新。
+- 状态胶囊复用 severity/add/del 语义色(ok 绿 / warn 琥珀 / err 红 / lock 灰),与 review 屏运行态一致。
+
 ## 待设计 backlog
 
 主干(entry → review → 提交/导出)+ 设计系统 + 状态机/组件层已覆盖。以下为盘点出的**主干之外整块缺口**与**运行时/异常态**,按推进顺序排;逐块补齐后移入上面的「屏与状态」并在此划掉。
@@ -135,7 +148,7 @@
 
 **第一层 · 整块缺失的功能屏(次批,各自独立 mockup)**:
 
-- [ ] **设置 / 偏好面板**:管理 `ui_settings`(主题两轴 / 栏宽 / 默认 tab / 默认 diff 视图),见 [frontend-components](frontend-components.md) 持久化节。
+- [x] **设置 / 偏好面板**:管理 `ui_settings`(主题两轴 / 栏宽 / 默认 tab / 默认 diff 视图)+ codex / gh 环境配置。→ `mockup/settings.html`,见上「设置 / 偏好面板」。
 - [ ] **审核规则提示词编辑**:查看/编辑 project → global → builtin 三层与合并结果(架构保留能力,UI 缺口最大)。
 - [ ] **全部会话历史页**:entry 只显示「最近」,缺全量列表(搜索 / 按 source 筛选 / 删除 / 恢复)。
 - [ ] **首次启动 / onboarding**:codex 未安装/未配置引导(entry 已有 gh 未登录态,codex 侧缺)。
@@ -151,5 +164,6 @@
 - `mockup/export-markdown.html` —— 非 GitHub source(本地分支 / GitButler)的**本地 Markdown 导出屏**:左侧实时报告预览(渲染/源码)、右侧导出配置(包含项 + 分组 + 勾选保留 + 复制/保存 .md)。见 [findings-submit](findings-submit.md#非-github-source--导出为-markdown)。
 - `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。
 - `mockup/design-system.html` —— 可视化 style guide:色板 + 字阶 + 组件清单(见 [design-system](design-system.md))。
+- `mockup/settings.html` —— **设置 / 偏好面板**:左栏分组导航 + 右栏分节表单;外观两轴实时驱动主题、审核默认(source/diff视图/tab/分组)、codex/gh 环境配置、快捷键摘录、关于。对齐 `ui_settings`。
 
 > 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、design tokens / 组件清单)在本目录新增分册,并在 [文档索引](../README.md) 登记。

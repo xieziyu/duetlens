@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — Settings & preferences (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 78% -10%,var(--glow1),transparent 60%),radial-gradient(900px 500px at 5% 108%,var(--glow2),transparent 55%)}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+/* topbar */
+.topbar{display:flex;align-items:center;gap:14px;height:48px;padding:0 14px;background:linear-gradient(180deg,var(--surface-2),var(--surface));border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:2px;padding-right:14px;border-right:1px solid var(--border)}
+.brand .mark{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px;color:var(--text);display:flex;align-items:center}
+.brand .mark i{font-style:normal;color:var(--agent-2)}
+.brand .mark .cur{color:var(--human);font-weight:400;margin-left:1px;animation:blink 1.15s step-end infinite}
+.back{color:var(--text-dim);font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;border:1px solid var(--border)}
+.back:hover{color:var(--text);border-color:var(--agent-line)}
+.crumb{color:var(--text-dim);font-size:12px} .crumb b{color:var(--text);font-weight:600}
+.spacer{flex:1}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+
+/* layout: left nav + content */
+.main{display:grid;grid-template-columns:214px minmax(0,1fr);min-height:0}
+.nav{background:var(--surface);border-right:1px solid var(--border);padding:14px 10px;overflow:auto}
+.nav .grp{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);font-weight:600;font-family:var(--mono);padding:0 10px;margin:14px 0 6px}
+.nav .grp:first-child{margin-top:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--text-dim);text-decoration:none;font-size:12.5px;cursor:pointer}
+.nav a .ic{width:16px;text-align:center;color:var(--text-faint);font-size:13px}
+.nav a:hover{background:var(--hover);color:var(--text)}
+.nav a.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+.nav a.on .ic{color:var(--agent-2)}
+
+.content{overflow:auto;padding:0}
+.content::-webkit-scrollbar{width:10px} .content::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+.sheet{max-width:660px;margin:0 auto;padding:26px 30px 90px}
+
+.sec{margin-bottom:34px;scroll-margin-top:20px}
+.sec > h2{font-size:16px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:9px}
+.sec > h2 .ic{color:var(--agent-2)}
+.sec > .desc{color:var(--text-faint);font-size:12px;margin:5px 0 16px;line-height:1.6}
+
+/* a single setting row */
+.row{display:flex;align-items:center;gap:18px;padding:14px 0;border-top:1px solid var(--border-soft)}
+.row:first-of-type{border-top:0}
+.row .meta{flex:1;min-width:0}
+.row .meta .lbl{font-size:13px;font-weight:500;color:var(--text)}
+.row .meta .hint{color:var(--text-faint);font-size:11.5px;margin-top:3px;line-height:1.5}
+.row .meta .hint code{font-family:var(--mono);color:var(--text-dim);background:var(--surface-3);padding:1px 5px;border-radius:4px;font-size:10.5px}
+.row .ctl{flex:none;display:flex;align-items:center;gap:9px}
+.row.col{flex-direction:column;align-items:stretch;gap:10px}
+.pill-scope{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);border:1px solid var(--border);border-radius:999px;padding:1px 7px;text-transform:lowercase}
+.pill-scope.review{color:var(--human);border-color:var(--human-line)}
+
+/* segmented control (choice) */
+.choice{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:9px;padding:2px}
+.choice button{border:0;background:transparent;color:var(--text-faint);border-radius:7px;cursor:pointer;font-size:12px;padding:6px 13px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.choice button.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--agent-line) inset}
+.choice.wide{width:100%} .choice.wide button{flex:1;justify-content:center}
+
+/* toggle switch (reused from other mockups) */
+.sw{width:38px;height:21px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);position:relative;flex:none;transition:.15s;cursor:pointer}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--text-faint);transition:.15s}
+.sw.on{background:var(--agent-soft);border-color:var(--agent-line)}
+.sw.on::after{left:19px;background:var(--agent)}
+
+/* select + text input */
+.field{background:var(--surface-3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;padding:8px 11px;font-family:var(--mono);min-width:0}
+.field:focus{outline:0;border-color:var(--agent-line);box-shadow:0 0 0 3px var(--agent-soft)}
+select.field{cursor:pointer;-webkit-appearance:none;appearance:none;padding-right:28px;background-image:linear-gradient(45deg,transparent 50%,var(--text-faint) 50%),linear-gradient(135deg,var(--text-faint) 50%,transparent 50%);background-position:calc(100% - 14px) 52%,calc(100% - 9px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.path-row{display:flex;gap:8px;align-items:stretch}
+.path-row .field{flex:1}
+.btn-sm{background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0 13px;font-size:12px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.btn-sm:hover{border-color:var(--agent-line)}
+
+/* status chips */
+.stat{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:500;padding:3px 10px;border-radius:999px;border:1px solid var(--border);font-family:var(--mono)}
+.stat .d{width:7px;height:7px;border-radius:50%;flex:none}
+.stat.ok{color:var(--add);border-color:var(--add-gutter);background:var(--add-bg)} .stat.ok .d{background:var(--add)}
+.stat.warn{color:var(--human);border-color:var(--human-line);background:var(--human-soft)} .stat.warn .d{background:var(--human)}
+.stat.err{color:var(--del);border-color:var(--del-gutter);background:var(--del-bg)} .stat.err .d{background:var(--del)}
+.stat.lock{color:var(--text-faint)} .stat.lock .d{background:var(--text-faint)}
+
+/* keyboard shortcut mini-list */
+.kbd-list{display:grid;grid-template-columns:1fr 1fr;gap:2px 26px;margin-top:4px}
+.kbd-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--border-soft);font-size:12px;color:var(--text-dim)}
+kbd{font-family:var(--mono);font-size:10.5px;background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:2px 6px;color:var(--text)}
+
+/* about block */
+.about{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:16px}
+.about .logo{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--text)}
+.about .logo i{font-style:normal;color:var(--agent-2)} .about .logo .cur{color:var(--human);animation:blink 1.15s step-end infinite}
+.about .vmeta{flex:1;min-width:0}
+.about .vmeta .v{font-size:12.5px;color:var(--text)} .about .vmeta .v b{font-family:var(--mono)}
+.about .vmeta .sub{color:var(--text-faint);font-size:11px;margin-top:3px;font-family:var(--mono)}
+
+.savebar{position:sticky;bottom:0;background:linear-gradient(0deg,var(--surface),transparent);padding-top:20px;margin-top:6px;display:flex;align-items:center;gap:12px}
+.savebar .msg{color:var(--text-faint);font-size:11.5px}
+.savebar .msg.show{color:var(--add)}
+.spring{flex:1}
+.btn-reset{background:transparent;color:var(--text-dim);border:1px solid var(--border);border-radius:9px;padding:8px 14px;font-size:12.5px;cursor:pointer}
+.btn-reset:hover{border-color:var(--del-gutter);color:var(--del)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
+    <a class="back" href="entry.html" title="返回主入口">← 返回</a>
+    <span class="crumb">设置 · <b>偏好</b></span>
+    <div class="spacer"></div>
+    <div class="seg" id="modeSeg"><button data-m="light" title="浅色">☀</button><button class="on" data-m="dark" title="深色">☾</button></div>
+  </div>
+
+  <div class="main">
+    <!-- ===== left nav ===== -->
+    <nav class="nav">
+      <div class="grp">偏好</div>
+      <a class="on" data-go="appearance"><span class="ic">◐</span> 外观</a>
+      <a data-go="review"><span class="ic">▤</span> 审核默认</a>
+      <a data-go="shortcuts"><span class="ic">⌘</span> 快捷键</a>
+      <div class="grp">环境</div>
+      <a data-go="codex"><span class="ic">◆</span> codex</a>
+      <a data-go="github"><span class="ic">⑂</span> GitHub CLI</a>
+      <div class="grp">其它</div>
+      <a data-go="rules"><span class="ic">▦</span> 审核规则提示词</a>
+      <a data-go="about"><span class="ic">◇</span> 关于</a>
+    </nav>
+
+    <!-- ===== content ===== -->
+    <div class="content">
+      <div class="sheet">
+
+        <!-- 外观 -->
+        <section class="sec" id="appearance">
+          <h2><span class="ic">◐</span> 外观</h2>
+          <div class="desc">明暗模式与配色主题两个正交轴,应用启动即生效,跨所有审核一致(per-user)。</div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">明暗模式</div></div>
+            <div class="ctl">
+              <div class="choice" id="modeChoice">
+                <button data-mode="system">跟随系统</button>
+                <button data-mode="light">☀ 浅色</button>
+                <button class="on" data-mode="dark">☾ 深色</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">配色主题</div></div>
+            <div class="ctl">
+              <select class="field" id="themeSelect">
+                <option value="duetlens">Duetlens</option>
+                <option value="github">GitHub</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- 审核默认 -->
+        <section class="sec" id="review">
+          <h2><span class="ic">▤</span> 审核默认</h2>
+          <div class="desc">发起与进入审核时的默认选择;单次审核内的临时改动不写回这里。</div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">默认来源</div></div>
+            <div class="ctl">
+              <div class="choice">
+                <button class="on">GitHub PR</button><button>本地分支</button><button>GitButler</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">默认 diff 视图</div></div>
+            <div class="ctl">
+              <div class="choice">
+                <button class="on">Unified</button><button>Split</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">默认右栏 Tab</div></div>
+            <div class="ctl">
+              <div class="choice">
+                <button class="on">Discussion</button><button>Findings</button><button>Summary</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">Findings 默认分组</div></div>
+            <div class="ctl">
+              <div class="choice">
+                <button class="on">按严重度</button><button>按文件</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">标记「已看」后自动折叠文件</div></div>
+            <div class="ctl"><div class="sw on" data-toggle></div></div>
+          </div>
+        </section>
+
+        <!-- 快捷键 -->
+        <section class="sec" id="shortcuts">
+          <h2><span class="ic">⌘</span> 快捷键</h2>
+          <div class="desc">完整列表在审核屏按 <kbd>?</kbd> 唤出帮助层;此处为常用摘录。</div>
+          <div class="kbd-list">
+            <div class="kbd-row"><span>打开/关闭帮助层</span><kbd>?</kbd></div>
+            <div class="kbd-row"><span>切右栏 tab</span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></div>
+            <div class="kbd-row"><span>切 unified / split</span><kbd>u</kbd></div>
+            <div class="kbd-row"><span>编辑聚焦的 finding</span><kbd>e</kbd></div>
+            <div class="kbd-row"><span>保存编辑</span><kbd>⌘</kbd> <kbd>↵</kbd></div>
+            <div class="kbd-row"><span>取消 / 关闭浮层</span><kbd>Esc</kbd></div>
+            <div class="kbd-row"><span>中断当前 turn</span><kbd>⌘</kbd> <kbd>.</kbd></div>
+            <div class="kbd-row"><span>提交 review</span><kbd>⌘</kbd> <kbd>⇧</kbd> <kbd>↵</kbd></div>
+          </div>
+        </section>
+
+        <!-- codex -->
+        <section class="sec" id="codex">
+          <h2><span class="ic">◆</span> codex</h2>
+          <div class="desc">审核 agent 由 codex app-server 常驻会话驱动;沙箱固定只读,不可改。</div>
+
+          <div class="row col">
+            <div class="meta"><div class="lbl">可执行文件路径</div><div class="hint">留空则用 <code>PATH</code> 中的 <code>codex</code>。</div></div>
+            <div class="path-row">
+              <input class="field" value="/opt/homebrew/bin/codex" spellcheck="false">
+              <button class="btn-sm">选择…</button>
+              <button class="btn-sm" id="detectCodex">检测</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">app-server 状态</div></div>
+            <div class="ctl"><span class="stat ok"><span class="d"></span>已连通 · v0.144.5</span></div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">模型</div></div>
+            <div class="ctl">
+              <select class="field">
+                <option>gpt-5.1-codex</option>
+                <option>gpt-5.1-codex-mini</option>
+                <option>o4-mini</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">沙箱</div></div>
+            <div class="ctl"><span class="stat lock"><span class="d"></span>read-only · 锁定</span></div>
+          </div>
+        </section>
+
+        <!-- github -->
+        <section class="sec" id="github">
+          <h2><span class="ic">⑂</span> GitHub CLI</h2>
+          <div class="desc">GitHub PR 来源与提交 review 依赖外部 <code>gh</code>;本地 / GitButler 来源无需登录。</div>
+
+          <div class="row col">
+            <div class="meta"><div class="lbl"><code>gh</code> 路径</div><div class="hint">留空则用 <code>PATH</code> 中的 <code>gh</code>。</div></div>
+            <div class="path-row">
+              <input class="field" value="/opt/homebrew/bin/gh" spellcheck="false">
+              <button class="btn-sm">选择…</button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="meta"><div class="lbl">登录状态</div></div>
+            <div class="ctl"><span class="stat ok"><span class="d"></span>已登录 · xieziyu</span><button class="btn-sm">登出</button></div>
+          </div>
+        </section>
+
+        <!-- 审核规则提示词 (入口) -->
+        <section class="sec" id="rules">
+          <h2><span class="ic">▦</span> 审核规则提示词</h2>
+          <div class="desc">project → global → builtin 三层提示词,决定 codex 的审核侧重;在独立编辑器中管理。</div>
+          <div class="row">
+            <div class="meta"><div class="lbl">三层提示词编辑器</div></div>
+            <div class="ctl"><a class="btn-sm" href="prompt-rules.html">打开编辑器 →</a></div>
+          </div>
+        </section>
+
+        <!-- 关于 -->
+        <section class="sec" id="about">
+          <h2><span class="ic">◇</span> 关于</h2>
+          <div class="about">
+            <div class="logo">duet<i>lens</i><span class="cur">_</span></div>
+            <div class="vmeta">
+              <div class="v">Duetlens <b>2.0.0</b></div>
+              <div class="sub">Electron 34 · codex-cli 0.144.5 · gh 2.63</div>
+            </div>
+            <button class="btn-sm">检查更新</button>
+          </div>
+        </section>
+
+        <div class="savebar">
+          <button class="btn-reset">恢复默认设置</button>
+          <div class="spring"></div>
+          <span class="msg" id="saveMsg">改动即时保存到本地</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const root=document.documentElement;
+
+// —— 明暗模式:choice + 顶栏 seg 同步(system 用媒体查询解析)——
+const mediaDark=window.matchMedia('(prefers-color-scheme: dark)');
+let modePref='dark';
+function applyMode(){
+  const resolved=modePref==='system'?(mediaDark.matches?'dark':'light'):modePref;
+  root.setAttribute('data-mode',resolved);
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.m===resolved));
+  document.querySelectorAll('#modeChoice button').forEach(b=>b.classList.toggle('on',b.dataset.mode===modePref));
+}
+document.querySelectorAll('#modeChoice button').forEach(b=>b.onclick=()=>{modePref=b.dataset.mode;applyMode();flash();});
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{modePref=b.dataset.m;applyMode();flash();});
+mediaDark.addEventListener('change',()=>{if(modePref==='system')applyMode();});
+
+// —— 配色主题(下拉,未来主题会变多)——
+document.getElementById('themeSelect').onchange=e=>{root.setAttribute('data-theme',e.target.value);flash();};
+
+// —— 通用 segmented(单选)——
+document.querySelectorAll('.choice:not(#modeChoice)').forEach(c=>{
+  c.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    c.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));flash();
+  });
+});
+// —— toggle ——
+document.querySelectorAll('.sw[data-toggle]').forEach(s=>s.onclick=()=>{s.classList.toggle('on');flash();});
+
+// —— codex 检测 demo ——
+document.getElementById('detectCodex').onclick=e=>{
+  const btn=e.target;btn.textContent='检测中…';
+  setTimeout(()=>{btn.textContent='检测';flash('已检测到 codex 0.144.5');},600);
+};
+
+// —— 左栏导航:滚动定位 + 高亮 ——
+const secs=[...document.querySelectorAll('.sec')];
+document.querySelectorAll('.nav a').forEach(a=>a.onclick=()=>{
+  document.getElementById(a.dataset.go)?.scrollIntoView({behavior:'smooth',block:'start'});
+});
+const content=document.querySelector('.content');
+content.addEventListener('scroll',()=>{
+  const top=content.scrollTop+80;let cur=secs[0].id;
+  for(const s of secs){if(s.offsetTop<=top)cur=s.id;}
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('on',a.dataset.go===cur));
+});
+
+// —— 保存提示(mockup:即时保存)——
+const msg=document.getElementById('saveMsg');let t;
+function flash(text){
+  msg.textContent=(text||'已保存')+' ✓';msg.classList.add('show');
+  clearTimeout(t);t=setTimeout(()=>{msg.textContent='改动即时保存到本地';msg.classList.remove('show');},1400);
+}
+</script>
+</body>
+</html>
