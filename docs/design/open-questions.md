@@ -9,3 +9,4 @@
 - **per-thread MCP 注入的鲁棒性**:端口 / 令牌分配、codex 多次 `initialize` 的幂等、HTTP server 生命周期与 review 生命周期对齐,待在骨架期打磨。
 - **审批面收敛**:除 MCP elicitation 外,`execCommandApproval` / `applyPatchApproval` 等在只读 sandbox 下应基本不出现,但需实测确认哪些反向请求仍会冒出来。
 - **持久化 schema**:discussion 锚点、finding、message 的本地存储结构待定稿(见 [data-model](data-model.md))。
+- **Electron 成本面**:自带 Chromium 使打包体积(~100MB 级)与内存占用显著高于 Tauri;安全基线(`contextIsolation` / `nodeIntegration` / preload `contextBridge`)、自动更新、代码签名 / 公证需在骨架期落实。这是为渲染一致性付出的代价(见 [architecture](architecture.md))。

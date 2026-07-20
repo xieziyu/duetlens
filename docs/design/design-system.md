@@ -4,7 +4,7 @@
 >
 > 状态:从稳定的 mockup 抽出 tokens 与组件清单;canonical tokens 已落地 `mockup/tokens.css`,可视化清单在 `mockup/design-system.html`。
 
-从 [`ui.md`](ui.md) 的屏与状态稳定后,把配色 tokens 抽成**单一来源**,并把重复出现的组件登记成清单,为后续 Tauri 实现铺路。
+从 [`ui.md`](ui.md) 的屏与状态稳定后,把配色 tokens 抽成**单一来源**,并把重复出现的组件登记成清单,为后续 Electron 实现铺路。
 
 ## Tokens 单一来源:`mockup/tokens.css`
 

@@ -30,7 +30,7 @@ codex app-server 把"一次常驻会话"本身称作 `thread`。为避免冲突,
 最常被 recall 的核心决策;每条注明详述所在分册。
 
 1. **全重写**(方案 A),另起新仓库,代号 **Duetlens**。→ [overview](design/overview.md)
-2. 技术栈:**Tauri 2.0 + 全 Rust 后端 + codex app-server + 外部 gh CLI**,先做 macOS。→ [architecture](design/architecture.md)
+2. 技术栈:**Electron + Node/TS 主进程后端 + codex app-server + 外部 gh CLI**,先做 macOS(选 Electron 图渲染与 Chrome 一致,规避 Tauri 的 WKWebView 差异)。→ [architecture](design/architecture.md)
 3. findings 回传走 **MCP 工具**,不再 watch 文件(**已验证**)。→ [data-model](design/data-model.md) · [codex-integration](design/codex-integration.md)
 4. 会话粒度:**一个 review 一个 codex thread**,全局视野;`thread/fork` 仅作备选。→ [data-model](design/data-model.md)
 5. 保留:会话历史、三种 source、多层级提示词(经 `baseInstructions`)、审核总结、**findings 筛选+提交到 GitHub**。→ [architecture](design/architecture.md) · [findings-submit](design/findings-submit.md)

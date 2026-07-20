@@ -6,22 +6,24 @@
 
 | 层 | 选型 | 说明 |
 | --- | --- | --- |
-| 桌面外壳 | **Tauri 2.0** | 目标平台先做 macOS |
-| 后端 | **全 Rust**(方案 A) | 编排层完全用 Rust 重写,**不引入 Node sidecar**。借重写把数据 schema 收敛干净 |
+| 桌面外壳 | **Electron** | 打包 Chromium,渲染与 Chrome 一致(规避 macOS 系统 WKWebView/Safari 内核的渲染差异);目标平台先做 macOS |
+| 后端 | **Node / TypeScript**(Electron main 进程) | 编排层用 TS 写在 main 进程,**不引入独立后端进程**。可复用 1.0 的 `src/shared/` zod schema、source-flow、prompt-resolver,而非另用 Rust 重写 |
 | 审核 agent | **codex app-server** | 常驻会话(JSON-RPC over stdio),取代 1.0 的一次性 `codex exec`。详见 [codex-integration](codex-integration.md) |
-| MCP 回传通道 | **in-process HTTP MCP server**(Rust) | Duetlens 进程内自托管,codex 以 `--url` 连接;工具调用直接落进 app 状态 |
+| MCP 回传通道 | **in-process HTTP MCP server**(Node) | Electron main 进程内自托管,codex 以 `--url` 连接;工具调用直接落进 app 状态 |
 | 外部依赖 | `gh` CLI | 沿用外部进程调用拉取 PR / diff / 提交 review |
-| 前端 | React(Web SPA,承载于 Tauri webview) | UI 整体重设计,见 [ui](ui.md) |
+| 前端 | React(Web SPA,承载于 Electron renderer) | UI 整体重设计,见 [ui](ui.md) |
 
-**为什么全 Rust 而不用 Node sidecar:** 追求最彻底的重写和单进程干净架构。git/gh/codex 都是外部进程,Rust(tokio)管理子进程很称手;代价是 1.0 的 `src/shared/` zod schema、source-flow、prompt-resolver 等都要用 Rust 重写,但这也是收敛技术债的机会。
+**为什么 Electron + Node 而不用 Tauri + 全 Rust:** 换 Electron 的动机是渲染一致性——Tauri 在 macOS 用系统 WKWebView(WebKit/Safari 内核),与 Chromium 有渲染差异,不少在 Chrome 上正常的效果到 WKWebView 会出问题;Electron 自带 Chromium,消除这类不确定性。换壳后主进程即 Node,"全 Rust 后端"的顺势前提随之消失:编排层的实质是管外部进程(git/gh/codex)+ 本地 HTTP MCP + sqlite + 事件流,都是 Node 的主场,也正是 1.0 已有实现,故后端定为 Node/TS 写在 main 进程——单进程、顺 Electron 纹理,并能捞回 1.0 的 TS 代码,反而**减少**重写量。
+
+**代价与权衡:** Electron 打包体积显著大于 Tauri(自带 Chromium,~100MB 级 vs Tauri 复用系统 webview 的几 MB),内存占用更高,且须按 Electron 安全基线配置(`contextIsolation` 开、`nodeIntegration` 关、preload + `contextBridge` 暴露 IPC)。用渲染一致性 + 更低重写成本换体积/内存,详见 [open-questions](open-questions.md)。"收敛技术债"的目标不靠后端语言,而靠重新架构(新数据模型、MCP 回传 findings、discussion 实体)达成,与外壳/语言无关。
 
 ## 架构分层与抽象
 
-- **`ConversationalAgent` 抽象(agent 接口层)**:定义 `startConversation` / `sendMessage` / `streamEvents` / `interrupt` / `approve` 等能力。codex app-server 是目前 **唯一** 实现。把 app-server 的 event / approval 模型包薄一层,不让它的协议细节渗透到 UI。协议可机器导出并据此生成 Rust 类型,见 [codex-integration](codex-integration.md)。
+- **`ConversationalAgent` 抽象(agent 接口层)**:定义 `startConversation` / `sendMessage` / `streamEvents` / `interrupt` / `approve` 等能力。codex app-server 是目前 **唯一** 实现。把 app-server 的 event / approval 模型包薄一层,不让它的协议细节渗透到 UI。协议可机器导出并据此生成 TS 类型(codex 提供 `generate-ts`),见 [codex-integration](codex-integration.md)。
 - **MCP server(控制反转层)**:app 侧对 agent 暴露的工具集(`report_finding` 等),是 findings 和源码读取的回传通道。以 in-process HTTP 形式自托管、per-thread 注入——机制详见 [codex-integration](codex-integration.md)。
 - **Elicitation / 审批处理器(必需件)**:codex 执行 MCP 工具前会发反向审批请求,client 必须应答,否则 turn 卡死。属架构必需件,详见 [codex-integration](codex-integration.md)。
 - **source 层**:延续 1.0 的 SourceFlow 思路,三种 source 各一实现。
-- **持久化**:会话历史、discussions、messages、findings 存本地(sqlite 或等价方案,Rust 侧待定)。codex thread 由 codex 侧持久化,我们存 threadId 做续接。
+- **持久化**:会话历史、discussions、messages、findings 存本地 sqlite(Node 侧,如 `better-sqlite3` / `libsql`,具体待骨架期定)。codex thread 由 codex 侧持久化,我们存 threadId 做续接。
 
 ## 保留能力(来自 1.0)
 

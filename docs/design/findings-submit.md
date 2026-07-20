@@ -63,7 +63,7 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA「提�
 - **报告结构**:标题(分支名)+ 元信息 blockquote(来源 / 日期 / codex 模型)+ `## 摘要`(codex 总结)+ `## Findings`(保留项,按严重度或按文件分组)。有 `suggestion` 的渲染为 ```` ```suggestion ```` fenced block(在 GitHub 之外无"一键采纳",但保留可读格式)。
 - **包含项开关**:审核摘要 / 无锚点 finding 并入摘要 / suggestion 代码块 / 已剔除项(默认关,开则以删除线列出);分组 `按严重度 | 按文件`。开关实时改写预览与将导出的内容,所见即所得。
 - **无 event 选择**:`Comment / Request changes / Approve` 是 GitHub review 概念,导出屏不涉及。
-- **动作**:`复制 Markdown`(剪贴板)+ `保存为 .md`。**应用内**"保存"经 Tauri 原生保存对话框写本地文件;mockup 里以浏览器下载/剪贴板作预览替身。
+- **动作**:`复制 Markdown`(剪贴板)+ `保存为 .md`。**应用内**"保存"经 Electron 原生保存对话框(`dialog.showSaveDialog`)写本地文件;mockup 里以浏览器下载/剪贴板作预览替身。
 
 ## UI
 

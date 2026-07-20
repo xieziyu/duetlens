@@ -18,7 +18,7 @@ Duetlens 的审核 agent 完全建立在 codex-cli 的 `app-server` 之上。本
 
 ## 协议获取
 
-`codex app-server generate-json-schema --out <DIR>`(另有 `generate-ts`)可机器导出协议:约 **87** 个 client→server 请求、**68** 个流事件、**10** 个 server→client 反向审批请求。据此生成 Rust 类型并对 codex 升级做回归。
+`codex app-server generate-json-schema --out <DIR>`(另有 `generate-ts`)可机器导出协议:约 **87** 个 client→server 请求、**68** 个流事件、**10** 个 server→client 反向审批请求。据此生成 TS 类型(codex 提供 `generate-ts`)并对 codex 升级做回归。
 
 ## 会话 / turn 映射到 `ConversationalAgent`
 
@@ -30,7 +30,7 @@ Duetlens 的审核 agent 完全建立在 codex-cli 的 `app-server` 之上。本
 
 ## MCP 传输:in-process HTTP + per-thread 注入
 
-- Duetlens 在 Rust 进程内自托管一个 **HTTP MCP server**,codex 以 `--url` 连接;工具调用直接落进 app 状态,无需再 IPC 回来。
+- Duetlens 在 Electron main(Node)进程内自托管一个 **HTTP MCP server**,codex 以 `--url` 连接;工具调用直接落进 app 状态,无需再 IPC 回来。
 - 注入走 **per-thread config**:`thread/start.config = { mcp_servers: { duetlens: { url: "http://127.0.0.1:PORT" } }, sandbox_mode: "read-only" }`。**不写全局 `~/.codex/config.toml`**,避免污染用户环境,并让每次 review 用独立端口/令牌隔离。
 - thread 启动时 codex 自动拉起 MCP server 并流 `mcpServer/startupStatus/updated`(starting→ready)。
 - **为什么不用 stdio 子进程**:实测 codex 会对 MCP server 做多次 `initialize`(thread 启动一次、首次用工具一次),stdio 子进程会被反复重启/重连;HTTP transport 规避 respawn。
