@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — Review-rule prompts, three layers (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 78% -10%,var(--glow1),transparent 60%),radial-gradient(900px 500px at 5% 108%,var(--glow2),transparent 55%)}
+.app{display:grid;grid-template-rows:auto auto 1fr;height:100vh}
+
+/* topbar */
+.topbar{display:flex;align-items:center;gap:14px;height:48px;padding:0 14px;background:linear-gradient(180deg,var(--surface-2),var(--surface));border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:2px;padding-right:14px;border-right:1px solid var(--border)}
+.brand .mark{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px;color:var(--text);display:flex;align-items:center}
+.brand .mark i{font-style:normal;color:var(--agent-2)}
+.brand .mark .cur{color:var(--human);font-weight:400;margin-left:1px;animation:blink 1.15s step-end infinite}
+.back{color:var(--text-dim);font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;border:1px solid var(--border)}
+.back:hover{color:var(--text);border-color:var(--agent-line)}
+.crumb{color:var(--text-dim);font-size:12px} .crumb b{color:var(--text);font-weight:600}
+.spacer{flex:1}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+
+/* priority ribbon */
+.ribbon{display:flex;align-items:center;gap:14px;padding:9px 18px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12px;color:var(--text-dim)}
+.ribbon .chain{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px}
+.ribbon .chain .lz{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:7px;border:1px solid var(--border)}
+.ribbon .chain .lz .d{width:7px;height:7px;border-radius:50%}
+.lz.project{color:var(--agent-2);border-color:var(--agent-line);background:var(--agent-soft)} .lz.project .d{background:var(--agent)}
+.lz.global{color:var(--human);border-color:var(--human-line);background:var(--human-soft)} .lz.global .d{background:var(--human)}
+.lz.builtin{color:var(--text-faint)} .lz.builtin .d{background:var(--text-faint)}
+.ribbon .arw{color:var(--text-faint)}
+.ribbon .note{margin-left:auto;color:var(--text-faint);font-size:11px}
+.ribbon .note code{font-family:var(--mono);color:var(--text-dim)}
+
+/* layout: layer rail + editor + merged */
+.main{display:grid;grid-template-columns:216px minmax(0,1fr) 348px;min-height:0}
+.rail{background:var(--surface);border-right:1px solid var(--border);padding:14px 12px;overflow:auto}
+.rail .h{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);font-weight:600;font-family:var(--mono);padding:0 6px;margin:0 0 8px}
+.layer{display:block;width:100%;text-align:left;border:1px solid var(--border);background:var(--surface-2);border-radius:10px;padding:10px 12px;margin-bottom:9px;cursor:pointer}
+.layer:hover{border-color:var(--agent-line)}
+.layer.on{box-shadow:0 0 0 1px var(--agent-line) inset;border-color:var(--agent-line);background:var(--agent-soft)}
+.layer .top{display:flex;align-items:center;gap:8px}
+.layer .nm{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--text)}
+.layer .badge{margin-left:auto;font-family:var(--mono);font-size:9.5px;padding:1px 7px;border-radius:999px;border:1px solid var(--border);color:var(--text-faint)}
+.layer .badge.act{color:var(--agent-2);border-color:var(--agent-line)}
+.layer .path{font-family:var(--mono);font-size:10px;color:var(--text-faint);margin-top:5px;word-break:break-all}
+.layer .cnt{font-size:11px;color:var(--text-dim);margin-top:5px}
+.layer .tag{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+.tag.project{background:var(--agent)} .tag.global{background:var(--human)} .tag.builtin{background:var(--text-faint)}
+.rail .div{height:1px;background:var(--border);margin:6px 2px 12px}
+.rail .prev-link{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;border:1px dashed var(--border);color:var(--text-dim);font-size:12px;cursor:pointer}
+.rail .prev-link:hover{border-color:var(--agent-line);color:var(--text)}
+.rail .prev-link.on{border-style:solid;box-shadow:0 0 0 1px var(--agent-line) inset;color:var(--agent-2)}
+
+/* editor pane */
+.editor{overflow:auto;padding:18px 22px 60px}
+.editor::-webkit-scrollbar,.merged::-webkit-scrollbar{width:10px}
+.editor::-webkit-scrollbar-thumb,.merged::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+.ed-head{margin-bottom:16px}
+.ed-head .t{font-size:15px;font-weight:600;display:flex;align-items:center;gap:9px}
+.ed-head .t .tag{width:9px;height:9px;border-radius:50%}
+.ed-head .s{color:var(--text-faint);font-size:11.5px;margin-top:5px;line-height:1.6}
+.ed-head .s code{font-family:var(--mono);color:var(--text-dim);background:var(--surface-3);padding:1px 5px;border-radius:4px}
+
+.scard{border:1px solid var(--border);border-radius:12px;background:var(--surface);margin-bottom:14px;overflow:hidden}
+.scard .sh{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border-soft)}
+.scard .sh .st{font-weight:600;font-size:13px}
+.scard .sh .win{margin-left:auto;font-family:var(--mono);font-size:10px;padding:2px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
+.win.project{color:var(--agent-2);background:var(--agent-soft);box-shadow:0 0 0 1px var(--agent-line) inset}
+.win.global{color:var(--human);background:var(--human-soft);box-shadow:0 0 0 1px var(--human-line) inset}
+.win.builtin{color:var(--text-faint);border:1px solid var(--border)}
+.scard .sb{padding:12px 14px}
+.scard .sb .txt{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--code-text);white-space:pre-wrap}
+.scard .sb .inherit{color:var(--text-faint);font-style:normal}
+.scard .sb .inherit .from{color:var(--text-dim)}
+textarea.ta{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--code-text);font-family:var(--mono);font-size:11.5px;line-height:1.7;padding:11px 13px;resize:vertical;min-height:88px}
+textarea.ta:focus{outline:0;border-color:var(--agent-line);box-shadow:0 0 0 3px var(--agent-soft)}
+.scard .sf{display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--border-soft)}
+.scard .sf .lbtn{background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:7px;padding:5px 12px;font-size:11.5px;cursor:pointer}
+.scard .sf .lbtn:hover{border-color:var(--agent-line);color:var(--text)}
+.scard .sf .lbtn.danger:hover{border-color:var(--del-gutter);color:var(--del)}
+.scard .sf .save{margin-left:auto;background:var(--accent-solid);color:var(--on-solid);border:0;border-radius:7px;padding:6px 14px;font-size:11.5px;font-weight:600;cursor:pointer}
+.scard.overridden{border-color:var(--agent-line)}
+.scard.builtinlock .sb .txt{color:var(--text-dim)}
+
+/* merged preview pane */
+.merged{background:var(--surface);border-left:1px solid var(--border);overflow:auto;padding:0}
+.mg-head{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding:13px 16px;z-index:1}
+.mg-head .t{font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+.mg-head .s{color:var(--text-faint);font-size:11px;margin-top:4px;line-height:1.5}
+.mg-head .s code{font-family:var(--mono);color:var(--text-dim)}
+.mg-body{padding:14px 16px 40px}
+.mblock{margin-bottom:16px;padding-left:11px;border-left:2px solid var(--border)}
+.mblock.project{border-color:var(--agent)} .mblock.global{border-color:var(--human)} .mblock.builtin{border-color:var(--text-faint)}
+.mblock .mt{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;margin-bottom:5px}
+.mblock .mt .src{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);margin-left:auto}
+.mblock .mt .src.project{color:var(--agent-2)} .mblock .mt .src.global{color:var(--human)}
+.mblock .mtx{font-family:var(--mono);font-size:11px;line-height:1.65;color:var(--text-dim);white-space:pre-wrap}
+.mg-legend{display:flex;gap:14px;padding:10px 16px;border-top:1px solid var(--border-soft);font-size:10.5px;color:var(--text-faint);flex-wrap:wrap}
+.mg-legend span{display:inline-flex;align-items:center;gap:5px}
+.mg-legend .d{width:8px;height:8px;border-radius:50%}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
+    <a class="back" href="settings.html" title="返回设置">← 设置</a>
+    <span class="crumb">审核规则 · <b>提示词(三层)</b></span>
+    <div class="spacer"></div>
+    <div class="seg" id="modeSeg"><button data-m="light" title="浅色">☀</button><button class="on" data-m="dark" title="深色">☾</button></div>
+  </div>
+
+  <div class="ribbon">
+    <span>优先级</span>
+    <div class="chain">
+      <span class="lz project"><span class="d"></span>project</span><span class="arw">▸</span>
+      <span class="lz global"><span class="d"></span>global</span><span class="arw">▸</span>
+      <span class="lz builtin"><span class="d"></span>builtin</span>
+    </div>
+    <span style="color:var(--text-faint);font-size:11px">上层按节覆盖下层</span>
+    <span class="note">合并结果注入 codex <code>thread/start · baseInstructions</code></span>
+  </div>
+
+  <div class="main">
+    <!-- ===== layer rail ===== -->
+    <div class="rail">
+      <div class="h">编辑层</div>
+      <button class="layer on" data-layer="project">
+        <div class="top"><span class="tag project"></span><span class="nm">project</span><span class="badge act" id="bd-project">覆盖 0 节</span></div>
+        <div class="path">.duetlens/review.md · 本仓库</div>
+        <div class="cnt">随仓库提交,团队共享</div>
+      </button>
+      <button class="layer" data-layer="global">
+        <div class="top"><span class="tag global"></span><span class="nm">global</span><span class="badge" id="bd-global">覆盖 0 节</span></div>
+        <div class="path">~/.duetlens/review.md · 你</div>
+        <div class="cnt">个人偏好,跨所有仓库</div>
+      </button>
+      <button class="layer" data-layer="builtin">
+        <div class="top"><span class="tag builtin"></span><span class="nm">builtin</span><span class="badge">只读基线</span></div>
+        <div class="path">Duetlens 内置</div>
+        <div class="cnt">全部节的默认,不可编辑</div>
+      </button>
+      <div class="div"></div>
+      <div class="prev-link" id="prevLink"><span>⊕</span> 生效预览(合并结果)</div>
+    </div>
+
+    <!-- ===== editor ===== -->
+    <div class="editor" id="editor"></div>
+
+    <!-- ===== merged preview ===== -->
+    <div class="merged">
+      <div class="mg-head">
+        <div class="t">◈ 生效结果</div>
+        <div class="s">按节取最高优先层;这是最终注入 <code>baseInstructions</code> 的文本。</div>
+      </div>
+      <div class="mg-body" id="mgBody"></div>
+      <div class="mg-legend">
+        <span><span class="d" style="background:var(--agent)"></span>project</span>
+        <span><span class="d" style="background:var(--human)"></span>global</span>
+        <span><span class="d" style="background:var(--text-faint)"></span>builtin</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 数据模型:每节含 builtin 默认 + global/project 可选覆盖 =====
+const LAYERS={project:'project',global:'global',builtin:'builtin'};
+const sections=[
+  {key:'focus',title:'审核重点',
+   builtin:'聚焦正确性、并发安全、错误处理、资源泄漏与安全漏洞。\n超出 diff 的架构隐患以 off-diff finding 提出,并说明为何 off-diff。',
+   global:null,
+   project:'除通用重点外,特别关注:\n- Electron IPC 边界的输入校验\n- 直接拼接的 SQL / shell,警惕注入\n- codex thread 只读沙箱假设是否被打破'},
+  {key:'severity',title:'严重度判定',
+   builtin:'high = 崩溃 / 数据损坏 / 安全问题;\nmed = 边界 / 健壮性 / 可维护性隐患;\nlow = 风格 / 命名 / 可读性。',
+   global:null, project:null},
+  {key:'ignore',title:'忽略范围',
+   builtin:'忽略纯格式化、生成文件、lockfile、无语义的行重排。',
+   global:null,
+   project:'额外忽略:mockup/*.html 的内联样式与演示 JS(设计稿,不进产物)。'},
+  {key:'tone',title:'输出与语气',
+   builtin:'finding 正文用简体中文,代码标识符 / 路径 / category 用英文;\n每条给出 file:line 锚点与可选 suggestion 块。',
+   global:'追问回复保持简洁,不复述已在 diff 中的代码;\n先给结论,再给依据。',
+   project:null},
+  {key:'context',title:'项目上下文',
+   builtin:'(无内置默认;由 project 层补充仓库背景)',
+   global:null,
+   project:'本仓库:Electron + Node/TS 主进程后端 + codex app-server;\n前端为 React SPA;审核 agent 只读代码,不改动。'}
+];
+const winnerOf=s=>s.project!=null?'project':s.global!=null?'global':'builtin';
+const textOf=s=>{const w=winnerOf(s);return s[w];};
+
+let curLayer='project', showMerged=false, editing={};
+
+// ===== 渲染左栏徽标 =====
+function refreshBadges(){
+  ['project','global'].forEach(L=>{
+    const n=sections.filter(s=>s[L]!=null).length;
+    document.getElementById('bd-'+L).textContent='覆盖 '+n+' 节';
+  });
+}
+
+// ===== 渲染编辑器(某一层)=====
+const LDESC={
+  project:'本仓库的审核规则,随代码提交、团队共享;覆盖 global 与 builtin。文件 <code>.duetlens/review.md</code>。',
+  global:'你的个人审核偏好,跨所有仓库生效;覆盖 builtin,被 project 覆盖。文件 <code>~/.duetlens/review.md</code>。',
+  builtin:'Duetlens 内置基线,提供每一节的默认值;<code>只读</code>,通过上层覆盖来调整。'
+};
+function renderEditor(){
+  const ed=document.getElementById('editor');
+  const L=curLayer;
+  let h=`<div class="ed-head"><div class="t"><span class="tag ${L}"></span>${L} 层</div>`+
+        `<div class="s">${LDESC[L]}</div></div>`;
+  sections.forEach((s,i)=>{
+    const overridden=s[L]!=null;
+    const win=winnerOf(s);
+    const isEditing=editing[L+':'+s.key];
+    if(L==='builtin'){
+      h+=`<div class="scard builtinlock"><div class="sh"><span class="st">${s.title}</span>`+
+         `<span class="win ${win}">生效层 ${win}</span></div>`+
+         `<div class="sb"><div class="txt">${esc(s.builtin)}</div></div></div>`;
+      return;
+    }
+    h+=`<div class="scard${overridden?' overridden':''}"><div class="sh"><span class="st">${s.title}</span>`+
+       `<span class="win ${win}">生效层 ${win}</span></div><div class="sb">`;
+    if(isEditing){
+      h+=`<textarea class="ta" data-k="${s.key}">${esc(s[L]!=null?s[L]:'')}</textarea>`;
+    }else if(overridden){
+      h+=`<div class="txt">${esc(s[L])}</div>`;
+    }else{
+      const from=belowText(s,L);
+      h+=`<div class="txt inherit">继承自 <span class="from">${from.layer}</span>:\n${esc(from.text)}</div>`;
+    }
+    h+=`</div><div class="sf">`;
+    if(isEditing){
+      h+=`<button class="lbtn" data-act="cancel" data-k="${s.key}">取消</button>`+
+         `<button class="save" data-act="commit" data-k="${s.key}">保存覆盖</button>`;
+    }else if(overridden){
+      h+=`<button class="lbtn" data-act="edit" data-k="${s.key}">✎ 编辑</button>`+
+         `<button class="lbtn danger" data-act="reset" data-k="${s.key}">重置(改回继承)</button>`;
+    }else{
+      h+=`<button class="lbtn" data-act="add" data-k="${s.key}">＋ 覆盖此节</button>`;
+    }
+    h+=`</div></div>`;
+  });
+  ed.innerHTML=h;
+  ed.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.k));
+}
+function belowText(s,L){
+  if(L==='project'){ if(s.global!=null)return{layer:'global',text:s.global}; return{layer:'builtin',text:s.builtin}; }
+  return{layer:'builtin',text:s.builtin};
+}
+
+// ===== 编辑动作 =====
+function act(a,key){
+  const s=sections.find(x=>x.key===key), L=curLayer, id=L+':'+key;
+  if(a==='add'){ s[L]=belowText(s,L).text; editing[id]=true; }
+  if(a==='edit'){ editing[id]=true; }
+  if(a==='cancel'){ if(s[L]!==null&&s[L].trim()===''&&false){} delete editing[id]; }
+  if(a==='commit'){
+    const ta=document.querySelector(`textarea[data-k="${key}"]`);
+    const v=ta.value.trim(); s[L]=v===''?null:ta.value; delete editing[id];
+  }
+  if(a==='reset'){ s[L]=null; delete editing[id]; }
+  refreshBadges(); renderEditor(); renderMerged();
+}
+
+// ===== 合并预览 =====
+function renderMerged(){
+  const box=document.getElementById('mgBody');
+  box.innerHTML=sections.map(s=>{
+    const w=winnerOf(s), t=textOf(s);
+    const srcLabel=w==='builtin'?'默认':(w==='project'?'project 覆盖':'global 覆盖');
+    return `<div class="mblock ${w}"><div class="mt">${s.title}<span class="src ${w}">${srcLabel}</span></div>`+
+           `<div class="mtx">${esc(t)}</div></div>`;
+  }).join('');
+}
+
+// ===== 交互接线 =====
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+document.querySelectorAll('.layer').forEach(l=>l.onclick=()=>{
+  curLayer=l.dataset.layer; showMerged=false;
+  document.querySelectorAll('.layer').forEach(x=>x.classList.toggle('on',x===l));
+  document.getElementById('prevLink').classList.remove('on');
+  document.getElementById('editor').style.display='';
+  renderEditor();
+});
+document.getElementById('prevLink').onclick=()=>{
+  // 生效预览已常驻右栏;此入口高亮并滚动到右栏顶部
+  document.getElementById('prevLink').classList.add('on');
+  document.querySelector('.merged').scrollTo({top:0,behavior:'smooth'});
+};
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
+  document.documentElement.setAttribute('data-mode',b.dataset.m);
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x===b));
+});
+
+refreshBadges(); renderEditor(); renderMerged();
+</script>
+</body>
+</html>
