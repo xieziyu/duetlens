@@ -488,6 +488,27 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 .code.split .row:hover .src.add{background:var(--add-bg)} .code.split .row:hover .src.del{background:var(--del-bg)}
 .code.split .row:hover .src.new:not(.blank) .add-thread{opacity:1}
 .code.split .src.new{position:relative}
+
+/* ---------- keyboard shortcuts help ---------- */
+.kbd-btn{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:13px;font-family:var(--mono);display:inline-flex;align-items:center;justify-content:center}
+.kbd-btn:hover{background:var(--surface-3);color:var(--text-dim)}
+.kbd-overlay{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:color-mix(in oklab,var(--bg) 52%,transparent);backdrop-filter:blur(3px)}
+.kbd-overlay.show{display:flex}
+.kbd-panel{width:min(660px,92vw);max-height:86vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:19px 22px 20px}
+.kbd-panel .kh{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.kbd-panel .kh h2{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-.1px}
+.kbd-panel .kh .khs{font-family:var(--mono);font-size:11px;color:var(--text-faint)}
+.kbd-panel .kh .kx{margin-left:auto;width:26px;height:26px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+.kbd-panel .kh .kx:hover{color:var(--text)}
+.kbd-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px 28px}
+.kbd-grp h3{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:0 0 6px;display:flex;align-items:center;gap:7px}
+.kbd-grp h3::before{content:"";width:5px;height:5px;border-radius:2px;background:var(--agent)}
+.krow{display:flex;align-items:center;gap:12px;padding:5px 0;font-size:12.5px;color:var(--text-dim);border-top:1px solid var(--border-soft)}
+.kbd-grp h3+.krow{border-top:0}
+.krow .kd{margin-left:auto;display:flex;gap:4px;flex:none}
+kbd{font-family:var(--mono);font-size:11px;line-height:1;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:4px 6px;min-width:10px;text-align:center}
+.krow .hint{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-faint);flex:none}
+.kbd-foot{margin-top:16px;padding-top:12px;border-top:1px solid var(--border-soft);font-size:11px;color:var(--text-faint)}
 </style>
 </head>
 <body>
@@ -521,6 +542,7 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
             <option value="github">GitHub</option>
           </select>
         </label>
+        <button class="kbd-btn" id="kbdBtn" title="键盘快捷键 (?)">⌘</button>
       </div>
     </div>
   </div>
@@ -954,6 +976,40 @@ counter.<span class="fn">fetch_add</span>(<span class="n">1</span>, <span class=
   <button class="sp-ask">◆ 追问 codex</button>
 </div>
 
+<!-- ================= KEYBOARD SHORTCUTS ================= -->
+<div class="kbd-overlay" id="kbdHelp">
+  <div class="kbd-panel" role="dialog" aria-label="键盘快捷键">
+    <div class="kh"><h2>键盘快捷键</h2><span class="khs">按 ? 随时唤起</span><button class="kx" id="kbdClose" title="关闭 (Esc)">✕</button></div>
+    <div class="kbd-cols">
+      <div class="kbd-grp">
+        <h3>通用</h3>
+        <div class="krow">打开 / 关闭本帮助<span class="kd"><kbd>?</kbd></span></div>
+        <div class="krow">关闭弹层 · 取消编辑<span class="kd"><kbd>Esc</kbd></span></div>
+        <div class="krow">切到 Discussion / Findings / Summary<span class="kd"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span></div>
+      </div>
+      <div class="kbd-grp">
+        <h3>Diff 视图</h3>
+        <div class="krow">Unified / Split 切换<span class="kd"><kbd>u</kbd></span></div>
+        <div class="krow">框选代码 → 发起 discussion<span class="hint">拖选</span></div>
+        <div class="krow">行内 ＋ 追加讨论<span class="hint">悬停行</span></div>
+      </div>
+      <div class="kbd-grp">
+        <h3>Finding</h3>
+        <div class="krow">编辑悬停的 finding（就地）<span class="kd"><kbd>e</kbd></span></div>
+        <div class="krow">保存编辑<span class="kd"><kbd>⌘</kbd><kbd>↵</kbd></span></div>
+        <div class="krow">取消编辑<span class="kd"><kbd>Esc</kbd></span></div>
+      </div>
+      <div class="kbd-grp">
+        <h3>Discussion</h3>
+        <div class="krow">发送回复 / 追问<span class="kd"><kbd>↵</kbd></span></div>
+        <div class="krow">输入框内换行<span class="kd"><kbd>⇧</kbd><kbd>↵</kbd></span></div>
+        <div class="krow">引用文件<span class="hint">@ 唤起菜单</span></div>
+      </div>
+    </div>
+    <div class="kbd-foot">⌘ 在 Windows / Linux 为 Ctrl · 焦点在输入框时快捷键自动让位</div>
+  </div>
+</div>
+
 <script>
 const root=document.documentElement;
 document.querySelectorAll('#themeSeg button').forEach(b=>b.onclick=()=>{
@@ -969,11 +1025,34 @@ document.querySelectorAll('#phaseSeg button').forEach(b=>b.onclick=()=>{
   }
 });
 const convo=document.querySelector('.convo');
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active');
-  convo.setAttribute('data-tab',t.dataset.tab);
-});
+function setTab(name){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));
+  convo.setAttribute('data-tab',name);
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setTab(t.dataset.tab));
+
+// ---- 键盘快捷键帮助层 + 全局导航快捷键 ----
+(()=>{
+  const help=document.getElementById('kbdHelp');
+  const openHelp=()=>help.classList.add('show'), closeHelp=()=>help.classList.remove('show');
+  document.getElementById('kbdBtn').onclick=openHelp;
+  document.getElementById('kbdClose').onclick=closeHelp;
+  help.addEventListener('mousedown',e=>{if(e.target===help)closeHelp();});
+  document.addEventListener('keydown',e=>{
+    const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)||e.target.isContentEditable;
+    if(e.key==='Escape'&&help.classList.contains('show')){closeHelp();return;}
+    if(typing||e.metaKey||e.ctrlKey||e.altKey)return;
+    if(e.key==='?'){e.preventDefault();help.classList.toggle('show');return;}
+    if(help.classList.contains('show'))return;   // 帮助打开时不再抢导航键
+    if(document.querySelector('.card.finding.editing'))return;
+    const tab={'1':'discussion','2':'findings','3':'summary'}[e.key];
+    if(tab){e.preventDefault();setTab(tab);return;}
+    if(e.key==='u'){                              // Unified / Split 切换
+      const vb=[...document.querySelectorAll('#viewSeg button')];
+      (vb.find(b=>!b.classList.contains('on'))||vb[0])?.click();
+    }
+  });
+})();
 // triage 保留/剔除
 document.querySelectorAll('.triage').forEach(tr=>tr.querySelectorAll('button').forEach(b=>b.onclick=e=>{
   e.stopPropagation();

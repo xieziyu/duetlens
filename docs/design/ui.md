@@ -88,6 +88,12 @@
 - **off-diff findings 区**:锚点不在当前 diff 新侧的 finding(被删除行 / 无行锚点的 PR 级 / 未展开文件),集中在 diff 顶部一条可折叠的琥珀 banner(`⚑ N 条 finding 不在当前 diff 视图内`),每条显示 sev·category / 标题 / 「为何 off-diff」原因 + origin,点击打开对应 discussion。避免这类 finding 因无处内联而被忽略。
 - **split vs unified**:file-header 的 `Unified | Split` segmented 切换。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
 
+### 键盘快捷键(`mockup/diff-review.html`)
+
+- **统一快捷键体系 + 帮助层**:散落在各交互里的键位(编辑 `e`、保存 `⌘↵`、取消 `Esc`、发送 `↵`)收敛为一套,并有一个随时可唤起的 cheatsheet 浮层。顶栏放一个 `⌘` 触发按钮,快捷键 `?` 唤起 / 关闭;`Esc` 关闭。浮层双列分组(通用 / Diff 视图 / Finding / Discussion),键位用 `<kbd>` 呈现,底部注明「⌘ 在 Windows/Linux 为 Ctrl · 焦点在输入框时快捷键自动让位」。浮层跟随两轴配色(tokens 驱动),明暗自洽。
+- **键位约定**:通用 —— `?` 帮助、`Esc` 关闭弹层/取消编辑、`1`/`2`/`3` 切右栏 Discussion/Findings/Summary。Diff —— `u` 切 Unified/Split(拖选发起 discussion、悬停行 ＋ 追加讨论为鼠标手势,列在浮层作参照)。Finding —— `e` 编辑悬停卡、`⌘↵` 保存、`Esc` 取消。Discussion —— `↵` 发送、`⇧↵` 换行、`@` 唤起引用文件菜单。
+- **让位原则**:焦点在 `INPUT/TEXTAREA/SELECT` 或 contenteditable 时,全局导航键(`?`/数字/`u`)不拦截,只保留输入框自身的 `⌘↵`/`Esc`/`↵`;帮助层打开时也不再抢导航键。(实现项:键位表按用户可配置。)
+
 ### 布局与栏宽
 
 - 三栏:文件树 / diff(主区,`minmax(0,1fr)` 自适应)/ 会话栏。
@@ -104,7 +110,7 @@
 ## 已有 mockup
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
-- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换 + 两轴配色切换。
+- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换 + 键盘快捷键帮助层(`?`)+ 两轴配色切换。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md))。
 - `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。
 - `mockup/design-system.html` —— 可视化 style guide:色板 + 字阶 + 组件清单(见 [design-system](design-system.md))。
