@@ -2,7 +2,7 @@
 
 > Duetlens 是 [better-review](https://github.com/xieziyu/better-review) 的 **2.0 全重写**:把 code review 从"人消费 agent 一次吐出的 findings"变成"**人与 agent 协同对话式** review"。
 >
-> 状态:设计定稿 · 关键技术假设已验证 · **后端垂直已实现并端到端验证**(codex 扫描 → MCP → sqlite,含 source 层与 update_finding 回环)· 最后更新 2026-07-20
+> 状态:设计定稿 · 关键技术假设已验证 · **后端 backlog #1–#6 全部落地并合入 main**(codex 扫描 → MCP → sqlite,含 source 层、update_finding 回环、生命周期健壮性、多层级提示词)· 仅剩 #7 前端三栏真实屏 · 最后更新 2026-07-20
 >
 > 实现进度见 [design/implementation-status.md](design/implementation-status.md)。设计文档描述目标,实现细节以代码为准。
 
