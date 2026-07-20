@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — First-run onboarding (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1100px 620px at 50% -12%,var(--glow1),transparent 60%),radial-gradient(800px 460px at 8% 112%,var(--glow2),transparent 55%)}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+/* topbar — minimal, first run 无返回 */
+.topbar{display:flex;align-items:center;gap:14px;height:46px;padding:0 14px;border-bottom:1px solid var(--border-soft)}
+.brand .mark{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:-.3px;color:var(--text);display:flex;align-items:center}
+.brand .mark i{font-style:normal;color:var(--agent-2)}
+.brand .mark .cur{color:var(--human);font-weight:400;margin-left:1px;animation:blink 1.15s step-end infinite}
+.spacer{flex:1}
+.demo{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-faint)}
+.demo select{background:var(--surface-3);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:4px 8px;font-size:11px;font-family:var(--mono);cursor:pointer}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+
+.stage{overflow:auto;display:flex;justify-content:center}
+.card{width:560px;max-width:calc(100vw - 40px);margin:auto;padding:40px 0 48px}
+
+/* hero */
+.hero{text-align:center;margin-bottom:26px;animation:rise .4s both}
+.hero .mk{font-family:var(--mono);font-size:34px;font-weight:600;letter-spacing:-1px;color:var(--text)}
+.hero .mk i{font-style:normal;color:var(--agent-2)} .hero .mk .cur{color:var(--human);animation:blink 1.15s step-end infinite}
+.hero .tag{color:var(--text-dim);font-size:13.5px;margin-top:10px}
+.hero .sub{color:var(--text-faint);font-size:12px;margin-top:6px;font-family:var(--mono)}
+
+/* checklist */
+.checks{border:1px solid var(--border);border-radius:16px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow);animation:rise .45s .05s both}
+.step{border-top:1px solid var(--border-soft);padding:15px 18px}
+.step:first-child{border-top:0}
+.srow{display:flex;align-items:center;gap:13px}
+.ico{width:30px;height:30px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--surface-3);border:1px solid var(--border);color:var(--text-dim);font-family:var(--mono)}
+.smeta{flex:1;min-width:0}
+.smeta .nm{font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:8px}
+.smeta .nm .opt{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);border:1px solid var(--border);border-radius:999px;padding:1px 7px;font-weight:400}
+.smeta .ds{color:var(--text-faint);font-size:11.5px;margin-top:3px;line-height:1.5}
+.smeta .ds code{font-family:var(--mono);color:var(--text-dim);background:var(--surface-3);padding:1px 5px;border-radius:4px;font-size:10.5px}
+
+/* status chip */
+.chip{flex:none;display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:500;padding:4px 11px;border-radius:999px;border:1px solid var(--border);font-family:var(--mono)}
+.chip .d{width:7px;height:7px;border-radius:50%;flex:none}
+.chip .sp{width:12px;height:12px;border:2px solid var(--agent-line);border-top-color:var(--agent);border-radius:50%;animation:spin .7s linear infinite}
+.chip.ok{color:var(--add);border-color:var(--add-gutter);background:var(--add-bg)} .chip.ok .d{background:var(--add)}
+.chip.warn{color:var(--human);border-color:var(--human-line);background:var(--human-soft)} .chip.warn .d{background:var(--human)}
+.chip.fail{color:var(--del);border-color:var(--del-gutter);background:var(--del-bg)} .chip.fail .d{background:var(--del)}
+.chip.wait{color:var(--text-faint)} .chip.wait .d{background:var(--text-faint)}
+.chip.checking{color:var(--agent-2);border-color:var(--agent-line);background:var(--agent-soft)}
+
+/* fix panel (shown on fail/warn) */
+.fix{margin-top:13px;padding:13px 14px;border-radius:11px;border:1px solid var(--border);background:var(--bg)}
+.fix.warn{border-color:var(--human-line)} .fix.fail{border-color:var(--del-gutter)}
+.fix .ft{font-size:12px;color:var(--text-dim);margin-bottom:9px;line-height:1.55}
+.fix .ft b{color:var(--text)}
+.cmd{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px}
+.cmd .p{color:var(--add);font-family:var(--mono);font-size:12px;flex:none}
+.cmd code{flex:1;font-family:var(--mono);font-size:12px;color:var(--text);white-space:nowrap;overflow:auto}
+.cmd .copy{flex:none;background:var(--surface-2);border:1px solid var(--border);color:var(--text-dim);border-radius:7px;padding:4px 11px;font-size:11px;cursor:pointer}
+.cmd .copy:hover{border-color:var(--agent-line);color:var(--text)}
+.cmd .copy.done{color:var(--add);border-color:var(--add-gutter)}
+.fix .acts{display:flex;align-items:center;gap:10px;margin-top:11px}
+.fix .lbtn{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 13px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.fix .lbtn:hover{border-color:var(--agent-line)}
+.fix .lnk{color:var(--agent-2);font-size:11.5px;text-decoration:none;margin-left:auto}
+.fix .lnk:hover{text-decoration:underline}
+
+/* footer CTA */
+.foot{margin-top:22px;display:flex;flex-direction:column;align-items:center;gap:12px;animation:rise .5s .1s both}
+.cta{width:100%;background:var(--accent-solid);color:var(--on-solid);font-weight:600;border:0;border-radius:12px;padding:13px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;gap:9px}
+.cta:hover{filter:brightness(1.06)}
+.cta:disabled{background:var(--surface-3);color:var(--text-faint);cursor:not-allowed;filter:none}
+.foot .hint{color:var(--text-faint);font-size:11.5px;text-align:center;line-height:1.6;min-height:16px}
+.foot .hint b{color:var(--human)}
+.foot .later{background:transparent;border:0;color:var(--text-dim);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.foot .later:hover{color:var(--text)}
+
+.hide{display:none!important}
+</style>
+</head>
+<body data-ob="checking">
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
+    <div class="spacer"></div>
+    <div class="demo">预览态
+      <select id="obSel">
+        <option value="checking">检测中</option>
+        <option value="no-codex">codex 未安装</option>
+        <option value="gh-out">gh 未登录(可选)</option>
+        <option value="ready">全部就绪</option>
+      </select>
+    </div>
+    <div class="seg" id="modeSeg"><button data-m="light" title="浅色">☀</button><button class="on" data-m="dark" title="深色">☾</button></div>
+  </div>
+
+  <div class="stage">
+    <div class="card">
+      <div class="hero">
+        <div class="mk">duet<i>lens</i><span class="cur">_</span></div>
+        <div class="tag">人 + agent 协同式 code review</div>
+        <div class="sub">首次启动 · 环境检查</div>
+      </div>
+
+      <div class="checks" id="checks"></div>
+
+      <div class="foot">
+        <button class="cta" id="cta" disabled>进入 Duetlens →</button>
+        <div class="hint" id="hint"></div>
+        <button class="later" id="later">跳过,稍后在设置中配置</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 前置项定义 =====
+// 必需:codex + app-server;可选:gh(仅 GitHub 来源需要)
+const STEPS=[
+  {key:'codex',ico:'◆',nm:'codex CLI',req:true,
+   ds:'审核 agent 的运行时;Duetlens 通过它的 app-server 常驻会话驱动机审。',
+   okText:v=>`已安装 · ${v}`, failText:'未检测到',
+   fix:{tone:'fail',
+     ft:'在 <b>PATH</b> 中没有找到 <code>codex</code>。安装后点「重新检测」:',
+     prompt:'brew install codex',
+     doc:['codex-cli 安装文档','#']}},
+  {key:'app',ico:'⇄',nm:'app-server 连通',req:true,
+   ds:'与 codex 建立常驻 JSON-RPC 会话;由 Duetlens 自动拉起,无需手动命令。',
+   okText:()=>'已建立会话', failText:'等待 codex',
+   fix:null},
+  {key:'gh',ico:'⑂',nm:'GitHub CLI',req:false,
+   ds:'仅 GitHub PR 来源与提交 review 需要;本地分支 / GitButler 来源无需登录。',
+   okText:u=>`已登录 · ${u}`, warnText:'未登录',
+   fix:{tone:'warn',
+     ft:'未登录 <b>gh</b>。不影响本地 / GitButler 来源;需要 GitHub PR 时再登录即可:',
+     prompt:'gh auth login',
+     doc:['gh 认证文档','#']}}
+];
+
+// ===== 各预览态的前置项状态 =====
+// 状态值:checking | ok | fail | warn | wait
+const MODES={
+  checking:{codex:'checking', app:'wait', gh:'checking'},
+  'no-codex':{codex:'fail', app:'wait', gh:'ok'},
+  'gh-out':{codex:'ok', app:'ok', gh:'warn'},
+  ready:{codex:'ok', app:'ok', gh:'ok'}
+};
+const VALS={codex:'v0.144.5', gh:'xieziyu'};
+
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+function chip(st){
+  if(st==='checking')return '<span class="chip checking"><span class="sp"></span>检测中</span>';
+  if(st==='wait')return '<span class="chip wait"><span class="d"></span>待前一步</span>';
+  if(st==='ok')return '<span class="chip ok"><span class="d"></span>就绪</span>';
+  if(st==='warn')return '<span class="chip warn"><span class="d"></span>可选 · 未配置</span>';
+  return '<span class="chip fail"><span class="d"></span>缺失</span>';
+}
+function statusText(s,st){
+  if(st==='ok')return s.okText(VALS[s.key]);
+  if(st==='fail')return s.failText;
+  if(st==='warn')return s.warnText;
+  if(st==='wait')return s.failText;
+  return '正在检测…';
+}
+function fixHtml(s,st){
+  if(!s.fix)return '';
+  if(st!=='fail'&&st!=='warn')return '';
+  const f=s.fix;
+  return `<div class="fix ${f.tone}">`+
+    `<div class="ft">${f.ft}</div>`+
+    `<div class="cmd"><span class="p">$</span><code>${esc(f.prompt)}</code>`+
+      `<button class="copy" data-cmd="${esc(f.prompt)}">复制</button></div>`+
+    `<div class="acts"><button class="lbtn recheck">↻ 重新检测</button>`+
+      `<a class="lnk" href="${f.doc[1]}">${esc(f.doc[0])} ↗</a></div>`+
+  `</div>`;
+}
+
+function render(){
+  const mode=document.body.dataset.ob, st=MODES[mode];
+  const box=document.getElementById('checks');
+  box.innerHTML=STEPS.map(s=>{
+    const cur=st[s.key];
+    return `<div class="step">`+
+      `<div class="srow">`+
+        `<div class="ico">${s.ico}</div>`+
+        `<div class="smeta"><div class="nm">${s.nm}`+(s.req?'':'<span class="opt">可选</span>')+`</div>`+
+          `<div class="ds">${s.ds}</div>`+
+          `<div class="ds" style="margin-top:5px;color:var(--text-dim)">${esc(statusText(s,cur))}</div></div>`+
+        chip(cur)+
+      `</div>`+ fixHtml(s,cur)+
+    `</div>`;
+  }).join('');
+  box.querySelectorAll('.copy').forEach(b=>b.onclick=async()=>{
+    try{await navigator.clipboard.writeText(b.dataset.cmd);}catch(e){}
+    b.classList.add('done');b.textContent='已复制 ✓';setTimeout(()=>{b.classList.remove('done');b.textContent='复制';},1400);
+  });
+  box.querySelectorAll('.recheck').forEach(b=>b.onclick=()=>{document.getElementById('obSel').value='checking';setMode('checking');});
+
+  // CTA:必需项全 ok 才可进入
+  const ready=st.codex==='ok'&&st.app==='ok';
+  const cta=document.getElementById('cta'); cta.disabled=!ready;
+  const hint=document.getElementById('hint');
+  if(mode==='checking')hint.innerHTML='正在检测环境…';
+  else if(!ready)hint.innerHTML='需要 <b>codex</b> 就绪才能开始;GitHub 登录可稍后再配。';
+  else if(st.gh==='warn')hint.innerHTML='已就绪。<b>gh 未登录</b> 只影响 GitHub 来源,可稍后再登。';
+  else hint.innerHTML='全部就绪,开始你的第一次审核。';
+}
+
+function setMode(m){document.body.dataset.ob=m;render();}
+document.getElementById('obSel').onchange=e=>setMode(e.target.value);
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
+  document.documentElement.setAttribute('data-mode',b.dataset.m);
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x===b));
+});
+
+// 检测中 → 自动落到「全部就绪」(demo:模拟探测完成)
+render();
+setTimeout(()=>{if(document.body.dataset.ob==='checking'){document.getElementById('obSel').value='ready';setMode('ready');}},1500);
+</script>
+</body>
+</html>

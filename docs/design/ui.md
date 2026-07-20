@@ -152,6 +152,16 @@
 - **软删除 + 撤销**:卡片悬停出现 🗑,删除后原地折叠为虚线条「已删除 · 撤销」(承接 backlog「删除 / 恢复」),不即时清除。
 - 点卡进入对应 review 屏(审核中→运行态,已完成/已提交→只读回放)。
 
+### 首次启动 / codex onboarding(`mockup/onboarding.html`)
+
+- 无历史首启进入全屏引导:wordmark hero + 「环境检查」清单,逐项探测运行前置,而非直接抛错。
+- **前置项分必需 / 可选**:
+  - **codex CLI**(必需):在 `PATH` 探测 + 版本;缺失→红「缺失」+ 修复面板(`brew install codex` 可复制命令 + `↻ 重新检测` + 安装文档)。
+  - **app-server 连通**(必需):由 Duetlens 自动拉起、无用户命令;**级联依赖 codex** —— codex 未就绪时显示灰「待前一步」。
+  - **GitHub CLI**(可选):标「可选」,未登录为琥珀「未配置」+ `gh auth login`;**不阻断 CTA**,面板明说仅 GitHub 来源需要。
+- **CTA 门控**:仅必需项(codex + app-server)全就绪才启用「进入 Duetlens →」;可选项(gh)未配只影响 GitHub 来源。底部「跳过,稍后在设置中配置」次要入口。
+- 顶栏「预览态」下拉演示 checking / codex 未安装 / gh 未登录 / 全部就绪四态;checking 态模拟探测完成自动落到就绪。状态胶囊与 severity/add/del 语义色一致,同 settings 环境区。
+
 ## 待设计 backlog
 
 主干(entry → review → 提交/导出)+ 设计系统 + 状态机/组件层已覆盖。以下为盘点出的**主干之外整块缺口**与**运行时/异常态**,按推进顺序排;逐块补齐后移入上面的「屏与状态」并在此划掉。
@@ -164,12 +174,12 @@
 - [x] **8 上下文压缩可见性**:ctx 接近上限预警 + 压缩发生时反馈 + 压缩后锚点提示(见 open-questions「上下文/token 膨胀」)。→ 同上。
 - [x] **9 提交失败 / 部分成功**:submit 中断、失败、一次 review 二次增量提交语义。→ `mockup/submit-to-github.html`「提交态」切换器 + [findings-submit](findings-submit.md#提交结果与异常态原子提交--增量)。**关键结论:PR review 是原子提交,无"部分成功";"部分失败"的真实形态是 422 行锚点失效 → 降级/改锚点/剔除后整份重提。**
 
-**第一层 · 整块缺失的功能屏(次批,各自独立 mockup)**:
+**第一层 · 整块缺失的功能屏(次批,各自独立 mockup)** —— 已全部完成:
 
 - [x] **设置 / 偏好面板**:管理 `ui_settings`(主题两轴 / 栏宽 / 默认 tab / 默认 diff 视图)+ codex / gh 环境配置。→ `mockup/settings.html`,见上「设置 / 偏好面板」。
 - [x] **审核规则提示词编辑**:查看/编辑 project → global → builtin 三层与合并结果(分节覆盖模型)。→ `mockup/prompt-rules.html`,见上「审核规则提示词 · 三层编辑器」。
 - [x] **全部会话历史页**:全量列表 + 搜索 + source/状态筛选 + 时间分桶 + 软删除/撤销。→ `mockup/history.html`,见上「全部会话历史页」。
-- [ ] **首次启动 / onboarding**:codex 未安装/未配置引导(entry 已有 gh 未登录态,codex 侧缺)。
+- [x] **首次启动 / onboarding**:codex CLI / app-server / gh 环境检查清单 + 修复命令 + CTA 门控。→ `mockup/onboarding.html`,见上「首次启动 / codex onboarding」。
 
 **第三层(打磨,暂缓)**:各 tab 空态、diff 边界(二进制/重命名/大文件/空白差异)、窄窗口退化、模型选择/reasoning effort、a11y 焦点管理、长任务完成通知。
 
@@ -185,5 +195,6 @@
 - `mockup/settings.html` —— **设置 / 偏好面板**:左栏分组导航 + 右栏分节表单;外观两轴实时驱动主题、审核默认(source/diff视图/tab/分组)、codex/gh 环境配置、快捷键摘录、关于。对齐 `ui_settings`。
 - `mockup/prompt-rules.html` —— **审核规则提示词三层编辑器**:优先级 ribbon + 左栏层选择 + 中栏分节编辑(继承/覆盖/重置)+ 右栏生效结果(provenance 配色)。分节覆盖模型,合并注入 `baseInstructions`。
 - `mockup/history.html` —— **全部会话历史页**:搜索 + source/状态筛选 + 时间分桶列表(复用 entry `.rev` 卡)+ 软删除/撤销;`entry.html` 的「全部历史 →」入口指向本页。
+- `mockup/onboarding.html` —— **首次启动 / codex onboarding**:环境检查清单(codex CLI / app-server / gh)+ 修复命令面板 + CTA 门控;顶栏「预览态」切 checking / 未安装 / gh 未登录 / 就绪。
 
 > 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、design tokens / 组件清单)在本目录新增分册,并在 [文档索引](../README.md) 登记。
