@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — All review history (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 78% -10%,var(--glow1),transparent 60%),radial-gradient(900px 500px at 5% 108%,var(--glow2),transparent 55%)}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+/* topbar */
+.topbar{display:flex;align-items:center;gap:14px;height:48px;padding:0 14px;background:linear-gradient(180deg,var(--surface-2),var(--surface));border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:2px;padding-right:14px;border-right:1px solid var(--border)}
+.brand .mark{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px;color:var(--text);display:flex;align-items:center}
+.brand .mark i{font-style:normal;color:var(--agent-2)}
+.brand .mark .cur{color:var(--human);font-weight:400;margin-left:1px;animation:blink 1.15s step-end infinite}
+.back{color:var(--text-dim);font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;border:1px solid var(--border)}
+.back:hover{color:var(--text);border-color:var(--agent-line)}
+.crumb{color:var(--text-dim);font-size:12px} .crumb b{color:var(--text);font-weight:600}
+.spacer{flex:1}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+
+.scroll{overflow:auto}
+.scroll::-webkit-scrollbar{width:10px} .scroll::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+.wrap{max-width:900px;margin:0 auto;padding:26px 26px 80px}
+
+.page-head{display:flex;align-items:baseline;gap:12px;margin-bottom:18px}
+.page-head h1{font-size:20px;font-weight:600;letter-spacing:-.3px}
+.page-head .n{font-family:var(--mono);font-size:12px;color:var(--text-faint)}
+
+/* toolbar: search + filters */
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.search{flex:1;min-width:220px;display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px}
+.search:focus-within{border-color:var(--agent-line);box-shadow:0 0 0 3px var(--agent-soft)}
+.search svg{width:14px;height:14px;color:var(--text-faint);flex:none}
+.search input{flex:1;background:transparent;border:0;color:var(--text);font-family:var(--sans);font-size:13px;outline:0}
+.search input::placeholder{color:var(--text-faint)}
+.filter{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:9px;padding:2px}
+.filter button{border:0;background:transparent;color:var(--text-faint);border-radius:7px;cursor:pointer;font-size:12px;padding:6px 12px;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.filter button.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--agent-line) inset}
+.filter button .sd{width:6px;height:6px;border-radius:50%}
+.sd.review{background:var(--agent)} .sd.done{background:var(--text-faint)} .sd.submitted{background:var(--add)}
+
+/* time group */
+.group{margin-bottom:22px}
+.group > .gh{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);font-weight:600;font-family:var(--mono);margin:0 2px 9px}
+.recent{display:flex;flex-direction:column;gap:9px}
+
+/* review card (对齐 entry.html .rev) */
+.rev{display:flex;align-items:center;gap:13px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;cursor:pointer;position:relative}
+.rev:hover{border-color:var(--agent-line);background:linear-gradient(180deg,var(--surface),color-mix(in oklab,var(--agent) 4%,var(--surface)))}
+.rev .srcbadge{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;border:1px solid var(--border);background:var(--surface-3);color:var(--text-dim);flex:none}
+.rev .srcbadge svg{width:12px;height:12px}
+.rev .srcbadge.gh b{color:var(--agent-2)}
+.rev .srcbadge.local{color:var(--text-dim)}
+.rev .srcbadge.gb{color:var(--human)}
+.rev .m{flex:1;min-width:0}
+.rev .t{color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rev .t .br{color:var(--text-faint);font-family:var(--mono);font-size:11px}
+.rev .meta{font-size:11px;color:var(--text-faint);margin-top:3px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-family:var(--mono)}
+.rev .meta .dot{width:3px;height:3px;border-radius:50%;background:var(--text-faint)}
+.rev .meta .find{color:var(--sev-high)} .rev .meta .find.zero{color:var(--text-faint)}
+.rev .meta .sub{color:var(--add)}
+.rev .stat{display:flex;align-items:center;gap:6px;font-size:11px;flex:none}
+.rev .stat .pulse{width:7px;height:7px;border-radius:50%;background:var(--agent);animation:pulse 2s infinite}
+.rev .stat.review{color:var(--agent-2)} .rev .stat.done{color:var(--text-faint)} .rev .stat.submitted{color:var(--add)}
+.rev .del{opacity:0;flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-faint);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center}
+.rev:hover .del{opacity:1} .rev .del:hover{border-color:var(--del-gutter);color:var(--del)}
+.rev .arrow{color:var(--text-faint);font-size:16px;flex:none}
+.rev:hover .arrow{color:var(--agent-2)}
+
+/* deleted (soft) */
+.rev.gone{cursor:default;border-style:dashed;background:var(--surface)}
+.rev.gone:hover{background:var(--surface)}
+.rev.gone .srcbadge,.rev.gone .m,.rev.gone .stat,.rev.gone .del,.rev.gone .arrow{display:none}
+.rev.gone .undo{display:flex;align-items:center;gap:10px;width:100%;color:var(--text-faint);font-size:12px}
+.rev .undo{display:none}
+.rev.gone .undo b{color:var(--text-dim);font-weight:500}
+.rev.gone .undo button{margin-left:auto;background:transparent;border:1px solid var(--border);color:var(--agent-2);border-radius:7px;padding:4px 12px;font-size:11.5px;cursor:pointer}
+.rev.gone .undo button:hover{border-color:var(--agent-line)}
+
+/* empty search */
+.noresult{display:none;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:44px 22px;border:1px dashed var(--border);border-radius:14px;background:var(--surface);color:var(--text-faint)}
+.noresult .ic{font-size:22px}
+.noresult.show{display:flex}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
+    <a class="back" href="entry.html" title="返回主入口">← 主入口</a>
+    <span class="crumb">审核历史 · <b>全部</b></span>
+    <div class="spacer"></div>
+    <div class="seg" id="modeSeg"><button data-m="light" title="浅色">☀</button><button class="on" data-m="dark" title="深色">☾</button></div>
+  </div>
+
+  <div class="scroll">
+    <div class="wrap">
+      <div class="page-head"><h1>全部审核</h1><span class="n" id="total">共 12 次</span></div>
+
+      <div class="toolbar">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="q" placeholder="搜索标题 / 仓库 / 分支 / PR 号…" spellcheck="false">
+        </div>
+        <div class="filter" id="srcFilter">
+          <button class="on" data-src="all">全部来源</button>
+          <button data-src="gh">GitHub</button>
+          <button data-src="local">本地</button>
+          <button data-src="gb">GitButler</button>
+        </div>
+        <div class="filter" id="statFilter">
+          <button class="on" data-stat="all">全部状态</button>
+          <button data-stat="review"><span class="sd review"></span>审核中</button>
+          <button data-stat="submitted"><span class="sd submitted"></span>已提交</button>
+          <button data-stat="done"><span class="sd done"></span>已完成</button>
+        </div>
+      </div>
+
+      <div id="list"></div>
+      <div class="noresult" id="noresult"><div class="ic">◍</div><div>没有匹配的审核</div><div style="font-size:11.5px">换个关键词,或清除来源 / 状态筛选。</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== source badge SVG(对齐 entry.html)=====
+const GH='<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>';
+const LOCAL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M6 8.5v7M8.4 6.6C13 6.6 18 6 18 10.5"/></svg>';
+const GB='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M6 8l6-5 6 5M6 16l6 5 6-5"/></svg>';
+
+// ===== 数据(时间分桶 today / week / older)=====
+const reviews=[
+  {src:'gh',ref:'#482',title:'feat: streaming transcode',repo:'podcast-go',find:3,disc:2,stat:'review',bucket:'today',when:'23 分钟前'},
+  {src:'local',title:'fix/audio-drift',branch:'← main',repo:'podcast-go',find:1,disc:0,stat:'done',bucket:'today',when:'2 小时前',note:'本地导出'},
+  {src:'gh',ref:'#479',title:'fix: episode duration off-by-one on live cutover',repo:'podcast-go',find:5,sub:4,stat:'submitted',bucket:'today',when:'今天 10:14'},
+  {src:'gb',title:'virtual/api-cleanup',repo:'Duetlens',find:2,disc:1,stat:'done',bucket:'week',when:'昨天'},
+  {src:'gh',ref:'#471',title:'refactor: extract prompt resolver into shared',repo:'duetlens',find:8,sub:6,stat:'submitted',bucket:'week',when:'周三'},
+  {src:'gh',ref:'#468',title:'feat: MCP in-process HTTP transport',repo:'duetlens',find:4,sub:4,stat:'submitted',bucket:'week',when:'周二'},
+  {src:'local',title:'fix/feed-encoding',branch:'← main',repo:'podcast-go',find:0,disc:0,stat:'done',bucket:'week',when:'周一',note:'本地导出 · 未提交'},
+  {src:'gb',title:'virtual/live-activity',repo:'podhub',find:6,disc:3,stat:'done',bucket:'week',when:'上周日'},
+  {src:'gh',ref:'#455',title:'perf: cache diff hunks across split/unified',repo:'duetlens',find:2,sub:1,stat:'submitted',bucket:'older',when:'7 月 12 日'},
+  {src:'gh',ref:'#449',title:'fix: elicitation approval blocks turn on read-only tools',repo:'duetlens',find:3,sub:3,stat:'submitted',bucket:'older',when:'7 月 9 日'},
+  {src:'local',title:'fix/transcode-timeout',branch:'← develop',repo:'podcast-go',find:1,disc:0,stat:'done',bucket:'older',when:'7 月 5 日',note:'本地导出'},
+  {src:'gb',title:'virtual/schema-zod-port',repo:'duetlens',find:4,disc:2,stat:'done',bucket:'older',when:'7 月 2 日'}
+];
+const BUCKETS=[['today','今天'],['week','本周'],['older','更早']];
+const SRC={gh:GH,local:LOCAL,gb:GB};
+const badgeLabel=r=>r.src==='gh'?`<b>${r.ref}</b>`:(r.src==='local'?'本地':'vbranch');
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+let fSrc='all', fStat='all', query='';
+
+function metaHtml(r){
+  const parts=[`<span>${esc(r.repo)}</span>`,'<span class="dot"></span>'];
+  parts.push(r.find>0?`<span class="find">${r.find} findings</span>`:`<span class="find zero">0 findings</span>`);
+  parts.push('<span class="dot"></span>');
+  if(r.sub)parts.push(`<span class="sub">${r.sub} 已提交</span>`);
+  else if(r.disc)parts.push(`<span>${r.disc} discussions</span>`);
+  else parts.push(`<span>${r.note||'—'}</span>`);
+  parts.push('<span class="dot"></span>',`<span>${r.when}</span>`);
+  return parts.join('');
+}
+function statHtml(r){
+  if(r.stat==='review')return '<span class="stat review"><span class="pulse"></span>审核中</span>';
+  if(r.stat==='submitted')return '<span class="stat submitted">✓ 已提交</span>';
+  return '<span class="stat done">已完成</span>';
+}
+function cardHtml(r,idx){
+  const title=r.branch?`${esc(r.title)} <span class="br">${esc(r.branch)}</span>`:esc(r.title);
+  return `<div class="rev" data-i="${idx}">`+
+    `<span class="srcbadge ${r.src}">${SRC[r.src]}${badgeLabel(r)}</span>`+
+    `<div class="m"><div class="t">${title}</div><div class="meta">${metaHtml(r)}</div></div>`+
+    statHtml(r)+
+    `<button class="del" title="删除这条历史" data-del="${idx}">🗑</button>`+
+    `<span class="arrow">→</span>`+
+    `<div class="undo">已删除 <b>${esc(r.title)}</b><button data-undo="${idx}">撤销</button></div>`+
+  `</div>`;
+}
+
+function render(){
+  const list=document.getElementById('list'); list.innerHTML='';
+  let shown=0;
+  BUCKETS.forEach(([bk,label])=>{
+    const rows=reviews.map((r,i)=>({r,i})).filter(({r})=>{
+      if(r.bucket!==bk)return false;
+      if(fSrc!=='all'&&r.src!==fSrc)return false;
+      if(fStat!=='all'&&r.stat!==fStat)return false;
+      if(query){
+        const hay=(r.title+' '+r.repo+' '+(r.ref||'')+' '+(r.branch||'')).toLowerCase();
+        if(!hay.includes(query))return false;
+      }
+      return true;
+    });
+    if(!rows.length)return;
+    const g=document.createElement('div'); g.className='group';
+    g.innerHTML=`<div class="gh">${label} · ${rows.length}</div><div class="recent">`+
+      rows.map(({r,i})=>cardHtml(r,i)).join('')+`</div>`;
+    list.appendChild(g);
+    shown+=rows.length;
+  });
+  // 接线
+  list.querySelectorAll('.rev').forEach(el=>{
+    const i=+el.dataset.i;
+    if(reviews[i].deleted)el.classList.add('gone');
+    el.querySelector('[data-del]')?.addEventListener('click',e=>{e.stopPropagation();reviews[i].deleted=true;render();});
+    el.querySelector('[data-undo]')?.addEventListener('click',e=>{e.stopPropagation();reviews[i].deleted=false;render();});
+  });
+  document.getElementById('noresult').classList.toggle('show',shown===0);
+  const live=reviews.filter(r=>!r.deleted).length;
+  document.getElementById('total').textContent='共 '+live+' 次';
+}
+
+// ===== filters =====
+document.querySelectorAll('#srcFilter button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#srcFilter button').forEach(x=>x.classList.toggle('on',x===b));
+  fSrc=b.dataset.src; render();
+});
+document.querySelectorAll('#statFilter button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#statFilter button').forEach(x=>x.classList.toggle('on',x===b));
+  fStat=b.dataset.stat; render();
+});
+document.getElementById('q').addEventListener('input',e=>{query=e.target.value.trim().toLowerCase();render();});
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
+  document.documentElement.setAttribute('data-mode',b.dataset.m);
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x===b));
+});
+
+render();
+</script>
+</body>
+</html>

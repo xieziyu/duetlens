@@ -144,6 +144,14 @@
   - **右 = 生效结果(常驻)**:按节合并后的最终文本,每节标来源(project 覆盖 / global 覆盖 / 默认)并用 provenance 左条配色(project=天蓝 / global=琥珀 / builtin=灰),底部图例。
 - provenance 三色沿用品牌语义:project(最具体)= 天蓝 accent、global(个人)= 琥珀、builtin(基线)= 灰。
 
+### 全部会话历史页(`mockup/history.html`)
+
+- entry「最近的审核」只显示近几条,`全部历史 →` 进入本页(已接 `entry.html` 链接);**复用 entry 的 `.rev` 卡片词汇**(srcbadge gh/local/gb · 标题 · meta(repo · findings · discussions/已提交 · 相对时间)· stat(审核中/已提交/已完成)),保证两处一致。
+- **工具条**:搜索框(标题 / 仓库 / 分支 / PR 号)+ 来源筛选(全部 / GitHub / 本地 / GitButler)+ 状态筛选(全部 / 审核中 / 已提交 / 已完成)。全部即时过滤,顶部计数随之更新。
+- **按时间分桶**(今天 / 本周 / 更早),每桶标题带条数;筛选 / 搜索后空结果显示引导空态。
+- **软删除 + 撤销**:卡片悬停出现 🗑,删除后原地折叠为虚线条「已删除 · 撤销」(承接 backlog「删除 / 恢复」),不即时清除。
+- 点卡进入对应 review 屏(审核中→运行态,已完成/已提交→只读回放)。
+
 ## 待设计 backlog
 
 主干(entry → review → 提交/导出)+ 设计系统 + 状态机/组件层已覆盖。以下为盘点出的**主干之外整块缺口**与**运行时/异常态**,按推进顺序排;逐块补齐后移入上面的「屏与状态」并在此划掉。
@@ -160,7 +168,7 @@
 
 - [x] **设置 / 偏好面板**:管理 `ui_settings`(主题两轴 / 栏宽 / 默认 tab / 默认 diff 视图)+ codex / gh 环境配置。→ `mockup/settings.html`,见上「设置 / 偏好面板」。
 - [x] **审核规则提示词编辑**:查看/编辑 project → global → builtin 三层与合并结果(分节覆盖模型)。→ `mockup/prompt-rules.html`,见上「审核规则提示词 · 三层编辑器」。
-- [ ] **全部会话历史页**:entry 只显示「最近」,缺全量列表(搜索 / 按 source 筛选 / 删除 / 恢复)。
+- [x] **全部会话历史页**:全量列表 + 搜索 + source/状态筛选 + 时间分桶 + 软删除/撤销。→ `mockup/history.html`,见上「全部会话历史页」。
 - [ ] **首次启动 / onboarding**:codex 未安装/未配置引导(entry 已有 gh 未登录态,codex 侧缺)。
 
 **第三层(打磨,暂缓)**:各 tab 空态、diff 边界(二进制/重命名/大文件/空白差异)、窄窗口退化、模型选择/reasoning effort、a11y 焦点管理、长任务完成通知。
@@ -176,5 +184,6 @@
 - `mockup/design-system.html` —— 可视化 style guide:色板 + 字阶 + 组件清单(见 [design-system](design-system.md))。
 - `mockup/settings.html` —— **设置 / 偏好面板**:左栏分组导航 + 右栏分节表单;外观两轴实时驱动主题、审核默认(source/diff视图/tab/分组)、codex/gh 环境配置、快捷键摘录、关于。对齐 `ui_settings`。
 - `mockup/prompt-rules.html` —— **审核规则提示词三层编辑器**:优先级 ribbon + 左栏层选择 + 中栏分节编辑(继承/覆盖/重置)+ 右栏生效结果(provenance 配色)。分节覆盖模型,合并注入 `baseInstructions`。
+- `mockup/history.html` —— **全部会话历史页**:搜索 + source/状态筛选 + 时间分桶列表(复用 entry `.rev` 卡)+ 软删除/撤销;`entry.html` 的「全部历史 →」入口指向本页。
 
 > 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、design tokens / 组件清单)在本目录新增分册,并在 [文档索引](../README.md) 登记。
