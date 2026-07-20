@@ -106,7 +106,7 @@
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
 - `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换 + 两轴配色切换。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md))。
-- `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` 已引用,`entry.html` 待收敛。
+- `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。
 - `mockup/design-system.html` —— 可视化 style guide:色板 + 字阶 + 组件清单(见 [design-system](design-system.md))。
 
 > 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、design tokens / 组件清单)在本目录新增分册,并在 [文档索引](../README.md) 登记。
