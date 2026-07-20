@@ -42,6 +42,19 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA「提�
 3. 经 `gh` 提交(`gh api` / `gh pr review`);只读 sandbox 不影响提交(提交是 app 侧用 gh,不经 codex 工具)。
 4. 提交后 finding 标 `submitted`(passive 标注,沿用 1.0 「不做 unsubmitted-changes 徽标」的约定)。
 
+## 提交结果与异常态(原子提交 · 增量)
+
+演示见 `mockup/submit-to-github.html` 顶栏「提交态」切换器(ready / submitting / success / invalid / failed / incremental)。
+
+**PR review 是一次原子提交。** Duetlens 用一次 `gh api …/pulls/{n}/reviews`(review body + event + 全部 inline `comments[]`)提交;GitHub 要么整份落地、要么整份失败 —— **没有"部分成功"**。据此设计结果态:
+
+- **submitting**:提交中,按钮转圈禁用。
+- **success**:绿 banner「review 已提交 · #NNN · <event>」+「在 GitHub 查看 ↗」;保留项转 `submitted`(passive 绿条锁定、不可再改),foot 换「完成 · 返回 diff」。
+- **invalid(422 · 行锚点失效)**:某条 finding 的 `file:line` 已不在最新 diff 的新增侧(base 更新 / 行移位),作为 inline 会让整份 review 被 GitHub 拒。这才是"部分不可提交"的真实形态(而非事后的部分成功)。红 banner + 该条**红框恢复**:**降级为摘要评论 / 改锚点到最近改动行 / 剔除此条**;处理后整份重提。
+- **failed(整体)**:`gh` 认证过期 / 网络中断 / PR 已合并关闭 —— 未提交任何评论,红 banner + 原因 + 重试;findings 保持未提交。
+
+**增量提交(二次)**:一次 review 可多轮提交。已 `submitted` 的 finding **锁定不重发**;上次提交后新增或改动的 finding 组成 **delta**,再进 submit 屏只提交 delta,每次 submit = **追加一份新的 PR review**(info banner 标「上次已提交 N 条,本次 M 条新增」)。这与 finding 的 `submission` 状态(见上「finding 生命周期」)一致 —— submitted 是终态、只读。
+
 ## 非 GitHub source — 导出为 Markdown
 
 `local-branch` / `gitbutler-vbranch` 无 PR 可提交 → GitHub 提交动作不可用,顶栏 CTA 换成 **「导出 review」**,进入**本地 Markdown 导出屏**(`mockup/export-markdown.html`)。同一条 triage 管线(勾选保留 / 剔除),终点从"提交到 GitHub"换成"生成一份 Markdown 报告"。

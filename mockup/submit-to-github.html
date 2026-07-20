@@ -110,9 +110,53 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13
 .submit:hover{filter:brightness(1.06)}
 .foot-note{margin-top:9px;font-size:11px;color:var(--text-faint);display:flex;align-items:center;gap:6px;justify-content:center}
 .foot-note code{font-family:var(--mono);color:var(--text-dim)}
+
+/* ===== 提交结果 / 异常态(第9项)· body[data-sub] ===== */
+@keyframes spin{to{transform:rotate(360deg)}}
+.sub-pick{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-faint);padding-left:12px;border-left:1px solid var(--border)}
+.sub-pick select{font-family:var(--mono);font-size:11px;background:var(--surface-3);color:var(--text-dim);border:1px solid var(--border);border-radius:7px;padding:4px 7px;cursor:pointer;outline:none}
+.spin-ic{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+.newpill{font-family:var(--mono);font-size:9.5px;font-weight:700;text-transform:uppercase;padding:2px 6px;border-radius:5px;color:var(--human);background:var(--human-soft);border:1px solid var(--human-line)}
+
+/* finish pane 顶部结果 banner */
+.sub-banner{display:none;align-items:flex-start;gap:9px;padding:12px 16px;font-size:12.5px;line-height:1.55;border-bottom:1px solid var(--border)}
+.sub-banner .bi{flex:none;font-size:15px;line-height:1.2} .sub-banner .bt{flex:1} .sub-banner .bt b{font-weight:600}
+.sub-banner code{font-family:var(--mono);font-size:11.5px} .sub-banner a{color:inherit;text-decoration:underline;font-weight:600}
+.sub-banner.ok{background:color-mix(in oklab,var(--add) 11%,var(--surface));color:var(--add)}
+.sub-banner.err{background:color-mix(in oklab,var(--sev-high) 9%,var(--surface));color:var(--sev-high)}
+.sub-banner.info{background:var(--agent-soft);color:var(--agent-2)}
+body[data-sub="success"] .sb-success,body[data-sub="failed"] .sb-failed,body[data-sub="invalid"] .sb-invalid,body[data-sub="incremental"] .sb-incremental{display:flex}
+
+/* foot 随态切换 */
+.foot-slot{display:none}
+body[data-sub="ready"] .foot-ready,body[data-sub="submitting"] .foot-submitting,body[data-sub="success"] .foot-success,body[data-sub="invalid"] .foot-invalid,body[data-sub="failed"] .foot-failed,body[data-sub="incremental"] .foot-incremental{display:block}
+.submit.busy{opacity:.75;cursor:default;filter:none} .submit.ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--border)} .submit.retry{background:var(--sev-high)}
+
+/* finding 行提交态标注 */
+.f-status{display:none;margin-top:8px;font-family:var(--mono);font-size:11px;align-items:center;gap:6px}
+.f-status.done{color:var(--add)} .f-status.done::before{content:"✓"}
+.f-status.pend{color:var(--human)} .f-status.pend::before{content:"◆"}
+/* 已提交锁定:success 时 kept 项、incremental 时旧项(非 delta) */
+body[data-sub="success"] .finding.kept .f-status.done,body[data-sub="incremental"] .finding.kept:not(.delta) .f-status.done{display:flex}
+body[data-sub="success"] .finding.kept,body[data-sub="incremental"] .finding.kept:not(.delta){border-left-color:var(--add);opacity:.82}
+body[data-sub="success"] .finding.kept .f-actions,body[data-sub="incremental"] .finding.kept:not(.delta) .f-actions,body[data-sub="success"] .finding.kept .chk,body[data-sub="incremental"] .finding.kept:not(.delta) .chk{pointer-events:none;opacity:.45}
+
+/* 增量 delta 新增项仅在 incremental 显示 */
+.finding.delta{display:none;border-left-color:var(--human)}
+body[data-sub="incremental"] .finding.delta{display:flex}
+body[data-sub="incremental"] .finding.delta .f-status.pend{display:flex}
+
+/* 位置校验失败:invalid 时高亮该条 + 恢复条 */
+.f-invalid{display:none;margin-top:9px;padding:9px 11px;border:1px solid color-mix(in oklab,var(--sev-high) 34%,transparent);border-radius:9px;background:color-mix(in oklab,var(--sev-high) 7%,var(--bg));font-size:11.5px;color:var(--text-dim);line-height:1.55}
+.f-invalid b{color:var(--sev-high)} .f-invalid code{font-family:var(--mono);font-size:11px;color:var(--text)}
+.f-invalid .fix{display:flex;gap:7px;margin-top:8px;flex-wrap:wrap}
+.f-invalid .fix span{font-size:11px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer}
+.f-invalid .fix span:hover{border-color:var(--agent-line);color:var(--text)}
+body[data-sub="invalid"] .finding.risky{border-left-color:var(--sev-high)}
+body[data-sub="invalid"] .finding.risky .f-invalid{display:block}
 </style>
 </head>
-<body>
+<body data-sub="ready">
 <div class="app">
   <div class="topbar">
     <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
@@ -120,6 +164,16 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13
     <span class="pr-chip"><span class="gh">⎇ GitHub</span> <b>#482</b></span>
     <span class="crumb">Review · <b>提交 findings</b></span>
     <div class="spacer"></div>
+    <div class="sub-pick"><span>提交态</span>
+      <select id="subSel" title="mockup:切换提交结果 / 异常态">
+        <option value="ready">ready · 待提交</option>
+        <option value="submitting">提交中…</option>
+        <option value="success">✓ 提交成功</option>
+        <option value="invalid">被拒 · 行锚点失效</option>
+        <option value="failed">失败 · 认证/网络/PR 关闭</option>
+        <option value="incremental">二次增量提交</option>
+      </select>
+    </div>
     <div class="seg"><button title="浅色">☀</button><button class="on" title="深色">☾</button></div>
   </div>
 
@@ -155,6 +209,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13
           <div class="f-sugg"><div class="h">suggestion · 将作为 GitHub suggestion 块</div><pre>let counter = Arc::new(AtomicUsize::new(0));
 counter.fetch_add(1, Ordering::Relaxed);</pre></div>
           <div class="f-refined">◆ 已在 discussion 中和你确认「近似进度用 Relaxed 即可」,body 已更新</div>
+          <div class="f-status done">已提交 · #482 · inline pipeline.rs:121</div>
         </div>
         <div class="f-actions">
           <span class="ibtn" title="编辑 severity/标题/正文/建议">✎</span>
@@ -162,8 +217,8 @@ counter.fetch_add(1, Ordering::Relaxed);</pre></div>
         </div>
       </div>
 
-      <!-- kept, medium, agent -->
-      <div class="finding kept">
+      <!-- kept, medium, agent(也是 invalid 态里锚点失效的那条) -->
+      <div class="finding kept risky">
         <span class="chk on">✓</span>
         <div class="f-main">
           <div class="f-top">
@@ -175,6 +230,33 @@ counter.fetch_add(1, Ordering::Relaxed);</pre></div>
             <span class="origin agent"><span class="d"></span> codex · report_finding</span>
           </div>
           <div class="f-body"><code>res.unwrap()</code> 会把单个 segment 的 panic 变成整个 pipeline 崩溃。建议 <code>?</code> 上抛并附带 segment 上下文。</div>
+          <div class="f-status done">已提交 · #482 · inline pipeline.rs:146</div>
+          <div class="f-invalid">
+            <b>⛔ 行锚点失效</b> —— <code>pipeline.rs:146</code> 不在最新 PR diff 的新增侧(base 已更新,原行已移位)。作为 inline 评论会让整份 review 被拒。
+            <div class="fix"><span>降级为摘要评论</span><span>改锚点到最近改动行</span><span>剔除此条</span></div>
+          </div>
+        </div>
+        <div class="f-actions">
+          <span class="ibtn" title="编辑">✎</span>
+          <span class="ibtn danger" title="剔除">🗑</span>
+        </div>
+      </div>
+
+      <!-- delta:上次提交后新增,仅二次增量态显示 -->
+      <div class="finding kept delta">
+        <span class="chk on">✓</span>
+        <div class="f-main">
+          <div class="f-top">
+            <span class="sev med">medium · resource <span class="car">▾</span></span>
+            <span class="f-title">JoinSet 无并发上限,超大 job 可能占满内存</span>
+            <span class="newpill">新增</span>
+          </div>
+          <div class="f-top">
+            <span class="f-anchor">📍 <b>pipeline.rs</b>:122</span>
+            <span class="origin human"><span class="d"></span> 你 · 由 discussion 提升</span>
+          </div>
+          <div class="f-body">上次提交后新增。给 <code>spawn</code> 加并发上限(<code>Semaphore</code>),避免一次性起满所有 segment。</div>
+          <div class="f-status pend">待提交(本次增量)</div>
         </div>
         <div class="f-actions">
           <span class="ibtn" title="编辑">✎</span>
@@ -213,6 +295,10 @@ counter.fetch_add(1, Ordering::Relaxed);</pre></div>
         <div class="t">◆ Finish your review</div>
         <div class="s">将组成 PR #482 的一次 review 提交</div>
       </div>
+      <div class="sub-banner ok sb-success"><span class="bi">✓</span><div class="bt"><b>review 已提交</b> · PR #482 · Request changes —— 2 行评论 + 摘要。<a href="#">在 GitHub 查看 ↗</a></div></div>
+      <div class="sub-banner err sb-failed"><span class="bi">⚠</span><div class="bt"><b>提交失败</b> —— <code>gh</code> 认证已过期(或网络中断 / PR 已合并关闭)。review <b>未提交</b>,findings 保持未提交,可重试。</div></div>
+      <div class="sub-banner err sb-invalid"><span class="bi">⛔</span><div class="bt"><b>提交被 GitHub 拒绝(422)</b> —— 1 条 finding 的行锚点不在最新 diff 中。PR review 是<b>原子</b>提交(全成或全败),须先处理该条(见左侧红框)才能整份提交。</div></div>
+      <div class="sub-banner info sb-incremental"><span class="bi">↻</span><div class="bt">上次已提交 <b>2 条</b>(#482 review),本次有 <b>1 条新增</b>待提交。已提交项锁定不重发,本次<b>追加</b>一份新的 review。</div></div>
       <div class="finish-body">
         <div class="field-lbl">Review 摘要(body)</div>
         <div class="summary">
@@ -229,8 +315,30 @@ counter.fetch_add(1, Ordering::Relaxed);</pre></div>
         </div>
       </div>
       <div class="finish-foot">
-        <button class="submit">提交到 GitHub · 2 行评论 + 摘要 →</button>
-        <div class="foot-note">经 <code>gh</code> CLI 提交 · 只读 sandbox 不影响</div>
+        <div class="foot-slot foot-ready">
+          <button class="submit">提交到 GitHub · 2 行评论 + 摘要 →</button>
+          <div class="foot-note">经 <code>gh</code> 创建一次 PR review(原子) · 只读 sandbox 不影响</div>
+        </div>
+        <div class="foot-slot foot-submitting">
+          <button class="submit busy"><span class="spin-ic"></span> 正在提交 review…</button>
+          <div class="foot-note">调用 <code>gh api …/reviews</code> 中,请勿关闭</div>
+        </div>
+        <div class="foot-slot foot-success">
+          <button class="submit ghost" onclick="location.href='diff-review.html'">完成 · 返回 diff</button>
+          <div class="foot-note">findings 已标记为已提交(passive · 锁定)</div>
+        </div>
+        <div class="foot-slot foot-invalid">
+          <button class="submit">修正后重新提交</button>
+          <div class="foot-note">或把红框那条「降级为摘要 / 剔除」后再整份提交</div>
+        </div>
+        <div class="foot-slot foot-failed">
+          <button class="submit retry">↻ 重试提交</button>
+          <div class="foot-note">未提交任何评论 · 认证过期请先 <code>gh auth login</code></div>
+        </div>
+        <div class="foot-slot foot-incremental">
+          <button class="submit">提交增量 · 1 条新的 →</button>
+          <div class="foot-note">追加为 PR #482 的又一次 review</div>
+        </div>
       </div>
     </div>
   </div>
@@ -241,6 +349,7 @@ document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x===b));});
 document.querySelectorAll('.event').forEach(e=>e.onclick=()=>{
   document.querySelectorAll('.event').forEach(x=>x.classList.remove('on'));e.classList.add('on');});
+document.getElementById('subSel').onchange=e=>document.body.dataset.sub=e.target.value;
 </script>
 </body>
 </html>

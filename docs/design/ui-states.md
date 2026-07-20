@@ -288,6 +288,25 @@ stateDiagram-v2
 
 composer 的 `↳ 引用选区` chip 可移除;`@file` 弹文件菜单写入 `@path`(菜单本身是瞬态,选中即关)。
 
+## 提交到 GitHub(结果 / 异常 / 增量)
+
+submit 屏的提交是**一次原子 PR review**(详见 [findings-submit](findings-submit.md#提交结果与异常态原子提交--增量));`mockup/submit-to-github.html` 顶栏「提交态」切换器演示。
+
+```mermaid
+stateDiagram-v2
+    [*] --> Ready
+    Ready --> Submitting : ● 提交 review
+    Submitting --> Success : ⚙ 创建成功 (201)
+    Submitting --> Failed : ⚙ 认证过期 / 网络 / PR 已关闭
+    Submitting --> Invalid : ⚙ 422 行锚点不在最新 diff
+    Failed --> Submitting : ● 重试
+    Invalid --> Ready : ● 降级为摘要 / 改锚点 / 剔除该条
+    Success --> [*] : ● 完成 · 返回 diff
+    Success --> Ready : ● 二次:仅提交新增 delta (追加一份 review)
+```
+
+原子提交=全成或全败,故**无"部分成功"**;`Invalid` 是"某条不能作为 inline"导致的整份拒绝,需先在左侧处理该条再整份重提。`Success → Ready` 是增量路径:已 submitted 的 finding 锁定只读,二次只提交 delta。finding 侧 submission 状态机见上「finding:两组正交状态」。
+
 ## 关联索引
 
 - 视觉 / 交互细节:[ui.md](ui.md)

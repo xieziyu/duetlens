@@ -131,7 +131,7 @@
 - [x] **6 中断正在跑的 turn**:`ConversationalAgent.interrupt` 的 UI 入口(停止)。→ 同上。
 - [x] **7 审批 / elicitation 呈现**:自建工具自动 accept 已定,但 `execCommandApproval`/`applyPatchApproval` 等反向请求若冒出需审批 UI(见 open-questions「审批面收敛」)。→ 同上。
 - [x] **8 上下文压缩可见性**:ctx 接近上限预警 + 压缩发生时反馈 + 压缩后锚点提示(见 open-questions「上下文/token 膨胀」)。→ 同上。
-- [ ] **9 提交失败 / 部分成功**:submit 中断、部分评论失败、一次 review 二次增量提交语义。(下一步)
+- [x] **9 提交失败 / 部分成功**:submit 中断、失败、一次 review 二次增量提交语义。→ `mockup/submit-to-github.html`「提交态」切换器 + [findings-submit](findings-submit.md#提交结果与异常态原子提交--增量)。**关键结论:PR review 是原子提交,无"部分成功";"部分失败"的真实形态是 422 行锚点失效 → 降级/改锚点/剔除后整份重提。**
 
 **第一层 · 整块缺失的功能屏(次批,各自独立 mockup)**:
 
@@ -147,7 +147,7 @@
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
 - `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换 + 键盘快捷键帮助层(`?`)+ 两轴配色切换。
 - `mockup/review-runtime.html` —— review **运行时 / 异常态**:顶栏「运行态」下拉切 9 态(空闲 / turn 运行中+中断 / 反向审批 / turn 失败 / agent 断开重连 / 离线 / MCP 通道故障 / ctx 接近上限 / 压缩中);演示 status 胶囊、全局横幅、右栏底部运行区、ctx 用量表。见上「运行时 / 异常态」。
-- `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md))。
+- `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md));顶栏「提交态」切换器演示提交结果/异常态(submitting / success / **invalid 行锚点失效** / failed / **incremental 增量**)。
 - `mockup/export-markdown.html` —— 非 GitHub source(本地分支 / GitButler)的**本地 Markdown 导出屏**:左侧实时报告预览(渲染/源码)、右侧导出配置(包含项 + 分组 + 勾选保留 + 复制/保存 .md)。见 [findings-submit](findings-submit.md#非-github-source--导出为-markdown)。
 - `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。
 - `mockup/design-system.html` —— 可视化 style guide:色板 + 字阶 + 组件清单(见 [design-system](design-system.md))。
