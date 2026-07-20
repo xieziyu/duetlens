@@ -69,7 +69,7 @@
   - **5 turn 失败**:错误卡(简述 + 可展开 stream error 详情)+ **重试这一轮 / 编辑后重发**;保留追问与既有对话。
   - **8 压缩**:轻量进度条「正在压缩上下文,保留代码锚点与未决 discussion」;不弹窗。
   - **连接断**(agent-down / mcp-fail / offline):底部禁用追问,提示「连接恢复前追问暂不可用 —— 仍可阅读 diff、triage 已有 findings」。
-- **8 上下文可见性**:顶栏 `ctx` 用量表接近上限时变琥珀(百分比同步),hover 提示「继续追问将触发自动压缩,压缩后早期讨论原文被摘要替代,**代码锚点保留**」。对应 [open-questions](open-questions.md)「上下文 / token 膨胀」。
+- **8 上下文可见性**:顶栏 `ctx` **用量环**(环形指示器,参考 Claude Desktop;`--ctx` = 已用比例)接近上限时变琥珀(百分比同步),hover 提示「继续追问将触发自动压缩,压缩后早期讨论原文被摘要替代,**代码锚点保留**」。对应 [open-questions](open-questions.md)「上下文 / token 膨胀」。
 
 ### review 右栏三 tab
 

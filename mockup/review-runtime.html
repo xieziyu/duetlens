@@ -29,17 +29,21 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13
 .spacer{flex:1}
 .meta{display:flex;align-items:center;gap:13px}
 
-/* ctx 用量表 —— 接近上限时变色(态 ctx-warn / compacting) */
-.ctx{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--text-dim);position:relative;cursor:default}
-.gauge{width:78px;height:5px;border-radius:3px;background:var(--surface-3);overflow:hidden;border:1px solid var(--border)}
-.gauge>i{display:block;height:100%;width:41%;background:linear-gradient(90deg,var(--agent),var(--agent-2));transition:width .4s ease,background .3s ease}
+/* ctx 用量:环形指示器(参考 Claude Desktop),--ctx = 已用比例 0–1;接近上限变色 */
+:root{--ctx:.41}
+.ctx{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;color:var(--text-dim);position:relative;cursor:default}
+.ring{width:16px;height:16px;transform:rotate(-90deg);transform-origin:center;flex:none}
+.ring circle{fill:none;stroke-width:2.4}
+.ring .bg{stroke:var(--surface-3)}
+.ring .fg{stroke:var(--agent);stroke-linecap:round;stroke-dasharray:43.98;stroke-dashoffset:calc(43.98px * (1 - var(--ctx)));transition:stroke-dashoffset .5s ease,stroke .3s ease}
 .ctx .pct{color:var(--text-dim)}
 .ctx .pct::after{content:"41%"}
-body:is([data-rt="ctx-warn"],[data-rt="compacting"]) .ctx .pct::after{content:"92%"}
 .ctx-tip{position:absolute;top:26px;right:0;width:230px;background:var(--surface-2);border:1px solid var(--human-line);border-radius:9px;padding:9px 11px;font-family:var(--sans);font-size:11.5px;color:var(--text-dim);box-shadow:var(--shadow);display:none;z-index:9;line-height:1.45}
 .ctx-tip b{color:var(--human);font-weight:600}
-body[data-rt="ctx-warn"] .ctx:hover .ctx-tip,body[data-rt="compacting"] .ctx:hover .ctx-tip{display:block}
-body[data-rt="ctx-warn"] .gauge>i,body[data-rt="compacting"] .gauge>i{width:92%;background:linear-gradient(90deg,var(--human),var(--sev-med))}
+body:is([data-rt="ctx-warn"],[data-rt="compacting"]){--ctx:.92}
+body:is([data-rt="ctx-warn"],[data-rt="compacting"]) .ctx .pct::after{content:"92%"}
+body:is([data-rt="ctx-warn"],[data-rt="compacting"]) .ring .fg{stroke:var(--sev-med)}
+body:is([data-rt="ctx-warn"],[data-rt="compacting"]) .ctx:hover .ctx-tip{display:block}
 body[data-rt="ctx-warn"] .ctx .pct{color:var(--human);font-weight:600}
 
 /* status 胶囊 —— 每个运行态换文案/配色 */
@@ -218,8 +222,8 @@ body[data-rt="offline"] .blk .ic{color:var(--human)}
     <div class="pr-chip"><span class="gh">github</span><b>vercel/next.js#48213</b></div>
     <div class="spacer"></div>
     <div class="meta">
-      <div class="ctx" tabindex="0">
-        <span>ctx</span><span class="gauge"><i></i></span><span class="pct"></span>
+      <div class="ctx" tabindex="0" title="上下文用量">
+        <svg class="ring" viewBox="0 0 16 16"><circle class="bg" cx="8" cy="8" r="7"/><circle class="fg" cx="8" cy="8" r="7"/></svg><span class="pct"></span>
         <div class="ctx-tip">上下文用量 <b>92%</b> —— 接近单会话上限。继续追问将触发 <b>自动压缩</b>,压缩后早期讨论的原文会被摘要替代,<b>代码锚点保留</b>。</div>
       </div>
       <div class="status"><span class="dot"></span><span class="lbl"></span></div>
