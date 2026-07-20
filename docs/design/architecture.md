@@ -23,7 +23,7 @@
 - **MCP server(控制反转层)**:app 侧对 agent 暴露的工具集(`report_finding` 等),是 findings 和源码读取的回传通道。以 in-process HTTP 形式自托管、per-thread 注入——机制详见 [codex-integration](codex-integration.md)。
 - **Elicitation / 审批处理器(必需件)**:codex 执行 MCP 工具前会发反向审批请求,client 必须应答,否则 turn 卡死。属架构必需件,详见 [codex-integration](codex-integration.md)。
 - **source 层**:延续 1.0 的 SourceFlow 思路,三种 source 各一实现。
-- **持久化**:会话历史、discussions、messages、findings 存本地 sqlite(Node 侧,如 `better-sqlite3` / `libsql`,具体待骨架期定)。codex thread 由 codex 侧持久化,我们存 threadId 做续接。
+- **持久化**:会话历史、discussions、messages、findings 存本地 sqlite。**已定 `better-sqlite3`**(原生模块,须按运行时 rebuild ABI,见 [open-questions](open-questions.md));落地见 `src/backend/db/`。codex thread 由 codex 侧持久化,我们存 threadId 做续接。
 
 ## 保留能力(来自 1.0)
 

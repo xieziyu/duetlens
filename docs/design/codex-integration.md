@@ -52,7 +52,18 @@ codex 通过 **server→client 反向请求** 要求授权,client 必须应答,�
 - `AskForApproval` = `untrusted` / `on-request` / `never` / `granular{ mcp_elicitations, rules, sandbox_approval, request_permissions }`
 - `Personality` = `none` / `friendly` / `pragmatic`
 
+## 0.144.1 实测修正(实现期,已验证)
+
+在 **0.144.1** 上把集成写成代码并端到端跑通,对上文(基于 0.144.5 的记录)有几处修正/细化:
+
+- **`thread/start` 的 `sandbox` 是顶层参数**(值 `read-only` 等),不在 `config` 里;`config` 仍是透传 config.toml 的 map,MCP 注入形如 `config.mcp_servers.duetlens = { url }`(HTTP streamable;`codex mcp add --url` 写出的 TOML 即 `[mcp_servers.NAME] url=...`)。
+- **无 `item/mcpToolCall` 这个方法名**。MCP 工具调用经 **`item/started` + `item/completed`** 通知观测,其 `item.type === "mcpToolCall"` 时带 `server`/`tool`/`status`/`arguments`;另有 `item/mcpToolCall/progress`。
+- **elicitation 应答**:`{ action:"accept"|"decline"|"cancel", content:null, _meta:null }`;实测 `approvalPolicy:"never"` + `read-only` 下每次工具调用前仍发,自动 accept 必需(坐实架构决策)。
+- **exec/applyPatch 审批**应答 `{ decision: ReviewDecision }`(review-only 一律 `denied`;只读 sandbox 未触发)。
+- codex 对同一 MCP server **多次 initialize**(startup starting/ready 各数次)→ HTTP transport + 每会话独立 Server 是对的。
+- Duetlens 只手写最小协议子集 `src/backend/agent/codex/protocol.ts`,`npm run codex:gen-types` 全量重导比对。
+
 ## 版本注记与待评估
 
-- 基于 codex-cli **0.144.5**,`app-server` 仍标 `[experimental]`,可能无预告 breaking change → `ConversationalAgent` 薄封装 + schema 导出回归隔离。
-- codex 另有内置 `review/start` + `item/autoApprovalReview/*` 全流程,**首轮机审或可复用而非自造**(待评估)。
+- `app-server` 仍标 `[experimental]`,可能无预告 breaking change → `ConversationalAgent` 薄封装 + schema 导出回归隔离。
+- codex 另有内置 `review/start` + `item/autoApprovalReview/*` 全流程 —— **已决定不复用,自建 MCP 扫描**(见 [implementation-status](implementation-status.md))。

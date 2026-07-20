@@ -28,4 +28,4 @@ finding 是一类 discussion,但同时是一条**可提交到 GitHub 的记录**
 
 可编辑字段(提交前):`severity` / `title` / `body` / `suggestion`;`category` 与 `file:line` 由 agent 定。`suggestion` 是**给 author 的建议代码**(提交时渲染为 GitHub suggestion 块),Duetlens 不落地执行 —— 只 review 不改代码。`source: agent | manual | promoted` 区分 agent 上报 / 用户手动新增 / 由 user-discussion 提升而来(同 schema、同提交路径)。对话经 MCP `update_finding` 回写字段是 finding 的打磨闭环。完整筛选与提交流程见 [findings-submit](findings-submit.md)。
 
-> 具体字段 schema(discussion 锚点结构、finding 严重度枚举、message 存储、submission 元数据)待骨架期定稿后补入本页。
+> **已落地**:具体字段 schema 见代码 —— 领域类型与 zod ingress schema 在 `src/shared/domain.ts`,sqlite 建表(reviews / discussions / findings / messages / ui_settings / review_ui_state)在 `src/backend/db/schema.ts`,读写在 `ReviewStore`。finding id 由 MCP `report_finding` 生成回传、`update_finding` 据此回写(见 [implementation-status](implementation-status.md))。
