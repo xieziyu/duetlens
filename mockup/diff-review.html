@@ -503,6 +503,43 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 .file-menu .fm-item{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:11.5px;color:var(--text-dim)}
 .file-menu .fm-item:hover{background:var(--agent-soft);color:var(--agent-2)}
 .file-menu .fm-item .fm-dir{color:var(--text-faint)}
+
+/* ---------- per-file Viewed + 文件折叠 ---------- */
+.file .vtick{margin-left:4px;width:16px;height:16px;border-radius:5px;border:1px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:transparent;flex:none;cursor:pointer}
+.file:hover .vtick{border-color:var(--agent-line);color:var(--text-faint)}
+.file.viewed .vtick{background:var(--add-bg);border-color:var(--add-gutter);color:var(--add)}
+.file.viewed .name{color:var(--text-faint);text-decoration:line-through;text-decoration-color:var(--border-soft)}
+.file.viewed .stat,.file.viewed .badge{opacity:.45}
+.tree .head .count .vn{color:var(--add)}
+.icon-btn.on{background:var(--add-bg);border-color:var(--add-gutter);color:var(--add)}
+.file-collapsed-bar{display:none;align-items:center;gap:9px;padding:10px 16px;border-bottom:1px solid var(--border-soft);color:var(--text-faint);font-size:12px;cursor:pointer;background:var(--surface)}
+.file-collapsed-bar .cb-ic{color:var(--add)}
+.file-collapsed-bar .cb-x{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--agent-2)}
+.diff.collapsed .hunk,.diff.collapsed .expander{display:none}
+.diff.collapsed .file-collapsed-bar{display:flex}
+
+/* ---------- off-diff findings 区(锚点不在当前 diff 视图) ---------- */
+.offdiff{border-bottom:1px solid var(--border);background:color-mix(in oklab,var(--human) 5%,var(--surface))}
+.offdiff-head{display:flex;align-items:center;gap:9px;padding:9px 16px;cursor:pointer;font-size:12px;color:var(--text-dim)}
+.offdiff-head .ic{color:var(--human)}
+.offdiff-head b{color:var(--text);font-weight:600}
+.offdiff-head .n{font-family:var(--mono);font-size:10px;background:var(--human-soft);color:var(--human);border:1px solid var(--human-line);border-radius:5px;padding:0 6px}
+.offdiff-head .chev{margin-left:auto;color:var(--text-faint);transition:transform .15s}
+.offdiff.open .offdiff-head .chev{transform:rotate(90deg)}
+.offdiff-body{display:none;padding:0 16px 12px}
+.offdiff.open .offdiff-body{display:block}
+.odf{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--surface);margin-bottom:8px;cursor:pointer}
+.odf:last-child{margin-bottom:0}
+.odf:hover{border-color:var(--agent-line);background:var(--surface-2)}
+.odf .m{flex:1;min-width:0}
+.odf .ot{font-size:12px;color:var(--text);line-height:1.4}
+.odf .oa{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);margin-top:4px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.odf .oa .why{color:var(--human)}
+.odf .origin{display:inline-flex;align-items:center;gap:5px}
+.odf .origin .d{width:6px;height:6px;border-radius:50%}
+.odf .origin.agent .d{background:var(--agent)}
+.odf .go{color:var(--text-faint);font-size:14px;flex:none;align-self:center}
+.odf:hover .go{color:var(--agent-2)}
 </style>
 </head>
 <body>
@@ -545,7 +582,7 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 
     <!-- ---------- LEFT: file tree ---------- -->
     <div class="pane tree">
-      <div class="head"><h3>Files changed</h3><span class="count">6</span></div>
+      <div class="head"><h3>Files changed</h3><span class="count" id="treeCount">6</span></div>
       <div class="group">
         <div class="dir"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg> src/transcode</div>
         <div class="file active"><span class="name">pipeline.rs</span><span class="badge f">2</span><span class="stat"><span class="a">+84</span><span class="d">−12</span></span></div>
@@ -572,10 +609,38 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 
     <!-- ---------- CENTER: diff ---------- -->
     <div class="pane diff">
+
+      <!-- off-diff findings:锚点不在当前 diff 新侧(被删行 / 无行锚点 / 未展开文件) -->
+      <div class="offdiff" id="offdiff">
+        <div class="offdiff-head">
+          <span class="ic">⚑</span> <b>2</b> 条 finding 不在当前 diff 视图内 <span class="n">off-diff</span>
+          <span class="chev">›</span>
+        </div>
+        <div class="offdiff-body">
+          <div class="odf" title="打开 discussion">
+            <span class="sev med">med · error-handling</span>
+            <div class="m">
+              <div class="ot">被删除的旧同步实现里,临时文件句柄没有清理</div>
+              <div class="oa"><span class="why">锚点在被删除行</span> · pipeline.rs (old):112 <span class="origin agent"><span class="d"></span>codex</span></div>
+            </div>
+            <span class="go">→</span>
+          </div>
+          <div class="odf" title="打开 discussion">
+            <span class="sev low">low · testing</span>
+            <div class="m">
+              <div class="ot">并行路径缺少并发压力测试,数据竞争难以回归</div>
+              <div class="oa"><span class="why">整个 PR · 无行锚点</span> <span class="origin agent"><span class="d"></span>codex</span></div>
+            </div>
+            <span class="go">→</span>
+          </div>
+        </div>
+      </div>
+
       <div class="file-header">
         <span class="fp"><span class="dim">src/transcode/</span>pipeline.rs</span>
-        <div class="chips"><span class="mini add">+84</span><span class="mini del">−12</span><span class="icon-btn" title="viewed">✓</span><span class="icon-btn" title="collapse">⌄</span></div>
+        <div class="chips"><span class="mini add">+84</span><span class="mini del">−12</span><span class="icon-btn" id="viewedBtn" title="标记已看并折叠">✓</span><span class="icon-btn" id="collapseBtn" title="折叠 / 展开">⌄</span></div>
       </div>
+      <div class="file-collapsed-bar"><span class="cb-ic">✓</span> 已标记看过 · 内容已折叠 <span class="cb-x">点击展开</span></div>
 
       <div class="expander" title="展开未改动代码"><span class="exic">↕</span> 展开上方 117 行未改动 <span class="rng">1–117</span></div>
       <div class="hunk">
@@ -1144,6 +1209,33 @@ document.addEventListener('keydown',e=>{
     cur={rows:[row],hunk:row.closest('.hunk'),label:FILE+':'+lnOf(row),ref:row};
     startDiscussion();
   });
+})();
+
+// ---- per-file Viewed / 折叠 + off-diff 区展开 ----
+(()=>{
+  const files=[...document.querySelectorAll('.tree .file')];
+  const treeCount=document.getElementById('treeCount');
+  const diff=document.querySelector('.pane.diff');
+  const vBtn=document.getElementById('viewedBtn'),cBtn=document.getElementById('collapseBtn');
+  const total=files.length;
+  const activeFile=()=>document.querySelector('.tree .file.active');
+  const updateCount=()=>{const v=files.filter(f=>f.classList.contains('viewed')).length;
+    treeCount.innerHTML=total+' 改动 · <span class="vn">'+v+'</span> 已看';};
+  const syncDiff=viewed=>{diff.classList.toggle('collapsed',viewed);vBtn&&vBtn.classList.toggle('on',viewed);};
+  files.forEach(f=>{
+    const tick=document.createElement('span');tick.className='vtick';tick.title='标记已看';tick.textContent='✓';
+    f.appendChild(tick);
+    tick.onclick=e=>{e.stopPropagation();f.classList.toggle('viewed');updateCount();
+      if(f.classList.contains('active'))syncDiff(f.classList.contains('viewed'));};
+  });
+  updateCount();
+  vBtn&&(vBtn.onclick=()=>{const af=activeFile();const nv=!af.classList.contains('viewed');
+    af.classList.toggle('viewed',nv);updateCount();syncDiff(nv);});
+  cBtn&&(cBtn.onclick=()=>diff.classList.toggle('collapsed'));
+  const bar=document.querySelector('.file-collapsed-bar');
+  bar&&(bar.onclick=()=>diff.classList.remove('collapsed'));
+  const od=document.getElementById('offdiff');
+  od&&(od.querySelector('.offdiff-head').onclick=()=>od.classList.toggle('open'));
 })();
 </script>
 </body>
