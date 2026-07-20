@@ -16,6 +16,7 @@
     "spike:db": "tsx scripts/spike-db.ts",
     "spike:review": "tsx scripts/spike-review.ts",
     "spike:source": "tsx scripts/spike-source.ts",
+    "spike:mcp": "tsx scripts/spike-mcp.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
   },
   "keywords": [],

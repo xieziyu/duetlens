@@ -13,6 +13,8 @@ import {
 
 /** report_finding 上报的一条 finding(对齐 docs/design/data-model.md 可编辑字段)。 */
 export interface ReportedFinding {
+  /** MCP server 生成并回传给 agent,后续 update_finding 用它定位 */
+  id: string;
   severity: 'high' | 'medium' | 'low';
   category?: string;
   title: string;
@@ -20,6 +22,16 @@ export interface ReportedFinding {
   file: string;
   line: number;
   suggestion?: string;
+}
+
+/** update_finding 的部分更新(对话打磨后回写)。 */
+export interface ReportedFindingUpdate {
+  findingId: string;
+  severity?: 'high' | 'medium' | 'low';
+  category?: string;
+  title?: string;
+  body?: string;
+  suggestion?: string | null;
 }
 
 /** 供 agent 读取源码/diff 的回调;由 review 会话注入真实数据。 */
@@ -48,6 +60,23 @@ const TOOLS = [
     },
   },
   {
+    name: 'update_finding',
+    description:
+      '更新一条已上报 finding 的可编辑字段(对话打磨后回写)。finding_id 用 report_finding 的返回值。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        finding_id: { type: 'string', description: 'report_finding 返回的 id' },
+        severity: { type: 'string', enum: ['high', 'medium', 'low'] },
+        category: { type: 'string' },
+        title: { type: 'string' },
+        body: { type: 'string' },
+        suggestion: { type: 'string' },
+      },
+      required: ['finding_id'],
+    },
+  },
+  {
     name: 'get_diff',
     description: '获取本次审核的完整 diff。',
     inputSchema: { type: 'object', properties: {} },
@@ -66,7 +95,7 @@ const TOOLS = [
 /**
  * Duetlens 对 codex 暴露的 in-process HTTP MCP server(StreamableHTTP)。
  * findings 经 report_finding 实时回传落进 app 状态,取代 1.0 watch 文件。
- * 事件:'finding' (ReportedFinding) · 'tool-call' (name, args)。
+ * 事件:'finding' (ReportedFinding) · 'finding-update' (ReportedFindingUpdate) · 'tool-call' (name, args)。
  */
 export class DuetlensMcpServer extends EventEmitter {
   private httpServer?: http.Server;
@@ -158,12 +187,24 @@ export class DuetlensMcpServer extends EventEmitter {
       this.emit('tool-call', name, args);
 
       if (name === 'report_finding') {
-        const f = args as unknown as ReportedFinding;
+        const f: ReportedFinding = { id: randomUUID(), ...(args as Omit<ReportedFinding, 'id'>) };
         this.findings.push(f);
         this.emit('finding', f);
-        return {
-          content: [{ type: 'text', text: `已记录 finding: ${f.severity} · ${f.title}` }],
+        // 回传 id,供后续 update_finding 定位
+        return { content: [{ type: 'text', text: `finding recorded, id=${f.id}` }] };
+      }
+      if (name === 'update_finding') {
+        const a = args as Record<string, unknown>;
+        const update: ReportedFindingUpdate = {
+          findingId: String(a.finding_id ?? ''),
+          severity: a.severity as ReportedFindingUpdate['severity'],
+          category: a.category as string | undefined,
+          title: a.title as string | undefined,
+          body: a.body as string | undefined,
+          suggestion: a.suggestion as string | undefined,
         };
+        this.emit('finding-update', update);
+        return { content: [{ type: 'text', text: `finding updated, id=${update.findingId}` }] };
       }
       if (name === 'get_diff') {
         return { content: [{ type: 'text', text: await this.providers.getDiff() }] };

@@ -1,6 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { DuetlensMcpServer, type McpContentProviders } from '../mcp/DuetlensMcpServer';
-import { reportFindingSchema, type Finding } from '@shared/domain';
+import {
+  DuetlensMcpServer,
+  type McpContentProviders,
+  type ReportedFinding,
+  type ReportedFindingUpdate,
+} from '../mcp/DuetlensMcpServer';
+import { reportFindingSchema, updateFindingSchema, type Finding } from '@shared/domain';
 import type { AgentEvent, ConversationalAgent } from '../agent/ConversationalAgent';
 import type { ReviewStore } from '../db/ReviewStore';
 
@@ -41,11 +46,18 @@ export class ReviewSession extends EventEmitter {
   /** 起会话 + 注入 + 跑首轮扫描;resolve 于扫描 turn 完成。 */
   async start(opts: StartReviewOptions): Promise<Finding[]> {
     this.mcp = new DuetlensMcpServer(opts.providers);
-    this.mcp.on('finding', (raw) => {
+    this.mcp.on('finding', (raw: ReportedFinding) => {
       const parsed = reportFindingSchema.safeParse(raw);
       if (!parsed.success) return; // 非法上报忽略;后续可回错误内容给 agent
-      const finding = this.store.addFinding(this.reviewId, parsed.data, 'agent');
+      // 用 MCP 生成的 id 落库,使 codex 侧 id 与存储 id 一致(update_finding 可定位)
+      const finding = this.store.addFinding(this.reviewId, parsed.data, 'agent', raw.id);
       this.emit('finding', finding);
+    });
+    this.mcp.on('finding-update', (raw: ReportedFindingUpdate) => {
+      const parsed = updateFindingSchema.safeParse(raw);
+      if (!parsed.success) return;
+      const updated = this.store.updateFinding(parsed.data);
+      if (updated) this.emit('finding', updated); // 复用 finding 事件;renderer upsert
     });
     const mcpUrl = await this.mcp.listen();
 

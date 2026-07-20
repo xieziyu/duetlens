@@ -171,10 +171,16 @@ export class ReviewStore {
   }
 
   // ---- findings(每条 finding 同时建一条 kind=finding 的 discussion 承载后续追问)----
-  addFinding(reviewId: string, input: ReportFindingInput, origin: Finding['origin'] = 'agent'): Finding {
+  // id 可显式传入(用 MCP 生成的 id,使 codex 的 finding id === 存储 id,便于 update_finding)
+  addFinding(
+    reviewId: string,
+    input: ReportFindingInput,
+    origin: Finding['origin'] = 'agent',
+    id: string = randomUUID(),
+  ): Finding {
     const ts = now();
     const discussionId = randomUUID();
-    const findingId = randomUUID();
+    const findingId = id;
     const insert = this.db.transaction(() => {
       this.db
         .prepare(

@@ -36,7 +36,14 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     const off = window.duetlens.review.onEvent((e) => {
       if (e.reviewId !== reviewId) return;
       if (e.type === 'finding') {
-        setFindings((prev) => (prev.some((x) => x.id === e.payload.id) ? prev : [...prev, e.payload]));
+        // upsert:新 finding 追加,已存在的(update_finding 回写)就地替换
+        setFindings((prev) => {
+          const i = prev.findIndex((x) => x.id === e.payload.id);
+          if (i < 0) return [...prev, e.payload];
+          const next = prev.slice();
+          next[i] = e.payload;
+          return next;
+        });
       } else if (e.type === 'status') {
         setStatus(e.payload);
       } else if (e.type === 'agent') {
