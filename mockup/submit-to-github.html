@@ -7,39 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
 <style>
-/* 同 diff-review 的两轴配色系统(data-mode × data-theme) */
-:root{
-  color-scheme:dark;
-  --bg:#0b0d12; --surface:#12151d; --surface-2:#171b24; --surface-3:#1c212c;
-  --border:#232834; --border-soft:#1b2028;
-  --text:#e7eaf1; --text-dim:#9aa3b2; --text-faint:#5f6877;
-  --agent:oklch(.72 .14 245); --agent-2:oklch(.82 .11 240); --agent-soft:color-mix(in oklab,var(--agent) 14%,transparent); --agent-line:color-mix(in oklab,var(--agent) 38%,transparent);
-  --accent-solid:oklch(.585 .16 245); --on-solid:#fff;
-  --human:#e8a24d; --human-soft:rgba(232,162,77,.13); --human-line:rgba(232,162,77,.4);
-  --on-accent:#07141d; --hover:rgba(255,255,255,.02);
-  --scroll:#262c38; --scroll-h:#323a48; --shadow:0 8px 24px -14px rgba(0,0,0,.7);
-  --glow1:color-mix(in oklab,var(--agent) 9%,transparent); --glow2:rgba(232,162,77,.045);
-  --del:#ff7085; --del-bg:rgba(255,90,110,.09); --del-gutter:rgba(255,90,110,.22);
-  --add:#57e39a; --add-bg:rgba(64,196,132,.10); --add-gutter:rgba(64,196,132,.22);
-  --sev-high:#ff7085; --sev-med:#e8a24d; --sev-low:#8b9bff;
-  --mono:"IBM Plex Mono",ui-monospace,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif;
-}
+/* 配色 tokens(两个正交轴 data-mode × data-theme)在 tokens.css · 单一来源 */
 @keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
-:root[data-mode="light"]{
-  color-scheme:light;
-  --bg:#ffffff; --surface:#f6f8fa; --surface-2:#eef1f4; --surface-3:#e6eaee;
-  --border:#d6dde3; --border-soft:#e6eaee;
-  --text:#1f2328; --text-dim:#57606a; --text-faint:#8b949e;
-  --agent:oklch(.52 .13 245); --agent-2:oklch(.46 .14 246); --agent-soft:color-mix(in oklab,var(--agent) 10%,transparent); --agent-line:color-mix(in oklab,var(--agent) 28%,transparent);
-  --human:#b7791f; --human-soft:rgba(183,121,31,.12); --human-line:rgba(183,121,31,.35);
-  --on-accent:#fff; --hover:rgba(31,35,40,.03);
-  --scroll:#d0d7de; --scroll-h:#b9c1ca; --shadow:0 10px 26px -16px rgba(31,35,40,.28);
-  --glow1:color-mix(in oklab,var(--agent) 6%,transparent); --glow2:rgba(183,121,31,.045);
-  --del:#cf222e; --del-bg:#ffeef0; --del-gutter:rgba(207,34,46,.2);
-  --add:#1a7f37; --add-bg:#e9fbef; --add-gutter:rgba(26,127,55,.2);
-  --sev-high:#cf222e; --sev-med:#9a6700; --sev-low:#4f57d6;
-}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;
