@@ -4,8 +4,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Finding, Review, UiSettings } from '@shared/domain';
 import type { ReviewEvent } from '@shared/ipc';
+import type { McpContentProviders } from '../mcp/DuetlensMcpServer';
 import type { ReviewStore } from '../db/ReviewStore';
 import { CodexAgent } from '../agent/codex/CodexAgent';
+import { createSource } from '../source/createSource';
+import type { ReviewTarget } from '../source/Source';
 import { ReviewSession } from './ReviewSession';
 
 // 演示用内置 fixture(source 层接好前,让 app 能端到端跑一遍真实审核)。
@@ -61,7 +64,24 @@ export class ReviewManager extends EventEmitter {
     this.store.saveUiSettings(settings);
   }
 
-  /** 起演示审核:立即返回已建 review,首轮扫描异步跑,findings/status 经事件流出。 */
+  /** 起真实审核:按 target 建 source,拉元数据落库,后台跑首轮扫描。 */
+  async startReview(target: ReviewTarget): Promise<Review> {
+    const source = createSource(target);
+    const prepared = await source.prepare();
+    const review = this.store.createReview({
+      source: target.source,
+      sourceRef: target.ref,
+      repoPath: target.repoPath || null,
+      title: prepared.title,
+    });
+    this.launch(review, prepared.cwd, {
+      getDiff: () => source.getDiff(),
+      getFile: (p) => source.getFile(p),
+    }, () => source.dispose());
+    return review;
+  }
+
+  /** 起演示审核:内置 fixture provider(source 层接好前保留,给无仓库环境跑通用)。 */
   async startDemoReview(): Promise<Review> {
     const workdir = mkdtempSync(path.join(tmpdir(), 'duetlens-demo-'));
     mkdirSync(path.join(workdir, 'src'), { recursive: true });
@@ -73,7 +93,17 @@ export class ReviewManager extends EventEmitter {
       repoPath: workdir,
       title: 'Demo · login.js 审核',
     });
+    this.launch(review, workdir, { getDiff: () => DEMO_DIFF, getFile: () => DEMO_SRC });
+    return review;
+  }
 
+  /** 建 session、接事件、后台跑首轮扫描(startReview / startDemoReview 共用)。 */
+  private launch(
+    review: Review,
+    cwd: string,
+    providers: McpContentProviders,
+    onDone?: () => void | Promise<void>,
+  ): void {
     const agent = new CodexAgent({ codexHome: this.codexHome });
     const session = new ReviewSession(review.id, this.store, agent);
     this.sessions.set(review.id, session);
@@ -84,12 +114,11 @@ export class ReviewManager extends EventEmitter {
     );
     session.on('agent-event', (payload) => this.forward({ reviewId: review.id, type: 'agent', payload }));
 
-    // 不 await:扫描在后台跑,IPC 立即返回
+    // 不 await:扫描后台跑,调用方(IPC)立即返回
     session
-      .start({ cwd: workdir, providers: { getDiff: () => DEMO_DIFF, getFile: () => DEMO_SRC } })
-      .catch(() => this.forward({ reviewId: review.id, type: 'status', payload: 'failed' }));
-
-    return review;
+      .start({ cwd, providers })
+      .catch(() => this.forward({ reviewId: review.id, type: 'status', payload: 'failed' }))
+      .finally(() => onDone?.());
   }
 
   async disposeAll(): Promise<void> {
