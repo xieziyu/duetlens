@@ -36,6 +36,7 @@
 | `resume` | session dispose 后按落库 threadId `thread/resume` 续接 → 复用会话记忆追问 |
 | `gitbutler` | `but diff --format json` 重建标准 unified + 路径穿越防护 + 实仓 smoke;不烧 token |
 | `mcp` | MCP client 驱动 report_finding/update_finding 回写 store + bearer 令牌鉴权(无/错令牌 401);不烧 token |
+| `prompt` | 审核规则提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ 空节忽略 + 两层读盘 + baseInstructions 组装;不烧 token |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` 在 Electron ABI 下加载、六表迁移到位、IPC 注册无崩溃。
 
@@ -54,5 +55,5 @@
 3. ✅ IPC `review:start` 真实命令通道(EntryScreen 真实发起表单:source 选择 / ref / 仓库目录选择器 / 基线;演示入口降级为次要链接)—— startReview 核心路径由 spike:source 覆盖
 4. ✅ GitButler source(`but diff <branch> --format json` 重建 unified;文件读 worktree 磁盘;EntryScreen 选项已启用)
 5. 生命周期健壮性:✅ MCP bearer 令牌隔离(codex 经 `bearer_token_env_var` 携带,无/错令牌 401)· ✅ `get_file` 路径穿越防护 · ✅ dispose 对齐(`disposeReview`/`review:release` + LRU 会话上限逐出闲置子进程)· ✅ 审批面收敛(反向审批归一成 `approval` 领域事件:受信 elicitation 自动 accept 为 expected,`execCommandApproval`/`applyPatchApproval` 等一律 denied 且上报)· ✅ 长会话 compaction 观测(依赖 codex 内置 auto-compact——按模型 `effective_context_window_percent` 默认开启、可 turn 内触发,优于我们只能插在 turn 间的手动 `thread/compact/start`;经 `contextCompaction` item 归一成 `compaction` 领域事件,压缩只摘要 codex 历史,不碰 DB 锚点/finding)
-6. 多层级提示词(project→global→builtin 注入 baseInstructions)
-7. 前端:diff-review 三栏真实屏(抽 InlineCard / SelectionPopover / Composer),删 DevBridgeProbe 骨架件
+6. ✅ 多层级提示词(project→global→builtin **分节覆盖**注入 baseInstructions):resolver 在 `src/backend/prompt/reviewPrompt.ts`(5 固定节 focus/severity/ignore/tone/context + builtin 默认;层文件 `<cwd>/.duetlens/review.md` 与 `~/.duetlens/review.md`,H2 分节、空节不算覆盖、缺失/读错降级为不覆盖不阻断);每节独立取最高优先层,合并 + 操作性前言 = baseInstructions,经 ReviewManager 注入 start/demo/resume。spike:prompt 覆盖。builtin `focus` 用 better-review 1.0 builtin-rules 的 8 大类规范(非 mockup 占位);severity 保持 high/med/low;`category` 软规范集见 `FINDING_CATEGORIES`(自由串 + 建议取值,MCP 工具描述与 tone 节引用)。分节覆盖比 1.0 整档 winner-takes-all 更细,但仍是整节替换(节内追加待议)。**三层编辑器 UI + 读写 IPC 归入 #7**(与前端一起做)。
+7. 前端:diff-review 三栏真实屏(抽 InlineCard / SelectionPopover / Composer),删 DevBridgeProbe 骨架件;含审核规则三层编辑器(`mockup/prompt-rules.html`)+ 其读写 IPC(读走 `reviewPrompt.ts`,写落 `.duetlens/review.md`)
