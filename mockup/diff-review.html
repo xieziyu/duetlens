@@ -394,6 +394,75 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 .fr-restore{margin-left:auto;font-size:10.5px;color:var(--agent-2);border:1px solid var(--agent-line);background:var(--agent-soft);border-radius:6px;padding:3px 9px;cursor:pointer;font-family:var(--sans)}
 .add-finding{margin:0 12px 14px;border:1px dashed var(--border);border-radius:9px;background:transparent;color:var(--text-dim);font-size:12px;padding:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-family:var(--sans)}
 .add-finding:hover{border-color:var(--human-line);color:var(--human)}
+
+/* ---------- finding 就地编辑器 · view/edit/dismissed 三态同卡切换 ---------- */
+.card .c-edit,.card .c-dismissed{display:none}
+.card.editing .c-view{display:none}
+.card.editing .c-edit{display:block}
+.card.editing{border-color:var(--agent-line);box-shadow:0 0 0 1px var(--agent-soft),var(--shadow)}
+.card.dismissed{border-style:dashed;opacity:.6}
+.card.dismissed .c-view,.card.dismissed .c-edit{display:none}
+.card.dismissed .c-dismissed{display:flex}
+.inline .card+.card{margin-top:10px}
+.reply-hint .rk{font-family:var(--mono);font-size:10px;border:1px solid var(--border);border-radius:4px;padding:0 4px;color:var(--text-dim);margin:0 2px}
+.btn.f-edit:hover{color:var(--agent-2);border-color:var(--agent-line)}
+
+/* dismissed 折叠条 */
+.c-dismissed{align-items:center;gap:9px;padding:9px 12px;font-size:12px;color:var(--text-faint)}
+.c-dismissed .dm-x{color:var(--del);font-weight:600;flex:none}
+.c-dismissed .dm-t{text-decoration:line-through;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-dismissed .f-restore{font-size:10.5px;color:var(--agent-2);border:1px solid var(--agent-line);background:var(--agent-soft);border-radius:6px;padding:3px 9px;cursor:pointer;font-family:var(--sans);flex:none}
+
+/* 编辑字段 */
+.c-edit{padding:11px 13px 12px}
+.fe-meta{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.fe-sev{display:inline-flex;gap:4px;flex:none}
+.fe-sev button{font-family:var(--mono);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-faint);cursor:pointer}
+.fe-sev button:hover{color:var(--text-dim)}
+.fe-sev button.on.high{color:var(--sev-high);background:var(--del-bg);border-color:var(--del-gutter)}
+.fe-sev button.on.med{color:var(--sev-med);background:var(--human-soft);border-color:var(--human-line)}
+.fe-sev button.on.low{color:var(--sev-low);background:var(--agent-soft);border-color:var(--agent-line)}
+.fe-cat{flex:1;min-width:0;font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:7px;padding:5px 9px;color:var(--agent-2);outline:none}
+.fe-cat:focus{border-color:var(--agent-line)}
+.fe-field{margin-bottom:10px}
+.fe-cap{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin-bottom:5px}
+.fe-input,.fe-textarea{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text);font-family:var(--sans);font-size:12.5px;line-height:1.6;outline:none}
+.fe-input:focus,.fe-textarea:focus{border-color:var(--agent-line)}
+.fe-input{font-weight:600}
+.fe-textarea{resize:vertical;min-height:76px}
+/* suggestion 编辑(可开关) */
+.fe-sugg-tog{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-dim);cursor:pointer;user-select:none}
+.fe-sugg-tog .sw{width:30px;height:17px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);position:relative;transition:.18s;flex:none}
+.fe-sugg-tog .sw::after{content:"";position:absolute;top:1px;left:1px;width:13px;height:13px;border-radius:50%;background:var(--text-faint);transition:.18s}
+.c-edit.has-sugg .fe-sugg-tog .sw{background:var(--agent-soft);border-color:var(--agent-line)}
+.c-edit.has-sugg .fe-sugg-tog .sw::after{left:14px;background:var(--agent)}
+.c-edit.has-sugg .fe-sugg-tog .dia{color:var(--agent-2)}
+.fe-sugg{display:none;margin-top:9px}
+.c-edit.has-sugg .fe-sugg{display:block}
+.fe-sugg .fe-cap{display:flex;align-items:center;gap:6px}
+.fe-sugg .fe-cap .dia{color:var(--agent-2)}
+.fe-code{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--code-text);background:var(--bg);white-space:pre;min-height:56px}
+/* footer */
+.fe-foot{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid var(--border-soft)}
+.fe-foot .save{background:var(--accent-solid);color:var(--on-solid);font-weight:600;border:0;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:7px}
+.fe-foot .save:hover{filter:brightness(1.08)}
+.fe-foot .save .kbd{font-family:var(--mono);font-size:10px;background:rgba(255,255,255,.22);padding:1px 5px;border-radius:5px}
+.fe-foot .cancel{font-size:12px;color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer}
+.fe-foot .cancel:hover{color:var(--text);border-color:var(--agent-line)}
+.fe-foot .fe-note{margin-left:auto;font-size:11px;color:var(--text-faint)}
+
+/* submitted(已提交)· 只读锁定卡 */
+.card.submitted{border-left:2px solid var(--add)}
+.card.submitted .subm-badge{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--add);border:1px solid var(--add-gutter);background:var(--add-bg);border-radius:5px;padding:2px 7px}
+.card-meta.locked{color:var(--text-faint);padding-top:2px}
+.card-meta.locked .lk{filter:grayscale(.2)}
+
+/* ---------- Summary 正文就地编辑 ---------- */
+.sb-editor{display:none;margin-top:2px}
+.sum-block.editing .sb-prose{display:none}
+.sum-block.editing .sb-editor{display:block}
+.sb-editor .sb-ta{min-height:150px;line-height:1.7;font-size:12.5px}
+.sb-by.edited{color:var(--agent-2)}
 </style>
 </head>
 <body>
@@ -487,22 +556,62 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
         </tbody></table>
 
         <div class="inline">
-          <div class="card agent stagger" style="animation-delay:.15s">
-            <div class="c-head">
-              <span class="who"><span class="av agent">◆</span> codex</span>
-              <span class="sev high">high · concurrency</span>
-              <span class="tool-tag">via <b>report_finding()</b></span>
+          <div class="card agent finding stagger" id="f-121" style="animation-delay:.15s">
+            <div class="c-view">
+              <div class="c-head">
+                <span class="who"><span class="av agent">◆</span> codex</span>
+                <span class="sev high">high · concurrency</span>
+                <span class="tool-tag">via <b>report_finding()</b></span>
+              </div>
+              <div class="c-body">
+                <strong>Cell&lt;usize&gt; 不是线程安全的,不能跨 <code>spawn</code> 共享。</strong>
+                每个 task 在独立线程执行,而 <code>Cell::set</code> 没有原子性也不满足 <code>Sync</code>——这段实际上编译不过;
+                即便换成裸 <code>usize</code> 也会数据竞争。用 <code>Arc&lt;AtomicUsize&gt;</code> + <code>fetch_add(1, Ordering::Relaxed)</code> 替代。
+              </div>
+              <div class="card-meta"><span class="dia">◇</span> 附给 author 的 suggestion · 提交时渲染为 GitHub suggestion 块</div>
+              <div class="c-actions">
+                <button class="btn primary">↳ 追问</button>
+                <button class="btn f-edit">✎ 编辑</button>
+                <button class="btn danger f-dismiss">✕ 剔除</button>
+                <span class="reply-hint">默认随 review 提交 ·<kbd class="rk">e</kbd>编辑 · pipeline.rs:121</span>
+              </div>
             </div>
-            <div class="c-body">
-              <strong>Cell&lt;usize&gt; 不是线程安全的,不能跨 <code>spawn</code> 共享。</strong>
-              每个 task 在独立线程执行,而 <code>Cell::set</code> 没有原子性也不满足 <code>Sync</code>——这段实际上编译不过;
-              即便换成裸 <code>usize</code> 也会数据竞争。用 <code>Arc&lt;AtomicUsize&gt;</code> + <code>fetch_add(1, Ordering::Relaxed)</code> 替代。
+
+            <div class="c-edit has-sugg">
+              <div class="fe-meta">
+                <span class="fe-sev">
+                  <button class="high on">high</button><button class="med">med</button><button class="low">low</button>
+                </span>
+                <input class="fe-cat" value="concurrency" spellcheck="false" aria-label="category">
+              </div>
+              <div class="fe-field">
+                <div class="fe-cap">标题</div>
+                <input class="fe-input" value="Cell&lt;usize&gt; 跨 spawn 共享数据竞争" spellcheck="false">
+              </div>
+              <div class="fe-field">
+                <div class="fe-cap">说明</div>
+                <textarea class="fe-textarea" spellcheck="false">Cell<usize> 不是线程安全的,不能跨 spawn 共享。每个 task 在独立线程执行,Cell::set 没有原子性也不满足 Sync——这段实际上编译不过;即便换成裸 usize 也会数据竞争。用 Arc<AtomicUsize> + fetch_add(1, Ordering::Relaxed) 替代。</textarea>
+              </div>
+              <div class="fe-field">
+                <label class="fe-sugg-tog"><span class="sw"></span><span class="dia">◇</span> 附给 author 的 suggestion</label>
+                <div class="fe-sugg">
+                  <div class="fe-cap"><span class="dia">◇</span> suggestion · 提交时渲染为 GitHub suggestion 块</div>
+                  <textarea class="fe-textarea fe-code" spellcheck="false">        let counter = Arc::new(AtomicUsize::new(0));
+        // in task:
+        counter.fetch_add(1, Ordering::Relaxed);</textarea>
+                </div>
+              </div>
+              <div class="fe-foot">
+                <button class="save">保存 <span class="kbd">⌘↵</span></button>
+                <button class="cancel">取消 <span class="kbd" style="background:transparent;color:var(--text-faint)">Esc</span></button>
+                <span class="fe-note">编辑后随 review 提交给 author</span>
+              </div>
             </div>
-            <div class="card-meta"><span class="dia">◇</span> 附给 author 的 suggestion · 提交时渲染为 GitHub suggestion 块</div>
-            <div class="c-actions">
-              <button class="btn primary">↳ 追问</button>
-              <button class="btn danger">✕ 剔除</button>
-              <span class="reply-hint">默认随 review 提交 · pipeline.rs:121</span>
+
+            <div class="c-dismissed">
+              <span class="dm-x">✕</span>
+              <span class="dm-t">已剔除 · Cell&lt;usize&gt; 跨 spawn 共享数据竞争</span>
+              <button class="btn f-restore">↩ 恢复</button>
             </div>
           </div>
         </div>
@@ -515,7 +624,7 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
           <tr class="row"><td class="ln">145</td><td class="gutter"></td><td class="src">        <span class="k">while let</span> <span class="ty">Some</span>(res) = tasks.<span class="fn">join_next</span>().<span class="fn">await</span> {</td></tr>
           <tr class="row sel"><td class="ln">146</td><td class="gutter"><span class="anchor human"></span></td><td class="src">            res.<span class="fn">unwrap</span>();  <span class="c">// propagate panic</span></td></tr>
           <tr class="row"><td class="ln">147</td><td class="gutter"></td><td class="src">        }</td></tr>
-          <tr class="row add"><td class="ln">148</td><td class="gutter">＋</td><td class="src">        self.<span class="fn">emit</span>(<span class="ty">Event</span>::<span class="fn">Done</span> { count: <span class="hl">counter</span>.<span class="fn">get</span>() }).<span class="fn">await</span>;<span class="add-thread" title="发起 discussion">＋</span></td></tr>
+          <tr class="row add"><td class="ln">148</td><td class="gutter"><span class="anchor agent"></span>＋</td><td class="src">        self.<span class="fn">emit</span>(<span class="ty">Event</span>::<span class="fn">Done</span> { count: <span class="hl">counter</span>.<span class="fn">get</span>() }).<span class="fn">await</span>;<span class="add-thread" title="发起 discussion">＋</span></td></tr>
           <tr class="row"><td class="ln">149</td><td class="gutter"></td><td class="src">        <span class="ty">Ok</span>(())</td></tr>
         </tbody></table>
 
@@ -531,6 +640,19 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
               <button class="btn">↳ 继续对话</button>
               <span class="reply-hint">转为 finding 后即可随 review 提交给 author</span>
             </div>
+          </div>
+
+          <div class="card agent submitted stagger" style="animation-delay:.35s">
+            <div class="c-head">
+              <span class="who"><span class="av agent">◆</span> codex</span>
+              <span class="sev med">med · resource</span>
+              <span class="subm-badge">✓ 已提交 · #482</span>
+            </div>
+            <div class="c-body">
+              <strong>Done 事件只在全部 task join 后发出,长任务期间前端拿不到中间进度。</strong>
+              计数器已在累加,可在每段完成时增量 emit,让 author 决定是否细化进度粒度。
+            </div>
+            <div class="card-meta locked"><span class="lk">🔒</span> 已随 review 提交给 author · 内容锁定;需改动请在 GitHub 上更新或撤回后重提</div>
           </div>
         </div>
       </div>
@@ -701,12 +823,24 @@ counter.<span class="fn">fetch_add</span>(<span class="n">1</span>, <span class=
             <div class="st"><span class="st-n">2</span><span class="st-l">讨论</span></div>
           </div>
 
-          <div class="sum-block">
+          <div class="sum-block" id="sum-prose">
             <div class="sb-head">总结 <span class="sb-edit">✎ 编辑</span> <span class="sb-by"><span class="gl"></span>codex 生成</span></div>
             <div class="sb-prose">
               <p>本 PR 将 transcode 从串行改为基于 <code>JoinSet</code> 的并行 encode,吞吐提升明显,方向正确。</p>
               <p>主要风险集中在<strong>共享状态的并发安全</strong>:进度计数用了非线程安全的 <code>Cell</code>(实则编译不过),需改 <code>Arc&lt;AtomicUsize&gt;</code>;错误处理上 <code>join_next</code> 的 <code>unwrap</code> 会把单段 panic 放大为整体崩溃。</p>
               <p>建议合并前处理 2 处 concurrency / error-handling 问题;资源占用(<code>JoinSet</code> 无背压)可后续跟进。</p>
+            </div>
+            <div class="sb-editor">
+              <textarea class="fe-textarea sb-ta" spellcheck="false">本 PR 将 transcode 从串行改为基于 `JoinSet` 的并行 encode,吞吐提升明显,方向正确。
+
+主要风险集中在**共享状态的并发安全**:进度计数用了非线程安全的 `Cell`(实则编译不过),需改 `Arc<AtomicUsize>`;错误处理上 `join_next` 的 `unwrap` 会把单段 panic 放大为整体崩溃。
+
+建议合并前处理 2 处 concurrency / error-handling 问题;资源占用(`JoinSet` 无背压)可后续跟进。</textarea>
+              <div class="fe-foot">
+                <button class="save sb-save">保存 <span class="kbd">⌘↵</span></button>
+                <button class="cancel sb-cancel">取消 <span class="kbd" style="background:transparent;color:var(--text-faint)">Esc</span></button>
+                <span class="fe-note">Markdown · 提交屏 review body 来源</span>
+              </div>
             </div>
           </div>
 
@@ -782,6 +916,72 @@ window.addEventListener('mousemove',e=>{
   root.style.setProperty(drag==='left'?'--left-w':'--right-w',w+'px');
 });
 window.addEventListener('mouseup',()=>{if(drag){document.querySelectorAll('.resizer').forEach(r=>r.classList.remove('drag'));drag=null;document.body.style.cursor='';document.body.style.userSelect='';}});
+
+// ---- finding 就地编辑器 · 剔除/恢复 · 键盘(e 编辑 / ⌘↵ 保存 / Esc 取消) ----
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+let lastCard=null;
+function openEdit(card){
+  if(!card||card.classList.contains('submitted')||card.classList.contains('dismissed'))return;
+  card.classList.add('editing');
+  const t=card.querySelector('.fe-input');
+  if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length);}
+}
+function saveEdit(card){
+  const ed=card.querySelector('.c-edit'),view=card.querySelector('.c-view');
+  if(!ed||!view)return;
+  const on=ed.querySelector('.fe-sev button.on');
+  const sev=on?['high','med','low'].find(s=>on.classList.contains(s)):'low';
+  const cat=ed.querySelector('.fe-cat').value.trim();
+  const title=ed.querySelector('.fe-input').value.trim();
+  const body=ed.querySelector('.fe-textarea').value.trim();
+  const hasSugg=ed.classList.contains('has-sugg');
+  const chip=view.querySelector('.sev');
+  chip.className='sev '+sev; chip.textContent=sev+(cat?' · '+cat:'');
+  view.querySelector('.c-body').innerHTML='<strong>'+esc(title)+'</strong> '+esc(body);
+  view.querySelector('.card-meta').style.display=hasSugg?'':'none';
+  const dm=card.querySelector('.dm-t'); if(dm)dm.textContent='已剔除 · '+title;
+  card.classList.remove('editing');
+}
+document.querySelectorAll('.card.finding').forEach(card=>{
+  card.addEventListener('mouseenter',()=>lastCard=card);
+  const q=s=>card.querySelector(s);
+  q('.f-edit')&&(q('.f-edit').onclick=()=>openEdit(card));
+  q('.f-dismiss')&&(q('.f-dismiss').onclick=()=>card.classList.add('dismissed'));
+  q('.f-restore')&&(q('.f-restore').onclick=()=>card.classList.remove('dismissed'));
+  q('.cancel')&&(q('.cancel').onclick=()=>card.classList.remove('editing'));
+  q('.save')&&(q('.save').onclick=()=>saveEdit(card));
+  q('.fe-sugg-tog')&&(q('.fe-sugg-tog').onclick=()=>q('.c-edit').classList.toggle('has-sugg'));
+  card.querySelectorAll('.fe-sev button').forEach(b=>b.onclick=()=>{
+    card.querySelectorAll('.fe-sev button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+  });
+});
+document.addEventListener('keydown',e=>{
+  const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  const editing=document.querySelector('.card.finding.editing');
+  if(e.key==='Escape'&&editing){editing.classList.remove('editing');return;}
+  if((e.metaKey||e.ctrlKey)&&e.key==='Enter'&&editing){e.preventDefault();saveEdit(editing);return;}
+  if(e.key==='e'&&!typing&&!editing&&lastCard){e.preventDefault();openEdit(lastCard);}
+});
+
+// ---- Summary 正文就地编辑(轻量 markdown 渲染:段落 / **粗** / `代码`) ----
+(()=>{
+  const blk=document.getElementById('sum-prose');
+  if(!blk)return;
+  const prose=blk.querySelector('.sb-prose'),ta=blk.querySelector('.sb-ta'),by=blk.querySelector('.sb-by');
+  const render=src=>src.trim().split(/\n{2,}/).map(p=>'<p>'+esc(p)
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/`([^`]+?)`/g,'<code>$1</code>')+'</p>').join('');
+  const close=()=>blk.classList.remove('editing');
+  const save=()=>{prose.innerHTML=render(ta.value);by.classList.add('edited');by.innerHTML='<span class="gl"></span>codex 生成 · 你已编辑';close();};
+  blk.querySelector('.sb-edit').onclick=()=>{blk.classList.add('editing');ta.focus();};
+  blk.querySelector('.sb-cancel').onclick=close;
+  blk.querySelector('.sb-save').onclick=save;
+  ta.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();save();}
+    else if(e.key==='Escape'){e.preventDefault();close();}
+  });
+})();
 </script>
 </body>
 </html>
