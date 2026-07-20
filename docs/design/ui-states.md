@@ -76,6 +76,61 @@ stateDiagram-v2
     active --> done : ⚙ 本步完成
 ```
 
+## 运行时 / 异常态
+
+Reviewing 期的运行时/异常态叠加在 review 屏之上,由后端事件驱动(见 [ui.md](ui.md#运行时--异常态)、`mockup/review-runtime.html`)。分三条正交的状态机:**turn 生命周期**(含错误/中断)、**连接**(app-server / MCP / network)、**上下文**(压缩)。审批是 turn 内的一个子状态。
+
+### turn 生命周期(含中断 / 错误 / 审批)
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Running : ● 追问 / ◆ 主动补充
+    Running --> Idle : ⚙ turn 完成
+    Running --> Interrupted : ● 停止 ⌘. (interrupt)
+    Interrupted --> Idle
+    Running --> Approval : ⚙ 反向审批请求 (execCommandApproval / applyPatchApproval)
+    Approval --> Running : ● 允许(仅这次 / 本会话始终)
+    Approval --> Running : ● 拒绝 (agent 收到拒绝, turn 继续)
+    Running --> TurnError : ⚙ stream error / turn aborted
+    TurnError --> Running : ● 重试这一轮
+    TurnError --> Idle : ● 编辑后重发 / 放弃
+```
+
+自建受信 MCP 工具**自动 accept**、不进 `Approval`(见 [codex-integration](codex-integration.md));只有白名单外的反向请求才冒出审批卡。
+
+### 连接(app-server / MCP / network)
+
+review 期的连接健康度独立于 turn;断连时右栏底部禁用追问,但 diff 阅读与 triage 不受影响。
+
+```mermaid
+stateDiagram-v2
+    [*] --> Connected
+    Connected --> AgentDown : ⚙ app-server 进程退出
+    AgentDown --> Reconnecting : ⚙ 自动重连 (第 N/5)
+    Reconnecting --> Connected : ⚙ 重连成功 (断点续接)
+    Reconnecting --> AgentDown : ⚙ 重连失败 (退避后重试)
+    Connected --> McpFail : ⚙ MCP 注入失败 (端口占用 / 注入被拒)
+    McpFail --> Connected : ● 重启通道成功
+    Connected --> Offline : ⚙ 网络断 (拉 diff / 提交不可用)
+    Offline --> Connected : ⚙ 网络恢复 (自动重试)
+```
+
+`AgentDown` / `McpFail` 为**阻断级**(红横幅 + 主体降饱和),`Offline` 为**警告级**(琥珀横幅,本地内容可继续读)。
+
+### 上下文压缩
+
+```mermaid
+stateDiagram-v2
+    [*] --> Normal
+    Normal --> NearLimit : ⚙ ctx 用量接近上限 (gauge 变琥珀 + 预警)
+    NearLimit --> Compacting : ⚙ 追问触发自动压缩
+    Compacting --> Normal : ⚙ 压缩完成 (代码锚点保留, 早期讨论摘要化)
+    Normal --> Normal : ⚙ ctx 回落
+```
+
+压缩不弹窗、不打断阅读;压缩后 discussion 引用的代码锚点保持有效(未决技术点见 [open-questions](open-questions.md)「上下文 / token 膨胀」)。
+
 ## 右栏 tab
 
 Discussion / Findings / Summary 三 tab 互斥;键盘 `1/2/3` 直切(见 ui.md 键盘快捷键)。scan 结束后默认落在 Discussion。

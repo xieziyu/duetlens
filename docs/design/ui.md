@@ -57,6 +57,20 @@
 - 右栏显示纵向 **timeline**(拉 diff → 注入 per-thread MCP → 通读 N/M files → 就绪)+ **实时流入的 findings 卡**(可点跳 diff);左侧 diff 全程可读,扫描期可点 finding / 框选提问,无需等待机审结束。
 - 扫描结束自动切回 Discussion / Findings tab。(mockup 顶栏有 `扫描中 / 已完成` demo 开关。)
 
+### 运行时 / 异常态(`mockup/review-runtime.html`)
+
+主干只画了 happy path;这些态叠加在 review 屏之上,由后端事件驱动。mockup 顶栏「运行态」下拉切换演示,状态机见 [ui-states](ui-states.md#运行时--异常态)。呈现分三处**互不打断阅读**的位置:
+
+- **顶栏 status 胶囊**:随态换文案/配色 —— Reviewing(天蓝)/ 运行中 / 待审批(琥珀)/ turn 失败 · agent 已断开 · 回传通道故障(红)/ 离线(琥珀)/ 压缩中(天蓝转圈)。
+- **全局横幅**(仅连接级异常,置于顶栏下方,分级):**阻断级(红)** = agent app-server 断开(自动重连 N/5 + 查看日志)、MCP 回传通道故障(诊断 + 重启通道);**警告级(琥珀)** = 网络离线(重试)。阻断态下主体轻微降饱和,强调需先恢复连接;会话与已上报 findings 已本地保存,重连从断点续接。
+- **右栏底部运行区**(随态切内容):
+  - **6 中断**:turn 运行中显示流式指示(已读 N 文件 · 用时)+ 红色 **`停止 ⌘.`**(对应 `ConversationalAgent.interrupt`)。
+  - **7 审批 / elicitation**:反向审批请求冒出时(自建工具自动 accept 之外,如 `execCommandApproval` / `applyPatchApproval`)显示审批卡 —— 工具名 + 参数摘要(如待执行命令)+ 用途说明 + **拒绝 / 仅这次 / 本会话始终允许**。见 [codex-integration](codex-integration.md) 与 [open-questions](open-questions.md)「审批面收敛」。
+  - **5 turn 失败**:错误卡(简述 + 可展开 stream error 详情)+ **重试这一轮 / 编辑后重发**;保留追问与既有对话。
+  - **8 压缩**:轻量进度条「正在压缩上下文,保留代码锚点与未决 discussion」;不弹窗。
+  - **连接断**(agent-down / mcp-fail / offline):底部禁用追问,提示「连接恢复前追问暂不可用 —— 仍可阅读 diff、triage 已有 findings」。
+- **8 上下文可见性**:顶栏 `ctx` 用量表接近上限时变琥珀(百分比同步),hover 提示「继续追问将触发自动压缩,压缩后早期讨论原文被摘要替代,**代码锚点保留**」。对应 [open-questions](open-questions.md)「上下文 / token 膨胀」。
+
 ### review 右栏三 tab
 
 - **Discussion**:当前锚点的对话线程(追问 codex / 框选发起),含 composer。
@@ -107,10 +121,32 @@
 - **仓库路径不匹配**:本地路径的 remote 与 PR 不符 —— **软警告、不阻断**(琥珀提示,继续则忽略本地路径改用临时 checkout),CTA 仍可用。
 - 原则:**硬错误(gh 未登录 / PR 解析失败)禁用 CTA;软警告(路径不匹配)放行**。
 
+## 待设计 backlog
+
+主干(entry → review → 提交/导出)+ 设计系统 + 状态机/组件层已覆盖。以下为盘点出的**主干之外整块缺口**与**运行时/异常态**,按推进顺序排;逐块补齐后移入上面的「屏与状态」并在此划掉。
+
+**第二层 · 运行时与异常态**——主干只画了 happy path,这几项直接对应 [open-questions](open-questions.md) 的未决技术点:
+
+- [x] **5 reviewing 期错误态**:codex app-server 崩溃/重连、turn 出错、network 断、MCP 注入失败的呈现与重试。→ `mockup/review-runtime.html`,见上「运行时 / 异常态」。
+- [x] **6 中断正在跑的 turn**:`ConversationalAgent.interrupt` 的 UI 入口(停止)。→ 同上。
+- [x] **7 审批 / elicitation 呈现**:自建工具自动 accept 已定,但 `execCommandApproval`/`applyPatchApproval` 等反向请求若冒出需审批 UI(见 open-questions「审批面收敛」)。→ 同上。
+- [x] **8 上下文压缩可见性**:ctx 接近上限预警 + 压缩发生时反馈 + 压缩后锚点提示(见 open-questions「上下文/token 膨胀」)。→ 同上。
+- [ ] **9 提交失败 / 部分成功**:submit 中断、部分评论失败、一次 review 二次增量提交语义。(下一步)
+
+**第一层 · 整块缺失的功能屏(次批,各自独立 mockup)**:
+
+- [ ] **设置 / 偏好面板**:管理 `ui_settings`(主题两轴 / 栏宽 / 默认 tab / 默认 diff 视图),见 [frontend-components](frontend-components.md) 持久化节。
+- [ ] **审核规则提示词编辑**:查看/编辑 project → global → builtin 三层与合并结果(架构保留能力,UI 缺口最大)。
+- [ ] **全部会话历史页**:entry 只显示「最近」,缺全量列表(搜索 / 按 source 筛选 / 删除 / 恢复)。
+- [ ] **首次启动 / onboarding**:codex 未安装/未配置引导(entry 已有 gh 未登录态,codex 侧缺)。
+
+**第三层(打磨,暂缓)**:各 tab 空态、diff 边界(二进制/重命名/大文件/空白差异)、窄窗口退化、模型选择/reasoning effort、a11y 焦点管理、长任务完成通知。
+
 ## 已有 mockup
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
 - `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换 + 键盘快捷键帮助层(`?`)+ 两轴配色切换。
+- `mockup/review-runtime.html` —— review **运行时 / 异常态**:顶栏「运行态」下拉切 9 态(空闲 / turn 运行中+中断 / 反向审批 / turn 失败 / agent 断开重连 / 离线 / MCP 通道故障 / ctx 接近上限 / 压缩中);演示 status 胶囊、全局横幅、右栏底部运行区、ctx 用量表。见上「运行时 / 异常态」。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md))。
 - `mockup/export-markdown.html` —— 非 GitHub source(本地分支 / GitButler)的**本地 Markdown 导出屏**:左侧实时报告预览(渲染/源码)、右侧导出配置(包含项 + 分组 + 勾选保留 + 复制/保存 .md)。见 [findings-submit](findings-submit.md#非-github-source--导出为-markdown)。
 - `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens" data-rt="idle">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — Review 运行时 / 异常态 (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* 配色 tokens 两轴在 tokens.css · 单一来源;本页只做运行时/异常态骨架 */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 78% -10%,var(--glow1),transparent 60%),radial-gradient(900px 500px at 5% 108%,var(--glow2),transparent 55%)}
+:root{--left-w:212px;--right-w:392px}
+::selection{background:var(--sel)}
+.app{display:grid;grid-template-rows:auto auto 1fr;height:100vh}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:14px;height:48px;padding:0 14px;background:linear-gradient(180deg,var(--surface-2),var(--surface));border-bottom:1px solid var(--border);z-index:6}
+.brand{display:flex;align-items:center;padding-right:13px;border-right:1px solid var(--border)}
+.brand .mark{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px;color:var(--text)}
+.brand .mark i{font-style:normal;color:var(--agent-2)}
+.brand .mark .cur{color:var(--human);font-weight:400;animation:blink 1.15s step-end infinite}
+.pr-chip{display:flex;align-items:center;gap:7px;background:var(--surface-3);border:1px solid var(--border);padding:4px 10px;border-radius:999px;font-weight:500;font-size:12px}
+.pr-chip .gh{color:var(--text-dim)} .pr-chip b{color:var(--agent-2);font-weight:600}
+.spacer{flex:1}
+.meta{display:flex;align-items:center;gap:13px}
+
+/* ctx 用量表 —— 接近上限时变色(态 ctx-warn / compacting) */
+.ctx{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;color:var(--text-dim);position:relative;cursor:default}
+.gauge{width:78px;height:5px;border-radius:3px;background:var(--surface-3);overflow:hidden;border:1px solid var(--border)}
+.gauge>i{display:block;height:100%;width:41%;background:linear-gradient(90deg,var(--agent),var(--agent-2));transition:width .4s ease,background .3s ease}
+.ctx .pct{color:var(--text-dim)}
+.ctx .pct::after{content:"41%"}
+body:is([data-rt="ctx-warn"],[data-rt="compacting"]) .ctx .pct::after{content:"92%"}
+.ctx-tip{position:absolute;top:26px;right:0;width:230px;background:var(--surface-2);border:1px solid var(--human-line);border-radius:9px;padding:9px 11px;font-family:var(--sans);font-size:11.5px;color:var(--text-dim);box-shadow:var(--shadow);display:none;z-index:9;line-height:1.45}
+.ctx-tip b{color:var(--human);font-weight:600}
+body[data-rt="ctx-warn"] .ctx:hover .ctx-tip,body[data-rt="compacting"] .ctx:hover .ctx-tip{display:block}
+body[data-rt="ctx-warn"] .gauge>i,body[data-rt="compacting"] .gauge>i{width:92%;background:linear-gradient(90deg,var(--human),var(--sev-med))}
+body[data-rt="ctx-warn"] .ctx .pct{color:var(--human);font-weight:600}
+
+/* status 胶囊 —— 每个运行态换文案/配色 */
+.status{display:flex;align-items:center;gap:7px;padding:4px 10px;border-radius:999px;font-weight:500;font-size:12px;background:var(--agent-soft);border:1px solid var(--agent-line);color:var(--agent-2)}
+.status .dot{width:7px;height:7px;border-radius:50%;background:var(--agent);animation:pulse 2s infinite}
+.status .lbl::after{content:"Reviewing"}
+body[data-rt="running"] .status .lbl::after{content:"运行中"}
+body[data-rt="approval"] .status{background:var(--human-soft);border-color:var(--human-line);color:var(--human)}
+body[data-rt="approval"] .status .dot{background:var(--human)} body[data-rt="approval"] .status .lbl::after{content:"待审批"}
+body[data-rt="compacting"] .status .lbl::after{content:"压缩上下文…"}
+body[data-rt="compacting"] .status .dot{animation:spin 1s linear infinite;border-radius:2px}
+body:is([data-rt="turn-error"],[data-rt="agent-down"],[data-rt="mcp-fail"]) .status{background:color-mix(in oklab,var(--sev-high) 13%,transparent);border-color:color-mix(in oklab,var(--sev-high) 40%,transparent);color:var(--sev-high)}
+body:is([data-rt="turn-error"],[data-rt="agent-down"],[data-rt="mcp-fail"]) .status .dot{background:var(--sev-high);animation:none}
+body[data-rt="turn-error"] .status .lbl::after{content:"turn 失败"}
+body[data-rt="agent-down"] .status .lbl::after{content:"agent 已断开"}
+body[data-rt="mcp-fail"] .status .lbl::after{content:"回传通道故障"}
+body[data-rt="offline"] .status{background:var(--human-soft);border-color:var(--human-line);color:var(--human)}
+body[data-rt="offline"] .status .dot{background:var(--human);animation:none} body[data-rt="offline"] .status .lbl::after{content:"离线"}
+
+.switches{display:flex;align-items:center;gap:9px;padding-left:12px;border-left:1px solid var(--border)}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+.rt-pick{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-faint)}
+.rt-pick select{font-family:var(--mono);font-size:11px;background:var(--surface-3);color:var(--text-dim);border:1px solid var(--border);border-radius:7px;padding:4px 7px;cursor:pointer;outline:none}
+.rt-pick select:hover{border-color:var(--agent-line)}
+
+/* ---------- 全局横幅(连接级异常)---------- */
+.banner-wrap{display:flex;flex-direction:column}
+.banner{display:none;align-items:center;gap:11px;padding:9px 16px;font-size:12.5px;border-bottom:1px solid var(--border)}
+.banner .bi{width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex:none;font-size:12px}
+.banner .bmsg{flex:1;color:var(--text)} .banner .bmsg b{font-weight:600}
+.banner .bmsg .sub{color:var(--text-dim);font-size:11.5px}
+.banner .bact{display:flex;gap:7px}
+.bbtn{padding:4px 11px;border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface-3);color:var(--text-dim)}
+.bbtn.primary{border:0;color:var(--on-solid)}
+.bbtn.ghost{background:transparent}
+/* 阻断级(红):agent-down / mcp-fail */
+.banner.block{background:color-mix(in oklab,var(--sev-high) 9%,var(--bg));border-bottom-color:color-mix(in oklab,var(--sev-high) 30%,transparent)}
+.banner.block .bi{background:color-mix(in oklab,var(--sev-high) 16%,transparent);color:var(--sev-high)}
+.banner.block .bbtn.primary{background:var(--sev-high)}
+/* 警告级(琥珀):offline */
+.banner.warn{background:color-mix(in oklab,var(--human) 8%,var(--bg));border-bottom-color:var(--human-line)}
+.banner.warn .bi{background:var(--human-soft);color:var(--human)}
+.banner.warn .bbtn.primary{background:var(--human);color:var(--on-accent)}
+.spin-ic{display:inline-block;width:11px;height:11px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+body[data-rt="agent-down"] .banner.agent-down{display:flex}
+body[data-rt="mcp-fail"] .banner.mcp-fail{display:flex}
+body[data-rt="offline"] .banner.offline{display:flex}
+
+/* ---------- 三栏主体 ---------- */
+.main{display:grid;grid-template-columns:var(--left-w) minmax(0,1fr) var(--right-w);min-height:0;position:relative}
+/* mcp-fail / agent-down 时主体轻微降饱和,强调需先恢复连接 */
+body:is([data-rt="mcp-fail"],[data-rt="agent-down"]) .main{filter:saturate(.7) opacity(.92)}
+
+.tree{border-right:1px solid var(--border);background:var(--surface);overflow:auto;padding:10px 0}
+.tree .th{padding:2px 14px 8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--text-faint)}
+.frow{display:flex;align-items:center;gap:8px;padding:5px 14px;font-size:12.5px;color:var(--text-dim);cursor:pointer}
+.frow:hover{background:var(--hover)} .frow.on{background:var(--agent-soft);color:var(--text);box-shadow:inset 2px 0 0 var(--agent)}
+.frow .fn{font-family:var(--mono);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frow .bdg{margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--sev-med)}
+
+.center{overflow:auto;min-width:0;background:var(--bg)}
+.fh{position:sticky;top:0;display:flex;align-items:center;gap:9px;padding:9px 14px;background:linear-gradient(180deg,var(--surface),transparent);border-bottom:1px solid var(--border-soft);font-family:var(--mono);font-size:12px;color:var(--text-dim);z-index:2}
+.fh b{color:var(--text);font-weight:600}
+.code{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+.code td{padding:1px 0;vertical-align:top}
+.ln{width:44px;text-align:right;padding-right:12px!important;color:var(--text-faint);user-select:none}
+.src{padding-right:16px!important;white-space:pre;color:var(--code-text)}
+.code tr.add .src{background:var(--add-bg)} .code tr.add .ln{background:var(--add-gutter)}
+.code tr.del .src{background:var(--del-bg)} .code tr.del .ln{background:var(--del-gutter)}
+.k{color:var(--k)} .fn{color:var(--fn)} .s{color:var(--s)} .c{color:var(--c)} .n{color:var(--n)}
+
+/* 内联 finding 卡(简化,只为撑起 diff 语境) */
+.card{margin:8px 14px 8px 56px;border:1px solid var(--agent-line);border-left:3px solid var(--agent);border-radius:10px;background:var(--surface);overflow:hidden}
+.card .ch{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border-soft)}
+.sev{font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;text-transform:uppercase}
+.sev.med{color:var(--sev-med);background:color-mix(in oklab,var(--sev-med) 15%,transparent)}
+.card .ch .cat{font-family:var(--mono);font-size:11px;color:var(--text-faint)}
+.card .ch .org{margin-left:auto;font-size:11px;color:var(--agent-2)}
+.card .cb{padding:9px 12px;color:var(--text-dim);font-size:12.5px}
+.card .cb b{color:var(--text)}
+
+/* ---------- 右栏:会话 + 底部运行区 ---------- */
+.convo{border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+.ctabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--border-soft)}
+.ctab{padding:6px 11px;font-size:12px;color:var(--text-faint);border-radius:7px 7px 0 0;cursor:pointer}
+.ctab.on{color:var(--text);background:var(--surface-2);box-shadow:inset 0 -2px 0 var(--agent)}
+.thread{flex:1;overflow:auto;padding:12px 12px 6px;display:flex;flex-direction:column;gap:11px}
+.msg{display:flex;gap:9px}
+.av{width:22px;height:22px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:700}
+.av.agent{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+.av.human{background:var(--human-soft);color:var(--human);box-shadow:0 0 0 1px var(--human-line) inset}
+.mb{flex:1;min-width:0}
+.mb .who{font-size:11px;color:var(--text-faint);margin-bottom:2px;font-family:var(--mono)}
+.mb .txt{color:var(--text-dim);font-size:12.5px}
+/* 流式打字中(态 running) */
+.typing{display:none;gap:4px;align-items:center;color:var(--agent-2);font-size:12px}
+.typing i{width:5px;height:5px;border-radius:50%;background:var(--agent);animation:blink 1s infinite}
+.typing i:nth-child(2){animation-delay:.2s} .typing i:nth-child(3){animation-delay:.4s}
+body[data-rt="running"] .typing{display:flex}
+
+/* 底部运行区:随态换内容 */
+.rt-foot{border-top:1px solid var(--border-soft);padding:11px 12px;background:var(--surface-2);min-height:56px}
+.rt-slot{display:none}
+body[data-rt="idle"] .slot-idle{display:block}
+body[data-rt="running"] .slot-running{display:block}
+body[data-rt="approval"] .slot-approval{display:block}
+body[data-rt="turn-error"] .slot-error{display:block}
+body[data-rt="compacting"] .slot-compact{display:block}
+body:is([data-rt="agent-down"],[data-rt="mcp-fail"],[data-rt="offline"]) .slot-blocked{display:block}
+
+/* idle: 追问输入框 */
+.composer{display:flex;flex-direction:column;gap:7px}
+.composer .box{border:1px solid var(--border);border-radius:9px;background:var(--bg);padding:8px 10px;color:var(--text-faint);font-size:12.5px}
+.composer .crow{display:flex;justify-content:space-between;align-items:center}
+.hint{font-size:11px;color:var(--text-faint);font-family:var(--mono)}
+.send{padding:4px 12px;border-radius:7px;background:var(--accent-solid);color:var(--on-solid);font-weight:600;font-size:12px;border:0;cursor:pointer}
+
+/* running: 流式 + 停止中断 */
+.run-line{display:flex;align-items:center;gap:10px}
+.run-line .rl-t{flex:1;color:var(--text-dim);font-size:12px}
+.run-line .rl-t b{color:var(--agent-2);font-weight:600}
+.stop{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:7px;border:1px solid color-mix(in oklab,var(--sev-high) 42%,transparent);background:color-mix(in oklab,var(--sev-high) 12%,transparent);color:var(--sev-high);font-weight:600;font-size:12px;cursor:pointer}
+.stop kbd{font-family:var(--mono);font-size:10px;opacity:.8}
+.stop .sq{width:8px;height:8px;border-radius:2px;background:var(--sev-high)}
+
+/* approval: 反向审批卡 */
+.appr{border:1px solid var(--human-line);border-radius:10px;background:color-mix(in oklab,var(--human) 6%,var(--bg));overflow:hidden}
+.appr .ah{display:flex;align-items:center;gap:8px;padding:8px 11px;border-bottom:1px solid var(--human-line)}
+.appr .ah .ic{color:var(--human)} .appr .ah b{font-weight:600;color:var(--text)}
+.appr .ah .tool{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--human);background:var(--human-soft);padding:2px 7px;border-radius:5px}
+.appr .abody{padding:9px 11px;font-size:12px;color:var(--text-dim)}
+.appr .abody .arg{font-family:var(--mono);font-size:11.5px;color:var(--text);background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:6px 9px;margin-top:6px;white-space:pre-wrap}
+.appr .afoot{display:flex;gap:7px;padding:9px 11px;border-top:1px solid var(--border-soft);align-items:center}
+.appr .afoot .why{flex:1;font-size:11px;color:var(--text-faint)}
+.abtn{padding:5px 11px;border-radius:7px;font-size:11.5px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface-3);color:var(--text-dim)}
+.abtn.deny{border-color:color-mix(in oklab,var(--sev-high) 40%,transparent);color:var(--sev-high);background:transparent}
+.abtn.allow{background:var(--human);color:var(--on-accent);border:0}
+
+/* turn-error: 错误卡 */
+.errc{border:1px solid color-mix(in oklab,var(--sev-high) 38%,transparent);border-radius:10px;background:color-mix(in oklab,var(--sev-high) 7%,var(--bg));overflow:hidden}
+.errc .eh{display:flex;align-items:center;gap:8px;padding:8px 11px}
+.errc .eh .ic{color:var(--sev-high)} .errc .eh b{color:var(--text);font-weight:600}
+.errc .eb{padding:0 11px 9px;font-size:12px;color:var(--text-dim)}
+.errc details{margin-top:6px} .errc summary{cursor:pointer;color:var(--text-faint);font-size:11px;font-family:var(--mono)}
+.errc pre{margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--sev-high);background:var(--surface-3);border:1px solid var(--border);border-radius:6px;padding:8px;overflow:auto;white-space:pre-wrap}
+.errc .efoot{display:flex;gap:7px;padding:9px 11px;border-top:1px solid var(--border-soft)}
+
+/* compacting: 轻提示 */
+.cmp{display:flex;align-items:center;gap:10px;color:var(--text-dim);font-size:12px}
+.cmp .ic{color:var(--agent-2)}
+.cmp .bar{flex:1;height:5px;border-radius:3px;background:var(--surface-3);overflow:hidden;border:1px solid var(--border)}
+.cmp .bar>i{display:block;height:100%;width:60%;background:linear-gradient(90deg,var(--agent),var(--agent-2));animation:cmpmove 1.4s ease-in-out infinite}
+
+/* blocked: 连接断时右栏底部禁用提示 */
+.blk{display:flex;align-items:center;gap:9px;color:var(--text-faint);font-size:12px}
+.blk .ic{color:var(--sev-high)}
+body[data-rt="offline"] .blk .ic{color:var(--human)}
+
+@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 var(--agent-line)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes cmpmove{0%{margin-left:-60%}100%{margin-left:100%}}
+
+/* 态说明条(mockup 辅助,非产品 UI) */
+.note{padding:7px 16px;font-size:11.5px;color:var(--text-faint);background:var(--surface);border-top:1px solid var(--border-soft);font-family:var(--mono)}
+.note b{color:var(--agent-2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===== top bar ===== -->
+  <div class="topbar">
+    <div class="brand"><span class="mark">duetlens<i>_</i><span class="cur">▍</span></span></div>
+    <div class="pr-chip"><span class="gh">github</span><b>vercel/next.js#48213</b></div>
+    <div class="spacer"></div>
+    <div class="meta">
+      <div class="ctx" tabindex="0">
+        <span>ctx</span><span class="gauge"><i></i></span><span class="pct"></span>
+        <div class="ctx-tip">上下文用量 <b>92%</b> —— 接近单会话上限。继续追问将触发 <b>自动压缩</b>,压缩后早期讨论的原文会被摘要替代,<b>代码锚点保留</b>。</div>
+      </div>
+      <div class="status"><span class="dot"></span><span class="lbl"></span></div>
+      <div class="switches">
+        <div class="rt-pick"><span>运行态</span>
+          <select id="rtSel" title="mockup:切换 review 运行时 / 异常态">
+            <option value="idle">idle · 空闲</option>
+            <option value="running">6 · turn 运行中(可中断)</option>
+            <option value="approval">7 · 反向审批请求</option>
+            <option value="turn-error">5 · turn 失败</option>
+            <option value="agent-down">5 · app-server 断开/重连</option>
+            <option value="offline">5 · 网络离线</option>
+            <option value="mcp-fail">5 · MCP 回传通道故障</option>
+            <option value="ctx-warn">8 · 上下文接近上限</option>
+            <option value="compacting">8 · 压缩上下文中</option>
+          </select>
+        </div>
+        <div class="seg" id="modeSeg" title="明暗"><button data-m="dark" class="on">☾</button><button data-m="light">☀</button></div>
+        <div class="seg" id="themeSeg" title="配色主题"><button data-t="duetlens" class="on">D</button><button data-t="github">G</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 全局横幅(连接级异常)===== -->
+  <div class="banner-wrap">
+    <div class="banner block agent-down">
+      <span class="bi">⚠</span>
+      <div class="bmsg"><b>codex agent 已断开</b> —— app-server 进程退出。<span class="sub">正在自动重连(第 2/5 次)· 会话与已上报 findings 已本地保存,重连后从断点续接。</span></div>
+      <div class="bact"><span class="bbtn ghost">查看日志</span><span class="bbtn primary"><span class="spin-ic"></span> 重连中</span></div>
+    </div>
+    <div class="banner block mcp-fail">
+      <span class="bi">⛔</span>
+      <div class="bmsg"><b>findings 回传通道故障</b> —— 内置 MCP server 注入失败,agent 无法上报 finding。<span class="sub">审阅只读可继续,但机审结果不会流入。多为端口占用或注入被拒。</span></div>
+      <div class="bact"><span class="bbtn ghost">诊断</span><span class="bbtn primary">重启通道</span></div>
+    </div>
+    <div class="banner warn offline">
+      <span class="bi">⚡</span>
+      <div class="bmsg"><b>网络离线</b> —— 拉取 diff / 提交 GitHub 暂不可用。<span class="sub">本地 diff 与已加载内容可继续审阅;恢复后自动重试。</span></div>
+      <div class="bact"><span class="bbtn primary">重试</span></div>
+    </div>
+  </div>
+
+  <!-- ===== 三栏 ===== -->
+  <div class="main">
+    <!-- 文件树 -->
+    <div class="tree">
+      <div class="th">改动文件 · 3</div>
+      <div class="frow on"><span class="fn">packages/next/cache.ts</span><span class="bdg">2</span></div>
+      <div class="frow"><span class="fn">packages/next/router.ts</span><span class="bdg">1</span></div>
+      <div class="frow"><span class="fn">test/cache.test.ts</span></div>
+    </div>
+
+    <!-- diff 中区 -->
+    <div class="center">
+      <div class="fh"><b>packages/next/cache.ts</b><span>+12 −4</span></div>
+      <table class="code">
+        <tr><td class="ln">37</td><td class="src">  <span class="k">async</span> <span class="fn">revalidate</span>(key<span class="k">:</span> <span class="n">string</span>) {</td></tr>
+        <tr class="del"><td class="ln">38</td><td class="src">    <span class="k">const</span> e = <span class="k">await</span> <span class="fn">get</span>(key)</td></tr>
+        <tr class="add"><td class="ln">38</td><td class="src">    <span class="k">const</span> e = <span class="k">await</span> <span class="fn">get</span>(key, { <span class="n">stale</span>: <span class="k">true</span> })</td></tr>
+        <tr class="add"><td class="ln">39</td><td class="src">    <span class="k">if</span> (!e) <span class="k">return</span> <span class="k">null</span></td></tr>
+        <tr><td class="ln">40</td><td class="src">    <span class="k">return</span> e.value</td></tr>
+      </table>
+      <div class="card">
+        <div class="ch"><span class="sev med">med</span><span class="cat">correctness</span><span class="org">◆ codex</span></div>
+        <div class="cb"><b>stale 读取未校验过期时间</b> —— 传入 <code>stale:true</code> 后需对 <code>e.expiresAt</code> 做判断,否则会返回已过期缓存。</div>
+      </div>
+    </div>
+
+    <!-- 右栏 -->
+    <div class="convo">
+      <div class="ctabs"><span class="ctab on">Discussion</span><span class="ctab">Findings <span style="opacity:.6">4</span></span><span class="ctab">Summary</span></div>
+      <div class="thread">
+        <div class="msg"><div class="av human">你</div><div class="mb"><div class="who">你 · cache.ts:38</div><div class="txt">这个 stale 分支在并发 revalidate 时会不会重复回源?</div></div></div>
+        <div class="msg"><div class="av agent">◆</div><div class="mb"><div class="who">codex</div><div class="txt">会。当前没有 in-flight 去重,两个并发请求都会打到源。建议加一个按 key 的 promise 缓存……</div>
+          <div class="typing"><i></i><i></i><i></i> <span style="margin-left:4px">codex 正在回复</span></div>
+        </div></div>
+      </div>
+
+      <!-- 底部运行区:随 data-rt 切换 -->
+      <div class="rt-foot">
+        <!-- idle -->
+        <div class="rt-slot slot-idle">
+          <div class="composer">
+            <div class="box">追问 codex,或框选左侧代码发起 discussion…</div>
+            <div class="crow"><span class="hint">↵ 发送 · ⇧↵ 换行 · @ 引用文件</span><button class="send">发送</button></div>
+          </div>
+        </div>
+        <!-- 6 running + interrupt -->
+        <div class="rt-slot slot-running">
+          <div class="run-line">
+            <div class="rl-t"><b>codex 正在生成…</b> · 已读 3 文件 · 12s</div>
+            <button class="stop"><span class="sq"></span> 停止 <kbd>⌘.</kbd></button>
+          </div>
+        </div>
+        <!-- 7 approval -->
+        <div class="rt-slot slot-approval">
+          <div class="appr">
+            <div class="ah"><span class="ic">◆</span><b>codex 请求执行命令</b><span class="tool">execCommandApproval</span></div>
+            <div class="abody">审阅沙箱默认只读,此请求超出自建工具白名单,需你确认:
+              <div class="arg">$ git log --oneline -20 packages/next/cache.ts</div>
+            </div>
+            <div class="afoot"><span class="why">只读命令 · 用于追溯改动历史</span><span class="abtn deny">拒绝</span><span class="abtn">仅这次</span><span class="abtn allow">本会话始终允许</span></div>
+          </div>
+        </div>
+        <!-- 5 turn-error -->
+        <div class="rt-slot slot-error">
+          <div class="errc">
+            <div class="eh"><span class="ic">✕</span><b>这一轮回复失败</b></div>
+            <div class="eb">codex 返回错误,已保留你的追问与此前对话。
+              <details><summary>展开详情</summary><pre>stream error: turn aborted (upstream 502)
+thread=th_9f2a · turn=42</pre></details>
+            </div>
+            <div class="efoot"><button class="send" style="background:var(--sev-high)">重试这一轮</button><button class="abtn">编辑后重发</button></div>
+          </div>
+        </div>
+        <!-- 8 compacting -->
+        <div class="rt-slot slot-compact">
+          <div class="cmp"><span class="ic">⟳</span><span>正在压缩上下文,保留代码锚点与未决 discussion…</span><span class="bar"><i></i></span></div>
+        </div>
+        <!-- 5 blocked(agent-down / mcp-fail / offline)-->
+        <div class="rt-slot slot-blocked">
+          <div class="blk"><span class="ic">⏸</span><span>连接恢复前,追问暂不可用 —— 你仍可阅读 diff、triage 已有 findings。</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note">mockup 辅助态切换器在顶栏「<b>运行态</b>」下拉;产品中这些态由后端事件驱动。覆盖设计 backlog 第二层 5–8。</div>
+
+<script>
+  const b=document.body;
+  document.getElementById('rtSel').onchange=e=>b.dataset.rt=e.target.value;
+  document.getElementById('modeSeg').onclick=e=>{const t=e.target.closest('button');if(!t)return;
+    document.documentElement.dataset.mode=t.dataset.m;modeSeg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===t));};
+  document.getElementById('themeSeg').onclick=e=>{const t=e.target.closest('button');if(!t)return;
+    document.documentElement.dataset.theme=t.dataset.t;themeSeg.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===t));};
+</script>
+</body>
+</html>
