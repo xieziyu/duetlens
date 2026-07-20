@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint --ext .ts,.tsx .",
     "spike:codex": "tsx scripts/spike-codex.ts",
+    "spike:db": "tsx scripts/spike-db.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
   },
   "keywords": [],
@@ -28,6 +29,7 @@
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron-forge/plugin-vite": "^7.11.2",
     "@electron/fuses": "^1.8.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -44,6 +46,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.11.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^4.4.3"
