@@ -42,10 +42,19 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA「提�
 3. 经 `gh` 提交(`gh api` / `gh pr review`);只读 sandbox 不影响提交(提交是 app 侧用 gh,不经 codex 工具)。
 4. 提交后 finding 标 `submitted`(passive 标注,沿用 1.0 「不做 unsubmitted-changes 徽标」的约定)。
 
-## 非 GitHub source
+## 非 GitHub source — 导出为 Markdown
 
-`local-branch` / `gitbutler-vbranch` 无 PR 可提交 → 提交动作不可用,退化为**本地导出**(markdown 汇总)。**[deferred]** 先只做 GitHub 提交,导出后续再补。
+`local-branch` / `gitbutler-vbranch` 无 PR 可提交 → GitHub 提交动作不可用,顶栏 CTA 换成 **「导出 review」**,进入**本地 Markdown 导出屏**(`mockup/export-markdown.html`)。同一条 triage 管线(勾选保留 / 剔除),终点从"提交到 GitHub"换成"生成一份 Markdown 报告"。
+
+- **布局倒置**:导出屏以**报告本身为主场** —— 左侧宽栏是实时 Markdown 预览(`渲染 / 源码` 可切),右侧窄栏是导出配置。对照 GitHub submit 屏"左筛选 / 右 finish"的主次关系,导出屏是"左预览 / 右配置"。
+- **报告结构**:标题(分支名)+ 元信息 blockquote(来源 / 日期 / codex 模型)+ `## 摘要`(codex 总结)+ `## Findings`(保留项,按严重度或按文件分组)。有 `suggestion` 的渲染为 ```` ```suggestion ```` fenced block(在 GitHub 之外无"一键采纳",但保留可读格式)。
+- **包含项开关**:审核摘要 / 无锚点 finding 并入摘要 / suggestion 代码块 / 已剔除项(默认关,开则以删除线列出);分组 `按严重度 | 按文件`。开关实时改写预览与将导出的内容,所见即所得。
+- **无 event 选择**:`Comment / Request changes / Approve` 是 GitHub review 概念,导出屏不涉及。
+- **动作**:`复制 Markdown`(剪贴板)+ `保存为 .md`。**应用内**"保存"经 Tauri 原生保存对话框写本地文件;mockup 里以浏览器下载/剪贴板作预览替身。
 
 ## UI
 
-见 mockup `mockup/submit-to-github.html`:左侧 findings 筛选列表(勾选/剔除/编辑,dismissed 项灰显可恢复,`file=null` 单独归入摘要),右侧 "Finish your review"(摘要 body + event 选择 + 提交按钮)。设计语言与 [ui.md](ui.md) 一致(duet 双声道、两轴配色)。
+- **GitHub 提交屏** `mockup/submit-to-github.html`:左侧 findings 筛选列表(勾选/剔除/编辑,dismissed 项灰显可恢复,`file=null` 单独归入摘要),右侧 "Finish your review"(摘要 body + event 选择 + 提交按钮)。
+- **本地导出屏** `mockup/export-markdown.html`:左侧实时 Markdown 预览(渲染/源码切换),右侧导出配置(包含项开关 + 分组 + findings 勾选保留 + 复制/保存)。Markdown 由 findings 数据模型实时生成,保证预览与复制/保存内容一致。
+
+两屏设计语言与 [ui.md](ui.md) 一致(duet 双声道、两轴配色、`mockup/tokens.css` 单一来源)。

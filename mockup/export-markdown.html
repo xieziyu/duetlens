@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duetlens — Export review as Markdown (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.15}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(1200px 600px at 78% -10%,var(--glow1),transparent 60%),radial-gradient(900px 500px at 5% 108%,var(--glow2),transparent 55%)}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+/* topbar */
+.topbar{display:flex;align-items:center;gap:14px;height:48px;padding:0 14px;background:linear-gradient(180deg,var(--surface-2),var(--surface));border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:2px;padding-right:14px;border-right:1px solid var(--border)}
+.brand .mark{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px;color:var(--text);display:flex;align-items:center}
+.brand .mark i{font-style:normal;color:var(--agent-2)}
+.brand .mark .cur{color:var(--human);font-weight:400;margin-left:1px;animation:blink 1.15s step-end infinite}
+.back{color:var(--text-dim);font-size:12px;text-decoration:none;display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;border:1px solid var(--border)}
+.back:hover{color:var(--text);border-color:var(--agent-line)}
+.src-chip{display:flex;align-items:center;gap:7px;background:var(--surface-3);border:1px solid var(--border);padding:4px 10px;border-radius:999px;font-weight:500;font-size:12px}
+.src-chip .ic{color:var(--human)} .src-chip b{color:var(--text);font-weight:600;font-family:var(--mono);font-size:11.5px}
+.crumb{color:var(--text-dim);font-size:12px} .crumb b{color:var(--text);font-weight:600}
+.spacer{flex:1}
+.seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.seg button{width:26px;height:22px;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+
+/* main split: preview (hero) + config */
+.main{display:grid;grid-template-columns:minmax(0,1fr) 366px;min-height:0}
+.pane{min-height:0}
+.pane::-webkit-scrollbar{width:10px} .pane::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+
+/* ---------- LEFT: markdown preview ---------- */
+.preview{display:grid;grid-template-rows:auto 1fr;min-height:0;background:var(--surface)}
+.pv-head{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+.pv-head .lbl{font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+.pv-head .lbl .fn{font-family:var(--mono);font-size:11px;color:var(--text-faint);font-weight:400}
+.mini-seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:7px;padding:2px;margin-left:auto}
+.mini-seg button{border:0;background:transparent;color:var(--text-faint);border-radius:5px;cursor:pointer;font-size:11px;padding:3px 11px;font-family:var(--mono)}
+.mini-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--agent-line) inset}
+.pv-body{overflow:auto;background:var(--bg)}
+
+.md-doc{max-width:720px;margin:0 auto;padding:30px 34px 70px}
+.md-doc h1{font-family:var(--mono);font-size:21px;font-weight:600;letter-spacing:-.4px;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.md-doc h2{font-size:15px;font-weight:600;margin:26px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border-soft)}
+.md-doc h3{font-size:13.5px;font-weight:600;margin:18px 0 6px;color:var(--text)}
+.md-doc h4{font-size:12.5px;font-weight:600;margin:14px 0 5px;color:var(--text-dim)}
+.md-doc p{color:var(--text-dim);line-height:1.7;margin:8px 0}
+.md-doc code{font-family:var(--mono);font-size:11.5px;background:var(--surface-3);padding:1px 6px;border-radius:5px;color:var(--agent-2)}
+.md-doc blockquote{border-left:3px solid var(--agent-line);padding:3px 0 3px 13px;margin:10px 0;color:var(--text-faint);font-size:12px;font-family:var(--mono)}
+.md-doc ul{padding-left:20px;margin:8px 0;color:var(--text-dim)} .md-doc li{margin:4px 0;line-height:1.6}
+.md-doc del{color:var(--text-faint)}
+.md-doc .pre-wrap{margin:10px 0;border:1px solid var(--border-soft);border-radius:9px;overflow:hidden;background:var(--surface)}
+.md-doc .pre-wrap pre{font-family:var(--mono);font-size:11.5px;padding:11px 13px;color:var(--text);white-space:pre-wrap;line-height:1.55}
+.md-doc .pre-wrap.sugg{border-color:var(--add-gutter)}
+.md-doc .pre-wrap .pre-lbl{font-family:var(--mono);font-size:10px;color:var(--add);padding:5px 12px;background:var(--add-bg);border-bottom:1px solid var(--border-soft)}
+.md-raw{padding:24px 28px 70px}
+.md-raw pre{font-family:var(--mono);font-size:12px;line-height:1.75;color:var(--text-dim);white-space:pre-wrap;max-width:840px;margin:0 auto}
+
+/* ---------- RIGHT: export config ---------- */
+.config{background:var(--surface);border-left:1px solid var(--border);display:grid;grid-template-rows:auto 1fr auto;min-height:0}
+.cfg-head{padding:15px 16px 12px;border-bottom:1px solid var(--border)}
+.cfg-head .t{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px}
+.cfg-head .s{color:var(--text-faint);font-size:11.5px;margin-top:4px;line-height:1.5}
+.cfg-body{overflow:auto;padding:15px 16px}
+.sec-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);font-weight:600;margin:18px 0 7px;font-family:var(--mono)}
+.cfg-body .sec-lbl:first-child{margin-top:0}
+
+.opt{display:flex;align-items:center;gap:11px;padding:6px 0;cursor:pointer;font-size:12.5px;color:var(--text-dim);user-select:none}
+.opt .sw{width:34px;height:19px;border-radius:999px;background:var(--surface-3);border:1px solid var(--border);position:relative;flex:none;transition:.15s}
+.opt .sw::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--text-faint);transition:.15s}
+.opt.on{color:var(--text)}
+.opt.on .sw{background:var(--agent-soft);border-color:var(--agent-line)}
+.opt.on .sw::after{left:16px;background:var(--agent)}
+.opt .sub{color:var(--text-faint);font-size:11px}
+
+.grp-seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:8px;padding:2px}
+.grp-seg button{flex:1;border:0;background:transparent;color:var(--text-faint);border-radius:6px;cursor:pointer;font-size:11.5px;padding:6px 0}
+.grp-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--agent-line) inset}
+
+.ck-tally{display:flex;gap:8px;font-family:var(--mono);font-size:11px;margin:0 0 6px}
+.ck-tally span{padding:2px 8px;border-radius:6px;border:1px solid var(--border);color:var(--text-dim)}
+.ck-tally .keep{color:var(--agent-2);border-color:var(--agent-line);background:var(--agent-soft)}
+.ck-tally .drop{color:var(--text-faint)}
+.ck-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer}
+.ck-item:hover{background:var(--hover)}
+.ck{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--text-faint);display:inline-flex;align-items:center;justify-content:center;color:transparent;font-size:11px;font-weight:800;flex:none}
+.ck-item.on .ck{background:var(--agent);border-color:var(--agent);color:var(--on-accent)}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.high{background:var(--sev-high)} .dot.med{background:var(--sev-med)} .dot.low{background:var(--sev-low)}
+.ck-item .t{flex:1;min-width:0;font-size:12px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ck-item .an{font-family:var(--mono);font-size:10px;color:var(--text-faint);flex:none}
+.ck-item.off{opacity:.5} .ck-item.off .t{text-decoration:line-through}
+
+.cfg-foot{border-top:1px solid var(--border);padding:12px 16px}
+.btn-copy{width:100%;background:var(--accent-solid);color:var(--on-solid);font-weight:600;border:0;border-radius:10px;padding:11px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-copy:hover{filter:brightness(1.06)}
+.btn-copy.done{background:var(--agent-soft);color:var(--agent-2);box-shadow:0 0 0 1px var(--agent-line) inset}
+.btn-save{width:100%;margin-top:8px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:9px;cursor:pointer;font-size:12.5px;display:flex;align-items:center;justify-content:center;gap:7px}
+.btn-save:hover{border-color:var(--agent-line)}
+.cfg-foot .note{margin-top:10px;font-size:11px;color:var(--text-faint);text-align:center;line-height:1.5}
+.cfg-foot .note code{font-family:var(--mono);color:var(--text-dim)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="mark">duet<i>lens</i><span class="cur">_</span></span></div>
+    <a class="back" href="diff-review.html" title="返回 diff review">← 返回 diff</a>
+    <span class="src-chip"><span class="ic">⎇</span> 本地分支 <b>feat/streaming-transcode</b></span>
+    <span class="crumb">Review · <b>导出 Markdown</b></span>
+    <div class="spacer"></div>
+    <div class="seg"><button title="浅色">☀</button><button class="on" title="深色">☾</button></div>
+  </div>
+
+  <div class="main">
+    <!-- ============ LEFT: preview ============ -->
+    <div class="pane preview">
+      <div class="pv-head">
+        <span class="lbl">报告预览 <span class="fn" id="fileName">review-feat-streaming-transcode.md</span></span>
+        <div class="mini-seg" id="modeSeg">
+          <button class="on" data-m="rendered">渲染</button>
+          <button data-m="raw">源码</button>
+        </div>
+      </div>
+      <div class="pv-body">
+        <div class="md-doc" id="rendered"></div>
+        <div class="md-raw" id="raw" style="display:none"><pre></pre></div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT: export config ============ -->
+    <div class="pane config">
+      <div class="cfg-head">
+        <div class="t">↓ 导出为 Markdown</div>
+        <div class="s">本地分支无 PR 可提交,把这次 review 导出成一份报告,用于分享 / 存档 / 贴到别处。</div>
+      </div>
+      <div class="cfg-body">
+        <div class="sec-lbl">包含内容</div>
+        <label class="opt on" data-opt="summary"><span class="sw"></span>审核摘要（codex 总结）</label>
+        <label class="opt on" data-opt="mergeNull"><span class="sw"></span>无锚点 finding 并入摘要</label>
+        <label class="opt on" data-opt="sugg"><span class="sw"></span>suggestion 代码块</label>
+        <label class="opt" data-opt="dismissed"><span class="sw"></span>已剔除项<span class="sub">（划线列出）</span></label>
+
+        <div class="sec-lbl">Findings 分组</div>
+        <div class="grp-seg" id="groupSeg">
+          <button class="on" data-g="sev">按严重度</button>
+          <button data-g="file">按文件</button>
+        </div>
+
+        <div class="sec-lbl">保留哪些 finding</div>
+        <div class="ck-tally"><span class="keep" id="tallyKeep">保留 0</span><span class="drop" id="tallyDrop">剔除 0</span></div>
+        <div id="ckList"></div>
+      </div>
+      <div class="cfg-foot">
+        <button class="btn-copy" id="btnCopy">复制 Markdown</button>
+        <button class="btn-save" id="btnSave">↓ 保存为 .md 文件</button>
+        <div class="note">应用内经 Tauri 保存对话框写入本地;此处 <code>复制</code> / <code>下载</code> 为预览。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- 数据模型(与 diff-review demo 对齐)----
+const meta={
+  branch:'feat/streaming-transcode', source:'本地分支 · xieziyu/podcast-go',
+  date:'2026-07-20', model:'gpt-5.1-codex',
+  summary:'并行 transcode 的方向没问题,但共享状态的线程安全需收口。建议处理已标注的 concurrency / error-handling 问题后再合并。'
+};
+const findings=[
+  {sev:'high',cat:'concurrency',title:'Cell<usize> 跨 spawn 共享导致数据竞争',
+   anchor:{file:'pipeline.rs',line:121},origin:'agent',kept:true,
+   body:'每个 task 在独立线程执行,`Cell` 既非 `Sync` 也无原子性(实则编译不过)。改用 `Arc<AtomicUsize>` + `fetch_add(1, Ordering::Relaxed)`。',
+   suggestion:'let counter = Arc::new(AtomicUsize::new(0));\ncounter.fetch_add(1, Ordering::Relaxed);'},
+  {sev:'med',cat:'error-handling',title:'join_next 的 panic 被 unwrap 直接放大',
+   anchor:{file:'pipeline.rs',line:146},origin:'agent',kept:true,
+   body:'`res.unwrap()` 会把单个 segment 的 panic 变成整个 pipeline 崩溃。建议 `?` 上抛并附带 segment 上下文。'},
+  {sev:'med',cat:'architecture',title:'JoinSet 无背压,超大 job 可能占满内存',
+   anchor:null,origin:'agent',kept:true,
+   body:'一次性 spawn 全部 segment,大 job 会同时占用过多内存;建议用 Semaphore 限制并发度。'},
+  {sev:'low',cat:'style',title:'变量名 c 可读性差',
+   anchor:{file:'pipeline.rs',line:123},origin:'agent',kept:false,
+   body:'`c` 建议改为 `counter`,与字段名一致。'}
+];
+const SEV={high:{emoji:'🔴',rank:0},med:{emoji:'🟠',rank:1},low:{emoji:'🟡',rank:2}};
+
+const opts={summary:true,mergeNull:true,sugg:true,dismissed:false,group:'sev',mode:'rendered'};
+
+// ---- 生成 Markdown ----
+function genMarkdown(){
+  const kept=findings.filter(f=>f.kept);
+  const nulls=kept.filter(f=>!f.anchor);
+  const anchored=kept.filter(f=>f.anchor);
+  const dropped=findings.filter(f=>!f.kept);
+  let md=`# Review — ${meta.branch}\n\n`;
+  md+=`> Duetlens · ${meta.source} · ${meta.date} · codex ${meta.model}\n\n`;
+  if(opts.summary){
+    md+=`## 摘要\n\n${meta.summary}\n\n`;
+    if(opts.mergeNull&&nulls.length){
+      nulls.forEach(f=>md+=`- **${f.title}**（${f.sev} · ${f.cat}）— ${f.body}\n`);
+      md+='\n';
+    }
+  }
+  const list=(opts.summary&&opts.mergeNull)?anchored:kept;
+  const sorted=[...list].sort((a,b)=>SEV[a.sev].rank-SEV[b.sev].rank);
+  md+=`## Findings（保留 ${list.length}）\n\n`;
+  const sugg=f=>opts.sugg&&f.suggestion?'```suggestion\n'+f.suggestion+'\n```\n\n':'';
+  const anchorLine=f=>f.anchor?`\`${f.anchor.file}:${f.anchor.line}\`\n\n`:'\n';
+  if(opts.group==='file'){
+    const byFile={};
+    sorted.forEach(f=>{const k=f.anchor?f.anchor.file:'（无锚点）';(byFile[k]=byFile[k]||[]).push(f);});
+    Object.keys(byFile).forEach(file=>{
+      md+=`### ${file}\n\n`;
+      byFile[file].forEach(f=>{
+        md+=`#### ${SEV[f.sev].emoji} ${f.sev} · ${f.cat} — ${f.title}\n`+anchorLine(f)+`${f.body}\n\n`+sugg(f);
+      });
+    });
+  }else{
+    sorted.forEach(f=>{
+      md+=`### ${SEV[f.sev].emoji} ${f.sev} · ${f.cat} — ${f.title}\n`+anchorLine(f)+`${f.body}\n\n`+sugg(f);
+    });
+  }
+  if(opts.dismissed&&dropped.length){
+    md+=`## 已剔除（${dropped.length}）\n\n`;
+    dropped.forEach(f=>md+=`- ~~${f.title}~~（${f.sev} · ${f.cat}${f.anchor?' · '+f.anchor.file+':'+f.anchor.line:''}）\n`);
+    md+='\n';
+  }
+  return md.trim()+'\n';
+}
+
+// ---- 轻量 Markdown 渲染 ----
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const inlineMd=s=>esc(s)
+  .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+  .replace(/~~(.+?)~~/g,'<del>$1</del>')
+  .replace(/`([^`]+?)`/g,'<code>$1</code>');
+function renderMd(md){
+  const lines=md.split('\n'); const out=[]; let i=0,listOpen=false;
+  const closeList=()=>{if(listOpen){out.push('</ul>');listOpen=false;}};
+  while(i<lines.length){
+    const ln=lines[i];
+    if(ln.startsWith('```')){
+      const lang=ln.slice(3).trim(),buf=[];i++;
+      while(i<lines.length&&!lines[i].startsWith('```')){buf.push(lines[i]);i++;} i++;
+      closeList();
+      const sugg=lang==='suggestion';
+      out.push('<div class="pre-wrap'+(sugg?' sugg':'')+'">'+(sugg?'<div class="pre-lbl">suggestion · author 可一键采纳</div>':'')+'<pre>'+esc(buf.join('\n'))+'</pre></div>');
+      continue;
+    }
+    const h=ln.match(/^(#{1,4})\s+(.*)$/);
+    if(h){closeList();const n=h[1].length;out.push(`<h${n}>`+inlineMd(h[2])+`</h${n}>`);i++;continue;}
+    if(/^>\s?/.test(ln)){closeList();out.push('<blockquote>'+inlineMd(ln.replace(/^>\s?/,''))+'</blockquote>');i++;continue;}
+    if(/^-\s/.test(ln)){if(!listOpen){out.push('<ul>');listOpen=true;}out.push('<li>'+inlineMd(ln.replace(/^-\s/,''))+'</li>');i++;continue;}
+    if(ln.trim()===''){closeList();i++;continue;}
+    closeList();out.push('<p>'+inlineMd(ln)+'</p>');i++;
+  }
+  closeList();
+  return out.join('\n');
+}
+
+// ---- 渲染右栏 findings 勾选清单 ----
+function buildChecklist(){
+  const box=document.getElementById('ckList'); box.innerHTML='';
+  findings.forEach((f,idx)=>{
+    const row=document.createElement('div');
+    row.className='ck-item'+(f.kept?' on':' off');
+    row.innerHTML=`<span class="ck">✓</span><span class="dot ${f.sev}"></span>`+
+      `<span class="t">${esc(f.title)}</span>`+
+      `<span class="an">${f.anchor?f.anchor.file+':'+f.anchor.line:'无锚点'}</span>`;
+    row.onclick=()=>{findings[idx].kept=!findings[idx].kept;refresh();};
+    box.appendChild(row);
+  });
+}
+
+// ---- 刷新预览 + tally ----
+function refresh(){
+  buildChecklist();
+  const md=genMarkdown();
+  document.getElementById('rendered').innerHTML=renderMd(md);
+  document.querySelector('#raw pre').textContent=md;
+  const keep=findings.filter(f=>f.kept).length, drop=findings.length-keep;
+  document.getElementById('tallyKeep').textContent='保留 '+keep;
+  document.getElementById('tallyDrop').textContent='剔除 '+drop;
+}
+
+// ---- 交互接线 ----
+document.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{
+  o.classList.toggle('on'); opts[o.dataset.opt]=o.classList.contains('on'); refresh();
+});
+document.querySelectorAll('#groupSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#groupSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  opts.group=b.dataset.g; refresh();
+});
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  opts.mode=b.dataset.m;
+  document.getElementById('rendered').style.display=opts.mode==='rendered'?'':'none';
+  document.getElementById('raw').style.display=opts.mode==='raw'?'':'none';
+});
+
+const btnCopy=document.getElementById('btnCopy');
+btnCopy.onclick=async()=>{
+  try{await navigator.clipboard.writeText(genMarkdown());}catch(e){}
+  btnCopy.classList.add('done'); btnCopy.textContent='已复制到剪贴板 ✓';
+  setTimeout(()=>{btnCopy.classList.remove('done');btnCopy.textContent='复制 Markdown';},1500);
+};
+document.getElementById('btnSave').onclick=()=>{
+  const blob=new Blob([genMarkdown()],{type:'text/markdown'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=document.getElementById('fileName').textContent;
+  a.click(); URL.revokeObjectURL(a.href);
+};
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
+  document.documentElement.setAttribute('data-mode',b.title==='浅色'?'light':'dark');
+  document.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('on',x===b));
+});
+
+refresh();
+</script>
+</body>
+</html>
