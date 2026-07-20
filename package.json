@@ -14,6 +14,7 @@
     "lint": "eslint --ext .ts,.tsx .",
     "spike:codex": "tsx scripts/spike-codex.ts",
     "spike:db": "tsx scripts/spike-db.ts",
+    "spike:review": "tsx scripts/spike-review.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
   },
   "keywords": [],
