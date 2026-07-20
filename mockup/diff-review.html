@@ -540,6 +540,26 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 .odf .origin.agent .d{background:var(--agent)}
 .odf .go{color:var(--text-faint);font-size:14px;flex:none;align-self:center}
 .odf:hover .go{color:var(--agent-2)}
+
+/* ---------- split vs unified diff ---------- */
+.view-seg{display:flex;background:var(--surface-3);border:1px solid var(--border);border-radius:7px;padding:2px}
+.view-seg button{border:0;background:transparent;color:var(--text-faint);border-radius:5px;cursor:pointer;font-size:11px;padding:2px 9px;font-family:var(--mono)}
+.view-seg button.on{background:var(--surface);color:var(--text);box-shadow:0 0 0 1px var(--agent-line) inset}
+.diff:not(.split) .code.split{display:none}
+.diff.split .code.unified{display:none}
+.code.split{table-layout:fixed}
+.code.split .ln{width:44px;border-right:1px solid var(--border-soft)}
+.code.split .ln.new{border-left:1px solid var(--border)}
+.code.split .src{white-space:pre;overflow:hidden;text-overflow:ellipsis}
+.code.split .src.add{background:var(--add-bg)}
+.code.split .ln.add{background:var(--add-gutter);color:var(--add)}
+.code.split .src.del{background:var(--del-bg)}
+.code.split .ln.del{background:var(--del-gutter);color:var(--del)}
+.code.split .src.blank,.code.split .ln.blank{background:color-mix(in oklab,var(--text-faint) 7%,transparent)}
+.code.split .row:hover .src:not(.blank){background:var(--hover)}
+.code.split .row:hover .src.add{background:var(--add-bg)} .code.split .row:hover .src.del{background:var(--del-bg)}
+.code.split .row:hover .src.new:not(.blank) .add-thread{opacity:1}
+.code.split .src.new{position:relative}
 </style>
 </head>
 <body>
@@ -638,14 +658,14 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 
       <div class="file-header">
         <span class="fp"><span class="dim">src/transcode/</span>pipeline.rs</span>
-        <div class="chips"><span class="mini add">+84</span><span class="mini del">−12</span><span class="icon-btn" id="viewedBtn" title="标记已看并折叠">✓</span><span class="icon-btn" id="collapseBtn" title="折叠 / 展开">⌄</span></div>
+        <div class="chips"><div class="view-seg" id="viewSeg"><button class="on" data-v="unified">Unified</button><button data-v="split">Split</button></div><span class="mini add">+84</span><span class="mini del">−12</span><span class="icon-btn" id="viewedBtn" title="标记已看并折叠">✓</span><span class="icon-btn" id="collapseBtn" title="折叠 / 展开">⌄</span></div>
       </div>
       <div class="file-collapsed-bar"><span class="cb-ic">✓</span> 已标记看过 · 内容已折叠 <span class="cb-x">点击展开</span></div>
 
       <div class="expander" title="展开未改动代码"><span class="exic">↕</span> 展开上方 117 行未改动 <span class="rng">1–117</span></div>
       <div class="hunk">
         <div class="hunk-label">@@ -118,7 +118,12 @@ <span class="ctx">impl TranscodePipeline</span></div>
-        <table class="code"><tbody>
+        <table class="code unified"><tbody>
           <tr class="row"><td class="ln">118</td><td class="gutter"></td><td class="src">    <span class="k">pub async fn</span> <span class="fn">run</span>(&<span class="k">self</span>, job: <span class="ty">Job</span>) -> <span class="ty">Result</span><()> {<span class="add-thread" title="发起 discussion">＋</span></td></tr>
           <tr class="row del"><td class="ln">119</td><td class="gutter">−</td><td class="src">        <span class="k">let</span> segments = self.split(&job).<span class="fn">await</span>?;</td></tr>
           <tr class="row add"><td class="ln">119</td><td class="gutter">＋</td><td class="src">        <span class="k">let</span> segments = self.split(&job).<span class="fn">await</span>?;</td></tr>
@@ -658,6 +678,20 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
           <tr class="row add"><td class="ln">126</td><td class="gutter">＋</td><td class="src">                c.<span class="fn">set</span>(c.<span class="fn">get</span>() + <span class="n">1</span>); <span class="c">// track progress</span></td></tr>
           <tr class="row add"><td class="ln">127</td><td class="gutter">＋</td><td class="src">            });</td></tr>
           <tr class="row"><td class="ln">128</td><td class="gutter"></td><td class="src">        }</td></tr>
+        </tbody></table>
+
+        <table class="code split"><tbody>
+          <tr class="row"><td class="ln">118</td><td class="src">    <span class="k">pub async fn</span> <span class="fn">run</span>(&<span class="k">self</span>, job: <span class="ty">Job</span>) -> <span class="ty">Result</span><()> {</td><td class="ln new">118</td><td class="src new">    <span class="k">pub async fn</span> <span class="fn">run</span>(&<span class="k">self</span>, job: <span class="ty">Job</span>) -> <span class="ty">Result</span><()> {</td></tr>
+          <tr class="row"><td class="ln del">119</td><td class="src del">        <span class="k">let</span> segments = self.split(&job).<span class="fn">await</span>?;</td><td class="ln new add">119</td><td class="src new add">        <span class="k">let</span> segments = self.split(&job).<span class="fn">await</span>?;</td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add">120</td><td class="src new add">        <span class="k">let</span> <span class="hl">counter</span> = <span class="ty">Arc</span>::<span class="fn">new</span>(<span class="ty">Cell</span>::<span class="fn">new</span>(<span class="n">0usize</span>));</td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add"><span class="anchor agent"></span>121</td><td class="src new add">        <span class="k">let mut</span> tasks = <span class="ty">JoinSet</span>::<span class="fn">new</span>();<span class="add-thread" title="发起 discussion">＋</span></td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add">122</td><td class="src new add">        <span class="k">for</span> seg <span class="k">in</span> segments {</td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add">123</td><td class="src new add">            <span class="k">let</span> c = counter.<span class="fn">clone</span>();</td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add">124</td><td class="src new add">            tasks.<span class="fn">spawn</span>(<span class="k">async move</span> {</td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add">125</td><td class="src new add">                <span class="fn">encode</span>(seg).<span class="fn">await</span>;</td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add">126</td><td class="src new add">                c.<span class="fn">set</span>(c.<span class="fn">get</span>() + <span class="n">1</span>); <span class="c">// track progress</span></td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add">127</td><td class="src new add">            });</td></tr>
+          <tr class="row"><td class="ln">120</td><td class="src">        }</td><td class="ln new">128</td><td class="src new">        }</td></tr>
         </tbody></table>
 
         <div class="inline">
@@ -725,12 +759,20 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
       <div class="expander" title="展开未改动代码"><span class="exic">↕</span> 展开 16 行未改动 <span class="rng">129–144</span></div>
       <div class="hunk">
         <div class="hunk-label">@@ -140,4 +145,9 @@ <span class="ctx">async fn finalize</span></div>
-        <table class="code"><tbody>
+        <table class="code unified"><tbody>
           <tr class="row"><td class="ln">145</td><td class="gutter"></td><td class="src">        <span class="k">while let</span> <span class="ty">Some</span>(res) = tasks.<span class="fn">join_next</span>().<span class="fn">await</span> {</td></tr>
           <tr class="row sel"><td class="ln">146</td><td class="gutter"><span class="anchor human"></span></td><td class="src">            res.<span class="fn">unwrap</span>();  <span class="c">// propagate panic</span></td></tr>
           <tr class="row"><td class="ln">147</td><td class="gutter"></td><td class="src">        }</td></tr>
           <tr class="row add"><td class="ln">148</td><td class="gutter"><span class="anchor agent"></span>＋</td><td class="src">        self.<span class="fn">emit</span>(<span class="ty">Event</span>::<span class="fn">Done</span> { count: <span class="hl">counter</span>.<span class="fn">get</span>() }).<span class="fn">await</span>;<span class="add-thread" title="发起 discussion">＋</span></td></tr>
           <tr class="row"><td class="ln">149</td><td class="gutter"></td><td class="src">        <span class="ty">Ok</span>(())</td></tr>
+        </tbody></table>
+
+        <table class="code split"><tbody>
+          <tr class="row"><td class="ln">140</td><td class="src">        <span class="k">while let</span> <span class="ty">Some</span>(res) = tasks.<span class="fn">join_next</span>().<span class="fn">await</span> {</td><td class="ln new">145</td><td class="src new">        <span class="k">while let</span> <span class="ty">Some</span>(res) = tasks.<span class="fn">join_next</span>().<span class="fn">await</span> {</td></tr>
+          <tr class="row sel"><td class="ln">141</td><td class="src">            res.<span class="fn">unwrap</span>();  <span class="c">// propagate panic</span></td><td class="ln new"><span class="anchor human"></span>146</td><td class="src new">            res.<span class="fn">unwrap</span>();  <span class="c">// propagate panic</span></td></tr>
+          <tr class="row"><td class="ln">142</td><td class="src">        }</td><td class="ln new">147</td><td class="src new">        }</td></tr>
+          <tr class="row"><td class="ln blank"></td><td class="src blank"></td><td class="ln new add"><span class="anchor agent"></span>148</td><td class="src new add">        self.<span class="fn">emit</span>(<span class="ty">Event</span>::<span class="fn">Done</span> { count: <span class="hl">counter</span>.<span class="fn">get</span>() }).<span class="fn">await</span>;<span class="add-thread" title="发起 discussion">＋</span></td></tr>
+          <tr class="row"><td class="ln">143</td><td class="src">        <span class="ty">Ok</span>(())</td><td class="ln new">149</td><td class="src new">        <span class="ty">Ok</span>(())</td></tr>
         </tbody></table>
 
         <div class="inline">
@@ -1113,7 +1155,7 @@ document.addEventListener('keydown',e=>{
   const FILE='pipeline.rs';
   const activateTab=name=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));convo.setAttribute('data-tab',name);};
   const rowOf=n=>{if(!n)return null;const el=n.nodeType===3?n.parentElement:n;return el&&el.closest?el.closest('.row'):null;};
-  const lnOf=r=>r?(r.querySelector('.ln')||{}).textContent?.trim()||'':'';
+  const lnOf=r=>{if(!r)return '';const el=r.querySelector('.ln.new')||r.querySelector('.ln');return el?el.textContent.trim():'';};
   const rowsBetween=(a,b)=>{
     if(!a||!b)return [a||b].filter(Boolean);
     const tb=a.closest('tbody');
@@ -1147,7 +1189,7 @@ document.addEventListener('keydown',e=>{
     if(!cur)return;
     const {rows,hunk,label,ref}=cur;
     rows.forEach(r=>r.classList.add('sel'));
-    const snip=(ref.querySelector('.src').textContent||'').trim().slice(0,58);
+    const snip=((ref.querySelector('.src.new')||ref.querySelector('.src')).textContent||'').trim().slice(0,58);
     const inline=document.createElement('div');
     inline.className='inline';
     inline.innerHTML='<div class="card human new-disc stagger">'
@@ -1236,6 +1278,12 @@ document.addEventListener('keydown',e=>{
   bar&&(bar.onclick=()=>diff.classList.remove('collapsed'));
   const od=document.getElementById('offdiff');
   od&&(od.querySelector('.offdiff-head').onclick=()=>od.classList.toggle('open'));
+
+  // unified / split 切换
+  document.querySelectorAll('#viewSeg button').forEach(b=>b.onclick=()=>{
+    diff.classList.toggle('split',b.dataset.v==='split');
+    document.querySelectorAll('#viewSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  });
 })();
 </script>
 </body>

@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽/空态错误态/finding 就地编辑器/Summary 正文编辑态/框选发起 discussion/per-file Viewed/off-diff findings 区 均已落地(见「屏与状态」)。
+> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽/空态错误态/finding 就地编辑器/Summary 正文编辑态/框选发起 discussion/per-file Viewed/off-diff findings 区/split vs unified 均已落地(见「屏与状态」)。核心屏功能基本齐,下一步可抽 design tokens / 组件清单。
 
 - 整体重新设计。
 - **diff review 是主场**——用户交互最多的界面。
@@ -86,6 +86,7 @@
 
 - **per-file Viewed ✓**:文件树每行右侧有 viewed tick(悬停显影),标记已看后该行删除线 + 变灰 + 绿 ✓;文件树头显示「N 改动 · M 已看」进度。diff 主区 file-header 的 ✓ 按钮 = 标记当前文件已看**并折叠**内容为一条「已折叠 · 点击展开」bar;`⌄` 只折叠不改 viewed。(实现项:viewed 状态按用户/PR 持久化。)
 - **off-diff findings 区**:锚点不在当前 diff 新侧的 finding(被删除行 / 无行锚点的 PR 级 / 未展开文件),集中在 diff 顶部一条可折叠的琥珀 banner(`⚑ N 条 finding 不在当前 diff 视图内`),每条显示 sev·category / 标题 / 「为何 off-diff」原因 + origin,点击打开对应 discussion。避免这类 finding 因无处内联而被忽略。
+- **split vs unified**:file-header 的 `Unified | Split` segmented 切换。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
 
 ### 布局与栏宽
 
@@ -103,7 +104,7 @@
 ## 已有 mockup
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
-- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + 两轴配色切换。
+- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换 + 两轴配色切换。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md))。
 
-> 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、组件清单、split vs unified diff 切换)在本目录新增分册,并在 [文档索引](../README.md) 登记。
+> 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、design tokens / 组件清单)在本目录新增分册,并在 [文档索引](../README.md) 登记。
