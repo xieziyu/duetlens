@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { run } from './exec';
-import type { PreparedSource, ReviewTarget, Source } from './Source';
+import type { PreparedSource, ReviewTarget, Source } from './source';
 
 /** `but diff --format json` 的最小结构(只取重建 unified diff 所需字段)。 */
 interface ButDiffJson {

@@ -1,5 +1,5 @@
 import { run } from './exec';
-import type { PreparedSource, ReviewTarget, Source } from './Source';
+import type { PreparedSource, ReviewTarget, Source } from './source';
 
 /**
  * 本地分支 source:diff 当前分支相对基线(base...head 三点,即 head 自 merge-base 起的改动)。

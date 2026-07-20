@@ -5,7 +5,7 @@
  * 运行:npm run spike:gitbutler [虚拟分支名，默认 feat/dev]
  */
 import { strict as assert } from 'node:assert';
-import { GitButlerSource, toUnifiedDiff } from '../src/backend/source/GitButlerSource';
+import { GitButlerSource, toUnifiedDiff } from '../src/backend/source/gitbutler-source';
 
 const log = (m: string) => process.stdout.write(`[gitbutler] ${m}\n`);
 

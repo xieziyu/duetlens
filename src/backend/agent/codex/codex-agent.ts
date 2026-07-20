@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { CodexAppServer } from './CodexAppServer';
+import { CodexAppServer } from './codex-app-server';
 import {
   CodexItemType,
   CodexNotification,
@@ -13,7 +13,7 @@ import type {
   ConversationalAgent,
   ResumeConversationOptions,
   StartConversationOptions,
-} from '../ConversationalAgent';
+} from '../conversational-agent';
 
 /** 注入 bearer 令牌的 env 变量名(codex config 的 bearer_token_env_var 指向它)。 */
 const MCP_TOKEN_ENV = 'DUETLENS_MCP_TOKEN';

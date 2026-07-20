@@ -4,13 +4,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Discussion, Finding, Message, Review, UiSettings } from '@shared/domain';
 import type { ReviewEvent } from '@shared/ipc';
-import type { McpContentProviders } from '../mcp/DuetlensMcpServer';
-import type { ReviewStore } from '../db/ReviewStore';
-import { CodexAgent } from '../agent/codex/CodexAgent';
-import { loadReviewPrompt } from '../prompt/reviewPrompt';
-import { createSource } from '../source/createSource';
-import type { ReviewTarget } from '../source/Source';
-import { ReviewSession } from './ReviewSession';
+import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
+import type { ReviewStore } from '../db/review-store';
+import { CodexAgent } from '../agent/codex/codex-agent';
+import { loadReviewPrompt } from '../prompt/review-prompt';
+import { createSource } from '../source/create-source';
+import type { ReviewTarget } from '../source/source';
+import { ReviewSession } from './review-session';
 
 // 演示用内置 fixture(source 层接好前,让 app 能端到端跑一遍真实审核)。
 const DEMO_FILE = 'src/login.js';

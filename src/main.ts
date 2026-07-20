@@ -2,8 +2,8 @@ import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers } from '@backend/ipc';
 import { openDatabase } from '@backend/db/database';
-import { ReviewStore } from '@backend/db/ReviewStore';
-import { ReviewManager } from '@backend/review/ReviewManager';
+import { ReviewStore } from '@backend/db/review-store';
+import { ReviewManager } from '@backend/review/review-manager';
 
 // MAIN_WINDOW_VITE_DEV_SERVER_URL / MAIN_WINDOW_VITE_NAME 由 plugin-vite 注入,
 // 类型见 forge.env.d.ts 引用的 @electron-forge/plugin-vite/forge-vite-env

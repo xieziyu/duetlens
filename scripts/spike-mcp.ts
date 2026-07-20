@@ -7,12 +7,12 @@ import { strict as assert } from 'node:assert';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { openDatabase } from '../src/backend/db/database';
-import { ReviewStore } from '../src/backend/db/ReviewStore';
+import { ReviewStore } from '../src/backend/db/review-store';
 import {
   DuetlensMcpServer,
   type ReportedFinding,
   type ReportedFindingUpdate,
-} from '../src/backend/mcp/DuetlensMcpServer';
+} from '../src/backend/mcp/duetlens-mcp-server';
 import { reportFindingSchema, updateFindingSchema } from '../src/shared/domain';
 
 const log = (m: string) => process.stdout.write(`[mcp] ${m}\n`);

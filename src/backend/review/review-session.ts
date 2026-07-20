@@ -4,7 +4,7 @@ import {
   type McpContentProviders,
   type ReportedFinding,
   type ReportedFindingUpdate,
-} from '../mcp/DuetlensMcpServer';
+} from '../mcp/duetlens-mcp-server';
 import {
   reportFindingSchema,
   updateFindingSchema,
@@ -12,9 +12,9 @@ import {
   type Finding,
   type Message,
 } from '@shared/domain';
-import type { AgentEvent, ConversationalAgent } from '../agent/ConversationalAgent';
-import type { ReviewStore } from '../db/ReviewStore';
-import { BUILTIN_BASE_INSTRUCTIONS } from '../prompt/reviewPrompt';
+import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
+import type { ReviewStore } from '../db/review-store';
+import { BUILTIN_BASE_INSTRUCTIONS } from '../prompt/review-prompt';
 
 export interface StartReviewOptions {
   cwd: string;

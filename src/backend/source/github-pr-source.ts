@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { run } from './exec';
-import type { PreparedSource, ReviewTarget, Source } from './Source';
+import type { PreparedSource, ReviewTarget, Source } from './source';
 
 /** 解析 PR 引用:完整 URL / owner/repo#123 / 纯号(需 repoPath 推断仓库)。 */
 export function parsePrRef(ref: string): { nwo: string; num: string } {

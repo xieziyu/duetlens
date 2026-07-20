@@ -9,7 +9,7 @@ import {
   type ReviewStartInput,
 } from '@shared/ipc';
 import type { UiSettings } from '@shared/domain';
-import type { ReviewManager } from '../review/ReviewManager';
+import type { ReviewManager } from '../review/review-manager';
 
 export interface IpcDeps {
   manager: ReviewManager;

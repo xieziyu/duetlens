@@ -4,7 +4,7 @@
  */
 import { strict as assert } from 'node:assert';
 import { openDatabase } from '../src/backend/db/database';
-import { ReviewStore } from '../src/backend/db/ReviewStore';
+import { ReviewStore } from '../src/backend/db/review-store';
 
 function log(msg: string) {
   process.stdout.write(`[db] ${msg}\n`);

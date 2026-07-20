@@ -1,7 +1,7 @@
-import { GitButlerSource } from './GitButlerSource';
-import { GitHubPrSource } from './GitHubPrSource';
-import { LocalGitSource } from './LocalGitSource';
-import type { ReviewTarget, Source } from './Source';
+import { GitButlerSource } from './gitbutler-source';
+import { GitHubPrSource } from './github-pr-source';
+import { LocalGitSource } from './local-git-source';
+import type { ReviewTarget, Source } from './source';
 
 /** 按 target.source 选具体实现。 */
 export function createSource(target: ReviewTarget): Source {

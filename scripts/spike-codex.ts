@@ -9,9 +9,9 @@
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { CodexAppServer } from '../src/backend/agent/codex/CodexAppServer';
+import { CodexAppServer } from '../src/backend/agent/codex/codex-app-server';
 import { CodexNotification, type McpToolCallItem } from '../src/backend/agent/codex/protocol';
-import { DuetlensMcpServer, type ReportedFinding } from '../src/backend/mcp/DuetlensMcpServer';
+import { DuetlensMcpServer, type ReportedFinding } from '../src/backend/mcp/duetlens-mcp-server';
 
 const TURN_TIMEOUT_MS = 180_000;
 

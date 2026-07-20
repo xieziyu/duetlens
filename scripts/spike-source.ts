@@ -9,11 +9,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { strict as assert } from 'node:assert';
 import { openDatabase } from '../src/backend/db/database';
-import { ReviewStore } from '../src/backend/db/ReviewStore';
-import { CodexAgent } from '../src/backend/agent/codex/CodexAgent';
-import { ReviewSession } from '../src/backend/review/ReviewSession';
-import { LocalGitSource } from '../src/backend/source/LocalGitSource';
-import { parsePrRef } from '../src/backend/source/GitHubPrSource';
+import { ReviewStore } from '../src/backend/db/review-store';
+import { CodexAgent } from '../src/backend/agent/codex/codex-agent';
+import { ReviewSession } from '../src/backend/review/review-session';
+import { LocalGitSource } from '../src/backend/source/local-git-source';
+import { parsePrRef } from '../src/backend/source/github-pr-source';
 
 const BUGGY = `const db = require('./db');
 

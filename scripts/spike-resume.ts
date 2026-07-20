@@ -10,9 +10,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { strict as assert } from 'node:assert';
 import { openDatabase } from '../src/backend/db/database';
-import { ReviewStore } from '../src/backend/db/ReviewStore';
-import { CodexAgent } from '../src/backend/agent/codex/CodexAgent';
-import { ReviewSession } from '../src/backend/review/ReviewSession';
+import { ReviewStore } from '../src/backend/db/review-store';
+import { CodexAgent } from '../src/backend/agent/codex/codex-agent';
+import { ReviewSession } from '../src/backend/review/review-session';
 
 const REVIEW_FILE = 'src/login.js';
 const SRC = `const db = require('./db');

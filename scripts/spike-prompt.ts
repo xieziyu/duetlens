@@ -14,7 +14,7 @@ import {
   loadReviewPrompt,
   parseReviewMarkdown,
   mergeLayers,
-} from '../src/backend/prompt/reviewPrompt';
+} from '../src/backend/prompt/review-prompt';
 
 const log = (m: string) => process.stdout.write(`[prompt] ${m}\n`);
 
