@@ -11,19 +11,17 @@
 # ---- macOS ----
 .DS_Store
 
-# ---- Rust ----
-/target/
-**/target/
-# Cargo.lock 对二进制/应用应提交,故不忽略
-
 # ---- Node / frontend ----
 node_modules/
 dist/
 dist-ssr/
 *.local
+*.tsbuildinfo
+.eslintcache
 
-# ---- Tauri ----
-/src-tauri/gen/
+# ---- Electron / Vite / Forge build output ----
+.vite/
+out/
 
 # ---- Env / secrets ----
 .env

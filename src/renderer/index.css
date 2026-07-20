@@ -1,0 +1,26 @@
+@import './theme/tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* wordmark / 结构标签用 mono(见 UI 设计:mono 小写 duetlens_) */
+.mono {
+  font-family: var(--mono);
+}

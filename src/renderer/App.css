@@ -1,0 +1,96 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 48px;
+  padding: 0 16px;
+  padding-left: 88px; /* 让开 macOS 交通灯(hiddenInset) */
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  -webkit-app-region: drag;
+}
+
+.topbar button,
+.topbar select {
+  -webkit-app-region: no-drag;
+}
+
+.wordmark {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--agent);
+  letter-spacing: -0.02em;
+}
+
+.screen-nav {
+  display: flex;
+  gap: 2px;
+}
+
+.seg {
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-size: 13px;
+  cursor: pointer;
+}
+.seg:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.seg.active {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+}
+
+.theme-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.mode-toggle {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.screen-host {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dev-strip {
+  padding: 4px 16px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
