@@ -456,6 +456,13 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 .card.submitted .subm-badge{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--add);border:1px solid var(--add-gutter);background:var(--add-bg);border-radius:5px;padding:2px 7px}
 .card-meta.locked{color:var(--text-faint);padding-top:2px}
 .card-meta.locked .lk{filter:grayscale(.2)}
+
+/* ---------- Summary 正文就地编辑 ---------- */
+.sb-editor{display:none;margin-top:2px}
+.sum-block.editing .sb-prose{display:none}
+.sum-block.editing .sb-editor{display:block}
+.sb-editor .sb-ta{min-height:150px;line-height:1.7;font-size:12.5px}
+.sb-by.edited{color:var(--agent-2)}
 </style>
 </head>
 <body>
@@ -816,12 +823,24 @@ counter.<span class="fn">fetch_add</span>(<span class="n">1</span>, <span class=
             <div class="st"><span class="st-n">2</span><span class="st-l">讨论</span></div>
           </div>
 
-          <div class="sum-block">
+          <div class="sum-block" id="sum-prose">
             <div class="sb-head">总结 <span class="sb-edit">✎ 编辑</span> <span class="sb-by"><span class="gl"></span>codex 生成</span></div>
             <div class="sb-prose">
               <p>本 PR 将 transcode 从串行改为基于 <code>JoinSet</code> 的并行 encode,吞吐提升明显,方向正确。</p>
               <p>主要风险集中在<strong>共享状态的并发安全</strong>:进度计数用了非线程安全的 <code>Cell</code>(实则编译不过),需改 <code>Arc&lt;AtomicUsize&gt;</code>;错误处理上 <code>join_next</code> 的 <code>unwrap</code> 会把单段 panic 放大为整体崩溃。</p>
               <p>建议合并前处理 2 处 concurrency / error-handling 问题;资源占用(<code>JoinSet</code> 无背压)可后续跟进。</p>
+            </div>
+            <div class="sb-editor">
+              <textarea class="fe-textarea sb-ta" spellcheck="false">本 PR 将 transcode 从串行改为基于 `JoinSet` 的并行 encode,吞吐提升明显,方向正确。
+
+主要风险集中在**共享状态的并发安全**:进度计数用了非线程安全的 `Cell`(实则编译不过),需改 `Arc<AtomicUsize>`;错误处理上 `join_next` 的 `unwrap` 会把单段 panic 放大为整体崩溃。
+
+建议合并前处理 2 处 concurrency / error-handling 问题;资源占用(`JoinSet` 无背压)可后续跟进。</textarea>
+              <div class="fe-foot">
+                <button class="save sb-save">保存 <span class="kbd">⌘↵</span></button>
+                <button class="cancel sb-cancel">取消 <span class="kbd" style="background:transparent;color:var(--text-faint)">Esc</span></button>
+                <span class="fe-note">Markdown · 提交屏 review body 来源</span>
+              </div>
             </div>
           </div>
 
@@ -944,6 +963,25 @@ document.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&e.key==='Enter'&&editing){e.preventDefault();saveEdit(editing);return;}
   if(e.key==='e'&&!typing&&!editing&&lastCard){e.preventDefault();openEdit(lastCard);}
 });
+
+// ---- Summary 正文就地编辑(轻量 markdown 渲染:段落 / **粗** / `代码`) ----
+(()=>{
+  const blk=document.getElementById('sum-prose');
+  if(!blk)return;
+  const prose=blk.querySelector('.sb-prose'),ta=blk.querySelector('.sb-ta'),by=blk.querySelector('.sb-by');
+  const render=src=>src.trim().split(/\n{2,}/).map(p=>'<p>'+esc(p)
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/`([^`]+?)`/g,'<code>$1</code>')+'</p>').join('');
+  const close=()=>blk.classList.remove('editing');
+  const save=()=>{prose.innerHTML=render(ta.value);by.classList.add('edited');by.innerHTML='<span class="gl"></span>codex 生成 · 你已编辑';close();};
+  blk.querySelector('.sb-edit').onclick=()=>{blk.classList.add('editing');ta.focus();};
+  blk.querySelector('.sb-cancel').onclick=close;
+  blk.querySelector('.sb-save').onclick=save;
+  ta.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();save();}
+    else if(e.key==='Escape'){e.preventDefault();close();}
+  });
+})();
 </script>
 </body>
 </html>
