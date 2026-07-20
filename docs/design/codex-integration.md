@@ -52,9 +52,9 @@ codex 通过 **server→client 反向请求** 要求授权,client 必须应答,�
 - `AskForApproval` = `untrusted` / `on-request` / `never` / `granular{ mcp_elicitations, rules, sandbox_approval, request_permissions }`
 - `Personality` = `none` / `friendly` / `pragmatic`
 
-## 0.144.1 实测修正(实现期,已验证)
+## 0.144.1 实测修正(实现期,已验证;0.144.6 确认无变化)
 
-在 **0.144.1** 上把集成写成代码并端到端跑通,对上文(基于 0.144.5 的记录)有几处修正/细化:
+在 **0.144.1** 上把集成写成代码并端到端跑通,对上文(基于 0.144.5 的记录)有几处修正/细化。**2026-07-20 升级到 0.144.6 后,`generate-ts` 全量导出与 0.144.1 逐字节完全一致**(root 87 + v2 510 文件递归 diff 为空;方法/通知/反向请求名全同)—— 即 0.144.x 内 wire 契约稳定,以下结论继续适用,无需重跑:
 
 - **`thread/start` 的 `sandbox` 是顶层参数**(值 `read-only` 等),不在 `config` 里;`config` 仍是透传 config.toml 的 map,MCP 注入形如 `config.mcp_servers.duetlens = { url }`(HTTP streamable;`codex mcp add --url` 写出的 TOML 即 `[mcp_servers.NAME] url=...`)。
 - **无 `item/mcpToolCall` 这个方法名**。MCP 工具调用经 **`item/started` + `item/completed`** 通知观测,其 `item.type === "mcpToolCall"` 时带 `server`/`tool`/`status`/`arguments`;另有 `item/mcpToolCall/progress`。
