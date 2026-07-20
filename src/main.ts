@@ -1,9 +1,14 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers } from '@backend/ipc';
+import { openDatabase } from '@backend/db/database';
+import { ReviewStore } from '@backend/db/ReviewStore';
+import { ReviewManager } from '@backend/review/ReviewManager';
 
 // MAIN_WINDOW_VITE_DEV_SERVER_URL / MAIN_WINDOW_VITE_NAME 由 plugin-vite 注入,
 // 类型见 forge.env.d.ts 引用的 @electron-forge/plugin-vite/forge-vite-env
+
+let manager: ReviewManager;
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -31,7 +36,16 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  registerIpcHandlers();
+  const db = openDatabase(path.join(app.getPath('userData'), 'duetlens.db'));
+  manager = new ReviewManager(new ReviewStore(db));
+
+  registerIpcHandlers({
+    manager,
+    broadcast: (channel, payload) => {
+      for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
+    },
+  });
+
   createWindow();
 
   app.on('activate', () => {
@@ -41,4 +55,8 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  void manager?.disposeAll();
 });

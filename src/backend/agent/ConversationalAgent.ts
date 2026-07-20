@@ -5,6 +5,10 @@
  * 不让 codex 协议细节渗到 UI。**先只做一个真实实现,把接口磨对再谈第二个。**
  */
 
+import type { AgentEvent } from '@shared/agent-events';
+
+export type { AgentEvent };
+
 export interface StartConversationOptions {
   /** 审核目标工作目录(源码/diff 所在) */
   cwd: string;
@@ -13,16 +17,6 @@ export interface StartConversationOptions {
   /** 自建 MCP server 的 HTTP 端点,注入让 agent 回传 findings */
   mcpUrl?: string;
 }
-
-/** 归一后的领域事件;codex 的 turn/item/* 流事件映射到这里。 */
-export type AgentEvent =
-  | { kind: 'turn-started'; turnId: string }
-  | { kind: 'message-delta'; text: string }
-  | { kind: 'tool-call'; server: string; tool: string; status: string; args?: unknown }
-  | { kind: 'token-usage'; used: number; total?: number }
-  | { kind: 'turn-completed'; turnId: string }
-  | { kind: 'turn-failed'; turnId: string; error: string }
-  | { kind: 'error'; error: string };
 
 export interface ConversationHandle {
   /** codex threadId(用于续接/持久化) */

@@ -17,7 +17,13 @@ const SCREENS: { id: Screen; label: string }[] = [
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('entry');
+  const [activeReviewId, setActiveReviewId] = useState<string | null>(null);
   const { mode, theme, toggleMode, setTheme } = useTheme();
+
+  const openReview = (id: string) => {
+    setActiveReviewId(id);
+    setScreen('review');
+  };
 
   return (
     <div className="app">
@@ -53,8 +59,8 @@ export function App() {
       </header>
 
       <main className="screen-host">
-        {screen === 'entry' && <EntryScreen />}
-        {screen === 'review' && <ReviewScreen />}
+        {screen === 'entry' && <EntryScreen onOpenReview={openReview} />}
+        {screen === 'review' && <ReviewScreen reviewId={activeReviewId} />}
         {screen === 'submit' && <SubmitExportScreen />}
       </main>
 

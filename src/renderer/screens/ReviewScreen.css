@@ -1,0 +1,149 @@
+.rev {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.rev-empty,
+.rev-empty-list {
+  color: var(--text-faint);
+  font-size: 13px;
+  padding: 40px 32px;
+}
+
+.rev-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.rev-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.rev-spacer {
+  flex: 1;
+}
+.rev-tool {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.rev-tok {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rev-body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px;
+  max-width: 860px;
+  width: 100%;
+  margin: 0 auto;
+}
+.rev-findings-head {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rev-findings-head .count {
+  color: var(--text-faint);
+}
+.scanning-dot {
+  color: var(--agent-2);
+  font-size: 12px;
+}
+
+.finding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.finding {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  padding: 12px 14px;
+}
+.finding.sev-high {
+  border-left-color: var(--sev-high);
+}
+.finding.sev-medium {
+  border-left-color: var(--sev-med);
+}
+.finding.sev-low {
+  border-left-color: var(--sev-low);
+}
+.finding-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.sev {
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.sev.sev-high {
+  color: var(--sev-high);
+  background: var(--del-bg);
+}
+.sev.sev-medium {
+  color: var(--sev-med);
+  background: var(--human-soft);
+}
+.sev.sev-low {
+  color: var(--sev-low);
+  background: var(--agent-soft);
+}
+.cat {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.anchor {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+.finding-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+.finding-body {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+.badge.s-scanning {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+}
+.badge.s-reviewing {
+  background: var(--human-soft);
+  color: var(--human);
+}
+.badge.s-failed {
+  background: var(--del-bg);
+  color: var(--sev-high);
+}
