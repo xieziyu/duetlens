@@ -9,7 +9,16 @@ const api: DuetlensApi = {
     list: () => ipcRenderer.invoke(IpcChannels.reviewList),
     get: (id) => ipcRenderer.invoke(IpcChannels.reviewGet, id),
     findings: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewFindings, reviewId),
+    discussions: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewDiscussions, reviewId),
+    messages: (discussionId) => ipcRenderer.invoke(IpcChannels.reviewMessages, discussionId),
+    start: (input) => ipcRenderer.invoke(IpcChannels.reviewStart, input),
     startDemo: () => ipcRenderer.invoke(IpcChannels.reviewStartDemo),
+    resume: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewResume, reviewId),
+    release: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewRelease, reviewId),
+    addDiscussion: (reviewId, anchor) =>
+      ipcRenderer.invoke(IpcChannels.reviewAddDiscussion, reviewId, anchor),
+    sendMessage: (reviewId, discussionId, text) =>
+      ipcRenderer.invoke(IpcChannels.reviewSendMessage, reviewId, discussionId, text),
     onEvent: (handler: (e: ReviewEvent) => void) => {
       const listener = (_e: IpcRendererEvent, payload: ReviewEvent) => handler(payload);
       ipcRenderer.on(IpcEvents.reviewEvent, listener);
@@ -19,6 +28,9 @@ const api: DuetlensApi = {
   ui: {
     getSettings: () => ipcRenderer.invoke(IpcChannels.uiGetSettings),
     saveSettings: (settings: UiSettings) => ipcRenderer.invoke(IpcChannels.uiSaveSettings, settings),
+  },
+  dialog: {
+    pickDirectory: () => ipcRenderer.invoke(IpcChannels.dialogPickDirectory),
   },
 };
 

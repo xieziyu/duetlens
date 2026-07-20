@@ -37,10 +37,21 @@ async function main() {
     if (p.success) store.updateFinding(p.data);
   });
   const url = await mcp.listen();
-  log(`server ${url}`);
+  log(`server ${url} (token=${mcp.token.slice(0, 8)}…)`);
+
+  // 鉴权面:无令牌 / 错令牌一律 401(隔离本地其他进程)
+  const noAuth = await fetch(url, { method: 'POST', body: '{}' });
+  assert.equal(noAuth.status, 401, '无 bearer 应 401');
+  const badAuth = await fetch(url, { method: 'POST', headers: { authorization: 'Bearer wrong' }, body: '{}' });
+  assert.equal(badAuth.status, 401, '错 bearer 应 401');
+  log('鉴权:无/错令牌 → 401 ✓');
 
   const client = new Client({ name: 'spike', version: '0' });
-  await client.connect(new StreamableHTTPClientTransport(new URL(url)));
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(url), {
+      requestInit: { headers: { authorization: `Bearer ${mcp.token}` } },
+    }),
+  );
 
   const tools = (await client.listTools()).tools.map((t) => t.name).sort();
   log(`tools: ${tools.join(', ')}`);

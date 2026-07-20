@@ -15,12 +15,12 @@
 | ConversationalAgent 抽象 | `src/backend/agent/ConversationalAgent.ts` | ✅ 接口;codex 唯一实现 |
 | codex app-server 封装 | `src/backend/agent/codex/`(jsonrpc / CodexAppServer / CodexAgent / protocol) | ✅ 薄封装、事件归一、elicitation 自动 accept |
 | in-process HTTP MCP | `src/backend/mcp/DuetlensMcpServer.ts` | ✅ report_finding / update_finding / get_diff / get_file |
-| review 编排 | `src/backend/review/`(ReviewSession / ReviewManager) | ✅ 首轮扫描 → findings 落库 → 领域事件 |
-| source 层 | `src/backend/source/`(Source / LocalGitSource / GitHubPrSource / createSource) | ✅ git / gh;⏳ gitbutler 待接 but CLI |
+| review 编排 | `src/backend/review/`(ReviewSession / ReviewManager) | ✅ 首轮扫描 + 多轮追问(discussion 回路)→ findings/messages 落库 → 领域事件 |
+| source 层 | `src/backend/source/`(Source / LocalGitSource / GitHubPrSource / GitButlerSource / createSource) | ✅ git / gh / but(三种 source 齐备) |
 | 持久化 | `src/backend/db/`(schema / database / ReviewStore) | ✅ better-sqlite3、迁移、六表 |
 | 领域模型 | `src/shared/domain.ts` | ✅ 类型 + zod ingress schema |
-| IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令/事件推送 |
-| 前端屏 | `src/renderer/`(EntryScreen / ReviewScreen 演示流 + useReviewStream) | 🚧 仅演示级;diff-review 三栏真实屏未做 |
+| IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令(start/resume/send-message)/事件推送 + dialog 目录选择 |
+| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 演示流 + useReviewStream) | 🚧 入口可对真实 source 发起;diff-review 三栏真实屏未做 |
 
 ## 端到端验证(headless spike)
 
@@ -32,7 +32,10 @@
 | `db` | 持久化读写 / 迁移 / triage / update / 级联删 |
 | `review` | ReviewSession 垂直:codex 扫描 → MCP → sqlite 落库 |
 | `source` | LocalGitSource 取真实 git diff/文件 → codex → 落库;parsePrRef |
-| `mcp` | MCP client 驱动 report_finding(带 id)+ update_finding 回写 store |
+| `discussion` | 扫描后就 finding/user-discussion 多轮追问 → user/agent 消息成对落库(同一 thread) |
+| `resume` | session dispose 后按落库 threadId `thread/resume` 续接 → 复用会话记忆追问 |
+| `gitbutler` | `but diff --format json` 重建标准 unified + 路径穿越防护 + 实仓 smoke;不烧 token |
+| `mcp` | MCP client 驱动 report_finding/update_finding 回写 store + bearer 令牌鉴权(无/错令牌 401);不烧 token |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` 在 Electron ABI 下加载、六表迁移到位、IPC 注册无崩溃。
 
@@ -46,10 +49,10 @@
 
 ## 剩余 backlog(非 UI 框架优先)
 
-1. 多轮 / discussion 回路(sendMessage 续问、user-discussion + message 落库、追问经 IPC)
-2. `thread/resume` 续接(codexThreadId 已落库)
-3. IPC `review:start` 真实命令通道(替换演示入口)
-4. GitButler source(`but` CLI diff)
-5. 生命周期健壮性(MCP 端口/令牌隔离、dispose 对齐 review 生命周期、审批面收敛、长会话 compaction 触发)
+1. ✅ 多轮 / discussion 回路(sendMessage 续问、user-discussion + message 落库、追问经 IPC)—— source 生命周期改为随 session dispose(续问需读文件)
+2. ✅ `thread/resume` 续接(会话不在内存时按 codexThreadId 重建 source + 恢复 codex thread;sendMessage 自动续接,另有显式 `review:resume`)—— demo review 因临时 workdir 重启即失效,续接面向真实 source
+3. ✅ IPC `review:start` 真实命令通道(EntryScreen 真实发起表单:source 选择 / ref / 仓库目录选择器 / 基线;演示入口降级为次要链接)—— startReview 核心路径由 spike:source 覆盖
+4. ✅ GitButler source(`but diff <branch> --format json` 重建 unified;文件读 worktree 磁盘;EntryScreen 选项已启用)
+5. 生命周期健壮性:✅ MCP bearer 令牌隔离(codex 经 `bearer_token_env_var` 携带,无/错令牌 401)· ✅ `get_file` 路径穿越防护 · ✅ dispose 对齐(`disposeReview`/`review:release` + LRU 会话上限逐出闲置子进程);⏳ 审批面收敛 · ⏳ 长会话 compaction 触发(`thread/compact/start`)
 6. 多层级提示词(project→global→builtin 注入 baseInstructions)
 7. 前端:diff-review 三栏真实屏(抽 InlineCard / SelectionPopover / Composer),删 DevBridgeProbe 骨架件

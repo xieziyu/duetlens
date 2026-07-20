@@ -101,9 +101,12 @@ export class DuetlensMcpServer extends EventEmitter {
   private httpServer?: http.Server;
   private readonly transports = new Map<string, StreamableHTTPServerTransport>();
   readonly findings: ReportedFinding[] = [];
+  /** 本 server 的 bearer 令牌;codex 经 bearer_token_env_var 携带,隔离本地其他进程。 */
+  readonly token: string;
 
-  constructor(private readonly providers: McpContentProviders) {
+  constructor(private readonly providers: McpContentProviders, token: string = randomUUID()) {
     super();
+    this.token = token;
   }
 
   /** 监听在 127.0.0.1 上;端口 0 = 系统分配,返回 codex 用的 url。 */
@@ -124,6 +127,10 @@ export class DuetlensMcpServer extends EventEmitter {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     if (url.pathname !== '/mcp') {
       res.writeHead(404).end();
+      return;
+    }
+    if (req.headers.authorization !== `Bearer ${this.token}`) {
+      res.writeHead(401).end('未授权');
       return;
     }
     if (req.method === 'POST') {

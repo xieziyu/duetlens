@@ -15,6 +15,9 @@
     "spike:codex": "tsx scripts/spike-codex.ts",
     "spike:db": "tsx scripts/spike-db.ts",
     "spike:review": "tsx scripts/spike-review.ts",
+    "spike:discussion": "tsx scripts/spike-discussion.ts",
+    "spike:resume": "tsx scripts/spike-resume.ts",
+    "spike:gitbutler": "tsx scripts/spike-gitbutler.ts",
     "spike:source": "tsx scripts/spike-source.ts",
     "spike:mcp": "tsx scripts/spike-mcp.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
@@ -41,6 +44,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "43.1.1",
     "eslint": "^8.57.1",
+    "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "tsx": "^4.23.1",

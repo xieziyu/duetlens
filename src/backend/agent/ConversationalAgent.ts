@@ -16,6 +16,13 @@ export interface StartConversationOptions {
   baseInstructions?: string;
   /** 自建 MCP server 的 HTTP 端点,注入让 agent 回传 findings */
   mcpUrl?: string;
+  /** 自建 MCP 的 bearer 令牌;codex 经 bearer_token_env_var 携带以隔离本地其他进程 */
+  mcpToken?: string;
+}
+
+/** 续接已存在会话:同 start 的注入项 + 要续接的 conversationId。 */
+export interface ResumeConversationOptions extends StartConversationOptions {
+  conversationId: string;
 }
 
 export interface ConversationHandle {
@@ -25,6 +32,8 @@ export interface ConversationHandle {
 
 export interface ConversationalAgent {
   startConversation(opts: StartConversationOptions): Promise<ConversationHandle>;
+  /** 按 conversationId 从磁盘续接会话(app 重启后追问);须重新注入 MCP。 */
+  resumeConversation(opts: ResumeConversationOptions): Promise<ConversationHandle>;
   sendMessage(conversationId: string, text: string): Promise<void>;
   streamEvents(handler: (e: AgentEvent) => void): () => void;
   interrupt(conversationId: string): Promise<void>;

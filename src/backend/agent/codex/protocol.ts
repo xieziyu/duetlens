@@ -46,6 +46,23 @@ export interface ThreadStartResponse {
   [k: string]: unknown;
 }
 
+// ---- thread/resume(按 threadId 从磁盘续接已存在的会话;可选项与 start 同构)----
+export interface ThreadResumeParams {
+  threadId: string;
+  cwd?: string;
+  approvalPolicy?: AskForApproval;
+  sandbox?: SandboxMode;
+  config?: Record<string, unknown>;
+  baseInstructions?: string;
+}
+
+export interface ThreadResumeResponse {
+  thread: { id: string; [k: string]: unknown };
+  model: string;
+  cwd: string;
+  [k: string]: unknown;
+}
+
 // ---- turn/start ----
 export type UserInput = { type: 'text'; text: string; text_elements?: unknown[] };
 
@@ -82,6 +99,7 @@ export interface McpServerElicitationRequestResponse {
 export const CodexMethod = {
   initialize: 'initialize',
   threadStart: 'thread/start',
+  threadResume: 'thread/resume',
   turnStart: 'turn/start',
   turnInterrupt: 'turn/interrupt',
   turnSteer: 'turn/steer',

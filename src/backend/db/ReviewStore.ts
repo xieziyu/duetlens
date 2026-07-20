@@ -50,6 +50,17 @@ interface FindingRow {
   updated_at: number;
 }
 
+interface DiscussionRow {
+  id: string;
+  review_id: string;
+  kind: string;
+  origin: string;
+  file: string | null;
+  line: number | null;
+  line_end: number | null;
+  created_at: number;
+}
+
 interface MessageRow {
   id: string;
   discussion_id: string;
@@ -91,6 +102,19 @@ function toFinding(r: FindingRow): Finding {
     submittedUrl: r.submitted_url,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+function toDiscussion(r: DiscussionRow): Discussion {
+  return {
+    id: r.id,
+    reviewId: r.review_id,
+    kind: r.kind as Discussion['kind'],
+    origin: r.origin as Discussion['origin'],
+    file: r.file,
+    line: r.line,
+    lineEnd: r.line_end,
+    createdAt: r.created_at,
   };
 }
 
@@ -220,6 +244,14 @@ export class ReviewStore {
     return r ? toFinding(r) : null;
   }
 
+  /** 按承载 discussion 反查 finding(追问某条 finding 时定位其可编辑字段/id)。 */
+  getFindingByDiscussion(discussionId: string): Finding | null {
+    const r = this.db.prepare('SELECT * FROM findings WHERE discussion_id = ?').get(discussionId) as
+      | FindingRow
+      | undefined;
+    return r ? toFinding(r) : null;
+  }
+
   listFindings(reviewId: string): Finding[] {
     const rows = this.db
       .prepare('SELECT * FROM findings WHERE review_id = ? ORDER BY created_at ASC')
@@ -281,6 +313,20 @@ export class ReviewStore {
       lineEnd: anchor.lineEnd ?? null,
       createdAt: ts,
     };
+  }
+
+  getDiscussion(id: string): Discussion | null {
+    const r = this.db.prepare('SELECT * FROM discussions WHERE id = ?').get(id) as
+      | DiscussionRow
+      | undefined;
+    return r ? toDiscussion(r) : null;
+  }
+
+  listDiscussions(reviewId: string): Discussion[] {
+    const rows = this.db
+      .prepare('SELECT * FROM discussions WHERE review_id = ? ORDER BY created_at ASC')
+      .all(reviewId) as DiscussionRow[];
+    return rows.map(toDiscussion);
   }
 
   addMessage(discussionId: string, role: MessageRole, text: string): Message {

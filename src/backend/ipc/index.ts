@@ -1,6 +1,13 @@
-import { app, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import process from 'node:process';
-import { IpcChannels, IpcEvents, type AppInfo, type ReviewEvent } from '@shared/ipc';
+import {
+  IpcChannels,
+  IpcEvents,
+  type AppInfo,
+  type DiscussionAnchor,
+  type ReviewEvent,
+  type ReviewStartInput,
+} from '@shared/ipc';
 import type { UiSettings } from '@shared/domain';
 import type { ReviewManager } from '../review/ReviewManager';
 
@@ -24,10 +31,37 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewList, () => manager.listReviews());
   ipcMain.handle(IpcChannels.reviewGet, (_e, id: string) => manager.getReview(id));
   ipcMain.handle(IpcChannels.reviewFindings, (_e, reviewId: string) => manager.getFindings(reviewId));
+  ipcMain.handle(IpcChannels.reviewDiscussions, (_e, reviewId: string) => manager.getDiscussions(reviewId));
+  ipcMain.handle(IpcChannels.reviewMessages, (_e, discussionId: string) => manager.getMessages(discussionId));
+  ipcMain.handle(IpcChannels.reviewStart, (_e, input: ReviewStartInput) =>
+    manager.startReview({
+      source: input.source,
+      ref: input.ref,
+      repoPath: input.repoPath ?? '',
+      baseRef: input.baseRef,
+    }),
+  );
   ipcMain.handle(IpcChannels.reviewStartDemo, () => manager.startDemoReview());
+  ipcMain.handle(IpcChannels.reviewResume, (_e, reviewId: string) => manager.resumeReview(reviewId));
+  ipcMain.handle(IpcChannels.reviewRelease, (_e, reviewId: string) => manager.disposeReview(reviewId));
+  ipcMain.handle(IpcChannels.reviewAddDiscussion, (_e, reviewId: string, anchor: DiscussionAnchor) =>
+    manager.addUserDiscussion(reviewId, anchor),
+  );
+  ipcMain.handle(IpcChannels.reviewSendMessage, (_e, reviewId: string, discussionId: string, text: string) =>
+    manager.sendMessage(reviewId, discussionId, text),
+  );
 
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());
   ipcMain.handle(IpcChannels.uiSaveSettings, (_e, settings: UiSettings) => manager.saveUiSettings(settings));
+
+  ipcMain.handle(IpcChannels.dialogPickDirectory, async () => {
+    const win = BrowserWindow.getFocusedWindow();
+    const opts = { properties: ['openDirectory' as const] };
+    const res = win
+      ? await dialog.showOpenDialog(win, opts)
+      : await dialog.showOpenDialog(opts);
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0];
+  });
 
   manager.on('review-event', (e: ReviewEvent) => broadcast(IpcEvents.reviewEvent, e));
 }

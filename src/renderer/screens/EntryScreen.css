@@ -37,6 +37,74 @@
   font-size: 13px;
   line-height: 1.6;
 }
+.start-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.field-label {
+  flex: 0 0 48px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.field-row {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+}
+.field-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.field-input:focus {
+  outline: none;
+  border-color: var(--agent-line);
+}
+select.field-input {
+  cursor: pointer;
+}
+.field-pick {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+.field-pick:hover {
+  border-color: var(--agent-line);
+}
+
+.start-error {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--sev-high);
+  background: var(--del-bg);
+  border-radius: var(--r);
+  white-space: pre-wrap;
+}
+
+.start-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 .start-cta {
   padding: 9px 16px;
   border: none;
@@ -48,6 +116,20 @@
   cursor: pointer;
 }
 .start-cta:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.start-demo-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.start-demo-link:disabled {
   opacity: 0.55;
   cursor: default;
 }

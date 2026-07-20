@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { Finding, Review } from '@shared/domain';
+import type { Discussion, Finding, Message, Review } from '@shared/domain';
 import type { AgentEvent } from '@shared/agent-events';
 
 export interface ReviewStreamState {
   review: Review | null;
   findings: Finding[];
+  discussions: Discussion[];
+  /** 按 discussionId 聚合的消息(user/agent),随 message 事件增量追加 */
+  messages: Record<string, Message[]>;
   status: Review['status'] | null;
   tokenUsage: { used: number; total?: number } | null;
   lastTool: string | null;
@@ -17,6 +20,8 @@ export interface ReviewStreamState {
 export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [review, setReview] = useState<Review | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [status, setStatus] = useState<Review['status'] | null>(null);
   const [tokenUsage, setTokenUsage] = useState<{ used: number; total?: number } | null>(null);
   const [lastTool, setLastTool] = useState<string | null>(null);
@@ -24,6 +29,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   useEffect(() => {
     if (!reviewId) return;
     let alive = true;
+    setMessages({});
 
     void window.duetlens.review.get(reviewId).then((r) => {
       if (alive) {
@@ -32,6 +38,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
       }
     });
     void window.duetlens.review.findings(reviewId).then((f) => alive && setFindings(f));
+    void window.duetlens.review.discussions(reviewId).then((d) => alive && setDiscussions(d));
 
     const off = window.duetlens.review.onEvent((e) => {
       if (e.reviewId !== reviewId) return;
@@ -43,6 +50,17 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
           const next = prev.slice();
           next[i] = e.payload;
           return next;
+        });
+      } else if (e.type === 'discussion') {
+        setDiscussions((prev) =>
+          prev.some((d) => d.id === e.payload.id) ? prev : [...prev, e.payload],
+        );
+      } else if (e.type === 'message') {
+        const m = e.payload;
+        setMessages((prev) => {
+          const bucket = prev[m.discussionId] ?? [];
+          if (bucket.some((x) => x.id === m.id)) return prev;
+          return { ...prev, [m.discussionId]: [...bucket, m] };
         });
       } else if (e.type === 'status') {
         setStatus(e.payload);
@@ -59,5 +77,5 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     };
   }, [reviewId]);
 
-  return { review, findings, status, tokenUsage, lastTool };
+  return { review, findings, discussions, messages, status, tokenUsage, lastTool };
 }

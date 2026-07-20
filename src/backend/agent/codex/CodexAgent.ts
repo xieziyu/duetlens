@@ -5,8 +5,12 @@ import type {
   AgentEvent,
   ConversationHandle,
   ConversationalAgent,
+  ResumeConversationOptions,
   StartConversationOptions,
 } from '../ConversationalAgent';
+
+/** 注入 bearer 令牌的 env 变量名(codex config 的 bearer_token_env_var 指向它)。 */
+const MCP_TOKEN_ENV = 'DUETLENS_MCP_TOKEN';
 
 export interface CodexAgentOptions {
   codexBin?: string;
@@ -34,16 +38,42 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
   }
 
   async startConversation(opts: StartConversationOptions): Promise<ConversationHandle> {
-    this.server.start();
-    await this.server.initialize({ name: 'duetlens', version: '2.0.0-dev' });
+    await this.launchServer(opts.mcpToken);
     const res = await this.server.threadStart({
       cwd: opts.cwd,
       sandbox: 'read-only',
       approvalPolicy: 'never',
       baseInstructions: opts.baseInstructions,
-      config: opts.mcpUrl ? { mcp_servers: { duetlens: { url: opts.mcpUrl } } } : undefined,
+      config: this.mcpConfig(opts),
     });
     return { conversationId: res.thread.id };
+  }
+
+  async resumeConversation(opts: ResumeConversationOptions): Promise<ConversationHandle> {
+    await this.launchServer(opts.mcpToken);
+    const res = await this.server.threadResume({
+      threadId: opts.conversationId,
+      cwd: opts.cwd,
+      sandbox: 'read-only',
+      approvalPolicy: 'never',
+      baseInstructions: opts.baseInstructions,
+      config: this.mcpConfig(opts),
+    });
+    return { conversationId: res.thread.id };
+  }
+
+  /** 起子进程(带 MCP 令牌 env)并握手。 */
+  private async launchServer(mcpToken?: string): Promise<void> {
+    this.server.start(mcpToken ? { [MCP_TOKEN_ENV]: mcpToken } : undefined);
+    await this.server.initialize({ name: 'duetlens', version: '2.0.0-dev' });
+  }
+
+  /** per-thread 注入自建 MCP;有令牌时让 codex 经 bearer_token_env_var 携带。 */
+  private mcpConfig(opts: StartConversationOptions): Record<string, unknown> | undefined {
+    if (!opts.mcpUrl) return undefined;
+    const duetlens: Record<string, unknown> = { url: opts.mcpUrl };
+    if (opts.mcpToken) duetlens.bearer_token_env_var = MCP_TOKEN_ENV;
+    return { mcp_servers: { duetlens } };
   }
 
   /** 发一轮对话;resolve 于 turn 启动,完成经 streamEvents 的 turn-completed。 */

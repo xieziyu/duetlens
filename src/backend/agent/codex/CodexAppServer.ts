@@ -7,6 +7,8 @@ import {
   type InitializeParams,
   type McpServerElicitationRequestParams,
   type McpServerElicitationRequestResponse,
+  type ThreadResumeParams,
+  type ThreadResumeResponse,
   type ThreadStartParams,
   type ThreadStartResponse,
   type TurnStartParams,
@@ -42,9 +44,9 @@ export class CodexAppServer extends EventEmitter {
     this.trusted = new Set(opts.trustedMcpServers ?? []);
   }
 
-  start(): void {
+  start(extraEnv?: Record<string, string>): void {
     const bin = this.opts.codexBin ?? 'codex';
-    const env = { ...process.env };
+    const env = { ...process.env, ...extraEnv };
     if (this.opts.codexHome) env.CODEX_HOME = this.opts.codexHome;
 
     this.child = spawn(bin, ['app-server', '--stdio'], {
@@ -71,6 +73,10 @@ export class CodexAppServer extends EventEmitter {
 
   async threadStart(params: ThreadStartParams): Promise<ThreadStartResponse> {
     return this.rpcOrThrow().request<ThreadStartResponse>(CodexMethod.threadStart, params);
+  }
+
+  async threadResume(params: ThreadResumeParams): Promise<ThreadResumeResponse> {
+    return this.rpcOrThrow().request<ThreadResumeResponse>(CodexMethod.threadResume, params);
   }
 
   async turnStart(params: TurnStartParams): Promise<TurnStartResponse> {
