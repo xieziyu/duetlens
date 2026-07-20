@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽/空态错误态/finding 就地编辑器/Summary 正文编辑态均已落地(见「屏与状态」)。
+> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽/空态错误态/finding 就地编辑器/Summary 正文编辑态/框选发起 discussion 均已落地(见「屏与状态」)。
 
 - 整体重新设计。
 - **diff review 是主场**——用户交互最多的界面。
@@ -73,6 +73,15 @@
 - **submitted(已提交)· 只读**:绿左条 + `✓ 已提交 · #NNN` 徽标,无 action、内容锁定;footer 提示需在 GitHub 更新或撤回后重提。
 - **dismissed(剔除)· diff 内呈现**:整卡折叠为虚线细条(`✕ 已剔除 · 标题`,删除线)+ `↩ 恢复`,不占视觉重量但可召回。
 
+### 框选发起 discussion + composer 引用(`mockup/diff-review.html`)
+
+"在 diff 上对话"的核心入口。在 diff 主区框选任意代码 → 浮出操作条(popover):
+
+- **popover**:显示选区 `file:行范围` + 两个动作 —— `⬆ 发起 discussion`(human/琥珀)与 `◆ 追问 codex`(agent/天蓝)。定位在选区上方,贴边自动翻转到下方;点击别处 / 滚动即消失。
+- **发起 discussion**:在选中行下方就地插入一张 human composer 卡(选中行标琥珀左条),含选区引用块 + textarea + `发送`(`↵`)/ `取消`;发送后原地变成一条「你的 discussion」卡(带「转为 finding / 继续对话」)。每行悬停的 `＋` 复用同一条单行流程。
+- **追问 codex**:切到右栏 Discussion tab,并把选区作为可移除的引用 chip(`↳ file:行`)附到 composer;composer 的 `↳ 引用选区` chip 行为相同。
+- **composer `@file`**:弹出文件菜单(按 diff 文件列表),选中即把 `@path` 引用写入输入区。
+
 ### 布局与栏宽
 
 - 三栏:文件树 / diff(主区,`minmax(0,1fr)` 自适应)/ 会话栏。
@@ -89,7 +98,7 @@
 ## 已有 mockup
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
-- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 两轴配色切换。
+- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + 两轴配色切换。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md))。
 
-> 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、组件清单、Summary 编辑态)在本目录新增分册,并在 [文档索引](../README.md) 登记。
+> 迭代界面时按偏好用 HTML mockup 对齐(而非 ASCII 预览)。后续细化(线框、状态机、组件清单、off-diff findings 区 / split vs unified / per-file Viewed)在本目录新增分册,并在 [文档索引](../README.md) 登记。

@@ -463,6 +463,46 @@ body.scan .convo .findings-panel,body.scan .convo .summary-panel{display:none!im
 .sum-block.editing .sb-editor{display:block}
 .sb-editor .sb-ta{min-height:150px;line-height:1.7;font-size:12.5px}
 .sb-by.edited{color:var(--agent-2)}
+
+/* ---------- 框选代码 → discussion popover ---------- */
+.sel-pop{position:fixed;z-index:60;display:none;align-items:center;gap:3px;padding:4px;
+  background:var(--surface-3);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow)}
+.sel-pop.show{display:flex}
+.sel-pop::after{content:"";position:absolute;left:var(--cx,50%);bottom:-5px;width:9px;height:9px;
+  background:var(--surface-3);border-right:1px solid var(--border);border-bottom:1px solid var(--border);transform:translateX(-50%) rotate(45deg)}
+.sel-pop .sp-range{font-family:var(--mono);font-size:10.5px;color:var(--text-faint);padding:0 7px 0 5px;margin-right:1px;border-right:1px solid var(--border);align-self:stretch;display:flex;align-items:center}
+.sel-pop button{border:0;background:transparent;color:var(--text-dim);font-size:12px;font-family:var(--sans);padding:5px 9px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.sel-pop .sp-disc{color:var(--human)} .sel-pop .sp-disc:hover{background:var(--human-soft)}
+.sel-pop .sp-ask{color:var(--agent-2)} .sel-pop .sp-ask:hover{background:var(--agent-soft)}
+
+/* 内联新建 discussion composer */
+.card.new-disc{border-left:2px solid var(--human)}
+.nd-head{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--border-soft);font-weight:600;font-size:12px;color:var(--text)}
+.nd-ref{margin:10px 12px 0;padding:7px 10px;border:1px solid var(--border);border-left:2px solid var(--human);border-radius:8px;background:var(--surface-2);font-family:var(--mono);font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nd-ref .lnref{color:var(--human)}
+.nd-body{padding:10px 12px 0}
+.nd-body .fe-textarea{min-height:60px}
+.nd-foot{display:flex;gap:8px;align-items:center;padding:10px 12px 12px}
+.nd-foot .send{background:var(--human);color:var(--on-accent);font-weight:600;border:0;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:12px}
+.nd-foot .send:hover{filter:brightness(1.06)}
+.nd-foot .cancel{font-size:12px;color:var(--text-dim);background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer}
+.nd-foot .cancel:hover{color:var(--text);border-color:var(--human-line)}
+
+/* composer:引用选区 chip + @file 菜单 */
+.composer{position:relative}
+.composer .refchip{display:flex;align-items:center;gap:7px;margin-bottom:9px;padding:6px 9px;border:1px solid var(--border);border-left:2px solid var(--human);border-radius:8px;background:var(--surface-3);font-family:var(--mono);font-size:11px;color:var(--text-dim)}
+.composer .refchip .lnref{color:var(--human)}
+.composer .refchip .x{margin-left:auto;cursor:pointer;color:var(--text-faint);font-size:11px}
+.composer .refchip .x:hover{color:var(--del)}
+.composer .chip{cursor:pointer}
+.composer .chip:hover{color:var(--agent-2);border-color:var(--agent-line)}
+.file-menu{position:absolute;z-index:40;left:12px;bottom:70px;display:none;max-height:210px;overflow:auto;
+  background:var(--surface-3);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow);padding:5px;min-width:190px}
+.file-menu.show{display:block}
+.file-menu .fm-h{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);padding:4px 8px 6px}
+.file-menu .fm-item{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:11.5px;color:var(--text-dim)}
+.file-menu .fm-item:hover{background:var(--agent-soft);color:var(--agent-2)}
+.file-menu .fm-item .fm-dir{color:var(--text-faint)}
 </style>
 </head>
 <body>
@@ -743,6 +783,15 @@ counter.<span class="fn">fetch_add</span>(<span class="n">1</span>, <span class=
           <div class="ph">追问 codex,或 @ 引用另一处代码…</div>
           <div class="bar"><span class="chip">@file</span><span class="chip">↳ 引用选区</span><button class="send">发送 ↵</button></div>
         </div>
+        <div class="file-menu" id="fileMenu">
+          <div class="fm-h">引用文件</div>
+          <div class="fm-item" data-f="src/transcode/pipeline.rs"><span class="fm-dir">src/transcode/</span>pipeline.rs</div>
+          <div class="fm-item" data-f="src/transcode/segment.rs"><span class="fm-dir">src/transcode/</span>segment.rs</div>
+          <div class="fm-item" data-f="src/transcode/mod.rs"><span class="fm-dir">src/transcode/</span>mod.rs</div>
+          <div class="fm-item" data-f="src/api/handler.rs"><span class="fm-dir">src/api/</span>handler.rs</div>
+          <div class="fm-item" data-f="src/api/routes.rs"><span class="fm-dir">src/api/</span>routes.rs</div>
+          <div class="fm-item" data-f="tests/transcode_test.rs"><span class="fm-dir">tests/</span>transcode_test.rs</div>
+        </div>
         <div class="scope">◆ 全局会话 · 已锚定 <b>pipeline.rs:121</b> · read-only sandbox</div>
       </div>
 
@@ -863,6 +912,13 @@ counter.<span class="fn">fetch_add</span>(<span class="n">1</span>, <span class=
   </div>
 </div>
 
+<!-- 框选代码后浮出的操作条 -->
+<div class="sel-pop" id="selPop">
+  <span class="sp-range" id="spRange">pipeline.rs:120–124</span>
+  <button class="sp-disc">⬆ 发起 discussion</button>
+  <button class="sp-ask">◆ 追问 codex</button>
+</div>
+
 <script>
 const root=document.documentElement;
 document.querySelectorAll('#themeSeg button').forEach(b=>b.onclick=()=>{
@@ -980,6 +1036,113 @@ document.addEventListener('keydown',e=>{
   ta.addEventListener('keydown',e=>{
     if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();save();}
     else if(e.key==='Escape'){e.preventDefault();close();}
+  });
+})();
+
+// ---- 框选代码 → discussion popover · composer 引用选区 / @file ----
+(()=>{
+  const diffPane=document.querySelector('.pane.diff');
+  const pop=document.getElementById('selPop');
+  const rangeEl=document.getElementById('spRange');
+  let cur=null;
+  const FILE='pipeline.rs';
+  const activateTab=name=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));convo.setAttribute('data-tab',name);};
+  const rowOf=n=>{if(!n)return null;const el=n.nodeType===3?n.parentElement:n;return el&&el.closest?el.closest('.row'):null;};
+  const lnOf=r=>r?(r.querySelector('.ln')||{}).textContent?.trim()||'':'';
+  const rowsBetween=(a,b)=>{
+    if(!a||!b)return [a||b].filter(Boolean);
+    const tb=a.closest('tbody');
+    if(!tb||b.closest('tbody')!==tb)return [a,b];
+    const all=[...tb.querySelectorAll('.row')];
+    let i=all.indexOf(a),j=all.indexOf(b); if(i>j){const t=i;i=j;j=t;}
+    return all.slice(i,j+1);
+  };
+  const rangeLabel=rows=>{const l1=lnOf(rows[0]),l2=lnOf(rows[rows.length-1]);return FILE+':'+(l1===l2?l1:l1+'–'+l2);};
+  const hide=()=>{pop.classList.remove('show');cur=null;};
+
+  diffPane.addEventListener('mouseup',()=>setTimeout(()=>{
+    const sel=window.getSelection();
+    if(!sel||sel.isCollapsed||!sel.toString().trim()){hide();return;}
+    const a=rowOf(sel.anchorNode),b=rowOf(sel.focusNode);
+    if(!a||!diffPane.contains(a)){hide();return;}
+    const rows=rowsBetween(a,b),label=rangeLabel(rows);
+    cur={rows,hunk:a.closest('.hunk'),label,ref:rows[rows.length-1]};
+    rangeEl.textContent=label;
+    pop.classList.add('show');
+    const r=sel.getRangeAt(0).getBoundingClientRect(),pw=pop.offsetWidth,ph=pop.offsetHeight;
+    let left=r.left+r.width/2,top=r.top-ph-9;
+    left=Math.max(pw/2+6,Math.min(window.innerWidth-pw/2-6,left));
+    if(top<54)top=r.bottom+9;
+    pop.style.left=left+'px';pop.style.top=top+'px';
+  },0));
+  document.addEventListener('mousedown',e=>{if(!pop.contains(e.target))hide();});
+  window.addEventListener('scroll',hide,true);
+
+  function startDiscussion(){
+    if(!cur)return;
+    const {rows,hunk,label,ref}=cur;
+    rows.forEach(r=>r.classList.add('sel'));
+    const snip=(ref.querySelector('.src').textContent||'').trim().slice(0,58);
+    const inline=document.createElement('div');
+    inline.className='inline';
+    inline.innerHTML='<div class="card human new-disc stagger">'
+      +'<div class="nd-head"><span class="av human">你</span> 新建 discussion <span class="tool-tag">框选 '+label+'</span></div>'
+      +'<div class="nd-ref"><span class="lnref">'+label+'</span> · '+esc(snip)+'</div>'
+      +'<div class="nd-body"><textarea class="fe-textarea" placeholder="描述你的疑问,codex 会在此讨论里回应…"></textarea></div>'
+      +'<div class="nd-foot"><button class="send">发送 ↵</button><button class="cancel">取消</button><span class="fe-note">发送后成为一条你发起的 discussion</span></div>'
+      +'</div>';
+    hunk.appendChild(inline);
+    const ta=inline.querySelector('textarea');ta.focus();
+    const clearSel=()=>rows.forEach(r=>r.classList.remove('sel'));
+    inline.querySelector('.cancel').onclick=()=>{inline.remove();clearSel();};
+    const send=()=>{
+      const val=ta.value.trim()||'(空)';
+      inline.innerHTML='<div class="card human stagger">'
+        +'<div class="c-head"><span class="who"><span class="av human">你</span> 你的 discussion</span><span class="tool-tag">框选 '+label+'</span></div>'
+        +'<div class="c-body">'+esc(val)+'</div>'
+        +'<div class="c-actions"><button class="btn promote">⬆ 转为 finding</button><button class="btn">↳ 继续对话</button><span class="reply-hint">转为 finding 后即可随 review 提交给 author</span></div>'
+        +'</div>';
+    };
+    inline.querySelector('.send').onclick=send;
+    ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+    hide();
+  }
+  pop.querySelector('.sp-disc').onclick=startDiscussion;
+
+  function attachRef(label){
+    activateTab('discussion');
+    const box=document.querySelector('.composer .box');
+    let chip=box.querySelector('.refchip');
+    if(!chip){chip=document.createElement('div');chip.className='refchip';box.insertBefore(chip,box.firstChild);}
+    chip.innerHTML='↳ <span class="lnref">'+label+'</span> <span class="x" title="移除引用">✕</span>';
+    chip.querySelector('.x').onclick=()=>chip.remove();
+  }
+  pop.querySelector('.sp-ask').onclick=()=>{if(cur)attachRef(cur.label);hide();};
+
+  const chips=[...document.querySelectorAll('.composer .chip')];
+  const quoteChip=chips.find(c=>c.textContent.includes('引用选区'));
+  quoteChip&&(quoteChip.onclick=()=>{
+    const sel=window.getSelection(),a=rowOf(sel&&sel.anchorNode),b=rowOf(sel&&sel.focusNode);
+    attachRef(a&&sel.toString().trim()?rangeLabel(rowsBetween(a,b)):FILE+':121');
+  });
+
+  const fileChip=chips.find(c=>c.textContent.includes('@file'));
+  const menu=document.getElementById('fileMenu');
+  fileChip&&menu&&(fileChip.onclick=e=>{e.stopPropagation();menu.classList.toggle('show');});
+  menu&&menu.querySelectorAll('.fm-item').forEach(it=>it.onclick=()=>{
+    const ph=document.querySelector('.composer .box .ph');
+    ph.textContent='@'+it.dataset.f+' ';ph.style.color='var(--text)';
+    menu.classList.remove('show');
+  });
+  document.addEventListener('click',e=>{if(menu&&fileChip&&!menu.contains(e.target)&&!fileChip.contains(e.target))menu.classList.remove('show');});
+
+  // 每行 ＋ 复用同一条内联 discussion 流程(单行)
+  document.querySelectorAll('.add-thread').forEach(btn=>btn.onclick=e=>{
+    e.stopPropagation();
+    const row=btn.closest('.row');if(!row)return;
+    window.getSelection().removeAllRanges();
+    cur={rows:[row],hunk:row.closest('.hunk'),label:FILE+':'+lnOf(row),ref:row};
+    startDiscussion();
   });
 })();
 </script>
