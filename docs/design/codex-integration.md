@@ -14,7 +14,7 @@ Duetlens 的审核 agent 完全建立在 codex-cli 的 `app-server` 之上。本
 | Duetlens 暴露 MCP,codex 调 `report_finding` 回传 | 最小 MCP server per-thread 注入 → codex 实际以正确参数调用,事件流 `item/mcpToolCall` 与 server 端 `tools/call` **双向观测** | ✅ "不再 watch 文件"坐实 |
 | 只读 sandbox 锁定 | `sandbox_mode:"read-only"` 生效(枚举 `read-only`/`workspace-write`/`danger-full-access`) | ✅ |
 | `ConversationalAgent` 抽象可落地 | 协议 schema 机器导出,方法逐条对上 start/send/stream/interrupt/approve | ✅ |
-| token 膨胀有治理原语 | 协议内置 `thread/compact/start` + `thread/tokenUsage/updated` | ✅ |
+| token 膨胀有治理原语 | codex 内置 auto-compact(按模型 `effective_context_window_percent` 默认开启、可 turn 内触发)+ `thread/tokenUsage/updated`;我们侧只观测,不主动 `thread/compact/start` | ✅ |
 
 ## 协议获取
 
@@ -59,7 +59,8 @@ codex 通过 **server→client 反向请求** 要求授权,client 必须应答,�
 - **`thread/start` 的 `sandbox` 是顶层参数**(值 `read-only` 等),不在 `config` 里;`config` 仍是透传 config.toml 的 map,MCP 注入形如 `config.mcp_servers.duetlens = { url }`(HTTP streamable;`codex mcp add --url` 写出的 TOML 即 `[mcp_servers.NAME] url=...`)。
 - **无 `item/mcpToolCall` 这个方法名**。MCP 工具调用经 **`item/started` + `item/completed`** 通知观测,其 `item.type === "mcpToolCall"` 时带 `server`/`tool`/`status`/`arguments`;另有 `item/mcpToolCall/progress`。
 - **elicitation 应答**:`{ action:"accept"|"decline"|"cancel", content:null, _meta:null }`;实测 `approvalPolicy:"never"` + `read-only` 下每次工具调用前仍发,自动 accept 必需(坐实架构决策)。
-- **exec/applyPatch 审批**应答 `{ decision: ReviewDecision }`(review-only 一律 `denied`;只读 sandbox 未触发)。
+- **exec/applyPatch 审批**应答 `{ decision: ReviewDecision }`(review-only 一律 `denied`;只读 sandbox 未触发)。反向审批(elicitation + exec/applyPatch/fileChange/permissions)现统一归一成 `approval` 领域事件:受信 accept 标 `expected=true`,其余 denied 且 `expected=false` 上浮。
+- **上下文压缩靠 codex auto-compact**(默认开启、turn 内触发);完成经 `contextCompaction` item(`item/started`+`item/completed`)观测,归一成 `compaction` 领域事件。**不主动 `thread/compact/start`**——手动只能插在 turn 间,覆盖不到单 turn 撑爆的场景。压缩只摘要 codex 内部历史,不碰我们 DB 里的锚点/finding。
 - codex 对同一 MCP server **多次 initialize**(startup starting/ready 各数次)→ HTTP transport + 每会话独立 Server 是对的。
 - Duetlens 只手写最小协议子集 `src/backend/agent/codex/protocol.ts`,`npm run codex:gen-types` 全量重导比对。
 

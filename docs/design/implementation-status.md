@@ -53,6 +53,6 @@
 2. ✅ `thread/resume` 续接(会话不在内存时按 codexThreadId 重建 source + 恢复 codex thread;sendMessage 自动续接,另有显式 `review:resume`)—— demo review 因临时 workdir 重启即失效,续接面向真实 source
 3. ✅ IPC `review:start` 真实命令通道(EntryScreen 真实发起表单:source 选择 / ref / 仓库目录选择器 / 基线;演示入口降级为次要链接)—— startReview 核心路径由 spike:source 覆盖
 4. ✅ GitButler source(`but diff <branch> --format json` 重建 unified;文件读 worktree 磁盘;EntryScreen 选项已启用)
-5. 生命周期健壮性:✅ MCP bearer 令牌隔离(codex 经 `bearer_token_env_var` 携带,无/错令牌 401)· ✅ `get_file` 路径穿越防护 · ✅ dispose 对齐(`disposeReview`/`review:release` + LRU 会话上限逐出闲置子进程);⏳ 审批面收敛 · ⏳ 长会话 compaction 触发(`thread/compact/start`)
+5. 生命周期健壮性:✅ MCP bearer 令牌隔离(codex 经 `bearer_token_env_var` 携带,无/错令牌 401)· ✅ `get_file` 路径穿越防护 · ✅ dispose 对齐(`disposeReview`/`review:release` + LRU 会话上限逐出闲置子进程)· ✅ 审批面收敛(反向审批归一成 `approval` 领域事件:受信 elicitation 自动 accept 为 expected,`execCommandApproval`/`applyPatchApproval` 等一律 denied 且上报)· ✅ 长会话 compaction 观测(依赖 codex 内置 auto-compact——按模型 `effective_context_window_percent` 默认开启、可 turn 内触发,优于我们只能插在 turn 间的手动 `thread/compact/start`;经 `contextCompaction` item 归一成 `compaction` 领域事件,压缩只摘要 codex 历史,不碰 DB 锚点/finding)
 6. 多层级提示词(project→global→builtin 注入 baseInstructions)
 7. 前端:diff-review 三栏真实屏(抽 InlineCard / SelectionPopover / Composer),删 DevBridgeProbe 骨架件

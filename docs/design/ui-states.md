@@ -124,12 +124,12 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> Normal
     Normal --> NearLimit : ⚙ ctx 用量接近上限 (gauge 变琥珀 + 预警)
-    NearLimit --> Compacting : ⚙ 追问触发自动压缩
+    NearLimit --> Compacting : ⚙ codex auto-compact (turn 内触发)
     Compacting --> Normal : ⚙ 压缩完成 (代码锚点保留, 早期讨论摘要化)
     Normal --> Normal : ⚙ ctx 回落
 ```
 
-压缩不弹窗、不打断阅读;压缩后 discussion 引用的代码锚点保持有效(未决技术点见 [open-questions](open-questions.md)「上下文 / token 膨胀」)。
+压缩由 codex 内置 auto-compact 触发(默认开启,可在一个 turn 内发生);前端只观测 `compaction` 事件与 ctx 用量,不主动触发。压缩不弹窗、不打断阅读;压缩只摘要 codex 内部历史,discussion 引用的代码锚点存于自有 DB、天然保持有效(见 [open-questions](open-questions.md)「上下文 / token 膨胀」)。
 
 ## 右栏 tab
 
