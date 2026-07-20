@@ -14,12 +14,7 @@ import {
 } from '@shared/domain';
 import type { AgentEvent, ConversationalAgent } from '../agent/ConversationalAgent';
 import type { ReviewStore } from '../db/ReviewStore';
-
-/** 首轮机审的默认提示词(review-only,自建 MCP 扫描;多层级提示词后续经此注入)。 */
-export const DEFAULT_SCAN_INSTRUCTIONS = `你是 Duetlens 的代码审核 agent。审核本次改动,把发现的每个问题通过 duetlens MCP 的 report_finding 上报。
-- 先调用 get_diff 查看改动,需要上下文时用 get_file 读取。
-- 每个问题调用一次 report_finding,锚定 file 与新侧 line,给出 severity(high/medium/low)、category、title、body。
-- 只审核、不修改代码。审完给一句话总结。`;
+import { BUILTIN_BASE_INSTRUCTIONS } from '../prompt/reviewPrompt';
 
 export interface StartReviewOptions {
   cwd: string;
@@ -61,7 +56,7 @@ export class ReviewSession extends EventEmitter {
       cwd: opts.cwd,
       mcpUrl,
       mcpToken: this.mcp!.token,
-      baseInstructions: opts.baseInstructions ?? DEFAULT_SCAN_INSTRUCTIONS,
+      baseInstructions: opts.baseInstructions ?? BUILTIN_BASE_INSTRUCTIONS,
     });
     this.conversationId = handle.conversationId;
     this.store.setCodexThreadId(this.reviewId, handle.conversationId);
@@ -93,7 +88,7 @@ export class ReviewSession extends EventEmitter {
       cwd: opts.cwd,
       mcpUrl,
       mcpToken: this.mcp!.token,
-      baseInstructions: opts.baseInstructions ?? DEFAULT_SCAN_INSTRUCTIONS,
+      baseInstructions: opts.baseInstructions ?? BUILTIN_BASE_INSTRUCTIONS,
     });
     this.conversationId = handle.conversationId;
     return this.store.listFindings(this.reviewId);

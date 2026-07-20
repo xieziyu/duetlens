@@ -7,6 +7,7 @@ import type { ReviewEvent } from '@shared/ipc';
 import type { McpContentProviders } from '../mcp/DuetlensMcpServer';
 import type { ReviewStore } from '../db/ReviewStore';
 import { CodexAgent } from '../agent/codex/CodexAgent';
+import { loadReviewPrompt } from '../prompt/reviewPrompt';
 import { createSource } from '../source/createSource';
 import type { ReviewTarget } from '../source/Source';
 import { ReviewSession } from './ReviewSession';
@@ -119,10 +120,11 @@ export class ReviewManager extends EventEmitter {
       repoPath: target.repoPath || null,
       title: prepared.title,
     });
+    const { baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd });
     this.launch(review, prepared.cwd, {
       getDiff: () => source.getDiff(),
       getFile: (p) => source.getFile(p),
-    }, () => source.dispose());
+    }, () => source.dispose(), baseInstructions);
     return review;
   }
 
@@ -138,7 +140,8 @@ export class ReviewManager extends EventEmitter {
       repoPath: workdir,
       title: 'Demo · login.js 审核',
     });
-    this.launch(review, workdir, { getDiff: () => DEMO_DIFF, getFile: () => DEMO_SRC });
+    const { baseInstructions } = await loadReviewPrompt({ cwd: workdir });
+    this.launch(review, workdir, { getDiff: () => DEMO_DIFF, getFile: () => DEMO_SRC }, undefined, baseInstructions);
     return review;
   }
 
@@ -148,11 +151,12 @@ export class ReviewManager extends EventEmitter {
     cwd: string,
     providers: McpContentProviders,
     onDone?: () => void | Promise<void>,
+    baseInstructions?: string,
   ): void {
     const session = this.createSession(review.id, onDone);
     // 不 await:扫描后台跑,调用方(IPC)立即返回。source 清理延到 dispose,续问仍能读文件。
     session
-      .start({ cwd, providers })
+      .start({ cwd, providers, baseInstructions })
       .catch(() => this.forward({ reviewId: review.id, type: 'status', payload: 'failed' }));
   }
 
@@ -168,11 +172,13 @@ export class ReviewManager extends EventEmitter {
       repoPath: review.repoPath ?? '',
     });
     const prepared = await source.prepare();
+    const { baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd });
     const session = this.createSession(reviewId, () => source.dispose());
     try {
       await session.resume({
         cwd: prepared.cwd,
         providers: { getDiff: () => source.getDiff(), getFile: (p) => source.getFile(p) },
+        baseInstructions,
       });
     } catch (e) {
       this.sessions.delete(reviewId);

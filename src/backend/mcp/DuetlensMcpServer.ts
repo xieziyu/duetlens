@@ -10,6 +10,9 @@ import {
   isInitializeRequest,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
+import { FINDING_CATEGORIES } from '@shared/domain';
+
+const CATEGORY_HINT = `建议取值:${FINDING_CATEGORIES.join(' / ')}`;
 
 /** report_finding 上报的一条 finding(对齐 docs/design/data-model.md 可编辑字段)。 */
 export interface ReportedFinding {
@@ -49,7 +52,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         severity: { type: 'string', enum: ['high', 'medium', 'low'] },
-        category: { type: 'string', description: '如 correctness / security / perf' },
+        category: { type: 'string', description: CATEGORY_HINT },
         title: { type: 'string' },
         body: { type: 'string', description: '问题说明与影响' },
         file: { type: 'string', description: '相对仓库根的路径' },
@@ -68,7 +71,7 @@ const TOOLS = [
       properties: {
         finding_id: { type: 'string', description: 'report_finding 返回的 id' },
         severity: { type: 'string', enum: ['high', 'medium', 'low'] },
-        category: { type: 'string' },
+        category: { type: 'string', description: CATEGORY_HINT },
         title: { type: 'string' },
         body: { type: 'string' },
         suggestion: { type: 'string' },

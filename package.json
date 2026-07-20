@@ -20,6 +20,7 @@
     "spike:gitbutler": "tsx scripts/spike-gitbutler.ts",
     "spike:source": "tsx scripts/spike-source.ts",
     "spike:mcp": "tsx scripts/spike-mcp.ts",
+    "spike:prompt": "tsx scripts/spike-prompt.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
   },
   "keywords": [],

@@ -12,6 +12,23 @@ export type SourceKind = (typeof SOURCE_KINDS)[number];
 export const SEVERITIES = ['high', 'medium', 'low'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
+/**
+ * finding 分类的软规范标签集(源自 better-review 1.0 builtin-rules)。
+ * category 仍以自由字符串存储/校验,此集仅作填写建议与筛选归类,便于按类分组。
+ */
+export const FINDING_CATEGORIES = [
+  'Scope',
+  'Correctness',
+  'Type Safety',
+  'Security',
+  'Architecture',
+  'Performance',
+  'Naming',
+  'Complexity',
+  'Error Handling',
+] as const;
+export type FindingCategory = (typeof FINDING_CATEGORIES)[number];
+
 /** finding 从何而来:agent 上报 / 用户手动 / 由 user-discussion 提升 */
 export const FINDING_ORIGINS = ['agent', 'manual', 'promoted'] as const;
 export type FindingOrigin = (typeof FINDING_ORIGINS)[number];
