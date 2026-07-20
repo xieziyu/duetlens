@@ -127,6 +127,13 @@ export const CodexNotification = {
   mcpServerStartupStatus: 'mcpServer/startupStatus/updated',
 } as const;
 
+/** item/started · item/completed 携带的 ThreadItem 的 type 判别(只列用到的支)。 */
+export const CodexItemType = {
+  mcpToolCall: 'mcpToolCall',
+  /** auto-compact 完成/开始经此 item 观测(deprecated `thread/compacted` 通知不再用)。 */
+  contextCompaction: 'contextCompaction',
+} as const;
+
 /**
  * item/started · item/completed 携带的 ThreadItem 里,MCP 工具调用这一支的形状。
  * codex 0.144.1 无独立 item/mcpToolCall 方法,工具调用经 item 生命周期通知观测。

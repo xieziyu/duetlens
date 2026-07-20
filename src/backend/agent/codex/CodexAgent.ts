@@ -1,6 +1,12 @@
 import { EventEmitter } from 'node:events';
 import { CodexAppServer } from './CodexAppServer';
-import { CodexNotification, type McpToolCallItem } from './protocol';
+import {
+  CodexItemType,
+  CodexNotification,
+  type McpServerElicitationAction,
+  type McpServerElicitationRequestParams,
+  type McpToolCallItem,
+} from './protocol';
 import type {
   AgentEvent,
   ConversationHandle,
@@ -35,6 +41,22 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
     });
     this.server.on('notification', (m, p) => this.mapNotification(m, p));
     this.server.on('error', (e: Error) => this.emitEvent({ kind: 'error', error: e.message }));
+    // 反向审批统一观测面:受信 elicitation 自动 accept(expected),其余一律拒绝并上报。
+    this.server.on('elicitation', (p: McpServerElicitationRequestParams, action: McpServerElicitationAction) => {
+      const accepted = action === 'accept';
+      this.emitEvent({
+        kind: 'approval',
+        method: 'mcpServer/elicitation/request',
+        decision: accepted ? 'accepted' : 'declined',
+        expected: accepted,
+        server: p.serverName,
+        message: p.message,
+      });
+    });
+    this.server.on('unexpected-approval', (method: string, params: unknown) => {
+      const server = (params as { serverName?: string } | undefined)?.serverName;
+      this.emitEvent({ kind: 'approval', method, decision: 'denied', expected: false, server });
+    });
   }
 
   async startConversation(opts: StartConversationOptions): Promise<ConversationHandle> {
@@ -115,14 +137,20 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
         break;
       case CodexNotification.itemStarted:
       case CodexNotification.itemCompleted: {
-        const item = p.item as McpToolCallItem | undefined;
-        if (item?.type === 'mcpToolCall') {
+        const item = p.item as { type?: string } | undefined;
+        if (item?.type === CodexItemType.mcpToolCall) {
+          const call = item as McpToolCallItem;
           this.emitEvent({
             kind: 'tool-call',
-            server: item.server,
-            tool: item.tool,
-            status: item.status,
-            args: item.arguments,
+            server: call.server,
+            tool: call.tool,
+            status: call.status,
+            args: call.arguments,
+          });
+        } else if (item?.type === CodexItemType.contextCompaction) {
+          this.emitEvent({
+            kind: 'compaction',
+            phase: method === CodexNotification.itemStarted ? 'started' : 'completed',
           });
         }
         break;
