@@ -21,7 +21,7 @@
 | 领域模型 | `src/shared/domain.ts` | ✅ 类型 + zod ingress schema |
 | IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令(start/resume/send-message)/事件推送 + dialog 目录选择 + `review:diff` |
 | 结构化 diff | `src/shared/diff.ts`(parseUnifiedDiff)+ `review_diffs` 表(schema V2) | ✅ 后端预取落库、MCP 与 renderer 共用;add/del/modify/rename/binary |
-| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 三栏 + FileTree/DiffPane/InlineCard/Resizer + SelectionPopover/InlineComposer/DiscussionTab/Composer/SummaryTab + settings/SettingsProvider) | 🚧 三栏 shell + unified/split diff + 语法高亮(highlight.js)+ 拖拽栏宽 + 锚定内联 finding 卡 + off-diff + **finding 写路径(triage + 就地编辑)** + **per-file viewed/折叠** + **框选/行内 ＋ 发起 discussion + Discussion 栏对话** + **Summary tab(结论/统计/可编辑总结/关注主题筛选)** + **全局 UI 偏好持久化(主题/栏宽/tab/diff 视图)**已落;提交屏/per-review 状态持久化 待做 |
+| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 三栏 + FileTree/DiffPane/InlineCard/Resizer + SelectionPopover/InlineComposer/DiscussionTab/Composer/SummaryTab + settings/SettingsProvider) | 🚧 三栏 shell + unified/split diff + 语法高亮(highlight.js)+ 拖拽栏宽 + 锚定内联 finding 卡 + off-diff + **finding 写路径(triage + 就地编辑)** + **per-file viewed/折叠** + **框选/行内 ＋ 发起 discussion + Discussion 栏对话** + **Summary tab(结论/统计/可编辑总结/关注主题筛选)** + **全局 UI 偏好持久化(主题/栏宽/tab/diff 视图)** + **per-review 进度持久化(viewed → `review_ui_state`)**已落;提交屏 待做 |
 
 ## 端到端验证(headless spike)
 
@@ -40,6 +40,7 @@
 | `prompt` | 审核规则提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ 空节忽略 + 两层读盘 + baseInstructions 组装;不烧 token |
 | `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store setDiff/getRawDiff 回环;不烧 token |
 | `write` | finding 写路径:ReviewManager.setTriage/updateFinding 落库 + 外发 `finding` 事件(dismiss→keep 往返、编辑不重置 triage、suggestion 清空、未知 id 抛错);不烧 token |
+| `ui-state` | per-review UI 进度态:ReviewStore.get/saveReviewUiState 往返 + 默认空态 + upsert 单行 + 损坏 JSON 降级 + 级联删除;不烧 token |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` 在 Electron ABI 下加载、六表迁移到位、IPC 注册无崩溃。
 
@@ -73,6 +74,7 @@
    - ✅ 框选发起 discussion + Discussion 栏协同对话(已合入 main):DiffPane 框选选区解析新侧锚点 → SelectionPopover(`发起 discussion` / `追问 codex`);行内 hover ＋(每新侧行)→ InlineComposer 就地新建;发送即 `addDiscussion` + `sendMessage`,消息经事件流回推。右栏 Discussion tab = 线程切换器 + 活跃线程(anchor-ref + finding 根气泡 + user/agent 气泡 + agent 打字指示 + 自动滚底)+ Composer(引用 chip + 发送);点 finding 亦选中其讨论线程。useReviewStream 加 `ensureMessages` 懒加载续接旧 review 的历史消息。preview fixtures stub `addDiscussion`/`sendMessage`(延迟回推 agent 回复),双主题实测:框选 popover/行内 composer/线程/追问引用/发送闭环全通。**追问烧 token 的真实回路由 spike:discussion 覆盖。**
    - ✅ Summary tab(已合入 main):结论卡(按未剔除 findings 最高严重度推导 review event:high→Request changes / 有→Comment / 无→Approve,标「仅建议·提交时确认」)+ 统计条(high/med/low + 保留/已提交/讨论)+ **可编辑总结正文**(轻量 markdown 视图 `**粗**`/`` `代码` ``/空行分段 ↔ textarea,⌘↵ 保存·Esc 取消,经 `review:update-summary` 落库、`review` 事件回推)+ 关注主题(按 category 聚合,点击→切 Findings tab 并按分类筛选,Findings 顶部出「筛选·X ✕」可清)+ 覆盖度行 + 提交 CTA(禁用,提交屏后续)。后端补 `ReviewManager.updateSummary`(store.setReviewSummary 已存在)+ `review` ReviewEvent 变体 + useReviewStream setReview。preview fixtures stub updateSummary。双主题实测:verdict/stats/markdown 编辑保存/分类筛选全通。
    - ✅ 全局 UI 偏好持久化(已合入 main):`SettingsProvider`(`src/renderer/settings/`)启动拉 `ui.getSettings`、改动去抖(400ms)写回 `ui.saveSettings`、主题两轴挂 documentElement,取代原来只存组件 state 的 ThemeProvider(已删)。App 主题控件 + ReviewScreen 的栏宽/默认 tab/默认 diff 视图全部改由 settings 驱动、拖拽/切换即写回。**后端 `ui_settings` 表 + IPC 早已就绪,本切片纯前端接线。** per-file viewed/collapsed 仍为 per-review 本地态(`review_ui_state` 持久化留后续)。preview fixtures 用非默认栏宽(300/420)+ 可变 saveSettings 存储,实测:启动即应用 300/420、明暗切换与 split 切换经去抖落库回读一致。
-   - ⏳ gutter 锚点圆点(有讨论的行)· 扫描 timeline · 键盘快捷键 · 顶栏合并 · promote(discussion→finding)/ 手动新增 finding · per-review UI 态持久化(viewed/collapsed → `review_ui_state`)· 提交屏
+   - ✅ per-review UI 态持久化(viewed → `review_ui_state`):`review:get-ui-state`/`review:save-ui-state` IPC(ReviewManager.get/saveReviewUiState → ReviewStore JSON 列)+ `useReviewUiState` hook(挂载按 reviewId 拉取、viewed 改动去抖 400ms 写回、恢复时把已看文件默认折叠)。collapsed 是「标记已看即折叠」派生的临时态、不持久化。preview fixtures 预置一个已看文件证明启动即恢复(非空态);`npm run spike:ui-state` 确定性 PASS。**last_active_tab 列暂留空(tab 现为全局 `ui_settings` 偏好)**
+   - ⏳ gutter 锚点圆点(有讨论的行)· 扫描 timeline · 键盘快捷键 · 顶栏合并 · promote(discussion→finding)/ 手动新增 finding · 提交屏
    - ⏳ 顶栏合并(App 全局栏 + rev-topbar 现为两条,mockup 是单条含 submit CTA/模型/⌘)· 主题+栏宽持久化(settings IPC)
    - ⏳ 审核规则三层编辑器(`mockup/prompt-rules.html`)+ 读写 IPC(读走 `review-prompt.ts`,写落 `.duetlens/review.md`)
