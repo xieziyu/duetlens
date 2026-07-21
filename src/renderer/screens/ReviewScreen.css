@@ -593,6 +593,38 @@
   text-align: center;
   color: var(--text-faint);
   user-select: none;
+  position: relative;
+}
+/* gutter 锚点圆点:有 finding / 讨论的行(agent 天蓝 · human 琥珀),点击跳转 */
+.anchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  cursor: pointer;
+}
+.anchor:hover {
+  transform: translate(-50%, -50%) scale(1.25);
+}
+.anchor.agent {
+  background: var(--agent);
+}
+.anchor.human {
+  background: var(--human);
+}
+/* split 视图无 gutter 列,圆点落在新侧行号格 */
+.code.split .ln.new {
+  position: relative;
+}
+.code.split .ln.new.has-anchor {
+  padding-left: 14px;
+}
+.code.split .ln.new .anchor {
+  left: 8px;
 }
 .src {
   padding: 0 14px 0 12px;

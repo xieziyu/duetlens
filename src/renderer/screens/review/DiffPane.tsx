@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFile, DiffHunk, DiffLine } from '@shared/diff';
-import type { Finding, Triage } from '@shared/domain';
+import type { Discussion, Finding, Triage } from '@shared/domain';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { InlineCard } from './InlineCard';
 import { InlineComposer } from './InlineComposer';
@@ -33,9 +33,33 @@ interface AnchorPick {
   snippet: string;
 }
 
+/** 某新侧行上的锚点标记(gutter 圆点):agent(codex finding)/ human(用户讨论·手动 finding)。 */
+interface AnchorMark {
+  tone: 'agent' | 'human';
+  finding?: Finding;
+  discussionId?: string;
+}
+
+/** gutter 圆点:标记该行有 finding / 讨论,点击跳到对应卡片或 Discussion 线程。 */
+function AnchorDot({ mark, onClick }: { mark: AnchorMark; onClick: (m: AnchorMark) => void }) {
+  return (
+    <span
+      className={`anchor ${mark.tone}`}
+      title={mark.finding ? '跳到该 finding' : '跳到该 discussion'}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(mark);
+      }}
+    />
+  );
+}
+
 export interface DiffPaneProps {
   files: DiffFile[];
   findings: Finding[];
+  /** 讨论(含 user 线程);用于在 gutter 给有讨论/finding 的行打锚点圆点 */
+  discussions?: Discussion[];
   /** 左栏选中的文件路径;变化时滚动到对应 file-header */
   activePath: string | null;
   /** 右栏点选的 finding;变化时滚动到内联卡并高亮 */
@@ -49,6 +73,9 @@ export interface DiffPaneProps {
   onAskCodex?: (anchor: DiscussionAnchor, label: string) => void;
   /** 框选「记为 finding」:在锚点处填写后新增一条 manual finding */
   onAddFinding?: (anchor: DiscussionAnchor, draft: NewFindingDraft) => void;
+  /** 点 gutter 圆点跳转:finding → 聚焦内联卡;user discussion → 切 Discussion 栏 */
+  onJumpFinding?: (finding: Finding) => void;
+  onJumpDiscussion?: (discussionId: string) => void;
   /** unified / split 视图(全局,file-header segmented 驱动) */
   view: DiffView;
   onViewChange: (v: DiffView) => void;
@@ -65,7 +92,18 @@ export interface DiffPaneProps {
  * 发起后交由 ReviewScreen 落库并在 Discussion 栏承载对话。
  */
 export function DiffPane(props: DiffPaneProps) {
-  const { files, findings, activePath, focusFindingId, onStartDiscussion, onAskCodex, onAddFinding } = props;
+  const {
+    files,
+    findings,
+    discussions,
+    activePath,
+    focusFindingId,
+    onStartDiscussion,
+    onAskCodex,
+    onAddFinding,
+    onJumpFinding,
+    onJumpDiscussion,
+  } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [sel, setSel] = useState<{ pick: AnchorPick; top: number; left: number; cx: number } | null>(null);
   const [composeAt, setComposeAt] = useState<Compose | null>(null);
@@ -80,6 +118,26 @@ export function DiffPane(props: DiffPaneProps) {
     }
     return m;
   }, [findings]);
+
+  // 按文件聚合 user discussions(有锚点、非 finding),用于 gutter 打点
+  const discByFile = useMemo(() => {
+    const m = new Map<string, Discussion[]>();
+    for (const d of discussions ?? []) {
+      if (d.kind !== 'user' || !d.file) continue;
+      const arr = m.get(d.file) ?? [];
+      arr.push(d);
+      m.set(d.file, arr);
+    }
+    return m;
+  }, [discussions]);
+
+  const onAnchorClick = useCallback(
+    (mark: AnchorMark) => {
+      if (mark.finding) onJumpFinding?.(mark.finding);
+      else if (mark.discussionId) onJumpDiscussion?.(mark.discussionId);
+    },
+    [onJumpFinding, onJumpDiscussion],
+  );
 
   useEffect(() => {
     if (!activePath || !ref.current) return;
@@ -177,6 +235,8 @@ export function DiffPane(props: DiffPaneProps) {
           key={f.path}
           file={f}
           findings={byFile.get(f.path) ?? []}
+          discussions={discByFile.get(f.path) ?? []}
+          onAnchorClick={onAnchorClick}
           focusFindingId={focusFindingId}
           onTriage={props.onTriage}
           onUpdate={props.onUpdate}
@@ -266,6 +326,8 @@ function snippetOf(tr: HTMLElement): string {
 function DiffFileView({
   file,
   findings,
+  discussions,
+  onAnchorClick,
   focusFindingId,
   onTriage,
   onUpdate,
@@ -283,6 +345,8 @@ function DiffFileView({
 }: {
   file: DiffFile;
   findings: Finding[];
+  discussions: Discussion[];
+  onAnchorClick: (mark: AnchorMark) => void;
   focusFindingId: string | null;
   onTriage?: (finding: Finding, triage: Triage) => void;
   onUpdate?: (input: FindingEditInput) => void;
@@ -304,6 +368,22 @@ function DiffFileView({
     for (const h of file.hunks) for (const l of h.lines) if (l.newLine != null) s.add(l.newLine);
     return s;
   }, [file]);
+
+  // 每个新侧行的锚点圆点:finding(agent 优先)> user discussion;off-diff 不打点
+  const anchorByLine = useMemo(() => {
+    const m = new Map<number, AnchorMark>();
+    for (const f of findings) {
+      if (!newLines.has(f.line)) continue;
+      const tone = f.origin === 'agent' ? 'agent' : 'human';
+      const prev = m.get(f.line);
+      if (!prev || (tone === 'agent' && prev.tone !== 'agent')) m.set(f.line, { tone, finding: f });
+    }
+    for (const d of discussions) {
+      if (d.line == null || !newLines.has(d.line) || m.has(d.line)) continue;
+      m.set(d.line, { tone: 'human', discussionId: d.id });
+    }
+    return m;
+  }, [findings, discussions, newLines]);
 
   const lang = useMemo(() => langOf(file.path), [file.path]);
   const offDiff = findings.filter((f) => !newLines.has(f.line));
@@ -409,6 +489,8 @@ function DiffFileView({
             hunk={h}
             lang={lang}
             byLine={byLine}
+            anchorByLine={anchorByLine}
+            onAnchorClick={onAnchorClick}
             focusFindingId={focusFindingId}
             view={view}
             onTriage={onTriage}
@@ -452,6 +534,8 @@ function HunkView({
   hunk,
   lang,
   byLine,
+  anchorByLine,
+  onAnchorClick,
   focusFindingId,
   view,
   onTriage,
@@ -463,6 +547,8 @@ function HunkView({
   hunk: DiffHunk;
   lang: string | null;
   byLine: Map<number, Finding[]>;
+  anchorByLine: Map<number, AnchorMark>;
+  onAnchorClick: (mark: AnchorMark) => void;
   focusFindingId: string | null;
   view: DiffView;
   onTriage?: (finding: Finding, triage: Triage) => void;
@@ -499,7 +585,14 @@ function HunkView({
               <table className="code split">
                 <tbody>
                   {seg.rows.map((r, j) => (
-                    <SplitRow key={j} row={r} lang={lang} onAddThread={onAddThread} />
+                    <SplitRow
+                      key={j}
+                      row={r}
+                      lang={lang}
+                      onAddThread={onAddThread}
+                      anchorByLine={anchorByLine}
+                      onAnchorClick={onAnchorClick}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -515,7 +608,14 @@ function HunkView({
               <table className="code unified">
                 <tbody>
                   {seg.rows.map((l, j) => (
-                    <LineRow key={j} line={l} lang={lang} onAddThread={onAddThread} />
+                    <LineRow
+                      key={j}
+                      line={l}
+                      lang={lang}
+                      onAddThread={onAddThread}
+                      anchorByLine={anchorByLine}
+                      onAnchorClick={onAnchorClick}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -577,13 +677,18 @@ function LineRow({
   line,
   lang,
   onAddThread,
+  anchorByLine,
+  onAnchorClick,
 }: {
   line: DiffLine;
   lang: string | null;
   onAddThread?: (line: number, snippet: string) => void;
+  anchorByLine: Map<number, AnchorMark>;
+  onAnchorClick: (mark: AnchorMark) => void;
 }) {
   const gutter = line.kind === 'add' ? '＋' : line.kind === 'del' ? '−' : '';
   const lineNo = line.kind === 'del' ? line.oldLine : line.newLine;
+  const mark = line.newLine != null ? anchorByLine.get(line.newLine) : undefined;
   const html = line.text === '' ? '&nbsp;' : highlightLine(line.text, lang);
   return (
     <tr
@@ -591,7 +696,9 @@ function LineRow({
       data-new-line={line.newLine ?? undefined}
     >
       <td className="ln">{lineNo}</td>
-      <td className="gutter">{gutter}</td>
+      <td className="gutter">
+        {mark ? <AnchorDot mark={mark} onClick={onAnchorClick} /> : gutter}
+      </td>
       <td className="src">
         <span dangerouslySetInnerHTML={{ __html: html }} />
         {line.newLine != null && <AddThread line={line.newLine} text={line.text} onAddThread={onAddThread} />}
@@ -605,11 +712,15 @@ function SplitCell({
   side,
   lang,
   onAddThread,
+  mark,
+  onAnchorClick,
 }: {
   line: DiffLine | null;
   side: 'old' | 'new';
   lang: string | null;
   onAddThread?: (line: number, snippet: string) => void;
+  mark?: AnchorMark;
+  onAnchorClick?: (mark: AnchorMark) => void;
 }) {
   const lnBase = side === 'new' ? 'ln new' : 'ln';
   const srcBase = side === 'new' ? 'src new' : 'src';
@@ -626,7 +737,10 @@ function SplitCell({
   const html = line.text === '' ? '&nbsp;' : highlightLine(line.text, lang);
   return (
     <>
-      <td className={lnBase + mod}>{lineNo}</td>
+      <td className={`${lnBase}${mod}${mark ? ' has-anchor' : ''}`}>
+        {mark && onAnchorClick && <AnchorDot mark={mark} onClick={onAnchorClick} />}
+        {lineNo}
+      </td>
       <td className={srcBase + mod}>
         <span dangerouslySetInnerHTML={{ __html: html }} />
         {side === 'new' && line.newLine != null && (
@@ -641,15 +755,27 @@ function SplitRow({
   row,
   lang,
   onAddThread,
+  anchorByLine,
+  onAnchorClick,
 }: {
   row: SplitPair;
   lang: string | null;
   onAddThread?: (line: number, snippet: string) => void;
+  anchorByLine: Map<number, AnchorMark>;
+  onAnchorClick: (mark: AnchorMark) => void;
 }) {
+  const mark = row.right?.newLine != null ? anchorByLine.get(row.right.newLine) : undefined;
   return (
     <tr className="row" data-new-line={row.right?.newLine ?? undefined}>
       <SplitCell line={row.left} side="old" lang={lang} />
-      <SplitCell line={row.right} side="new" lang={lang} onAddThread={onAddThread} />
+      <SplitCell
+        line={row.right}
+        side="new"
+        lang={lang}
+        onAddThread={onAddThread}
+        mark={mark}
+        onAnchorClick={onAnchorClick}
+      />
     </tr>
   );
 }

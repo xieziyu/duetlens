@@ -304,6 +304,7 @@ export function ReviewScreen({
         <DiffPane
           files={diff}
           findings={findings}
+          discussions={discussions}
           activePath={activePath}
           focusFindingId={focusFindingId}
           onTriage={onTriage}
@@ -311,6 +312,8 @@ export function ReviewScreen({
           onStartDiscussion={onStartDiscussion}
           onAskCodex={onAskCodex}
           onAddFinding={onAddFinding}
+          onJumpFinding={focusFinding}
+          onJumpDiscussion={focusDiscussion}
           view={diffView}
           onViewChange={setDiffView}
           viewed={viewed}
