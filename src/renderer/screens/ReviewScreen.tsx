@@ -9,6 +9,7 @@ import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
 import { SummaryTab } from './review/SummaryTab';
+import { ScanTimeline } from './review/ScanTimeline';
 import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
 import { Wordmark } from '../components/Wordmark';
@@ -331,6 +332,8 @@ export function ReviewScreen({
           review={review}
           diff={diff}
           scanning={status === 'scanning' || !status}
+          lastTool={lastTool}
+          tokenUsage={tokenUsage}
           onPickFinding={focusFinding}
           onTriage={onTriage}
           activeDiscussionId={activeDiscussionId}
@@ -364,6 +367,8 @@ function RightPanel({
   review,
   diff,
   scanning,
+  lastTool,
+  tokenUsage,
   onPickFinding,
   onTriage,
   activeDiscussionId,
@@ -388,6 +393,8 @@ function RightPanel({
   review: Review | null;
   diff: DiffFile[];
   scanning: boolean;
+  lastTool: string | null;
+  tokenUsage: { used: number; total?: number } | null;
   onPickFinding: (f: Finding) => void;
   onTriage: (finding: Finding, triage: Triage) => void;
   activeDiscussionId: string | null;
@@ -432,42 +439,50 @@ function RightPanel({
 
       {tab === 'findings' && (
         <div className="tab-body">
-          {scanning && (
-            <div className="scan-note">
-              <span className="pulse" /> codex 正在通读改动,findings 会实时出现…
-            </div>
-          )}
-          {categoryFilter && (
-            <div className="cat-filter">
-              筛选 · <b>{categoryFilter}</b>
-              <button className="cf-x" onClick={onClearCategory} title="清除筛选">
-                ✕
-              </button>
-            </div>
-          )}
-          {shown.length === 0 && !scanning && (
-            <p className="empty-note">{categoryFilter ? `无 ${categoryFilter} 分类的 findings。` : '暂无 findings。'}</p>
-          )}
-          {shown.length > 0 && (
-            <div className="fp-toolbar">
-              <span className="fp-tally">
-                保留 <b>{kept}</b> · 剔除 {dropped}
-              </span>
-            </div>
-          )}
-          {SEV_ORDER.map((sev) =>
-            grouped[sev].length === 0 ? null : (
-              <div key={sev} className="fgroup">
-                <div className="fg-head">
-                  <span className={`sev sev-${sev}`}>{SEV_LABEL[sev]}</span>
-                  <span className="fg-n">{grouped[sev].length}</span>
-                  <span className="fg-line" />
+          {scanning ? (
+            <ScanTimeline
+              findings={findings}
+              diffReady={diff.length > 0}
+              sessionReady={lastTool != null || tokenUsage != null || findings.length > 0}
+              onPickFinding={onPickFinding}
+            />
+          ) : (
+            <>
+              {categoryFilter && (
+                <div className="cat-filter">
+                  筛选 · <b>{categoryFilter}</b>
+                  <button className="cf-x" onClick={onClearCategory} title="清除筛选">
+                    ✕
+                  </button>
                 </div>
-                {grouped[sev].map((f) => (
-                  <FindingRow key={f.id} finding={f} onPick={onPickFinding} onTriage={onTriage} />
-                ))}
-              </div>
-            ),
+              )}
+              {shown.length === 0 && (
+                <p className="empty-note">
+                  {categoryFilter ? `无 ${categoryFilter} 分类的 findings。` : '暂无 findings。'}
+                </p>
+              )}
+              {shown.length > 0 && (
+                <div className="fp-toolbar">
+                  <span className="fp-tally">
+                    保留 <b>{kept}</b> · 剔除 {dropped}
+                  </span>
+                </div>
+              )}
+              {SEV_ORDER.map((sev) =>
+                grouped[sev].length === 0 ? null : (
+                  <div key={sev} className="fgroup">
+                    <div className="fg-head">
+                      <span className={`sev sev-${sev}`}>{SEV_LABEL[sev]}</span>
+                      <span className="fg-n">{grouped[sev].length}</span>
+                      <span className="fg-line" />
+                    </div>
+                    {grouped[sev].map((f) => (
+                      <FindingRow key={f.id} finding={f} onPick={onPickFinding} onTriage={onTriage} />
+                    ))}
+                  </div>
+                ),
+              )}
+            </>
           )}
         </div>
       )}

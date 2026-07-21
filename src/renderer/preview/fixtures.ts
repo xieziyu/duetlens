@@ -194,9 +194,13 @@ export function installPreviewApi(): void {
   const params = new URLSearchParams(window.location.search);
   const asGithub = (params.get('source') ?? '').startsWith('github');
   const forceSubmit = params.get('submit');
-  const review: Review = asGithub
-    ? { ...REVIEW, source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null }
-    : { ...REVIEW };
+  // ?scan 让 demo review 处于首轮机审态,用于自查扫描 timeline
+  const asScanning = params.has('scan');
+  const review: Review = {
+    ...REVIEW,
+    ...(asGithub ? { source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null } : {}),
+    ...(asScanning ? { status: 'scanning' as const } : {}),
+  };
   let uiSettings: UiSettings = { ...UI_SETTINGS };
   // 预置一个已看文件,证明启动即从后端恢复 per-review 进度(非组件默认空态)
   let reviewUiState: ReviewUiState = {
