@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:后端垂直打通 + 前端 diff-review 推进中 · 最后更新 2026-07-21(`origin/main` = c324dd9,`dev` 分支在推进右栏三 tab) —— backlog #1–#6 已合入 main;#7 前端三栏 diff-review shell + 语法高亮 + 拖拽栏宽 + **finding 写路径(triage + 就地编辑)** + **diff 视图交互(unified/split + per-file viewed/折叠)**已合入 main;**框选/行内 ＋ 发起 discussion + Discussion 栏协同对话 + Summary tab(结论/统计/可编辑总结/关注主题筛选)**在 `dev` 分支(右栏三 tab 全齐);另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查)(见下)
+> 状态:后端垂直打通 + 前端 diff-review 推进中 · 最后更新 2026-07-21(`origin/main` = c324dd9,`dev` 分支在推进右栏三 tab) —— backlog #1–#6 已合入 main;#7 前端三栏 diff-review shell + 语法高亮 + 拖拽栏宽 + **finding 写路径(triage + 就地编辑)** + **diff 视图交互(unified/split + per-file viewed/折叠)**已合入 main;**框选/行内 ＋ 发起 discussion + Discussion 栏协同对话 + Summary tab(结论/统计/可编辑总结/关注主题筛选)+ 全局 UI 偏好持久化(主题/栏宽/tab/diff 视图)**在 `dev` 分支(右栏三 tab 全齐);另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查)(见下)
 
 设计文档描述目标结构;本页记录**已落地到代码**的部分、验证方式与剩余 backlog。实现细节以代码为准,本页只做导航与状态。
 
@@ -72,6 +72,7 @@
    - ✅ diff 视图交互:unified/split 切换(file-header segmented,全局态;`toSplitRows` 把连续 del/add 两两配成并排双列,pure-add/pure-del 一侧留 blank,内联卡与 unified 共用 InlineCard、锚点一律新侧行号,split 亦逐行语法高亮)+ per-file viewed✓/折叠(file-header ✓=标记已看并折叠、⌄=仅折叠,折叠显 file-collapsed-bar;FileTree viewed tick + 划线灰显 + 树头「N 改动 · M 已看」进度)。**均为本地态,持久化统一留 ④**
    - ✅ 框选发起 discussion + Discussion 栏协同对话(`dev` 分支):DiffPane 框选选区解析新侧锚点 → SelectionPopover(`发起 discussion` / `追问 codex`);行内 hover ＋(每新侧行)→ InlineComposer 就地新建;发送即 `addDiscussion` + `sendMessage`,消息经事件流回推。右栏 Discussion tab = 线程切换器 + 活跃线程(anchor-ref + finding 根气泡 + user/agent 气泡 + agent 打字指示 + 自动滚底)+ Composer(引用 chip + 发送);点 finding 亦选中其讨论线程。useReviewStream 加 `ensureMessages` 懒加载续接旧 review 的历史消息。preview fixtures stub `addDiscussion`/`sendMessage`(延迟回推 agent 回复),双主题实测:框选 popover/行内 composer/线程/追问引用/发送闭环全通。**追问烧 token 的真实回路由 spike:discussion 覆盖。**
    - ✅ Summary tab(`dev` 分支):结论卡(按未剔除 findings 最高严重度推导 review event:high→Request changes / 有→Comment / 无→Approve,标「仅建议·提交时确认」)+ 统计条(high/med/low + 保留/已提交/讨论)+ **可编辑总结正文**(轻量 markdown 视图 `**粗**`/`` `代码` ``/空行分段 ↔ textarea,⌘↵ 保存·Esc 取消,经 `review:update-summary` 落库、`review` 事件回推)+ 关注主题(按 category 聚合,点击→切 Findings tab 并按分类筛选,Findings 顶部出「筛选·X ✕」可清)+ 覆盖度行 + 提交 CTA(禁用,提交屏后续)。后端补 `ReviewManager.updateSummary`(store.setReviewSummary 已存在)+ `review` ReviewEvent 变体 + useReviewStream setReview。preview fixtures stub updateSummary。双主题实测:verdict/stats/markdown 编辑保存/分类筛选全通。
-   - ⏳ gutter 锚点圆点(有讨论的行)· 扫描 timeline · 键盘快捷键 · 顶栏合并 · promote(discussion→finding)/ 手动新增 finding · 持久化(主题/栏宽/viewed)· 提交屏
+   - ✅ 全局 UI 偏好持久化(`dev` 分支):`SettingsProvider`(`src/renderer/settings/`)启动拉 `ui.getSettings`、改动去抖(400ms)写回 `ui.saveSettings`、主题两轴挂 documentElement,取代原来只存组件 state 的 ThemeProvider(已删)。App 主题控件 + ReviewScreen 的栏宽/默认 tab/默认 diff 视图全部改由 settings 驱动、拖拽/切换即写回。**后端 `ui_settings` 表 + IPC 早已就绪,本切片纯前端接线。** per-file viewed/collapsed 仍为 per-review 本地态(`review_ui_state` 持久化留后续)。preview fixtures 用非默认栏宽(300/420)+ 可变 saveSettings 存储,实测:启动即应用 300/420、明暗切换与 split 切换经去抖落库回读一致。
+   - ⏳ gutter 锚点圆点(有讨论的行)· 扫描 timeline · 键盘快捷键 · 顶栏合并 · promote(discussion→finding)/ 手动新增 finding · per-review UI 态持久化(viewed/collapsed → `review_ui_state`)· 提交屏
    - ⏳ 顶栏合并(App 全局栏 + rev-topbar 现为两条,mockup 是单条含 submit CTA/模型/⌘)· 主题+栏宽持久化(settings IPC)
    - ⏳ 审核规则三层编辑器(`mockup/prompt-rules.html`)+ 读写 IPC(读走 `review-prompt.ts`,写落 `.duetlens/review.md`)
