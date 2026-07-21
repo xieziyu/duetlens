@@ -439,20 +439,23 @@ export class ReviewStore {
       defaultDiffView: r.default_diff_view as UiSettings['defaultDiffView'],
       defaultModel: (r.default_model as string | null) ?? DEFAULT_UI_SETTINGS.defaultModel,
       defaultEffort: (r.default_effort as UiSettings['defaultEffort'] | null) ?? DEFAULT_UI_SETTINGS.defaultEffort,
+      notifyOnComplete:
+        r.notify_on_complete == null ? DEFAULT_UI_SETTINGS.notifyOnComplete : !!r.notify_on_complete,
     };
   }
 
   saveUiSettings(s: UiSettings): void {
     this.db
       .prepare(
-        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_model, default_effort)
-         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultModel, @defaultEffort)
+        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_model, default_effort, notify_on_complete)
+         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultModel, @defaultEffort, @notifyOnComplete)
          ON CONFLICT(id) DO UPDATE SET
            data_mode = @dataMode, data_theme = @dataTheme, left_width = @leftWidth,
            right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView,
-           default_model = @defaultModel, default_effort = @defaultEffort`,
+           default_model = @defaultModel, default_effort = @defaultEffort, notify_on_complete = @notifyOnComplete`,
       )
-      .run(s);
+      // SQLite 不能绑定 boolean:notifyOnComplete 转 0/1
+      .run({ ...s, notifyOnComplete: s.notifyOnComplete ? 1 : 0 });
   }
 
   getReviewUiState(reviewId: string): ReviewUiState {

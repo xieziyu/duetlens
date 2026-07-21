@@ -95,7 +95,12 @@ ALTER TABLE ui_settings ADD COLUMN default_model TEXT NOT NULL DEFAULT '';
 ALTER TABLE ui_settings ADD COLUMN default_effort TEXT NOT NULL DEFAULT 'medium';
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3];
+// 长任务完成提示开关(SQLite 无 bool,用 INTEGER 0/1)。
+const V4 = `
+ALTER TABLE ui_settings ADD COLUMN notify_on_complete INTEGER NOT NULL DEFAULT 1;
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

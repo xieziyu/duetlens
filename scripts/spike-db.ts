@@ -98,18 +98,21 @@ function main() {
   assert.equal(store.getUiSettings().dataMode, 'dark');
   assert.equal(store.getUiSettings().defaultModel, '');
   assert.equal(store.getUiSettings().defaultEffort, 'medium');
+  assert.equal(store.getUiSettings().notifyOnComplete, true);
   store.saveUiSettings({
     ...store.getUiSettings(),
     dataMode: 'light',
     leftWidth: 300,
     defaultModel: 'o3',
     defaultEffort: 'xhigh',
+    notifyOnComplete: false,
   });
   assert.equal(store.getUiSettings().dataMode, 'light');
   assert.equal(store.getUiSettings().leftWidth, 300);
   assert.equal(store.getUiSettings().defaultModel, 'o3');
   assert.equal(store.getUiSettings().defaultEffort, 'xhigh');
-  log('ui_settings 默认 + 往返 ok(含 model/effort)');
+  assert.equal(store.getUiSettings().notifyOnComplete, false);
+  log('ui_settings 默认 + 往返 ok(含 model/effort/notify)');
 
   // 级联删除:删 review 应清空其 findings/discussions/messages
   db.prepare('DELETE FROM reviews WHERE id = ?').run(review.id);

@@ -31,6 +31,7 @@
     "spike:export": "tsx scripts/spike-export.ts",
     "spike:submit": "tsx scripts/spike-submit.ts",
     "spike:add-finding": "tsx scripts/spike-add-finding.ts",
+    "spike:notify": "tsx scripts/spike-notify.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
   },
   "keywords": [],

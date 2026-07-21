@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { CompletionNotice } from '@shared/ipc';
 import { EntryScreen } from './screens/EntryScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { SubmitExportScreen } from './screens/SubmitExportScreen';
 import { PromptRulesScreen } from './screens/PromptRulesScreen';
 import { Wordmark } from './components/Wordmark';
 import { ThemeControls } from './components/ThemeControls';
+import { CompletionToast } from './components/CompletionToast';
 import './App.css';
 
 // 骨架期极简屏路由;review 屏自带合并顶栏(brand + 源 + CTA + 主题 + ⌘),故此处不再套全局栏。
@@ -24,11 +26,32 @@ export function App({
 }: { initialReviewId?: string | null; initialScreen?: Screen } = {}) {
   const [screen, setScreen] = useState<Screen>(initialScreen ?? (initialReviewId ? 'review' : 'entry'));
   const [activeReviewId, setActiveReviewId] = useState<string | null>(initialReviewId);
+  const [toast, setToast] = useState<CompletionNotice | null>(null);
 
   const openReview = (id: string) => {
     setActiveReviewId(id);
     setScreen('review');
+    setToast(null);
   };
+
+  // 通知点击「聚焦+定位」挂在常驻的 App:onOpenReview 打开 review;onInApp 弹轻提示。
+  // 用 ref 记住当前所看,避免为订阅重挂而随导航变化。
+  const viewing = useRef<{ screen: Screen; reviewId: string | null }>({ screen, reviewId: activeReviewId });
+  viewing.current = { screen, reviewId: activeReviewId };
+  useEffect(() => {
+    const n = window.duetlens.notifications;
+    if (!n) return;
+    const offOpen = n.onOpenReview(({ reviewId }) => openReview(reviewId));
+    const offInApp = n.onInApp((notice) => {
+      const v = viewing.current;
+      if (v.screen === 'review' && v.reviewId === notice.reviewId) return; // 正看着就不打扰
+      setToast(notice);
+    });
+    return () => {
+      offOpen();
+      offInApp();
+    };
+  }, []);
 
   return (
     <div className="app">
@@ -62,6 +85,14 @@ export function App({
         )}
         {screen === 'prompt' && <PromptRulesScreen onBack={() => setScreen('entry')} />}
       </main>
+
+      {toast && (
+        <CompletionToast
+          notice={toast}
+          onOpen={openReview}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

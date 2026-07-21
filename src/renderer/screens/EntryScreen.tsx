@@ -205,6 +205,15 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
           <button className="start-demo-link" onClick={startDemo} disabled={busy}>
             或跑内置演示
           </button>
+          <span className="field-row" style={{ flex: 1 }} />
+          <label className="start-pref" title="扫描完成 / 追问回复时,窗口未聚焦弹系统通知,聚焦弹应用内提示">
+            <input
+              type="checkbox"
+              checked={settings.notifyOnComplete}
+              onChange={(e) => update({ notifyOnComplete: e.target.checked })}
+            />
+            完成时通知
+          </label>
         </div>
       </div>
 

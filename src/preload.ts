@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { IpcChannels, IpcEvents, type DuetlensApi, type ReviewEvent } from '@shared/ipc';
+import {
+  IpcChannels,
+  IpcEvents,
+  type CompletionNotice,
+  type DuetlensApi,
+  type ReviewEvent,
+} from '@shared/ipc';
 import type { UiSettings } from '@shared/domain';
 
 // 唯一暴露给 renderer 的桥;沿 contextIsolation 边界只透出白名单方法。
@@ -39,6 +45,18 @@ const api: DuetlensApi = {
       const listener = (_e: IpcRendererEvent, payload: ReviewEvent) => handler(payload);
       ipcRenderer.on(IpcEvents.reviewEvent, listener);
       return () => ipcRenderer.off(IpcEvents.reviewEvent, listener);
+    },
+  },
+  notifications: {
+    onOpenReview: (handler: (payload: { reviewId: string }) => void) => {
+      const listener = (_e: IpcRendererEvent, payload: { reviewId: string }) => handler(payload);
+      ipcRenderer.on(IpcEvents.notifyOpenReview, listener);
+      return () => ipcRenderer.off(IpcEvents.notifyOpenReview, listener);
+    },
+    onInApp: (handler: (notice: CompletionNotice) => void) => {
+      const listener = (_e: IpcRendererEvent, notice: CompletionNotice) => handler(notice);
+      ipcRenderer.on(IpcEvents.notifyInApp, listener);
+      return () => ipcRenderer.off(IpcEvents.notifyInApp, listener);
     },
   },
   ui: {

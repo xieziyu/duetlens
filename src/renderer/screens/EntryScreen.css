@@ -142,6 +142,18 @@ select.field-input {
   opacity: 0.55;
   cursor: default;
 }
+.start-pref {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.start-pref input {
+  cursor: pointer;
+}
 
 .recent-head {
   font-size: 13px;

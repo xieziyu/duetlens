@@ -4,7 +4,7 @@
  * 仅 preview 入口引用,不进 app 打包路径。
  */
 import { parseUnifiedDiff } from '@shared/diff';
-import type { DuetlensApi, ReviewEvent } from '@shared/ipc';
+import type { CompletionNotice, DuetlensApi, ReviewEvent } from '@shared/ipc';
 import type { Discussion, Finding, Message, Review, ReviewUiState, UiSettings } from '@shared/domain';
 import type {
   EditablePromptLayer,
@@ -184,6 +184,7 @@ const UI_SETTINGS: UiSettings = {
   defaultDiffView: 'unified',
   defaultModel: '',
   defaultEffort: 'medium',
+  notifyOnComplete: true,
 };
 
 /** 一条 finding discussion 预置对话,便于点开 f1 即见真实线程。 */
@@ -299,6 +300,12 @@ export function installPreviewApi(): void {
   const listeners = new Set<(e: ReviewEvent) => void>();
   const fire = (e: ReviewEvent) => {
     for (const l of listeners) l(e);
+  };
+  // 通知在真实里由 main 派发;preview 用测试钩子(window.__fireInApp)触发应用内提示自查。
+  const openReviewListeners = new Set<(p: { reviewId: string }) => void>();
+  const inAppListeners = new Set<(n: CompletionNotice) => void>();
+  (window as unknown as { __fireInApp?: (n: CompletionNotice) => void }).__fireInApp = (n) => {
+    for (const l of inAppListeners) l(n);
   };
   const emit = (payload: Finding) => {
     const i = findings.findIndex((f) => f.id === payload.id);
@@ -486,6 +493,16 @@ export function installPreviewApi(): void {
       onEvent: (handler) => {
         listeners.add(handler);
         return () => listeners.delete(handler);
+      },
+    },
+    notifications: {
+      onOpenReview: (handler) => {
+        openReviewListeners.add(handler);
+        return () => openReviewListeners.delete(handler);
+      },
+      onInApp: (handler) => {
+        inAppListeners.add(handler);
+        return () => inAppListeners.delete(handler);
       },
     },
     ui: {

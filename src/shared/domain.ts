@@ -156,6 +156,8 @@ export interface UiSettings {
   defaultModel: string;
   /** 发起表单预填的 reasoning effort */
   defaultEffort: ReasoningEffort;
+  /** 扫描完成 / 追问回复时是否提示(未聚焦弹原生通知,聚焦弹应用内轻提示) */
+  notifyOnComplete: boolean;
 }
 
 export const DEFAULT_UI_SETTINGS: UiSettings = {
@@ -167,6 +169,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   defaultDiffView: 'unified',
   defaultModel: '',
   defaultEffort: DEFAULT_REASONING_EFFORT,
+  notifyOnComplete: true,
 };
 
 /** per-review 的进度态(随会话恢复);viewedFiles = 已标记「已看」的文件路径。 */

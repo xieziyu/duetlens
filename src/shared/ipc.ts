@@ -107,7 +107,19 @@ export type SubmitReviewResult =
 /** 后端 → renderer 单向推送(webContents.send) */
 export const IpcEvents = {
   reviewEvent: 'review:event',
+  /** 原生通知点击后主进程回推:打开该 review */
+  notifyOpenReview: 'notify:open-review',
+  /** 窗口聚焦时的应用内轻提示(不弹原生通知) */
+  notifyInApp: 'notify:in-app',
 } as const;
+
+/** 长任务完成提示的载荷(扫描完成 / 追问回复);原生通知与应用内提示共用。 */
+export interface CompletionNotice {
+  reviewId: string;
+  kind: 'scan-done' | 'reply';
+  title: string;
+  body: string;
+}
 
 export interface AppInfo {
   name: string;
@@ -170,6 +182,12 @@ export interface DuetlensApi {
     saveUiState(reviewId: string, state: ReviewUiState): Promise<void>;
     /** 订阅领域事件;返回取消订阅函数。 */
     onEvent(handler: (e: ReviewEvent) => void): () => void;
+  };
+  notifications: {
+    /** 原生完成通知被点击 → 打开对应 review;返回取消订阅函数。 */
+    onOpenReview(handler: (payload: { reviewId: string }) => void): () => void;
+    /** 窗口聚焦时的应用内轻提示(扫描完成/追问回复);返回取消订阅函数。 */
+    onInApp(handler: (notice: CompletionNotice) => void): () => void;
   };
   ui: {
     getSettings(): Promise<UiSettings>;
