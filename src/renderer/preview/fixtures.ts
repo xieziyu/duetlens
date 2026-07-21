@@ -5,7 +5,7 @@
  */
 import { parseUnifiedDiff } from '@shared/diff';
 import type { DuetlensApi, ReviewEvent } from '@shared/ipc';
-import type { Discussion, Finding, Message, Review, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, ReviewUiState, UiSettings } from '@shared/domain';
 
 const RAW_DIFF = `diff --git a/src/pipeline.ts b/src/pipeline.ts
 index 1111111..2222222 100644
@@ -169,6 +169,11 @@ export function installPreviewApi(): void {
   const diff = parseUnifiedDiff(RAW_DIFF);
   const review: Review = { ...REVIEW };
   let uiSettings: UiSettings = { ...UI_SETTINGS };
+  // 预置一个已看文件,证明启动即从后端恢复 per-review 进度(非组件默认空态)
+  let reviewUiState: ReviewUiState = {
+    viewedFiles: diff.length > 1 ? [diff[1].path] : diff.slice(0, 1).map((f) => f.path),
+    lastActiveTab: null,
+  };
   const findings = FINDINGS.map((f) => ({ ...f }));
   const discussions = DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
@@ -251,6 +256,10 @@ export function installPreviewApi(): void {
         Object.assign(review, next);
         fire({ reviewId: 'demo', type: 'review', payload: next });
         return next;
+      },
+      getUiState: async () => reviewUiState,
+      saveUiState: async (_r, state) => {
+        reviewUiState = state;
       },
       updateFinding: async (_r, input) => {
         const f = findings.find((x) => x.id === input.findingId)!;

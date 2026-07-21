@@ -4,6 +4,7 @@ import type { DiffFile } from '@shared/diff';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
 import { useReviewStream } from '../review/useReviewStream';
+import { useReviewUiState } from '../review/useReviewUiState';
 import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
@@ -49,25 +50,8 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   const rightW = settings.rightWidth;
   const diffView = settings.defaultDiffView;
   const setDiffView = (v: DiffView) => update({ defaultDiffView: v });
-  // per-file 已看/折叠:per-review 本地态(review_ui_state 持久化留后续切片)
-  const [viewed, setViewed] = useState<Set<string>>(() => new Set());
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-
-  const toggle = (s: Set<string>, path: string, on: boolean): Set<string> => {
-    const next = new Set(s);
-    if (on) next.add(path);
-    else next.delete(path);
-    return next;
-  };
-  const onToggleCollapsed = (path: string) =>
-    setCollapsed((prev) => toggle(prev, path, !prev.has(path)));
-  // 标记已看同时折叠;取消已看则展开
-  const onToggleViewed = (path: string) =>
-    setViewed((prev) => {
-      const nowViewed = !prev.has(path);
-      setCollapsed((c) => toggle(c, path, nowViewed));
-      return toggle(prev, path, nowViewed);
-    });
+  // per-file 已看/折叠:per-review 持久化态(后端 review_ui_state),挂载拉取 + 去抖写回
+  const { viewed, collapsed, onToggleViewed, onToggleCollapsed } = useReviewUiState(reviewId);
 
   const focusFinding = (f: Finding) => {
     setActivePath(f.file);

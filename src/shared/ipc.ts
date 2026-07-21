@@ -7,6 +7,7 @@ import type {
   Finding,
   Message,
   Review,
+  ReviewUiState,
   SourceKind,
   Triage,
   UiSettings,
@@ -32,6 +33,8 @@ export const IpcChannels = {
   reviewSetTriage: 'review:set-triage',
   reviewUpdateFinding: 'review:update-finding',
   reviewUpdateSummary: 'review:update-summary',
+  reviewGetUiState: 'review:get-ui-state',
+  reviewSaveUiState: 'review:save-ui-state',
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
   dialogPickDirectory: 'dialog:pick-directory',
@@ -116,6 +119,10 @@ export interface DuetlensApi {
     updateFinding(reviewId: string, input: FindingEditInput): Promise<Finding>;
     /** 编辑审核总结正文(提交屏 review body 来源);落库后返回并经 `review` 事件回推。 */
     updateSummary(reviewId: string, body: string): Promise<Review>;
+    /** 读某 review 的 per-review UI 进度态(已看文件等);无记录返回默认空态。 */
+    getUiState(reviewId: string): Promise<ReviewUiState>;
+    /** 写某 review 的 per-review UI 进度态(前端去抖调用)。 */
+    saveUiState(reviewId: string, state: ReviewUiState): Promise<void>;
     /** 订阅领域事件;返回取消订阅函数。 */
     onEvent(handler: (e: ReviewEvent) => void): () => void;
   };

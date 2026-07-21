@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { Discussion, Finding, Message, Review, Triage, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { FindingEditInput, ReviewEvent } from '@shared/ipc';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
@@ -148,6 +148,14 @@ export class ReviewManager extends EventEmitter {
 
   saveUiSettings(settings: UiSettings): void {
     this.store.saveUiSettings(settings);
+  }
+
+  getReviewUiState(reviewId: string): ReviewUiState {
+    return this.store.getReviewUiState(reviewId);
+  }
+
+  saveReviewUiState(reviewId: string, state: ReviewUiState): void {
+    this.store.saveReviewUiState(reviewId, state);
   }
 
   /** 起真实审核:按 target 建 source,拉元数据落库,后台跑首轮扫描。 */

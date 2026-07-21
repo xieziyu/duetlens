@@ -9,7 +9,7 @@ import {
   type ReviewEvent,
   type ReviewStartInput,
 } from '@shared/ipc';
-import type { Triage, UiSettings } from '@shared/domain';
+import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import type { ReviewManager } from '../review/review-manager';
 
 export interface IpcDeps {
@@ -60,6 +60,12 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   );
   ipcMain.handle(IpcChannels.reviewUpdateSummary, (_e, reviewId: string, body: string) =>
     manager.updateSummary(reviewId, body),
+  );
+  ipcMain.handle(IpcChannels.reviewGetUiState, (_e, reviewId: string) =>
+    manager.getReviewUiState(reviewId),
+  );
+  ipcMain.handle(IpcChannels.reviewSaveUiState, (_e, reviewId: string, state: ReviewUiState) =>
+    manager.saveReviewUiState(reviewId, state),
   );
 
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());

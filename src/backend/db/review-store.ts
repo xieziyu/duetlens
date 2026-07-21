@@ -7,8 +7,10 @@ import {
   type Message,
   type MessageRole,
   type ReportFindingInput,
+  DEFAULT_REVIEW_UI_STATE,
   type Review,
   type ReviewStatus,
+  type ReviewUiState,
   type SourceKind,
   type Submission,
   type Triage,
@@ -388,5 +390,35 @@ export class ReviewStore {
            right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView`,
       )
       .run(s);
+  }
+
+  getReviewUiState(reviewId: string): ReviewUiState {
+    const r = this.db
+      .prepare('SELECT viewed_files, last_active_tab FROM review_ui_state WHERE review_id = ?')
+      .get(reviewId) as { viewed_files: string; last_active_tab: string | null } | undefined;
+    if (!r) return { ...DEFAULT_REVIEW_UI_STATE };
+    let viewedFiles: string[] = [];
+    try {
+      const parsed = JSON.parse(r.viewed_files);
+      if (Array.isArray(parsed)) viewedFiles = parsed.filter((x): x is string => typeof x === 'string');
+    } catch {
+      // 落库 JSON 损坏 → 降级为空进度,不阻断
+    }
+    return { viewedFiles, lastActiveTab: r.last_active_tab };
+  }
+
+  saveReviewUiState(reviewId: string, state: ReviewUiState): void {
+    this.db
+      .prepare(
+        `INSERT INTO review_ui_state (review_id, viewed_files, last_active_tab)
+         VALUES (@reviewId, @viewedFiles, @lastActiveTab)
+         ON CONFLICT(review_id) DO UPDATE SET
+           viewed_files = @viewedFiles, last_active_tab = @lastActiveTab`,
+      )
+      .run({
+        reviewId,
+        viewedFiles: JSON.stringify(state.viewedFiles),
+        lastActiveTab: state.lastActiveTab ?? null,
+      });
   }
 }

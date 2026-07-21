@@ -150,3 +150,14 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   defaultTab: 'findings',
   defaultDiffView: 'unified',
 };
+
+/** per-review 的进度态(随会话恢复);viewedFiles = 已标记「已看」的文件路径。 */
+export interface ReviewUiState {
+  viewedFiles: string[];
+  lastActiveTab: string | null;
+}
+
+export const DEFAULT_REVIEW_UI_STATE: ReviewUiState = {
+  viewedFiles: [],
+  lastActiveTab: null,
+};
