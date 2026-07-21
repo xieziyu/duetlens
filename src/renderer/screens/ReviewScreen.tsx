@@ -3,7 +3,15 @@ import type { Finding, Severity } from '@shared/domain';
 import { useReviewStream } from '../review/useReviewStream';
 import { FileTree } from './review/FileTree';
 import { DiffPane } from './review/DiffPane';
+import { Resizer } from './review/Resizer';
 import './ReviewScreen.css';
+import './review/review-syntax.css';
+
+const LEFT_MIN = 180;
+const LEFT_MAX = 460;
+const RIGHT_MIN = 300;
+const RIGHT_MAX = 620;
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 type RightTab = 'discussion' | 'findings' | 'summary';
 
@@ -21,6 +29,9 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   const [activePath, setActivePath] = useState<string | null>(null);
   const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
   const [tab, setTab] = useState<RightTab>('findings');
+  // 栏宽:本地拖拽态,持久化(后端 settings)后续接入
+  const [leftW, setLeftW] = useState(236);
+  const [rightW, setRightW] = useState(380);
 
   const focusFinding = (f: Finding) => {
     setActivePath(f.file);
@@ -39,7 +50,10 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   }
 
   return (
-    <div className="rev-root">
+    <div
+      className="rev-root"
+      style={{ ['--left-w' as string]: `${leftW}px`, ['--right-w' as string]: `${rightW}px` }}
+    >
       <div className="rev-topbar">
         <div className="source">
           <span className="mono ref">{review?.sourceRef ?? '…'}</span>
@@ -73,12 +87,14 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           activePath={activePath}
           onSelect={setActivePath}
         />
+        <Resizer onDrag={(dx) => setLeftW((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))} />
         <DiffPane
           files={diff}
           findings={findings}
           activePath={activePath}
           focusFindingId={focusFindingId}
         />
+        <Resizer onDrag={(dx) => setRightW((w) => clamp(w - dx, RIGHT_MIN, RIGHT_MAX))} />
         <RightPanel
           tab={tab}
           onTab={setTab}

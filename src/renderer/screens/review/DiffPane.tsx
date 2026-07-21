@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { DiffFile, DiffHunk, DiffLine } from '@shared/diff';
 import type { Finding } from '@shared/domain';
 import { InlineCard } from './InlineCard';
+import { highlightLine, langOf } from './highlight';
 
 /** 文件锚点 id:供左栏点击滚动定位。路径里的非单词字符替换成 -。 */
 export function fileAnchorId(path: string): string {
@@ -85,6 +86,7 @@ function DiffFileView({
     return s;
   }, [file]);
 
+  const lang = useMemo(() => langOf(file.path), [file.path]);
   const offDiff = findings.filter((f) => !newLines.has(f.line));
   // 锚定 findings 按新侧行号分组
   const byLine = new Map<number, Finding[]>();
@@ -130,7 +132,7 @@ function DiffFileView({
         <div className="diff-note">无内容改动(仅重命名/模式变更)。</div>
       ) : (
         file.hunks.map((h, i) => (
-          <HunkView key={i} hunk={h} byLine={byLine} focusFindingId={focusFindingId} />
+          <HunkView key={i} hunk={h} lang={lang} byLine={byLine} focusFindingId={focusFindingId} />
         ))
       )}
     </section>
@@ -143,10 +145,12 @@ function DiffFileView({
  */
 function HunkView({
   hunk,
+  lang,
   byLine,
   focusFindingId,
 }: {
   hunk: DiffHunk;
+  lang: string | null;
   byLine: Map<number, Finding[]>;
   focusFindingId: string | null;
 }) {
@@ -174,7 +178,7 @@ function HunkView({
           <table className="code">
             <tbody>
               {seg.lines.map((l, j) => (
-                <LineRow key={j} line={l} />
+                <LineRow key={j} line={l} lang={lang} />
               ))}
             </tbody>
           </table>
@@ -187,14 +191,15 @@ function HunkView({
   );
 }
 
-function LineRow({ line }: { line: DiffLine }) {
+function LineRow({ line, lang }: { line: DiffLine; lang: string | null }) {
   const gutter = line.kind === 'add' ? '＋' : line.kind === 'del' ? '−' : '';
   const lineNo = line.kind === 'del' ? line.oldLine : line.newLine;
+  const html = line.text === '' ? '&nbsp;' : highlightLine(line.text, lang);
   return (
     <tr className={`row${line.kind === 'add' ? ' add' : line.kind === 'del' ? ' del' : ''}`}>
       <td className="ln">{lineNo}</td>
       <td className="gutter">{gutter}</td>
-      <td className="src">{line.text === '' ? ' ' : line.text}</td>
+      <td className="src" dangerouslySetInnerHTML={{ __html: html }} />
     </tr>
   );
 }

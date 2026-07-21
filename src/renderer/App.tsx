@@ -3,7 +3,6 @@ import { useTheme, type ColorTheme } from './theme/ThemeProvider';
 import { EntryScreen } from './screens/EntryScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { SubmitExportScreen } from './screens/SubmitExportScreen';
-import { DevBridgeProbe } from './components/DevBridgeProbe';
 import './App.css';
 
 // 骨架期极简屏路由;后续按 frontend-components.md 三顶层屏演进。
@@ -28,7 +27,10 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="wordmark mono">duetlens_</span>
+        <span className="wordmark mono">
+          duet<i>lens</i>
+          <span className="cur">_</span>
+        </span>
 
         <nav className="screen-nav">
           {SCREENS.map((s) => (
@@ -63,8 +65,6 @@ export function App() {
         {screen === 'review' && <ReviewScreen reviewId={activeReviewId} />}
         {screen === 'submit' && <SubmitExportScreen />}
       </main>
-
-      <DevBridgeProbe />
     </div>
   );
 }

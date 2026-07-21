@@ -1,0 +1,46 @@
+/* highlight.js token class → 主题语法色变量(两轴 data-mode × data-theme 已在 tokens.css 定义)。
+   只映射到设计系统里已有的 7 类:--k 关键字 / --fn 函数名 / --s 字符串 / --n 数字 / --c 注释 / --ty 类型 / --mac 元信息。 */
+.src .hljs-keyword,
+.src .hljs-literal,
+.src .hljs-selector-tag,
+.src .hljs-tag,
+.src .hljs-name {
+  color: var(--k);
+}
+.src .hljs-title,
+.src .hljs-title.function_,
+.src .hljs-section {
+  color: var(--fn);
+}
+.src .hljs-string,
+.src .hljs-regexp,
+.src .hljs-char.escape_,
+.src .hljs-symbol,
+.src .hljs-selector-attr,
+.src .hljs-selector-pseudo,
+.src .hljs-quote {
+  color: var(--s);
+}
+.src .hljs-number,
+.src .hljs-bullet {
+  color: var(--n);
+}
+.src .hljs-comment {
+  color: var(--c);
+  font-style: italic;
+}
+.src .hljs-type,
+.src .hljs-title.class_,
+.src .hljs-built_in,
+.src .hljs-class .hljs-title,
+.src .hljs-attr,
+.src .hljs-attribute,
+.src .hljs-property {
+  color: var(--ty);
+}
+.src .hljs-meta,
+.src .hljs-meta .hljs-keyword,
+.src .hljs-doctag,
+.src .hljs-variable.language_ {
+  color: var(--mac);
+}

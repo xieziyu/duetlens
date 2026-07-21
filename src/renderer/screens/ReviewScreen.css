@@ -136,8 +136,34 @@
 /* ---------- 三栏主网格 ---------- */
 .rev-main {
   display: grid;
-  grid-template-columns: var(--left-w) minmax(0, 1fr) var(--right-w);
+  grid-template-columns: var(--left-w) 5px minmax(0, 1fr) 5px var(--right-w);
   min-height: 0;
+}
+.resizer {
+  position: relative;
+  cursor: col-resize;
+  z-index: 6;
+  touch-action: none;
+}
+.resizer::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--border);
+  transition:
+    background 0.15s,
+    width 0.15s,
+    box-shadow 0.15s;
+}
+.resizer:hover::before,
+.resizer.drag::before {
+  width: 2px;
+  background: var(--agent);
+  box-shadow: 0 0 0 2px var(--agent-soft);
 }
 .pane {
   min-height: 0;

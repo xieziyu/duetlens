@@ -21,11 +21,35 @@
   -webkit-app-region: no-drag;
 }
 
+/* wordmark:duet(text) + lens(天蓝) + _(琥珀,闪烁),对齐 mockup .brand .mark */
 .wordmark {
+  display: inline-flex;
+  align-items: baseline;
   font-size: 15px;
   font-weight: 600;
-  color: var(--agent);
-  letter-spacing: -0.02em;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  line-height: 1;
+}
+.wordmark i {
+  font-style: normal;
+  color: var(--agent-2);
+}
+.wordmark .cur {
+  color: var(--human);
+  font-weight: 400;
+  margin-left: 1px;
+  animation: blink 1.15s step-end infinite;
+}
+@keyframes blink {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
 }
 
 .screen-nav {
@@ -82,15 +106,4 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-}
-
-.dev-strip {
-  padding: 4px 16px;
-  border-top: 1px solid var(--border-soft);
-  background: var(--surface);
-  color: var(--text-faint);
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
