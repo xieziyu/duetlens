@@ -32,6 +32,7 @@ export const IpcChannels = {
   reviewAddDiscussion: 'review:add-discussion',
   reviewSendMessage: 'review:send-message',
   reviewSetTriage: 'review:set-triage',
+  reviewAddFinding: 'review:add-finding',
   reviewPromoteDiscussion: 'review:promote-discussion',
   reviewUpdateFinding: 'review:update-finding',
   reviewUpdateSummary: 'review:update-summary',
@@ -69,6 +70,17 @@ export interface DiscussionAnchor {
   file: string;
   line: number;
   lineEnd?: number | null;
+}
+
+/** 用户手动新增一条 finding(origin=manual;锚点由 diff 框选/行内选定,字段就地填写)。 */
+export interface AddFindingInput {
+  file: string;
+  line: number;
+  severity: Finding['severity'];
+  category?: string | null;
+  title: string;
+  body?: string;
+  suggestion?: string | null;
 }
 
 /** 提交一次 GitHub PR review 的入参(summaryBody 传入即先落库为 review body)。 */
@@ -131,6 +143,8 @@ export interface DuetlensApi {
     sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message>;
     /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推更新。 */
     setTriage(reviewId: string, findingId: string, triage: Triage): Promise<Finding>;
+    /** 用户手动新增一条锚定 finding(origin=manual),同 agent finding 的 schema/提交路径。 */
+    addFinding(reviewId: string, input: AddFindingInput): Promise<Finding>;
     /** 把一条用户 discussion 提升为 finding(origin=promoted),保留会话历史;返回新 finding。 */
     promoteDiscussion(reviewId: string, discussionId: string): Promise<Finding>;
     /** 用户就地编辑 finding 可编辑字段(与 codex update_finding 同一落库路径)。 */

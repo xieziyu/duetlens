@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Discussion, Finding, Message, Review, Severity, Triage } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
-import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
+import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
 import { useReviewStream } from '../review/useReviewStream';
 import { useReviewUiState } from '../review/useReviewUiState';
@@ -101,6 +101,22 @@ export function ReviewScreen({
       void runSend(d.id, text);
     },
     [reviewId, runSend],
+  );
+
+  // 框选「记为 finding」:填写后新增一条 manual finding(落库回推),聚焦其内联卡。
+  const onAddFinding = useCallback(
+    async (anchor: DiscussionAnchor, draft: Omit<AddFindingInput, 'file' | 'line'>) => {
+      if (!reviewId) return;
+      const f = await window.duetlens.review.addFinding(reviewId, {
+        file: anchor.file,
+        line: anchor.line,
+        ...draft,
+      });
+      setActivePath(f.file);
+      setFocusFindingId(f.id);
+      setTab('findings');
+    },
+    [reviewId],
   );
 
   // 框选「追问 codex」:把选区作为待发引用带进 Discussion 栏 composer(发送时再建 discussion)。
@@ -294,6 +310,7 @@ export function ReviewScreen({
           onUpdate={onUpdate}
           onStartDiscussion={onStartDiscussion}
           onAskCodex={onAskCodex}
+          onAddFinding={onAddFinding}
           view={diffView}
           onViewChange={setDiffView}
           viewed={viewed}

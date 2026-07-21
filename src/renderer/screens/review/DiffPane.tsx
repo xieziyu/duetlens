@@ -4,10 +4,18 @@ import type { Finding, Triage } from '@shared/domain';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { InlineCard } from './InlineCard';
 import { InlineComposer } from './InlineComposer';
+import { NewFindingComposer, type NewFindingDraft } from './NewFindingComposer';
 import { SelectionPopover } from './SelectionPopover';
 import { highlightLine, langOf } from './highlight';
 
 export type DiffView = 'unified' | 'split';
+
+/** 内联 composer 的两种形态:发起 discussion 或 新增 finding。 */
+type ComposeMode = 'discussion' | 'finding';
+interface Compose {
+  pick: AnchorPick;
+  mode: ComposeMode;
+}
 
 /** 文件锚点 id:供左栏点击滚动定位。路径里的非单词字符替换成 -。 */
 export function fileAnchorId(path: string): string {
@@ -39,6 +47,8 @@ export interface DiffPaneProps {
   onStartDiscussion?: (anchor: DiscussionAnchor, text: string) => void;
   /** 追问 codex:把选区作为引用带进 Discussion 栏 composer */
   onAskCodex?: (anchor: DiscussionAnchor, label: string) => void;
+  /** 框选「记为 finding」:在锚点处填写后新增一条 manual finding */
+  onAddFinding?: (anchor: DiscussionAnchor, draft: NewFindingDraft) => void;
   /** unified / split 视图(全局,file-header segmented 驱动) */
   view: DiffView;
   onViewChange: (v: DiffView) => void;
@@ -55,10 +65,10 @@ export interface DiffPaneProps {
  * 发起后交由 ReviewScreen 落库并在 Discussion 栏承载对话。
  */
 export function DiffPane(props: DiffPaneProps) {
-  const { files, findings, activePath, focusFindingId, onStartDiscussion, onAskCodex } = props;
+  const { files, findings, activePath, focusFindingId, onStartDiscussion, onAskCodex, onAddFinding } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [sel, setSel] = useState<{ pick: AnchorPick; top: number; left: number; cx: number } | null>(null);
-  const [composeAt, setComposeAt] = useState<AnchorPick | null>(null);
+  const [composeAt, setComposeAt] = useState<Compose | null>(null);
 
   // 按文件聚合 findings,便于每个 DiffFileView 只拿自己的
   const byFile = useMemo(() => {
@@ -122,7 +132,7 @@ export function DiffPane(props: DiffPaneProps) {
         snippet,
       };
       const rect = selection.getRangeAt(0).getBoundingClientRect();
-      const pw = 250;
+      const pw = 340; // 三动作按钮的估算宽度(定位/箭头居中用)
       let left = rect.left + rect.width / 2 - pw / 2;
       left = Math.max(8, Math.min(window.innerWidth - pw - 8, left));
       let top = rect.top - 44;
@@ -146,10 +156,10 @@ export function DiffPane(props: DiffPaneProps) {
     };
   }, [sel]);
 
-  const startCompose = (pick: AnchorPick) => {
+  const startCompose = (pick: AnchorPick, mode: ComposeMode) => {
     setSel(null);
     window.getSelection()?.removeAllRanges();
-    setComposeAt(pick);
+    setComposeAt({ pick, mode });
   };
 
   if (files.length === 0) {
@@ -179,17 +189,24 @@ export function DiffPane(props: DiffPaneProps) {
           onAddThread={
             canStart
               ? (line, snippet) =>
-                  startCompose({
-                    anchor: { file: f.path, line, lineEnd: null },
-                    placeLine: line,
-                    label: `${basename(f.path)}:${line}`,
-                    snippet,
-                  })
+                  startCompose(
+                    {
+                      anchor: { file: f.path, line, lineEnd: null },
+                      placeLine: line,
+                      label: `${basename(f.path)}:${line}`,
+                      snippet,
+                    },
+                    'discussion',
+                  )
               : undefined
           }
-          compose={composeAt && composeAt.anchor.file === f.path ? composeAt : null}
+          compose={composeAt && composeAt.pick.anchor.file === f.path ? composeAt : null}
           onSendCompose={(text) => {
-            if (composeAt) onStartDiscussion?.(composeAt.anchor, text);
+            if (composeAt) onStartDiscussion?.(composeAt.pick.anchor, text);
+            setComposeAt(null);
+          }}
+          onCreateFinding={(draft) => {
+            if (composeAt) onAddFinding?.(composeAt.pick.anchor, draft);
             setComposeAt(null);
           }}
           onCancelCompose={() => setComposeAt(null)}
@@ -202,12 +219,13 @@ export function DiffPane(props: DiffPaneProps) {
           top={sel.top}
           left={sel.left}
           cx={sel.cx}
-          onDiscussion={() => startCompose(sel.pick)}
+          onDiscussion={() => startCompose(sel.pick, 'discussion')}
           onAsk={() => {
             onAskCodex?.(sel.pick.anchor, sel.pick.label);
             setSel(null);
             window.getSelection()?.removeAllRanges();
           }}
+          onFinding={() => startCompose(sel.pick, 'finding')}
         />
       )}
     </div>
@@ -260,6 +278,7 @@ function DiffFileView({
   onAddThread,
   compose,
   onSendCompose,
+  onCreateFinding,
   onCancelCompose,
 }: {
   file: DiffFile;
@@ -274,8 +293,9 @@ function DiffFileView({
   onToggleViewed: () => void;
   onToggleCollapsed: () => void;
   onAddThread?: (line: number, snippet: string) => void;
-  compose: AnchorPick | null;
+  compose: Compose | null;
   onSendCompose: (text: string) => void;
+  onCreateFinding: (draft: NewFindingDraft) => void;
   onCancelCompose: () => void;
 }) {
   // 新侧存在的行号集合;锚点不在其中的 finding 归 off-diff
@@ -297,12 +317,21 @@ function DiffFileView({
   }
 
   const composeNode = compose ? (
-    <InlineComposer
-      label={compose.label}
-      snippet={compose.snippet}
-      onSend={onSendCompose}
-      onCancel={onCancelCompose}
-    />
+    compose.mode === 'finding' ? (
+      <NewFindingComposer
+        label={compose.pick.label}
+        snippet={compose.pick.snippet}
+        onCreate={onCreateFinding}
+        onCancel={onCancelCompose}
+      />
+    ) : (
+      <InlineComposer
+        label={compose.pick.label}
+        snippet={compose.pick.snippet}
+        onSend={onSendCompose}
+        onCancel={onCancelCompose}
+      />
+    )
   ) : null;
 
   return (
@@ -385,7 +414,7 @@ function DiffFileView({
             onTriage={onTriage}
             onUpdate={onUpdate}
             onAddThread={onAddThread}
-            composeLine={compose?.placeLine ?? null}
+            composeLine={compose?.pick.placeLine ?? null}
             composeNode={composeNode}
           />
         ))

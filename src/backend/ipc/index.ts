@@ -6,6 +6,7 @@ import {
   IpcEvents,
   type AppInfo,
   type DiscussionAnchor,
+  type AddFindingInput,
   type FindingEditInput,
   type ReviewEvent,
   type ReviewStartInput,
@@ -56,6 +57,9 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   );
   ipcMain.handle(IpcChannels.reviewSetTriage, (_e, reviewId: string, findingId: string, triage: Triage) =>
     manager.setTriage(reviewId, findingId, triage),
+  );
+  ipcMain.handle(IpcChannels.reviewAddFinding, (_e, reviewId: string, input: AddFindingInput) =>
+    manager.addManualFinding(reviewId, input),
   );
   ipcMain.handle(IpcChannels.reviewPromoteDiscussion, (_e, reviewId: string, discussionId: string) =>
     manager.promoteDiscussion(reviewId, discussionId),

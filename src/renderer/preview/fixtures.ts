@@ -280,6 +280,45 @@ export function installPreviewApi(): void {
         emit(next);
         return next;
       },
+      // 手动新增 finding(origin=manual):建 finding + 承载 discussion,回推两事件
+      addFinding: async (_r, input) => {
+        const ts = Date.now();
+        const id = `f-manual-${ts}`;
+        const discussionId = `d-${id}`;
+        const finding: Finding = {
+          id,
+          reviewId: 'demo',
+          discussionId,
+          origin: 'manual',
+          severity: input.severity,
+          category: input.category ?? null,
+          title: input.title,
+          body: input.body ?? '',
+          file: input.file,
+          line: input.line,
+          suggestion: input.suggestion ?? null,
+          triage: 'open',
+          submission: 'unsubmitted',
+          submittedUrl: null,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        const discussion: Discussion = {
+          id: discussionId,
+          reviewId: 'demo',
+          kind: 'finding',
+          origin: 'manual',
+          file: input.file,
+          line: input.line,
+          lineEnd: null,
+          createdAt: ts,
+        };
+        findings.push(finding);
+        discussions.push(discussion);
+        fire({ reviewId: 'demo', type: 'finding', payload: finding });
+        fire({ reviewId: 'demo', type: 'discussion', payload: discussion });
+        return finding;
+      },
       promoteDiscussion: async (_r, discussionId) => {
         const d = discussions.find((x) => x.id === discussionId)!;
         const firstUser = (msgStore[discussionId] ?? []).find((m) => m.role === 'user');

@@ -1400,6 +1400,12 @@
 .sel-pop .sp-ask:hover {
   background: var(--agent-soft);
 }
+.sel-pop .sp-finding {
+  color: var(--text);
+}
+.sel-pop .sp-finding:hover {
+  background: var(--hover);
+}
 
 /* ---------- 内联新建 discussion composer ---------- */
 .card.new-disc {

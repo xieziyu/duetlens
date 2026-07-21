@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { FindingEditInput, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, FindingEditInput, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import { buildPrReviewPayload, isSubmittable } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
@@ -118,6 +118,30 @@ export class ReviewManager extends EventEmitter {
     const finding = this.store.getFinding(findingId);
     if (!finding) throw new Error(`finding 不存在: ${findingId}`);
     this.forward({ reviewId, type: 'finding', payload: finding });
+    return finding;
+  }
+
+  /**
+   * 用户手动新增一条锚定 finding(origin=manual):与 agent finding 同 schema、同提交路径,
+   * 并建承载 discussion(可后续追问)。外发 finding + discussion 事件。
+   */
+  addManualFinding(reviewId: string, input: AddFindingInput): Finding {
+    const finding = this.store.addFinding(
+      reviewId,
+      {
+        severity: input.severity,
+        category: input.category ?? undefined,
+        title: input.title,
+        body: input.body ?? '',
+        file: input.file,
+        line: input.line,
+        suggestion: input.suggestion ?? undefined,
+      },
+      'manual',
+    );
+    this.forward({ reviewId, type: 'finding', payload: finding });
+    const discussion = this.store.getDiscussion(finding.discussionId);
+    if (discussion) this.forward({ reviewId, type: 'discussion', payload: discussion });
     return finding;
   }
 

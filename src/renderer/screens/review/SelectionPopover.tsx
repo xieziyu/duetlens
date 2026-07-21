@@ -1,6 +1,6 @@
 /**
- * 框选 diff 代码后浮出的动作条(对齐 mockup .sel-pop):
- * 选区 file:行范围 + 「发起 discussion」(human 琥珀)/「追问 codex」(agent 天蓝)。
+ * 框选 diff 代码后浮出的动作条(对齐 mockup .sel-pop):选区 file:行范围 +
+ * 「发起 discussion」(human 琥珀)/「追问 codex」(agent 天蓝)/「记为 finding」。
  * 纯呈现:定位与选区解析在 DiffPane 里,这里只画。
  */
 export interface SelectionPopoverProps {
@@ -12,9 +12,18 @@ export interface SelectionPopoverProps {
   cx: number;
   onDiscussion: () => void;
   onAsk: () => void;
+  onFinding: () => void;
 }
 
-export function SelectionPopover({ label, top, left, cx, onDiscussion, onAsk }: SelectionPopoverProps) {
+export function SelectionPopover({
+  label,
+  top,
+  left,
+  cx,
+  onDiscussion,
+  onAsk,
+  onFinding,
+}: SelectionPopoverProps) {
   return (
     <div
       className="sel-pop show"
@@ -28,6 +37,9 @@ export function SelectionPopover({ label, top, left, cx, onDiscussion, onAsk }: 
       </button>
       <button className="sp-ask" onClick={onAsk}>
         ◆ 追问 codex
+      </button>
+      <button className="sp-finding" onClick={onFinding}>
+        ＋ 记为 finding
       </button>
     </div>
   );
