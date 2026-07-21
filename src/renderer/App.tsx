@@ -70,7 +70,9 @@ export function App({ initialReviewId = null }: { initialReviewId?: string | nul
       <main className="screen-host">
         {screen === 'entry' && <EntryScreen onOpenReview={openReview} />}
         {screen === 'review' && <ReviewScreen reviewId={activeReviewId} />}
-        {screen === 'submit' && <SubmitExportScreen />}
+        {screen === 'submit' && (
+          <SubmitExportScreen reviewId={activeReviewId} onBack={() => setScreen('review')} />
+        )}
       </main>
     </div>
   );

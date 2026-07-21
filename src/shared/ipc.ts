@@ -39,6 +39,7 @@ export const IpcChannels = {
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
   dialogPickDirectory: 'dialog:pick-directory',
+  dialogSaveTextFile: 'dialog:save-text-file',
 } as const;
 
 /** 发起一次真实审核的目标(对应 backend ReviewTarget;repoPath 对 github-pr 可省)。 */
@@ -136,5 +137,7 @@ export interface DuetlensApi {
   dialog: {
     /** 打开系统目录选择器,返回所选绝对路径(取消返回 null)。 */
     pickDirectory(): Promise<string | null>;
+    /** 经系统保存对话框把文本写入本地文件(如 Markdown 报告);返回落盘路径,取消返回 null。 */
+    saveTextFile(defaultName: string, content: string): Promise<string | null>;
   };
 }

@@ -43,6 +43,8 @@ const api: DuetlensApi = {
   },
   dialog: {
     pickDirectory: () => ipcRenderer.invoke(IpcChannels.dialogPickDirectory),
+    saveTextFile: (defaultName, content) =>
+      ipcRenderer.invoke(IpcChannels.dialogSaveTextFile, defaultName, content),
   },
 };
 

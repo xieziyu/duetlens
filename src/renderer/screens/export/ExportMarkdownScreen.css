@@ -1,0 +1,486 @@
+/* 导出 Markdown 屏:左预览(hero)+ 右配置,与 mockup/export-markdown.html 对齐。 */
+.export-md {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ---- 二级顶栏(返回 / 来源 / 面包屑)---- */
+.exp-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 44px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border-bottom: 1px solid var(--border);
+}
+.exp-topbar .back {
+  color: var(--text-dim);
+  font-size: 12px;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+}
+.exp-topbar .back:hover {
+  color: var(--text);
+  border-color: var(--agent-line);
+}
+.exp-topbar .src-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 12px;
+}
+.exp-topbar .src-chip .ic {
+  color: var(--human);
+}
+.exp-topbar .src-chip b {
+  color: var(--text);
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.exp-topbar .crumb {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.exp-topbar .crumb b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---- 主区:预览(1fr)+ 配置(固定宽)---- */
+.exp-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 366px;
+  min-height: 0;
+}
+.export-md .pane {
+  min-height: 0;
+}
+
+/* ---- 左:markdown 预览 ---- */
+.preview {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  background: var(--surface);
+}
+.pv-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.pv-head .lbl {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pv-head .lbl .fn {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.mini-seg {
+  display: flex;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 2px;
+  margin-left: auto;
+}
+.mini-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 11px;
+  font-family: var(--mono);
+}
+.mini-seg button.on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--agent-line) inset;
+}
+.pv-body {
+  overflow: auto;
+  background: var(--bg);
+}
+
+.md-doc {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 30px 34px 70px;
+}
+.md-doc h1 {
+  font-family: var(--mono);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.md-doc h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 26px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.md-doc h3 {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 18px 0 6px;
+  color: var(--text);
+}
+.md-doc h4 {
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 14px 0 5px;
+  color: var(--text-dim);
+}
+.md-doc p {
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin: 8px 0;
+}
+.md-doc code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--surface-3);
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: var(--agent-2);
+}
+.md-doc blockquote {
+  border-left: 3px solid var(--agent-line);
+  padding: 3px 0 3px 13px;
+  margin: 10px 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.md-doc ul {
+  padding-left: 20px;
+  margin: 8px 0;
+  color: var(--text-dim);
+}
+.md-doc li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+.md-doc del {
+  color: var(--text-faint);
+}
+.md-doc .pre-wrap {
+  margin: 10px 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.md-doc .pre-wrap pre {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 11px 13px;
+  color: var(--text);
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+.md-doc .pre-wrap.sugg {
+  border-color: var(--add-gutter);
+}
+.md-doc .pre-wrap .pre-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--add);
+  padding: 5px 12px;
+  background: var(--add-bg);
+  border-bottom: 1px solid var(--border-soft);
+}
+.md-raw {
+  padding: 24px 28px 70px;
+}
+.md-raw pre {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.75;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  max-width: 840px;
+  margin: 0 auto;
+}
+
+/* ---- 右:导出配置 ---- */
+.config {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 0;
+}
+.cfg-head {
+  padding: 15px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.cfg-head .t {
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cfg-head .s {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.cfg-body {
+  overflow: auto;
+  padding: 15px 16px;
+}
+.cfg-body .sec-lbl {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+  font-weight: 600;
+  margin: 18px 0 7px;
+  font-family: var(--mono);
+}
+.cfg-body .sec-lbl:first-child {
+  margin-top: 0;
+}
+
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  user-select: none;
+}
+.opt .sw {
+  width: 34px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  position: relative;
+  flex: none;
+  transition: 0.15s;
+}
+.opt .sw::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: 0.15s;
+}
+.opt.on {
+  color: var(--text);
+}
+.opt.on .sw {
+  background: var(--agent-soft);
+  border-color: var(--agent-line);
+}
+.opt.on .sw::after {
+  left: 16px;
+  background: var(--agent);
+}
+.opt .sub {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.grp-seg {
+  display: flex;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+}
+.grp-seg button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11.5px;
+  padding: 6px 0;
+}
+.grp-seg button.on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--agent-line) inset;
+}
+
+.ck-tally {
+  display: flex;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  margin: 0 0 6px;
+}
+.ck-tally span {
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.ck-tally .keep {
+  color: var(--agent-2);
+  border-color: var(--agent-line);
+  background: var(--agent-soft);
+}
+.ck-tally .drop {
+  color: var(--text-faint);
+}
+.ck-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ck-item:hover {
+  background: var(--hover);
+}
+.ck-item .ck {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1.5px solid var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 11px;
+  font-weight: 800;
+  flex: none;
+}
+.ck-item.on .ck {
+  background: var(--agent);
+  border-color: var(--agent);
+  color: var(--on-accent);
+}
+.ck-item .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.ck-item .dot.high {
+  background: var(--sev-high);
+}
+.ck-item .dot.med {
+  background: var(--sev-med);
+}
+.ck-item .dot.low {
+  background: var(--sev-low);
+}
+.ck-item .t {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ck-item .an {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  flex: none;
+}
+.ck-item.off {
+  opacity: 0.5;
+}
+.ck-item.off .t {
+  text-decoration: line-through;
+}
+
+.cfg-foot {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+}
+.btn-copy {
+  width: 100%;
+  background: var(--accent-solid);
+  color: var(--on-solid);
+  font-weight: 600;
+  border: 0;
+  border-radius: 10px;
+  padding: 11px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-copy:hover {
+  filter: brightness(1.06);
+}
+.btn-copy.done {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  box-shadow: 0 0 0 1px var(--agent-line) inset;
+}
+.btn-save {
+  width: 100%;
+  margin-top: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px;
+  cursor: pointer;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.btn-save:hover {
+  border-color: var(--agent-line);
+}
+.cfg-foot .note {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.cfg-foot .note.ok {
+  color: var(--agent-2);
+}

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 import {
   IpcChannels,
@@ -81,6 +82,18 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
       ? await dialog.showOpenDialog(win, opts)
       : await dialog.showOpenDialog(opts);
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0];
+  });
+
+  ipcMain.handle(IpcChannels.dialogSaveTextFile, async (_e, defaultName: string, content: string) => {
+    const win = BrowserWindow.getFocusedWindow();
+    const opts = {
+      defaultPath: defaultName,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    };
+    const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+    if (res.canceled || !res.filePath) return null;
+    await writeFile(res.filePath, content, 'utf8');
+    return res.filePath;
   });
 
   manager.on('review-event', (e: ReviewEvent) => broadcast(IpcEvents.reviewEvent, e));

@@ -28,6 +28,7 @@
     "spike:ui-state": "tsx scripts/spike-ui-state.ts",
     "spike:promote": "tsx scripts/spike-promote.ts",
     "spike:prompt": "tsx scripts/spike-prompt.ts",
+    "spike:export": "tsx scripts/spike-export.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
   },
   "keywords": [],

@@ -55,9 +55,10 @@ const now = Date.now();
 
 const REVIEW: Review = {
   id: 'demo',
-  source: 'github-pr',
-  sourceRef: 'xieziyu/podcast-go#482',
-  repoPath: null,
+  // 本地分支 source:无 PR 可提交,终点走导出 Markdown(便于自查导出屏)
+  source: 'local-branch',
+  sourceRef: 'feat/streaming-transcode',
+  repoPath: '/Users/dev/podcast-go',
   codexThreadId: 'thread-demo',
   title: 'feat: streaming transcode pipeline',
   status: 'reviewing',
@@ -339,6 +340,16 @@ export function installPreviewApi(): void {
     },
     dialog: {
       pickDirectory: async () => null,
+      // 浏览器里无原生保存对话框:用 <a download> 下载作预览替身,回一个假路径证明闭环
+      saveTextFile: async (defaultName, content) => {
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = defaultName;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        return `~/Downloads/${defaultName}`;
+      },
     },
   };
   (window as unknown as { duetlens: DuetlensApi }).duetlens = api;
