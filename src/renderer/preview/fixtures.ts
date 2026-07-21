@@ -166,6 +166,7 @@ const SEED_MESSAGES: Record<string, Message[]> = {
 /** 装一个 stub 到 window.duetlens;写路径(triage/编辑/讨论)真的改内存态并经事件回推,便于自查闭环。 */
 export function installPreviewApi(): void {
   const diff = parseUnifiedDiff(RAW_DIFF);
+  const review: Review = { ...REVIEW };
   const findings = FINDINGS.map((f) => ({ ...f }));
   const discussions = DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
@@ -189,15 +190,15 @@ export function installPreviewApi(): void {
       platform: 'darwin',
     }),
     review: {
-      list: async () => [REVIEW],
-      get: async () => REVIEW,
+      list: async () => [review],
+      get: async () => review,
       findings: async () => findings,
       diff: async () => diff,
       discussions: async () => discussions,
       messages: async (discussionId) => msgStore[discussionId] ?? [],
-      start: async () => REVIEW,
-      startDemo: async () => REVIEW,
-      resume: async () => REVIEW,
+      start: async () => review,
+      startDemo: async () => review,
+      resume: async () => review,
       release: async () => {},
       addDiscussion: async (_r, anchor) => {
         const d: Discussion = {
@@ -241,6 +242,12 @@ export function installPreviewApi(): void {
         const f = findings.find((x) => x.id === findingId)!;
         const next = { ...f, triage, updatedAt: Date.now() };
         emit(next);
+        return next;
+      },
+      updateSummary: async (_r, body) => {
+        const next = { ...review, summaryBody: body, updatedAt: Date.now() };
+        Object.assign(review, next);
+        fire({ reviewId: 'demo', type: 'review', payload: next });
         return next;
       },
       updateFinding: async (_r, input) => {

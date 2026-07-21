@@ -24,6 +24,8 @@ const api: DuetlensApi = {
       ipcRenderer.invoke(IpcChannels.reviewSetTriage, reviewId, findingId, triage),
     updateFinding: (reviewId, input) =>
       ipcRenderer.invoke(IpcChannels.reviewUpdateFinding, reviewId, input),
+    updateSummary: (reviewId, body) =>
+      ipcRenderer.invoke(IpcChannels.reviewUpdateSummary, reviewId, body),
     onEvent: (handler: (e: ReviewEvent) => void) => {
       const listener = (_e: IpcRendererEvent, payload: ReviewEvent) => handler(payload);
       ipcRenderer.on(IpcEvents.reviewEvent, listener);

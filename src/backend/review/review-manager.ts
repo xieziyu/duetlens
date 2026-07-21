@@ -113,6 +113,15 @@ export class ReviewManager extends EventEmitter {
     return finding;
   }
 
+  /** 编辑审核总结正文(提交屏 review body 来源);落库后外发 `review` 事件。 */
+  updateSummary(reviewId: string, body: string): Review {
+    this.store.setReviewSummary(reviewId, body);
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    this.forward({ reviewId, type: 'review', payload: review });
+    return review;
+  }
+
   /** 向某条 discussion 追问;会话不在内存时先按 codexThreadId 续接。 */
   async sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message> {
     const session = this.sessions.get(reviewId) ?? (await this.resumeSession(reviewId));

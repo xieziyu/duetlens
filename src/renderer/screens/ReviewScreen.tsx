@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Discussion, Finding, Message, Severity, Triage } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, Severity, Triage } from '@shared/domain';
+import type { DiffFile } from '@shared/diff';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useReviewStream } from '../review/useReviewStream';
 import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
+import { SummaryTab } from './review/SummaryTab';
 import { Resizer } from './review/Resizer';
 import './ReviewScreen.css';
 import './review/review-syntax.css';
@@ -36,6 +38,8 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
   const [pendingRef, setPendingRef] = useState<{ anchor: DiscussionAnchor; label: string } | null>(null);
   const [awaitingReply, setAwaitingReply] = useState<string | null>(null);
+  // Summary 关注主题 → 筛 Findings tab
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   // 栏宽:本地拖拽态,持久化(后端 settings)后续接入
   const [leftW, setLeftW] = useState(236);
   const [rightW, setRightW] = useState(380);
@@ -122,6 +126,19 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
     },
     [reviewId, activeDiscussionId, pendingRef, runSend],
   );
+
+  const onEditSummary = useCallback(
+    (body: string) => {
+      if (!reviewId) return;
+      void window.duetlens.review.updateSummary(reviewId, body);
+    },
+    [reviewId],
+  );
+
+  const onPickCategory = (cat: string) => {
+    setCategoryFilter(cat);
+    setTab('findings');
+  };
 
   const jumpToCode = (d: Discussion) => {
     if (d.file) setActivePath(d.file);
@@ -220,6 +237,8 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           findings={findings}
           discussions={discussions}
           messages={messages}
+          review={review}
+          diff={diff}
           scanning={status === 'scanning' || !status}
           onPickFinding={focusFinding}
           onTriage={onTriage}
@@ -231,6 +250,10 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           onComposerSend={onComposerSend}
           onJumpToCode={jumpToCode}
           ensureMessages={ensureMessages}
+          categoryFilter={categoryFilter}
+          onClearCategory={() => setCategoryFilter(null)}
+          onEditSummary={onEditSummary}
+          onPickCategory={onPickCategory}
         />
       </div>
     </div>
@@ -246,6 +269,8 @@ function RightPanel({
   findings,
   discussions,
   messages,
+  review,
+  diff,
   scanning,
   onPickFinding,
   onTriage,
@@ -257,12 +282,18 @@ function RightPanel({
   onComposerSend,
   onJumpToCode,
   ensureMessages,
+  categoryFilter,
+  onClearCategory,
+  onEditSummary,
+  onPickCategory,
 }: {
   tab: RightTab;
   onTab: (t: RightTab) => void;
   findings: Finding[];
   discussions: Discussion[];
   messages: Record<string, Message[]>;
+  review: Review | null;
+  diff: DiffFile[];
   scanning: boolean;
   onPickFinding: (f: Finding) => void;
   onTriage: (finding: Finding, triage: Triage) => void;
@@ -274,14 +305,22 @@ function RightPanel({
   onComposerSend: (text: string) => void;
   onJumpToCode: (d: Discussion) => void;
   ensureMessages: (id: string) => void;
+  categoryFilter: string | null;
+  onClearCategory: () => void;
+  onEditSummary: (body: string) => void;
+  onPickCategory: (cat: string) => void;
 }) {
+  const shown = useMemo(
+    () => (categoryFilter ? findings.filter((f) => (f.category ?? '未分类') === categoryFilter) : findings),
+    [findings, categoryFilter],
+  );
   const grouped = useMemo(() => {
     const g: Record<Severity, Finding[]> = { high: [], medium: [], low: [] };
-    for (const f of findings) g[f.severity].push(f);
+    for (const f of shown) g[f.severity].push(f);
     return g;
-  }, [findings]);
-  const kept = findings.filter((f) => f.triage === 'keep').length;
-  const dropped = findings.filter((f) => f.triage === 'dismiss').length;
+  }, [shown]);
+  const kept = shown.filter((f) => f.triage === 'keep').length;
+  const dropped = shown.filter((f) => f.triage === 'dismiss').length;
 
   return (
     <div className="right pane">
@@ -304,8 +343,18 @@ function RightPanel({
               <span className="pulse" /> codex 正在通读改动,findings 会实时出现…
             </div>
           )}
-          {findings.length === 0 && !scanning && <p className="empty-note">暂无 findings。</p>}
-          {findings.length > 0 && (
+          {categoryFilter && (
+            <div className="cat-filter">
+              筛选 · <b>{categoryFilter}</b>
+              <button className="cf-x" onClick={onClearCategory} title="清除筛选">
+                ✕
+              </button>
+            </div>
+          )}
+          {shown.length === 0 && !scanning && (
+            <p className="empty-note">{categoryFilter ? `无 ${categoryFilter} 分类的 findings。` : '暂无 findings。'}</p>
+          )}
+          {shown.length > 0 && (
             <div className="fp-toolbar">
               <span className="fp-tally">
                 保留 <b>{kept}</b> · 剔除 {dropped}
@@ -345,11 +394,23 @@ function RightPanel({
           ensureMessages={ensureMessages}
         />
       )}
-      {tab === 'summary' && (
-        <div className="tab-body">
-          <p className="empty-note">审核总结即将接入(后续切片)。</p>
-        </div>
-      )}
+      {tab === 'summary' &&
+        (scanning ? (
+          <div className="tab-body">
+            <div className="scan-note">
+              <span className="pulse" /> 扫描完成后生成审核总结…
+            </div>
+          </div>
+        ) : (
+          <SummaryTab
+            review={review}
+            findings={findings}
+            discussionCount={discussions.length}
+            diff={diff}
+            onEditSummary={onEditSummary}
+            onPickCategory={onPickCategory}
+          />
+        ))}
     </div>
   );
 }

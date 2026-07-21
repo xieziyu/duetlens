@@ -1689,3 +1689,303 @@
   color: var(--text-faint);
   margin-top: 8px;
 }
+
+/* ---------- Findings tab 分类筛选条(来自 Summary 关注主题)---------- */
+.cat-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--agent-line);
+  border-radius: 8px;
+  background: var(--agent-soft);
+}
+.cat-filter b {
+  font-family: var(--mono);
+  color: var(--text);
+}
+.cat-filter .cf-x {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+  cursor: pointer;
+}
+.cat-filter .cf-x:hover {
+  color: var(--del);
+}
+
+/* ---------- Summary tab ---------- */
+.summary-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.sum-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 14px 10px;
+}
+.sum-verdict {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 12px 13px;
+  margin-bottom: 14px;
+}
+.sum-verdict.rc {
+  border-color: var(--del-gutter);
+  background: color-mix(in oklab, var(--del) 7%, var(--surface));
+}
+.sum-verdict.approve {
+  border-color: var(--add-gutter);
+  background: color-mix(in oklab, var(--add) 7%, var(--surface));
+}
+.sv-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.sv-head b {
+  color: var(--text);
+  font-weight: 600;
+}
+.sv-ic {
+  width: 21px;
+  height: 21px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex: none;
+  background: var(--del-bg);
+  color: var(--sev-high);
+  border: 1px solid var(--del-gutter);
+}
+.sum-verdict.comment .sv-ic {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  border-color: var(--agent-line);
+}
+.sum-verdict.approve .sv-ic {
+  background: var(--add-bg);
+  color: var(--add);
+  border-color: var(--add-gutter);
+}
+.sv-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 9px;
+  font-family: var(--mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sum-stats {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-2);
+  padding: 11px 6px;
+  margin-bottom: 16px;
+}
+.sum-stats .st {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.sum-stats .st-n {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
+}
+.sum-stats .st-l {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+.sum-stats .st-div {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 1px 7px;
+}
+.sum-block {
+  margin-bottom: 16px;
+}
+.sb-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 9px;
+}
+.sb-head .sb-edit {
+  color: var(--agent-2);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.sb-head .sb-by {
+  margin-left: auto;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sb-head .sb-by .gl {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  background: conic-gradient(from 210deg, var(--agent), var(--agent-2), var(--agent));
+  box-shadow: 0 0 0 1px var(--agent-line) inset;
+}
+.sb-prose {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.65;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 11px 12px;
+}
+.sb-prose p {
+  margin-bottom: 8px;
+}
+.sb-prose p:last-child {
+  margin-bottom: 0;
+}
+.sb-prose strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.sb-prose code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--surface-3);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--agent-2);
+}
+.sb-prose.empty {
+  color: var(--text-faint);
+  cursor: text;
+}
+.sb-editor .sb-ta {
+  min-height: 150px;
+  line-height: 1.7;
+  font-size: 12.5px;
+}
+.theme {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  margin-bottom: 7px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.theme:hover {
+  border-color: var(--agent-line);
+  background: var(--surface-2);
+}
+.theme .th-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  flex: none;
+}
+.theme .th-dot.high {
+  background: var(--sev-high);
+}
+.theme .th-dot.med {
+  background: var(--sev-med);
+}
+.theme .th-dot.low {
+  background: var(--sev-low);
+}
+.theme .th-cat {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+  font-weight: 500;
+}
+.theme .th-note {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.theme .th-n {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 6px;
+  flex: none;
+}
+.sum-cov {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  padding: 2px 2px 4px;
+  line-height: 1.7;
+}
+.sum-foot {
+  border-top: 1px solid var(--border);
+  padding: 12px 14px;
+  flex: none;
+}
+.sum-submit {
+  width: 100%;
+  background: var(--accent-solid);
+  color: var(--on-solid);
+  font-weight: 600;
+  border: 0;
+  border-radius: 10px;
+  padding: 11px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.sum-submit:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.sum-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sum-submit .arr {
+  font-size: 15px;
+  line-height: 1;
+}

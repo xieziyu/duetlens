@@ -58,6 +58,9 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewUpdateFinding, (_e, reviewId: string, input: FindingEditInput) =>
     manager.updateFinding(reviewId, input),
   );
+  ipcMain.handle(IpcChannels.reviewUpdateSummary, (_e, reviewId: string, body: string) =>
+    manager.updateSummary(reviewId, body),
+  );
 
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());
   ipcMain.handle(IpcChannels.uiSaveSettings, (_e, settings: UiSettings) => manager.saveUiSettings(settings));

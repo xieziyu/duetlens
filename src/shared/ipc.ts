@@ -31,6 +31,7 @@ export const IpcChannels = {
   reviewSendMessage: 'review:send-message',
   reviewSetTriage: 'review:set-triage',
   reviewUpdateFinding: 'review:update-finding',
+  reviewUpdateSummary: 'review:update-summary',
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
   dialogPickDirectory: 'dialog:pick-directory',
@@ -82,6 +83,7 @@ export type ReviewEvent =
   | { reviewId: string; type: 'finding'; payload: Finding }
   | { reviewId: string; type: 'message'; payload: Message }
   | { reviewId: string; type: 'discussion'; payload: Discussion }
+  | { reviewId: string; type: 'review'; payload: Review }
   | { reviewId: string; type: 'status'; payload: Review['status'] }
   | { reviewId: string; type: 'agent'; payload: AgentEvent };
 
@@ -112,6 +114,8 @@ export interface DuetlensApi {
     setTriage(reviewId: string, findingId: string, triage: Triage): Promise<Finding>;
     /** 用户就地编辑 finding 可编辑字段(与 codex update_finding 同一落库路径)。 */
     updateFinding(reviewId: string, input: FindingEditInput): Promise<Finding>;
+    /** 编辑审核总结正文(提交屏 review body 来源);落库后返回并经 `review` 事件回推。 */
+    updateSummary(reviewId: string, body: string): Promise<Review>;
     /** 订阅领域事件;返回取消订阅函数。 */
     onEvent(handler: (e: ReviewEvent) => void): () => void;
   };
