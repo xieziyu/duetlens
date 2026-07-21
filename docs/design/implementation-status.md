@@ -41,6 +41,7 @@
 | `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store setDiff/getRawDiff 回环;不烧 token |
 | `write` | finding 写路径:ReviewManager.setTriage/updateFinding 落库 + 外发 `finding` 事件(dismiss→keep 往返、编辑不重置 triage、suggestion 清空、未知 id 抛错);不烧 token |
 | `ui-state` | per-review UI 进度态:ReviewStore.get/saveReviewUiState 往返 + 默认空态 + upsert 单行 + 损坏 JSON 降级 + 级联删除;不烧 token |
+| `promote` | discussion→finding 提升:锚点沿用 + 会话历史保留 + kind 翻转为 finding + 重复/无锚点/未知 id 守卫;不烧 token |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` 在 Electron ABI 下加载、六表迁移到位、IPC 注册无崩溃。
 
@@ -76,6 +77,7 @@
    - ✅ 全局 UI 偏好持久化(已合入 main):`SettingsProvider`(`src/renderer/settings/`)启动拉 `ui.getSettings`、改动去抖(400ms)写回 `ui.saveSettings`、主题两轴挂 documentElement,取代原来只存组件 state 的 ThemeProvider(已删)。App 主题控件 + ReviewScreen 的栏宽/默认 tab/默认 diff 视图全部改由 settings 驱动、拖拽/切换即写回。**后端 `ui_settings` 表 + IPC 早已就绪,本切片纯前端接线。** per-file viewed/collapsed 仍为 per-review 本地态(`review_ui_state` 持久化留后续)。preview fixtures 用非默认栏宽(300/420)+ 可变 saveSettings 存储,实测:启动即应用 300/420、明暗切换与 split 切换经去抖落库回读一致。
    - ✅ per-review UI 态持久化(viewed → `review_ui_state`):`review:get-ui-state`/`review:save-ui-state` IPC(ReviewManager.get/saveReviewUiState → ReviewStore JSON 列)+ `useReviewUiState` hook(挂载按 reviewId 拉取、viewed 改动去抖 400ms 写回、恢复时把已看文件默认折叠)。collapsed 是「标记已看即折叠」派生的临时态、不持久化。preview fixtures 预置一个已看文件证明启动即恢复(非空态);`npm run spike:ui-state` 确定性 PASS。**last_active_tab 列暂留空(tab 现为全局 `ui_settings` 偏好)**
    - ✅ 键盘快捷键 + 帮助浮层(→ mockup #kbdHelp):`useEffect` 全局 keydown —— `?`/⌘ 开关帮助、`Esc` 关、`1/2/3` 切右栏 tab、`u` 切 unified/split(经 `update()` 一并去抖持久化到 `ui_settings`);焦点在输入框或按住修饰键时让位。`KbdHelp.tsx` 双列分组浮层(仅列已实现快捷键;编辑/发送的 ⌘↵·Esc·↵ 由各 InlineCard/Composer/SummaryTab 自理)。rev-topbar 加 `⌘` 触发按钮。preview 实测:帮助开关、Esc、1/2/3 切 tab、u 切 diff 全通
-   - ⏳ gutter 锚点圆点(有讨论的行)· 扫描 timeline · 顶栏合并 · promote(discussion→finding)/ 手动新增 finding · 提交屏
+   - ✅ promote(discussion→finding):Discussion 栏活跃 user 线程顶部「⬆ 转为 finding」按钮 → `review:promote-discussion` IPC(ReviewManager 派生默认标题/正文取首条 user 消息、severity 默认 medium → ReviewStore.promoteDiscussion 翻转 discussion.kind=finding/origin=promoted + 建 finding、事务保证、锚点沿用 discussion、保留会话历史)→ 外发 `finding` + `discussion` 事件(useReviewStream discussion 改为 upsert 使 kind 变更传播)→ 前端聚焦新 finding 内联卡就地编辑。`npm run spike:promote` 确定性 PASS;preview 实测:user 线程 promote → Findings 4→5、glyph 你→◆、内联卡「你·提升」、按钮消失。**手动新增 finding(需锚点选择 UX)留后续切片**
+   - ⏳ gutter 锚点圆点(有讨论的行)· 扫描 timeline · 顶栏合并 · 手动新增 finding · 提交屏
    - ⏳ 顶栏合并(App 全局栏 + rev-topbar 现为两条,mockup 是单条含 submit CTA/模型/⌘)· 主题+栏宽持久化(settings IPC)
    - ⏳ 审核规则三层编辑器(`mockup/prompt-rules.html`)+ 读写 IPC(读走 `review-prompt.ts`,写落 `.duetlens/review.md`)
