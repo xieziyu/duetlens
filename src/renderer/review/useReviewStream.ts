@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { Discussion, Finding, Message, Review } from '@shared/domain';
+import type { DiffFile } from '@shared/diff';
 import type { AgentEvent } from '@shared/agent-events';
 
 export interface ReviewStreamState {
   review: Review | null;
   findings: Finding[];
   discussions: Discussion[];
+  /** 结构化 diff;首帧拉取,scan 期已落库故立即可得 */
+  diff: DiffFile[];
   /** 按 discussionId 聚合的消息(user/agent),随 message 事件增量追加 */
   messages: Record<string, Message[]>;
   status: Review['status'] | null;
@@ -21,6 +24,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [review, setReview] = useState<Review | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [diff, setDiff] = useState<DiffFile[]>([]);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [status, setStatus] = useState<Review['status'] | null>(null);
   const [tokenUsage, setTokenUsage] = useState<{ used: number; total?: number } | null>(null);
@@ -30,6 +34,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     if (!reviewId) return;
     let alive = true;
     setMessages({});
+    setDiff([]);
 
     void window.duetlens.review.get(reviewId).then((r) => {
       if (alive) {
@@ -39,6 +44,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     });
     void window.duetlens.review.findings(reviewId).then((f) => alive && setFindings(f));
     void window.duetlens.review.discussions(reviewId).then((d) => alive && setDiscussions(d));
+    void window.duetlens.review.diff(reviewId).then((d) => alive && setDiff(d));
 
     const off = window.duetlens.review.onEvent((e) => {
       if (e.reviewId !== reviewId) return;
@@ -77,5 +83,5 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     };
   }, [reviewId]);
 
-  return { review, findings, discussions, messages, status, tokenUsage, lastTool };
+  return { review, findings, discussions, diff, messages, status, tokenUsage, lastTool };
 }
