@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:后端垂直打通 + 前端 diff-review 起步 · 最后更新 2026-07-21(`origin/main` = b16c35d) —— backlog #1–#6 已合入 main;#7 前端三栏 diff-review shell + 语法高亮 + 拖拽栏宽已合入 main(见下)
+> 状态:后端垂直打通 + 前端 diff-review 起步 · 最后更新 2026-07-21(`origin/main` = d83d8c5) —— backlog #1–#6 已合入 main;#7 前端三栏 diff-review shell + 语法高亮 + 拖拽栏宽已合入 main;另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查)(见下)
 
 设计文档描述目标结构;本页记录**已落地到代码**的部分、验证方式与剩余 backlog。实现细节以代码为准,本页只做导航与状态。
 
@@ -41,6 +41,8 @@
 | `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store setDiff/getRawDiff 回环;不烧 token |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` 在 Electron ABI 下加载、六表迁移到位、IPC 注册无崩溃。
+
+**前端视觉自查(不需 Electron)**:`npm run preview:ui` 起纯 Vite dev server,`src/renderer/preview/` 用 fixture stub `window.duetlens`(一个 review + 多文件 diff + findings 含 off-diff),浏览器开 `/preview.html` 即渲染真实 diff-review 组件 + CSS,顶栏可切明暗×配色两轴。dev-only,forge 生产只打 `index.html`。做 UI 切片时先扩 `preview/fixtures.ts` 再看效果。
 
 ## 与设计的偏差 / 决策记录
 
