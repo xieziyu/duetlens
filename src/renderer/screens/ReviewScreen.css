@@ -325,8 +325,152 @@
   border-color: var(--del-gutter);
   background: var(--del-bg);
 }
+.mini.fnd {
+  color: var(--sev-high);
+  border-color: var(--del-gutter);
+  background: var(--del-bg);
+}
 .diff-file {
   border-bottom: 1px solid var(--border);
+}
+
+/* ---------- 内联 finding 卡(锚定在 diff 行处)---------- */
+.inline {
+  padding: 8px 16px 14px 78px;
+  background: linear-gradient(180deg, var(--agent-soft), transparent);
+}
+.inline .card + .card {
+  margin-top: 10px;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.card.agent {
+  border-left: 2px solid var(--agent);
+}
+.card.human {
+  border-left: 2px solid var(--human);
+}
+.card.focused {
+  border-color: var(--agent);
+  box-shadow: 0 0 0 2px var(--agent-soft);
+}
+.card.submitted {
+  border-left-color: var(--add);
+}
+.card.dismissed {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.card.dismissed .c-body strong {
+  text-decoration: line-through;
+}
+.card .c-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.who {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+}
+.av {
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.av.agent {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  border: 1px solid var(--agent-line);
+}
+.av.human {
+  background: var(--human-soft);
+  color: var(--human);
+  border: 1px solid var(--human-line);
+}
+.tool-tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  margin-left: auto;
+}
+.tool-tag b {
+  color: var(--agent-2);
+  font-weight: 500;
+}
+.c-body {
+  padding: 11px 13px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.c-body strong {
+  color: var(--text);
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+}
+.c-body-text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.card-meta {
+  padding: 0 13px 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.card-meta .dia {
+  color: var(--agent-2);
+}
+.card-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 13px 11px;
+}
+.anchor-tag {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.sub-tag {
+  font-size: 11px;
+  color: var(--add);
+  margin-left: auto;
+}
+
+/* ---------- off-diff findings 区 ---------- */
+.offdiff {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  background: color-mix(in oklab, var(--human) 4%, transparent);
+}
+.offdiff-head {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--human);
+  padding: 4px 4px 8px 66px;
+}
+.offdiff .inline {
+  padding: 4px 4px 8px 66px;
+  background: none;
 }
 .hunk {
   border-bottom: 1px solid var(--border-soft);

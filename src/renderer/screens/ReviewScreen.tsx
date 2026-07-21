@@ -19,7 +19,13 @@ const STATUS_LABEL: Record<string, string> = {
 export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   const { review, findings, diff, status, tokenUsage, lastTool } = useReviewStream(reviewId);
   const [activePath, setActivePath] = useState<string | null>(null);
+  const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
   const [tab, setTab] = useState<RightTab>('findings');
+
+  const focusFinding = (f: Finding) => {
+    setActivePath(f.file);
+    setFocusFindingId(f.id);
+  };
 
   // diff 到达后默认选中首个文件
   useEffect(() => {
@@ -67,13 +73,18 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           activePath={activePath}
           onSelect={setActivePath}
         />
-        <DiffPane files={diff} activePath={activePath} />
+        <DiffPane
+          files={diff}
+          findings={findings}
+          activePath={activePath}
+          focusFindingId={focusFindingId}
+        />
         <RightPanel
           tab={tab}
           onTab={setTab}
           findings={findings}
           scanning={status === 'scanning' || !status}
-          onPickFinding={(f) => setActivePath(f.file)}
+          onPickFinding={focusFinding}
         />
       </div>
     </div>
