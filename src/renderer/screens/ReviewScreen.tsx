@@ -422,6 +422,15 @@ function RightPanel({
   }, [shown]);
   const kept = shown.filter((f) => f.triage === 'keep').length;
   const dropped = shown.filter((f) => f.triage === 'dismiss').length;
+  const coverage = useMemo(() => {
+    let a = 0;
+    let d = 0;
+    for (const f of diff) {
+      a += f.additions;
+      d += f.deletions;
+    }
+    return { files: diff.length, additions: a, deletions: d };
+  }, [diff]);
 
   return (
     <div className="right pane">
@@ -456,11 +465,25 @@ function RightPanel({
                   </button>
                 </div>
               )}
-              {shown.length === 0 && (
-                <p className="empty-note">
-                  {categoryFilter ? `无 ${categoryFilter} 分类的 findings。` : '暂无 findings。'}
-                </p>
-              )}
+              {shown.length === 0 &&
+                (categoryFilter ? (
+                  <p className="empty-note">无 {categoryFilter} 分类的 findings。</p>
+                ) : (
+                  // 扫描已结束且零 finding = 干净通过:给正向结论 + 覆盖度 + 手动新增引导
+                  <div className="findings-clean">
+                    <span className="fc-badge">✓</span>
+                    <div className="fc-title">未发现需要修复的问题</div>
+                    <div className="fc-sub">codex 已通读本次改动,没有报告 finding。</div>
+                    {coverage.files > 0 && (
+                      <div className="fc-cover">
+                        已覆盖 {coverage.files} 文件 · +{coverage.additions} −{coverage.deletions} · read-only sandbox
+                      </div>
+                    )}
+                    <div className="fc-hint">
+                      仍可框选左侧代码「＋ 记为 finding」手动新增,或在 Discussion 追问 codex。
+                    </div>
+                  </div>
+                ))}
               {shown.length > 0 && (
                 <div className="fp-toolbar">
                   <span className="fp-tally">

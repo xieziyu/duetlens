@@ -410,6 +410,33 @@
   border-color: var(--del-gutter);
   background: var(--del-bg);
 }
+/* 非常规文件状态 pill(新增/删除/重命名/二进制) */
+.fstat {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.fstat.added {
+  color: var(--add);
+  border-color: var(--add-gutter);
+  background: var(--add-bg);
+}
+.fstat.deleted {
+  color: var(--del);
+  border-color: var(--del-gutter);
+  background: var(--del-bg);
+}
+.fstat.renamed {
+  color: var(--agent-2);
+  border-color: var(--agent-line);
+  background: var(--agent-soft);
+}
+.fstat.binary {
+  color: var(--text-faint);
+}
 .diff-file {
   border-bottom: 1px solid var(--border);
 }
@@ -695,6 +722,51 @@
 .scan-note {
   color: var(--text-faint);
   font-size: 12px;
+}
+/* 扫描结束零 finding = 干净通过的正向空态 */
+.findings-clean {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 44px 20px;
+}
+.fc-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--add-bg);
+  color: var(--add);
+  border: 1px solid var(--add-gutter);
+  font-size: 16px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.fc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.fc-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.fc-cover {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+.fc-hint {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 8px;
+  max-width: 270px;
+  line-height: 1.6;
 }
 .scan-note {
   display: flex;

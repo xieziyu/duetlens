@@ -56,6 +56,23 @@ index 4444444..5555555 100644
 +  color: var(--accent);
 +  padding: 4px 8px;
  }
+diff --git a/src/legacy.ts b/src/legacy.ts
+deleted file mode 100644
+index 6666666..0000000
+--- a/src/legacy.ts
++++ /dev/null
+@@ -1,3 +0,0 @@
+-export const legacy = true;
+-// dropped in this change
+-export default legacy;
+diff --git a/src/oldname.ts b/src/newname.ts
+similarity index 100%
+rename from src/oldname.ts
+rename to src/newname.ts
+diff --git a/assets/logo.png b/assets/logo.png
+new file mode 100644
+index 0000000..7777777
+Binary files /dev/null and b/assets/logo.png differ
 `;
 
 const now = Date.now();
@@ -259,6 +276,8 @@ export function installPreviewApi(): void {
   const forceSubmit = params.get('submit');
   // ?scan 让 demo review 处于首轮机审态,用于自查扫描 timeline
   const asScanning = params.has('scan');
+  // ?clean 零 finding:自查扫描结束「干净通过」的正向空态
+  const asClean = params.has('clean');
   const review: Review = {
     ...REVIEW,
     ...(asGithub ? { source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null } : {}),
@@ -270,8 +289,8 @@ export function installPreviewApi(): void {
     viewedFiles: diff.length > 1 ? [diff[1].path] : diff.slice(0, 1).map((f) => f.path),
     lastActiveTab: null,
   };
-  const findings = FINDINGS.map((f) => ({ ...f }));
-  const discussions = DISCUSSIONS.map((d) => ({ ...d }));
+  const findings = asClean ? [] : FINDINGS.map((f) => ({ ...f }));
+  const discussions = asClean ? [] : DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const listeners = new Set<(e: ReviewEvent) => void>();
   const fire = (e: ReviewEvent) => {

@@ -24,6 +24,13 @@ export function fileAnchorId(path: string): string {
 
 const basename = (p: string) => p.split('/').pop() ?? p;
 
+/** 非常规状态的文件在 file-header 标一枚 pill;modified 是默认、不标以免噪音。 */
+const FILE_STATUS_LABEL: Partial<Record<DiffFile['status'], string>> = {
+  added: '新增',
+  deleted: '删除',
+  renamed: '重命名',
+};
+
 /** diff 内锚点:发起 discussion / 追问 codex 时携带的选区信息 */
 interface AnchorPick {
   anchor: DiscussionAnchor;
@@ -424,6 +431,10 @@ function DiffFileView({
           {file.path}
         </span>
         <span className="chips">
+          {FILE_STATUS_LABEL[file.status] && (
+            <span className={`fstat ${file.status}`}>{FILE_STATUS_LABEL[file.status]}</span>
+          )}
+          {file.binary && <span className="fstat binary">二进制</span>}
           {!file.binary && file.hunks.length > 0 && (
             <span className="view-seg">
               {(['unified', 'split'] as DiffView[]).map((v) => (

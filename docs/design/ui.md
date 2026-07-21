@@ -181,7 +181,7 @@
 - [x] **全部会话历史页**:全量列表 + 搜索 + source/状态筛选 + 时间分桶 + 软删除/撤销。→ `mockup/history.html`,见上「全部会话历史页」。
 - [x] **首次启动 / onboarding**:codex CLI / app-server / gh 环境检查清单 + 修复命令 + CTA 门控。→ `mockup/onboarding.html`,见上「首次启动 / codex onboarding」。
 
-**第三层(打磨,暂缓)**:各 tab 空态、diff 边界(二进制/重命名/大文件/空白差异)、窄窗口退化、模型选择/reasoning effort、a11y 焦点管理、长任务完成通知。
+**第三层(打磨)**:✅ 各 tab 空态(Findings 干净通过正向空态 + 覆盖度)、✅ diff 边界文件状态 pill(新增/删除/重命名/二进制;渲染层早已分派 binary/空 hunk/rename 提示)。**余**:窄窗口退化、模型选择/reasoning effort、a11y 焦点管理、长任务完成通知、大文件/大 diff 截断。
 
 ## 已有 mockup
 
