@@ -4,13 +4,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { FindingEditInput, ReviewEvent } from '@shared/ipc';
+import type { FindingEditInput, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import { buildPrReviewPayload, isSubmittable } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
 import { loadReviewPrompt } from '../prompt/review-prompt';
 import { createSource } from '../source/create-source';
 import type { ReviewTarget } from '../source/source';
+import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
 import { ReviewSession } from './review-session';
 
 // 演示用内置 fixture(source 层接好前,让 app 能端到端跑一遍真实审核)。
@@ -42,15 +44,18 @@ export class ReviewManager extends EventEmitter {
   /** source 等随会话存活的清理钩子;续问要读文件,故不在扫描结束时释放,延到 dispose。 */
   private readonly cleanups = new Map<string, () => void | Promise<void>>();
   private readonly maxLiveSessions: number;
+  /** GitHub 提交层;可注入(spike 用假实现,不烧真 PR)。 */
+  private readonly submitter: GitHubSubmitter;
 
   constructor(
     private readonly store: ReviewStore,
     private readonly codexHome?: string,
-    opts?: { maxLiveSessions?: number },
+    opts?: { maxLiveSessions?: number; submitter?: GitHubSubmitter },
   ) {
     super();
     // 每个活跃会话 = 一个 codex 子进程 + MCP server;上限避免长时运行泄漏进程。
     this.maxLiveSessions = opts?.maxLiveSessions ?? 4;
+    this.submitter = opts?.submitter ?? new GhReviewSubmitter();
   }
 
   listReviews(): Review[] {
@@ -138,6 +143,41 @@ export class ReviewManager extends EventEmitter {
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
     this.forward({ reviewId, type: 'review', payload: review });
     return review;
+  }
+
+  /**
+   * 把保留且未提交的 findings 组成一次 GitHub PR review 原子提交。
+   * 成功后被提交项锁定为 submitted(增量:下次只发新的 delta);失败/被拒不改任何状态。
+   */
+  async submitReview(reviewId: string, input: SubmitReviewInput): Promise<SubmitReviewResult> {
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    if (review.source !== 'github-pr') {
+      return { status: 'failed', message: '仅 github-pr source 可提交到 GitHub;本地/vbranch 请用导出。' };
+    }
+    // summary 若有改动,先落库(review body 来源),再一并回推
+    if (input.summaryBody !== undefined && input.summaryBody !== review.summaryBody) {
+      this.updateSummary(reviewId, input.summaryBody);
+    }
+    const fresh = this.store.getReview(reviewId)!;
+    const pending = this.store.listFindings(reviewId).filter(isSubmittable);
+    if (pending.length === 0) {
+      return { status: 'failed', message: '没有保留且未提交的 finding 可提交。' };
+    }
+
+    const payload = buildPrReviewPayload(fresh, pending, input.event);
+    const result = await this.submitter.submit(fresh, payload);
+
+    if (result.status === 'success') {
+      for (const f of pending) {
+        this.store.setSubmission(f.id, 'submitted', result.url);
+        const updated = this.store.getFinding(f.id);
+        if (updated) this.forward({ reviewId, type: 'finding', payload: updated });
+      }
+      this.store.setReviewStatus(reviewId, 'submitted');
+      this.forward({ reviewId, type: 'status', payload: 'submitted' });
+    }
+    return result;
   }
 
   /** 向某条 discussion 追问;会话不在内存时先按 codexThreadId 续接。 */

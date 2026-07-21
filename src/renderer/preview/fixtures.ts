@@ -190,7 +190,13 @@ const SEED_MESSAGES: Record<string, Message[]> = {
 /** 装一个 stub 到 window.duetlens;写路径(triage/编辑/讨论)真的改内存态并经事件回推,便于自查闭环。 */
 export function installPreviewApi(): void {
   const diff = parseUnifiedDiff(RAW_DIFF);
-  const review: Review = { ...REVIEW };
+  // ?source=github 切到 github-pr 以自查提交屏;?submit=invalid|failed 强制模拟提交结果
+  const params = new URLSearchParams(window.location.search);
+  const asGithub = (params.get('source') ?? '').startsWith('github');
+  const forceSubmit = params.get('submit');
+  const review: Review = asGithub
+    ? { ...REVIEW, source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null }
+    : { ...REVIEW };
   let uiSettings: UiSettings = { ...UI_SETTINGS };
   // 预置一个已看文件,证明启动即从后端恢复 per-review 进度(非组件默认空态)
   let reviewUiState: ReviewUiState = {
@@ -308,6 +314,21 @@ export function installPreviewApi(): void {
         Object.assign(review, next);
         fire({ reviewId: 'demo', type: 'review', payload: next });
         return next;
+      },
+      // 模拟原子 PR review 提交:success 标记待提交项 submitted 并回推;invalid/failed 不改状态
+      submit: async () => {
+        await new Promise((r) => setTimeout(r, 700));
+        if (forceSubmit === 'invalid')
+          return { status: 'invalid', message: 'pipeline.ts:20 不在最新 diff 的新增侧。' };
+        if (forceSubmit === 'failed')
+          return { status: 'failed', message: 'gh 认证已过期。' };
+        const url = 'https://github.com/xieziyu/podcast-go/pull/482#pullrequestreview-1';
+        const pending = findings.filter((f) => f.triage !== 'dismiss' && f.submission !== 'submitted');
+        for (const f of pending) {
+          const next = { ...f, submission: 'submitted' as const, submittedUrl: url, updatedAt: Date.now() };
+          emit(next);
+        }
+        return { status: 'success', url, submittedCount: pending.filter((f) => f.file && f.line > 0).length };
       },
       getUiState: async () => reviewUiState,
       saveUiState: async (_r, state) => {

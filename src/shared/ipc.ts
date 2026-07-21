@@ -14,6 +14,7 @@ import type {
 } from './domain';
 import type { DiffFile } from './diff';
 import type { AgentEvent } from './agent-events';
+import type { GhReviewEvent } from './github-review';
 
 // ---- 请求/响应(ipcRenderer.invoke ↔ ipcMain.handle)----
 export const IpcChannels = {
@@ -34,6 +35,7 @@ export const IpcChannels = {
   reviewPromoteDiscussion: 'review:promote-discussion',
   reviewUpdateFinding: 'review:update-finding',
   reviewUpdateSummary: 'review:update-summary',
+  reviewSubmit: 'review:submit',
   reviewGetUiState: 'review:get-ui-state',
   reviewSaveUiState: 'review:save-ui-state',
   uiGetSettings: 'ui:get-settings',
@@ -68,6 +70,18 @@ export interface DiscussionAnchor {
   line: number;
   lineEnd?: number | null;
 }
+
+/** 提交一次 GitHub PR review 的入参(summaryBody 传入即先落库为 review body)。 */
+export interface SubmitReviewInput {
+  event: GhReviewEvent;
+  summaryBody?: string;
+}
+
+/** 提交结果:PR review 原子提交,故只有整体成功 / 行锚点失效(422)/ 整体失败。 */
+export type SubmitReviewResult =
+  | { status: 'success'; url: string; submittedCount: number }
+  | { status: 'invalid'; message: string }
+  | { status: 'failed'; message: string };
 
 /** 后端 → renderer 单向推送(webContents.send) */
 export const IpcEvents = {
@@ -123,6 +137,8 @@ export interface DuetlensApi {
     updateFinding(reviewId: string, input: FindingEditInput): Promise<Finding>;
     /** 编辑审核总结正文(提交屏 review body 来源);落库后返回并经 `review` 事件回推。 */
     updateSummary(reviewId: string, body: string): Promise<Review>;
+    /** 把保留且未提交的 findings 组成一次 GitHub PR review 原子提交(仅 github-pr source)。 */
+    submit(reviewId: string, input: SubmitReviewInput): Promise<SubmitReviewResult>;
     /** 读某 review 的 per-review UI 进度态(已看文件等);无记录返回默认空态。 */
     getUiState(reviewId: string): Promise<ReviewUiState>;
     /** 写某 review 的 per-review UI 进度态(前端去抖调用)。 */

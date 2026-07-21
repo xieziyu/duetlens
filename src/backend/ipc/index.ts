@@ -9,6 +9,7 @@ import {
   type FindingEditInput,
   type ReviewEvent,
   type ReviewStartInput,
+  type SubmitReviewInput,
 } from '@shared/ipc';
 import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import type { ReviewManager } from '../review/review-manager';
@@ -64,6 +65,9 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   );
   ipcMain.handle(IpcChannels.reviewUpdateSummary, (_e, reviewId: string, body: string) =>
     manager.updateSummary(reviewId, body),
+  );
+  ipcMain.handle(IpcChannels.reviewSubmit, (_e, reviewId: string, input: SubmitReviewInput) =>
+    manager.submitReview(reviewId, input),
   );
   ipcMain.handle(IpcChannels.reviewGetUiState, (_e, reviewId: string) =>
     manager.getReviewUiState(reviewId),

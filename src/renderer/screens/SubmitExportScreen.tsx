@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { Finding } from '@shared/domain';
 import { useReviewStream } from '../review/useReviewStream';
 import { ExportMarkdownScreen } from './export/ExportMarkdownScreen';
+import { SubmitGitHubScreen } from './submit/SubmitGitHubScreen';
 import { ScreenPlaceholder } from '../components/ScreenPlaceholder';
 
 /**
@@ -38,13 +39,7 @@ export function SubmitExportScreen({
   }
 
   if (review.source === 'github-pr') {
-    return (
-      <ScreenPlaceholder
-        title="提交到 GitHub"
-        mockup="mockup/submit-to-github.html"
-        parts={['SubmitGitHubScreen(findings 筛选 + 一次原子 PR review)——后续切片']}
-      />
-    );
+    return <SubmitGitHubScreen review={review} findings={findings} onBack={onBack} />;
   }
 
   return (
