@@ -14,9 +14,10 @@ const SCREENS: { id: Screen; label: string }[] = [
   { id: 'submit', label: '提交/导出' },
 ];
 
-export function App() {
-  const [screen, setScreen] = useState<Screen>('entry');
-  const [activeReviewId, setActiveReviewId] = useState<string | null>(null);
+// initialReviewId 仅 preview 入口用于直达审核屏;production main.tsx 不传。
+export function App({ initialReviewId = null }: { initialReviewId?: string | null } = {}) {
+  const [screen, setScreen] = useState<Screen>(initialReviewId ? 'review' : 'entry');
+  const [activeReviewId, setActiveReviewId] = useState<string | null>(initialReviewId);
   const { mode, theme, toggleMode, setTheme } = useTheme();
 
   const openReview = (id: string) => {
