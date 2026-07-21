@@ -31,6 +31,7 @@ export const IpcChannels = {
   reviewAddDiscussion: 'review:add-discussion',
   reviewSendMessage: 'review:send-message',
   reviewSetTriage: 'review:set-triage',
+  reviewPromoteDiscussion: 'review:promote-discussion',
   reviewUpdateFinding: 'review:update-finding',
   reviewUpdateSummary: 'review:update-summary',
   reviewGetUiState: 'review:get-ui-state',
@@ -115,6 +116,8 @@ export interface DuetlensApi {
     sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message>;
     /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推更新。 */
     setTriage(reviewId: string, findingId: string, triage: Triage): Promise<Finding>;
+    /** 把一条用户 discussion 提升为 finding(origin=promoted),保留会话历史;返回新 finding。 */
+    promoteDiscussion(reviewId: string, discussionId: string): Promise<Finding>;
     /** 用户就地编辑 finding 可编辑字段(与 codex update_finding 同一落库路径)。 */
     updateFinding(reviewId: string, input: FindingEditInput): Promise<Finding>;
     /** 编辑审核总结正文(提交屏 review body 来源);落库后返回并经 `review` 事件回推。 */

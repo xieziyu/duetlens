@@ -123,16 +123,29 @@ const FINDINGS: Finding[] = [
   }),
 ];
 
-const DISCUSSIONS: Discussion[] = FINDINGS.map((f) => ({
-  id: f.discussionId,
-  reviewId: 'demo',
-  kind: 'finding',
-  origin: f.origin,
-  file: f.file,
-  line: f.line,
-  lineEnd: null,
-  createdAt: now,
-}));
+const DISCUSSIONS: Discussion[] = [
+  ...FINDINGS.map((f) => ({
+    id: f.discussionId,
+    reviewId: 'demo',
+    kind: 'finding' as const,
+    origin: f.origin,
+    file: f.file,
+    line: f.line,
+    lineEnd: null,
+    createdAt: now,
+  })),
+  // 一条用户发起的 discussion,便于自查「⬆ 转为 finding」提升流程
+  {
+    id: 'd-user-seed',
+    reviewId: 'demo',
+    kind: 'user',
+    origin: 'manual',
+    file: 'src/pipeline.ts',
+    line: 19,
+    lineEnd: null,
+    createdAt: now,
+  },
+];
 
 // 刻意用非默认栏宽,便于自查「启动即从 ui_settings 应用」而非用组件默认值
 const UI_SETTINGS: UiSettings = {
@@ -160,6 +173,15 @@ const SEED_MESSAGES: Record<string, Message[]> = {
       role: 'agent',
       text: '近似进度也要跨线程,所以仍需原子类型,但 Relaxed 顺序就够——它保证单变量原子性、开销接近裸加:\ncounter.fetch_add(1, Ordering::Relaxed);',
       createdAt: now + 2000,
+    },
+  ],
+  'd-user-seed': [
+    {
+      id: 'm-user-seed-1',
+      discussionId: 'd-user-seed',
+      role: 'user',
+      text: '这里 done += 1 在并发下会不会丢更新?想听听 codex 的意见。',
+      createdAt: now + 500,
     },
   ],
 };
@@ -250,6 +272,35 @@ export function installPreviewApi(): void {
         const next = { ...f, triage, updatedAt: Date.now() };
         emit(next);
         return next;
+      },
+      promoteDiscussion: async (_r, discussionId) => {
+        const d = discussions.find((x) => x.id === discussionId)!;
+        const firstUser = (msgStore[discussionId] ?? []).find((m) => m.role === 'user');
+        const ts = Date.now();
+        const finding: Finding = {
+          id: `f-promoted-${ts}`,
+          reviewId: 'demo',
+          discussionId,
+          origin: 'promoted',
+          severity: 'medium',
+          category: null,
+          title: firstUser ? firstUser.text.slice(0, 60) : '待补充标题',
+          body: firstUser?.text ?? '',
+          file: d.file!,
+          line: d.line!,
+          suggestion: null,
+          triage: 'open',
+          submission: 'unsubmitted',
+          submittedUrl: null,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        const di = discussions.findIndex((x) => x.id === discussionId);
+        discussions[di] = { ...d, kind: 'finding', origin: 'promoted' };
+        findings.push(finding);
+        fire({ reviewId: 'demo', type: 'finding', payload: finding });
+        fire({ reviewId: 'demo', type: 'discussion', payload: discussions[di] });
+        return finding;
       },
       updateSummary: async (_r, body) => {
         const next = { ...review, summaryBody: body, updatedAt: Date.now() };

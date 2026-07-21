@@ -842,6 +842,24 @@
   color: var(--del);
   border-color: var(--del-gutter);
 }
+.btn.promote {
+  background: var(--human-soft);
+  border-color: var(--human-line);
+  color: var(--human);
+}
+.btn.promote:hover {
+  filter: brightness(1.08);
+  color: var(--human);
+  border-color: var(--human-line);
+}
+/* Discussion 栏活跃线程的提升操作条(→ mockup .c-actions) */
+.disc-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
 .reply-hint {
   margin-left: auto;
   font-size: 11px;

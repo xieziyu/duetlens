@@ -19,6 +19,8 @@ export interface DiscussionTabProps {
   onSend: (text: string) => void;
   onJumpToCode: (d: Discussion) => void;
   ensureMessages: (id: string) => void;
+  /** 把当前用户 discussion 提升为 finding */
+  onPromote: (discussionId: string) => void;
 }
 
 /** 一条 discussion 的展示标题:finding 用其标题,user 用首条消息 / 兜底文案 */
@@ -113,6 +115,15 @@ export function DiscussionTab(props: DiscussionTabProps) {
                   {rootFinding?.category ? ` · ${rootFinding.category}` : ''}
                 </div>
               </div>
+            </div>
+          )}
+
+          {active.kind === 'user' && !rootFinding && (
+            <div className="disc-actions">
+              <button className="btn promote" onClick={() => props.onPromote(active.id)}>
+                ⬆ 转为 finding
+              </button>
+              <span className="reply-hint">转为 finding 后即可随 review 提交给 author</span>
             </div>
           )}
 

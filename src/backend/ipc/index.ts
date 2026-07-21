@@ -55,6 +55,9 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewSetTriage, (_e, reviewId: string, findingId: string, triage: Triage) =>
     manager.setTriage(reviewId, findingId, triage),
   );
+  ipcMain.handle(IpcChannels.reviewPromoteDiscussion, (_e, reviewId: string, discussionId: string) =>
+    manager.promoteDiscussion(reviewId, discussionId),
+  );
   ipcMain.handle(IpcChannels.reviewUpdateFinding, (_e, reviewId: string, input: FindingEditInput) =>
     manager.updateFinding(reviewId, input),
   );

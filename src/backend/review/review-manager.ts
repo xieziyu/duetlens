@@ -89,6 +89,24 @@ export class ReviewManager extends EventEmitter {
     return discussion;
   }
 
+  /**
+   * 把一条用户 discussion 提升为 finding(origin=promoted),保留其会话历史。
+   * 默认标题/正文取该讨论首条 user 消息(截断),严重度默认 medium,留待用户就地编辑。
+   */
+  promoteDiscussion(reviewId: string, discussionId: string): Finding {
+    const firstUser = this.store.listMessages(discussionId).find((m) => m.role === 'user');
+    const title = firstUser ? firstUser.text.slice(0, 60) : '待补充标题';
+    const finding = this.store.promoteDiscussion(discussionId, {
+      severity: 'medium',
+      title,
+      body: firstUser?.text ?? '',
+    });
+    this.forward({ reviewId, type: 'finding', payload: finding });
+    const updated = this.store.getDiscussion(discussionId);
+    if (updated) this.forward({ reviewId, type: 'discussion', payload: updated });
+    return finding;
+  }
+
   /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推。 */
   setTriage(reviewId: string, findingId: string, triage: Triage): Finding {
     this.store.setTriage(findingId, triage);

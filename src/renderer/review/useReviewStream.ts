@@ -81,9 +81,14 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
           return next;
         });
       } else if (e.type === 'discussion') {
-        setDiscussions((prev) =>
-          prev.some((d) => d.id === e.payload.id) ? prev : [...prev, e.payload],
-        );
+        // upsert:新 discussion 追加,已存在的(如 promote 后 kind 变更)就地替换
+        setDiscussions((prev) => {
+          const i = prev.findIndex((d) => d.id === e.payload.id);
+          if (i < 0) return [...prev, e.payload];
+          const next = prev.slice();
+          next[i] = e.payload;
+          return next;
+        });
       } else if (e.type === 'message') {
         const m = e.payload;
         setMessages((prev) => {

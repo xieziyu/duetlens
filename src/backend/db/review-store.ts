@@ -334,6 +334,51 @@ export class ReviewStore {
     };
   }
 
+  /** 把一条 user discussion 提升为 finding:翻转 kind/origin 并建 finding,保留原会话历史。 */
+  promoteDiscussion(
+    discussionId: string,
+    input: {
+      severity: Finding['severity'];
+      category?: string | null;
+      title: string;
+      body?: string;
+      suggestion?: string | null;
+    },
+  ): Finding {
+    const disc = this.getDiscussion(discussionId);
+    if (!disc) throw new Error(`discussion 不存在: ${discussionId}`);
+    if (disc.kind === 'finding') throw new Error('该 discussion 已是 finding');
+    if (!disc.file || disc.line == null) throw new Error('无代码锚点的 discussion 不能提升为 finding');
+    const ts = now();
+    const findingId = randomUUID();
+    const run = this.db.transaction(() => {
+      this.db
+        .prepare(`UPDATE discussions SET kind = 'finding', origin = 'promoted' WHERE id = ?`)
+        .run(discussionId);
+      this.db
+        .prepare(
+          `INSERT INTO findings (id, review_id, discussion_id, origin, severity, category, title, body, file, line, suggestion, triage, submission, submitted_url, created_at, updated_at)
+           VALUES (?, ?, ?, 'promoted', ?, ?, ?, ?, ?, ?, ?, 'open', 'unsubmitted', NULL, ?, ?)`,
+        )
+        .run(
+          findingId,
+          disc.reviewId,
+          discussionId,
+          input.severity,
+          input.category ?? null,
+          input.title,
+          input.body ?? '',
+          disc.file,
+          disc.line,
+          input.suggestion ?? null,
+          ts,
+          ts,
+        );
+    });
+    run();
+    return this.getFinding(findingId)!;
+  }
+
   getDiscussion(id: string): Discussion | null {
     const r = this.db.prepare('SELECT * FROM discussions WHERE id = ?').get(id) as
       | DiscussionRow

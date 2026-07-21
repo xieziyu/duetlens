@@ -138,6 +138,17 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
     if (f) setFocusFindingId(f.id);
   };
 
+  // 提升 user discussion 为 finding:落库后经事件回推(finding + discussion),再聚焦新 finding 就地编辑
+  const onPromote = useCallback(
+    async (discussionId: string) => {
+      if (!reviewId) return;
+      const f = await window.duetlens.review.promoteDiscussion(reviewId, discussionId);
+      setActivePath(f.file);
+      setFocusFindingId(f.id);
+    },
+    [reviewId],
+  );
+
   // 写路径:落库后经 review:event 回推刷新(useReviewStream upsert),前端不本地臆造。
   const onTriage = useCallback(
     (finding: Finding, triage: Triage) => {
@@ -281,6 +292,7 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           onComposerSend={onComposerSend}
           onJumpToCode={jumpToCode}
           ensureMessages={ensureMessages}
+          onPromote={onPromote}
           categoryFilter={categoryFilter}
           onClearCategory={() => setCategoryFilter(null)}
           onEditSummary={onEditSummary}
@@ -313,6 +325,7 @@ function RightPanel({
   onComposerSend,
   onJumpToCode,
   ensureMessages,
+  onPromote,
   categoryFilter,
   onClearCategory,
   onEditSummary,
@@ -336,6 +349,7 @@ function RightPanel({
   onComposerSend: (text: string) => void;
   onJumpToCode: (d: Discussion) => void;
   ensureMessages: (id: string) => void;
+  onPromote: (discussionId: string) => void;
   categoryFilter: string | null;
   onClearCategory: () => void;
   onEditSummary: (body: string) => void;
@@ -423,6 +437,7 @@ function RightPanel({
           onSend={onComposerSend}
           onJumpToCode={onJumpToCode}
           ensureMessages={ensureMessages}
+          onPromote={onPromote}
         />
       )}
       {tab === 'summary' &&
