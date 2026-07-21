@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useSettings, type ColorTheme } from './settings/SettingsProvider';
 import { EntryScreen } from './screens/EntryScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { SubmitExportScreen } from './screens/SubmitExportScreen';
+import { Wordmark } from './components/Wordmark';
+import { ThemeControls } from './components/ThemeControls';
 import './App.css';
 
-// 骨架期极简屏路由;后续按 frontend-components.md 三顶层屏演进。
+// 骨架期极简屏路由;review 屏自带合并顶栏(brand + 源 + CTA + 主题 + ⌘),故此处不再套全局栏。
 type Screen = 'entry' | 'review' | 'submit';
 
 const SCREENS: { id: Screen; label: string }[] = [
@@ -18,9 +19,6 @@ const SCREENS: { id: Screen; label: string }[] = [
 export function App({ initialReviewId = null }: { initialReviewId?: string | null } = {}) {
   const [screen, setScreen] = useState<Screen>(initialReviewId ? 'review' : 'entry');
   const [activeReviewId, setActiveReviewId] = useState<string | null>(initialReviewId);
-  const { settings, update } = useSettings();
-  const mode = settings.dataMode;
-  const theme = settings.dataTheme;
 
   const openReview = (id: string) => {
     setActiveReviewId(id);
@@ -29,47 +27,31 @@ export function App({ initialReviewId = null }: { initialReviewId?: string | nul
 
   return (
     <div className="app">
-      <header className="topbar">
-        <span className="wordmark mono">
-          duet<i>lens</i>
-          <span className="cur">_</span>
-        </span>
-
-        <nav className="screen-nav">
-          {SCREENS.map((s) => (
-            <button
-              key={s.id}
-              className={s.id === screen ? 'seg active' : 'seg'}
-              onClick={() => setScreen(s.id)}
-            >
-              {s.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="theme-controls">
-          <select
-            className="mono theme-select"
-            value={theme}
-            onChange={(e) => update({ dataTheme: e.target.value as ColorTheme })}
-            aria-label="配色主题"
-          >
-            <option value="duetlens">duetlens</option>
-            <option value="github">github</option>
-          </select>
-          <button
-            className="mode-toggle"
-            onClick={() => update({ dataMode: mode === 'dark' ? 'light' : 'dark' })}
-            aria-label="切换明暗"
-          >
-            {mode === 'dark' ? '🌙' : '☀️'}
-          </button>
-        </div>
-      </header>
+      {/* review 屏自渲染合并顶栏;entry/submit 保留骨架期全局栏(含开发用屏切换) */}
+      {screen !== 'review' && (
+        <header className="topbar">
+          <Wordmark />
+          <nav className="screen-nav">
+            {SCREENS.map((s) => (
+              <button
+                key={s.id}
+                className={s.id === screen ? 'seg active' : 'seg'}
+                onClick={() => setScreen(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </nav>
+          <span className="tb-spacer" />
+          <ThemeControls />
+        </header>
+      )}
 
       <main className="screen-host">
         {screen === 'entry' && <EntryScreen onOpenReview={openReview} />}
-        {screen === 'review' && <ReviewScreen reviewId={activeReviewId} />}
+        {screen === 'review' && (
+          <ReviewScreen reviewId={activeReviewId} onOpenSubmit={() => setScreen('submit')} />
+        )}
         {screen === 'submit' && (
           <SubmitExportScreen reviewId={activeReviewId} onBack={() => setScreen('review')} />
         )}

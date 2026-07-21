@@ -11,6 +11,9 @@ import { DiscussionTab } from './review/DiscussionTab';
 import { SummaryTab } from './review/SummaryTab';
 import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
+import { Wordmark } from '../components/Wordmark';
+import { ThemeControls } from '../components/ThemeControls';
+import { isSubmittable } from '@shared/github-review';
 import './ReviewScreen.css';
 import './review/review-syntax.css';
 
@@ -30,8 +33,14 @@ const STATUS_LABEL: Record<string, string> = {
   failed: '失败',
 };
 
-// → mockup/diff-review.html:三栏(file tree | diff | right panel)。
-export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
+// → mockup/diff-review.html:合并单顶栏 + 三栏(file tree | diff | right panel)。
+export function ReviewScreen({
+  reviewId,
+  onOpenSubmit,
+}: {
+  reviewId: string | null;
+  onOpenSubmit?: () => void;
+}) {
   const { review, findings, discussions, messages, diff, status, tokenUsage, lastTool, ensureMessages } =
     useReviewStream(reviewId);
   // 布局 / tab / diff 视图 = 全局持久化偏好(后端 ui_settings);改动去抖写回。
@@ -206,6 +215,11 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   }, [helpOpen, diffView, update]);
 
   const pct = tokenUsage?.total ? Math.round((tokenUsage.used / tokenUsage.total) * 100) : null;
+  // 常驻 CTA:github-pr → 提交 review(徽标=待提交数);其余 → 导出 review(徽标=保留数)
+  const isGithub = review?.source === 'github-pr';
+  const ctaCount = isGithub
+    ? findings.filter(isSubmittable).length
+    : findings.filter((f) => f.triage !== 'dismiss').length;
 
   if (!reviewId) {
     return <div className="rev-empty">从入口开始一个审核。</div>;
@@ -217,12 +231,16 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
       style={{ ['--left-w' as string]: `${leftW}px`, ['--right-w' as string]: `${rightW}px` }}
     >
       <div className="rev-topbar">
+        <Wordmark />
         <div className="source">
           <span className="mono ref">{review?.sourceRef ?? '…'}</span>
           <span className="title">{review?.title ?? '加载中…'}</span>
         </div>
         <span className="spacer" />
         <div className="meta">
+          <span className="model" title="审阅 agent">
+            <span className="glyph" /> codex
+          </span>
           {lastTool && <span className="mono tool" title="最近工具调用">{lastTool}</span>}
           {tokenUsage && (
             <span className="tokens">
@@ -239,9 +257,20 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
             {(status === 'scanning' || !status) && <span className="pulse" />}
             {STATUS_LABEL[status ?? 'scanning'] ?? status}
           </span>
-          <button className="kbd-btn" onClick={() => setHelpOpen(true)} title="键盘快捷键 (?)">
-            ⌘
+          <button
+            className="submit-cta"
+            onClick={onOpenSubmit}
+            title={isGithub ? '进入筛选并提交 review 到 GitHub' : '导出 review 为 Markdown'}
+          >
+            {isGithub ? '提交 review' : '↓ 导出 review'}
+            {ctaCount > 0 && <span className="cta-badge">{ctaCount}</span>}
           </button>
+          <div className="switches">
+            <ThemeControls />
+            <button className="kbd-btn" onClick={() => setHelpOpen(true)} title="键盘快捷键 (?)">
+              ⌘
+            </button>
+          </div>
         </div>
       </div>
       {helpOpen && <KbdHelp onClose={() => setHelpOpen(false)} />}

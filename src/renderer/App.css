@@ -76,8 +76,11 @@
   color: var(--agent-2);
 }
 
+.tb-spacer {
+  flex: 1;
+}
+
 .theme-controls {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
