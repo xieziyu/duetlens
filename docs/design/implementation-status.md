@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:后端垂直打通 + 前端 diff-review 推进中 · 最后更新 2026-07-21(main = d83d8c5;进行分支 `feat/dev`) —— backlog #1–#6 已合入 main;#7 前端三栏 diff-review shell + 语法高亮 + 拖拽栏宽已合入 main;**finding 写路径(triage + 就地编辑)在 `feat/dev` 落地**;另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查)(见下)
+> 状态:后端垂直打通 + 前端 diff-review 推进中 · 最后更新 2026-07-21(`origin/main` = c324dd9) —— backlog #1–#6 已合入 main;#7 前端三栏 diff-review shell + 语法高亮 + 拖拽栏宽 + **finding 写路径(triage + 就地编辑)** + **diff 视图交互(unified/split + per-file viewed/折叠)**均已合入 main;另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查)(见下)
 
 设计文档描述目标结构;本页记录**已落地到代码**的部分、验证方式与剩余 backlog。实现细节以代码为准,本页只做导航与状态。
 
