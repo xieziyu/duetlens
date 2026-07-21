@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Finding, Severity, Triage } from '@shared/domain';
-import type { FindingEditInput } from '@shared/ipc';
+import type { Discussion, Finding, Message, Severity, Triage } from '@shared/domain';
+import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useReviewStream } from '../review/useReviewStream';
 import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
+import { DiscussionTab } from './review/DiscussionTab';
 import { Resizer } from './review/Resizer';
 import './ReviewScreen.css';
 import './review/review-syntax.css';
@@ -24,12 +25,17 @@ const STATUS_LABEL: Record<string, string> = {
   failed: '失败',
 };
 
-// → mockup/diff-review.html:三栏(file tree | diff | right panel)。本切片为只读 diff + findings 右栏。
+// → mockup/diff-review.html:三栏(file tree | diff | right panel)。
 export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
-  const { review, findings, diff, status, tokenUsage, lastTool } = useReviewStream(reviewId);
+  const { review, findings, discussions, messages, diff, status, tokenUsage, lastTool, ensureMessages } =
+    useReviewStream(reviewId);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
   const [tab, setTab] = useState<RightTab>('findings');
+  // discussion 协同态:活跃线程 / 待发引用(框选追问带入)/ 正在等 agent 回复
+  const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
+  const [pendingRef, setPendingRef] = useState<{ anchor: DiscussionAnchor; label: string } | null>(null);
+  const [awaitingReply, setAwaitingReply] = useState<string | null>(null);
   // 栏宽:本地拖拽态,持久化(后端 settings)后续接入
   const [leftW, setLeftW] = useState(236);
   const [rightW, setRightW] = useState(380);
@@ -57,6 +63,70 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   const focusFinding = (f: Finding) => {
     setActivePath(f.file);
     setFocusFindingId(f.id);
+    // 点 finding 亦选中其讨论线程,切到 Discussion 栏即见对话(不强制换 tab)
+    setActiveDiscussionId(f.discussionId);
+  };
+
+  const focusDiscussion = (id: string) => {
+    setActiveDiscussionId(id);
+    setTab('discussion');
+  };
+
+  // 向某条 discussion 追问:落库经事件回推消息,期间显示 agent 打字指示。
+  const runSend = useCallback(
+    async (discussionId: string, text: string) => {
+      if (!reviewId) return;
+      setAwaitingReply(discussionId);
+      try {
+        await window.duetlens.review.sendMessage(reviewId, discussionId, text);
+      } finally {
+        setAwaitingReply((cur) => (cur === discussionId ? null : cur));
+      }
+    },
+    [reviewId],
+  );
+
+  // 框选 / 行内 ＋ 发起 discussion:先建 user discussion(事件回推),再发出首问。
+  const onStartDiscussion = useCallback(
+    async (anchor: DiscussionAnchor, text: string) => {
+      if (!reviewId) return;
+      const d = await window.duetlens.review.addDiscussion(reviewId, anchor);
+      setActiveDiscussionId(d.id);
+      setTab('discussion');
+      void runSend(d.id, text);
+    },
+    [reviewId, runSend],
+  );
+
+  // 框选「追问 codex」:把选区作为待发引用带进 Discussion 栏 composer(发送时再建 discussion)。
+  const onAskCodex = useCallback((anchor: DiscussionAnchor, label: string) => {
+    setPendingRef({ anchor, label });
+    setActiveDiscussionId(null);
+    setTab('discussion');
+  }, []);
+
+  // Discussion 栏 composer 发送:有活跃线程则追问,否则从待发引用新建。
+  const onComposerSend = useCallback(
+    async (text: string) => {
+      if (!reviewId) return;
+      if (activeDiscussionId) {
+        void runSend(activeDiscussionId, text);
+        return;
+      }
+      if (pendingRef) {
+        const d = await window.duetlens.review.addDiscussion(reviewId, pendingRef.anchor);
+        setActiveDiscussionId(d.id);
+        setPendingRef(null);
+        void runSend(d.id, text);
+      }
+    },
+    [reviewId, activeDiscussionId, pendingRef, runSend],
+  );
+
+  const jumpToCode = (d: Discussion) => {
+    if (d.file) setActivePath(d.file);
+    const f = findings.find((x) => x.discussionId === d.id);
+    if (f) setFocusFindingId(f.id);
   };
 
   // 写路径:落库后经 review:event 回推刷新(useReviewStream upsert),前端不本地臆造。
@@ -134,6 +204,8 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           focusFindingId={focusFindingId}
           onTriage={onTriage}
           onUpdate={onUpdate}
+          onStartDiscussion={onStartDiscussion}
+          onAskCodex={onAskCodex}
           view={diffView}
           onViewChange={setDiffView}
           viewed={viewed}
@@ -146,9 +218,19 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           tab={tab}
           onTab={setTab}
           findings={findings}
+          discussions={discussions}
+          messages={messages}
           scanning={status === 'scanning' || !status}
           onPickFinding={focusFinding}
           onTriage={onTriage}
+          activeDiscussionId={activeDiscussionId}
+          onSelectDiscussion={focusDiscussion}
+          pendingRef={pendingRef}
+          onClearRef={() => setPendingRef(null)}
+          awaitingReply={awaitingReply}
+          onComposerSend={onComposerSend}
+          onJumpToCode={jumpToCode}
+          ensureMessages={ensureMessages}
         />
       </div>
     </div>
@@ -162,16 +244,36 @@ function RightPanel({
   tab,
   onTab,
   findings,
+  discussions,
+  messages,
   scanning,
   onPickFinding,
   onTriage,
+  activeDiscussionId,
+  onSelectDiscussion,
+  pendingRef,
+  onClearRef,
+  awaitingReply,
+  onComposerSend,
+  onJumpToCode,
+  ensureMessages,
 }: {
   tab: RightTab;
   onTab: (t: RightTab) => void;
   findings: Finding[];
+  discussions: Discussion[];
+  messages: Record<string, Message[]>;
   scanning: boolean;
   onPickFinding: (f: Finding) => void;
   onTriage: (finding: Finding, triage: Triage) => void;
+  activeDiscussionId: string | null;
+  onSelectDiscussion: (id: string) => void;
+  pendingRef: { anchor: DiscussionAnchor; label: string } | null;
+  onClearRef: () => void;
+  awaitingReply: string | null;
+  onComposerSend: (text: string) => void;
+  onJumpToCode: (d: Discussion) => void;
+  ensureMessages: (id: string) => void;
 }) {
   const grouped = useMemo(() => {
     const g: Record<Severity, Finding[]> = { high: [], medium: [], low: [] };
@@ -186,7 +288,10 @@ function RightPanel({
       <div className="tabs">
         {(['discussion', 'findings', 'summary'] as RightTab[]).map((t) => (
           <button key={t} className={`tab${t === tab ? ' on' : ''}`} onClick={() => onTab(t)}>
-            {t === 'discussion' ? '讨论' : t === 'findings' ? 'Findings' : 'Summary'}
+            {t === 'discussion' ? 'Discussion' : t === 'findings' ? 'Findings' : 'Summary'}
+            {t === 'discussion' && discussions.length > 0 && (
+              <span className="tab-count">{discussions.length}</span>
+            )}
             {t === 'findings' && findings.length > 0 && <span className="tab-count">{findings.length}</span>}
           </button>
         ))}
@@ -225,9 +330,20 @@ function RightPanel({
       )}
 
       {tab === 'discussion' && (
-        <div className="tab-body">
-          <p className="empty-note">讨论线程即将接入(后续切片)。</p>
-        </div>
+        <DiscussionTab
+          discussions={discussions}
+          findings={findings}
+          messages={messages}
+          activeId={activeDiscussionId}
+          onSelect={onSelectDiscussion}
+          pendingRef={pendingRef ? { label: pendingRef.label } : null}
+          onClearRef={onClearRef}
+          awaitingReply={awaitingReply}
+          scanning={scanning}
+          onSend={onComposerSend}
+          onJumpToCode={onJumpToCode}
+          ensureMessages={ensureMessages}
+        />
       )}
       {tab === 'summary' && (
         <div className="tab-body">

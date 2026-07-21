@@ -1239,3 +1239,453 @@
 .code.split .row:hover .src.del {
   background: var(--del-bg);
 }
+
+/* ---------- 行内「发起 discussion」＋(hover 显影)---------- */
+.src {
+  position: relative;
+}
+.add-thread {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--human-line);
+  border-radius: 5px;
+  background: var(--human-soft);
+  color: var(--human);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.row:hover .add-thread {
+  opacity: 1;
+}
+.add-thread:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- 框选 → 动作条 ---------- */
+.sel-pop {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--shadow);
+}
+.sel-pop::after {
+  content: '';
+  position: absolute;
+  left: var(--cx, 50%);
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  background: var(--surface-3);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: translateX(-50%) rotate(45deg);
+}
+.sel-pop .sp-range {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  padding: 0 7px 0 5px;
+  margin-right: 1px;
+  border-right: 1px solid var(--border);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+.sel-pop button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-family: var(--sans);
+  padding: 5px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sel-pop .sp-disc {
+  color: var(--human);
+}
+.sel-pop .sp-disc:hover {
+  background: var(--human-soft);
+}
+.sel-pop .sp-ask {
+  color: var(--agent-2);
+}
+.sel-pop .sp-ask:hover {
+  background: var(--agent-soft);
+}
+
+/* ---------- 内联新建 discussion composer ---------- */
+.card.new-disc {
+  border-left: 2px solid var(--human);
+}
+.nd-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+}
+.nd-ref {
+  margin: 10px 12px 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--human);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nd-ref .lnref {
+  color: var(--human);
+}
+.nd-body {
+  padding: 10px 12px 0;
+}
+.nd-body .fe-textarea {
+  min-height: 60px;
+}
+.nd-foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px 12px;
+}
+.nd-foot .send {
+  background: var(--human);
+  color: var(--on-accent);
+  font-weight: 600;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 13px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.nd-foot .send:hover {
+  filter: brightness(1.06);
+}
+.nd-foot .send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.nd-foot .cancel {
+  font-size: 12px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.nd-foot .cancel:hover {
+  color: var(--text);
+  border-color: var(--human-line);
+}
+
+/* ---------- Discussion 栏:切换 + 线程 + composer ---------- */
+.disc-tab {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.disc-list {
+  flex: none;
+  max-height: 148px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.disc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.disc-item:hover {
+  background: var(--hover);
+}
+.disc-item.on {
+  border-color: var(--agent-line);
+  background: var(--agent-soft);
+  color: var(--text);
+}
+.disc-item .di-glyph {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+.disc-item .di-glyph.agent {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  border: 1px solid var(--agent-line);
+}
+.disc-item .di-glyph.human {
+  background: var(--human-soft);
+  color: var(--human);
+  border: 1px solid var(--human-line);
+}
+.disc-item .di-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.disc-item .di-sev {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.disc-item .di-sev.sev-high {
+  background: var(--sev-high);
+}
+.disc-item .di-sev.sev-medium {
+  background: var(--sev-med);
+}
+.disc-item .di-sev.sev-low {
+  background: var(--sev-low);
+}
+.disc-item .di-anchor {
+  flex: none;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.anchor-ref {
+  flex: none;
+  margin: 12px 12px 4px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  cursor: pointer;
+}
+.anchor-ref:hover {
+  border-color: var(--human-line);
+}
+.anchor-ref .bar {
+  width: 2px;
+  align-self: stretch;
+  background: var(--human);
+  border-radius: 2px;
+}
+.anchor-ref .ar-text {
+  min-width: 0;
+}
+.anchor-ref .path {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.anchor-ref .lnref {
+  color: var(--human);
+}
+
+.thread {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.thread.thread-empty {
+  justify-content: flex-start;
+}
+.msg {
+  display: flex;
+  gap: 10px;
+}
+.msg .body {
+  flex: 1;
+  min-width: 0;
+}
+.msg .nm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.msg .nm b {
+  font-size: 12px;
+}
+.msg .nm .agent-name {
+  color: var(--agent-2);
+}
+.msg .nm .human-name {
+  color: var(--human);
+}
+.msg .nm .t {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.bubble {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.bubble strong {
+  color: var(--text);
+}
+.typing {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+.typing i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--agent);
+  animation: blink 1.2s infinite;
+}
+.typing i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.typing i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes blink {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Composer(Discussion 栏底部)---------- */
+.composer {
+  position: relative;
+  flex: none;
+  border-top: 1px solid var(--border);
+  padding: 10px 12px 12px;
+  background: var(--surface);
+}
+.composer .box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  padding: 9px 11px;
+}
+.composer .box:focus-within {
+  border-color: var(--agent-line);
+}
+.composer .refchip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--human);
+  border-radius: 8px;
+  background: var(--surface-3);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.composer .refchip .lnref {
+  color: var(--human);
+}
+.composer .refchip .x {
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.composer .refchip .x:hover {
+  color: var(--del);
+}
+.composer-input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  min-height: 38px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.composer-input::placeholder {
+  color: var(--text-faint);
+}
+.composer-input:disabled {
+  cursor: not-allowed;
+}
+.composer .bar {
+  display: flex;
+  align-items: center;
+  margin-top: 9px;
+}
+.composer .send {
+  margin-left: auto;
+  background: var(--accent-solid);
+  color: var(--on-solid);
+  font-weight: 600;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.composer .send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.composer .scope {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 8px;
+}

@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFile, DiffHunk, DiffLine } from '@shared/diff';
 import type { Finding, Triage } from '@shared/domain';
-import type { FindingEditInput } from '@shared/ipc';
+import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { InlineCard } from './InlineCard';
+import { InlineComposer } from './InlineComposer';
+import { SelectionPopover } from './SelectionPopover';
 import { highlightLine, langOf } from './highlight';
 
 export type DiffView = 'unified' | 'split';
@@ -10,6 +12,17 @@ export type DiffView = 'unified' | 'split';
 /** 文件锚点 id:供左栏点击滚动定位。路径里的非单词字符替换成 -。 */
 export function fileAnchorId(path: string): string {
   return 'df-' + path.replace(/[^\w]+/g, '-');
+}
+
+const basename = (p: string) => p.split('/').pop() ?? p;
+
+/** diff 内锚点:发起 discussion / 追问 codex 时携带的选区信息 */
+interface AnchorPick {
+  anchor: DiscussionAnchor;
+  /** 内联 composer 插入位置(新侧行号) */
+  placeLine: number;
+  label: string;
+  snippet: string;
 }
 
 export interface DiffPaneProps {
@@ -22,6 +35,10 @@ export interface DiffPaneProps {
   /** finding 写路径:裁决 / 就地编辑,缺省则内联卡为只读 */
   onTriage?: (finding: Finding, triage: Triage) => void;
   onUpdate?: (input: FindingEditInput) => void;
+  /** 框选 / hover ＋ 发起 discussion:创建 user discussion 并发出首问 */
+  onStartDiscussion?: (anchor: DiscussionAnchor, text: string) => void;
+  /** 追问 codex:把选区作为引用带进 Discussion 栏 composer */
+  onAskCodex?: (anchor: DiscussionAnchor, label: string) => void;
   /** unified / split 视图(全局,file-header segmented 驱动) */
   view: DiffView;
   onViewChange: (v: DiffView) => void;
@@ -33,12 +50,15 @@ export interface DiffPaneProps {
 }
 
 /**
- * 中栏 diff 主场(对齐 mockup .diff):unified/split 双视图 + 锚定内联 finding 卡(view/edit/dismissed)。
- * split 与 unified 共用同一 InlineCard,锚点一律用新侧行号。框选发起 discussion 归后续切片。
+ * 中栏 diff 主场(对齐 mockup .diff):unified/split 双视图 + 锚定内联 finding 卡 +
+ * 框选 / 行内 ＋ 发起 discussion。selection popover 与内联 composer 都由本组件托管;
+ * 发起后交由 ReviewScreen 落库并在 Discussion 栏承载对话。
  */
 export function DiffPane(props: DiffPaneProps) {
-  const { files, findings, activePath, focusFindingId } = props;
+  const { files, findings, activePath, focusFindingId, onStartDiscussion, onAskCodex } = props;
   const ref = useRef<HTMLDivElement>(null);
+  const [sel, setSel] = useState<{ pick: AnchorPick; top: number; left: number; cx: number } | null>(null);
+  const [composeAt, setComposeAt] = useState<AnchorPick | null>(null);
 
   // 按文件聚合 findings,便于每个 DiffFileView 只拿自己的
   const byFile = useMemo(() => {
@@ -63,6 +83,75 @@ export function DiffPane(props: DiffPaneProps) {
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [focusFindingId]);
 
+  // ---- 框选 → popover:解析选区新侧锚点 + 定位 ----
+  const canStart = !!onStartDiscussion;
+  const onMouseUp = useCallback(() => {
+    if (!canStart) return;
+    // 等浏览器把 selection 敲定后再读
+    setTimeout(() => {
+      const pane = ref.current;
+      const selection = window.getSelection();
+      if (!pane || !selection || selection.isCollapsed || !selection.toString().trim()) {
+        setSel(null);
+        return;
+      }
+      const startRow = rowOf(selection.anchorNode);
+      const endRow = rowOf(selection.focusNode);
+      if (!startRow || !pane.contains(startRow)) {
+        setSel(null);
+        return;
+      }
+      const rows = rowsBetween(startRow, endRow);
+      const withLine = rows
+        .map((r) => ({ r, line: rowNewLine(r) }))
+        .filter((x): x is { r: HTMLElement; line: number } => x.line != null);
+      const fileEl = startRow.closest('.diff-file') as HTMLElement | null;
+      const file = fileEl?.getAttribute('data-path') ?? null;
+      if (!file || withLine.length === 0) {
+        setSel(null); // 纯删除行 / 越界:无新侧行不可锚定
+        return;
+      }
+      const first = withLine[0].line;
+      const last = withLine[withLine.length - 1].line;
+      const label = `${basename(file)}:${first === last ? first : `${first}–${last}`}`;
+      const snippet = snippetOf(withLine[withLine.length - 1].r);
+      const pick: AnchorPick = {
+        anchor: { file, line: first, lineEnd: first === last ? null : last },
+        placeLine: last,
+        label,
+        snippet,
+      };
+      const rect = selection.getRangeAt(0).getBoundingClientRect();
+      const pw = 250;
+      let left = rect.left + rect.width / 2 - pw / 2;
+      left = Math.max(8, Math.min(window.innerWidth - pw - 8, left));
+      let top = rect.top - 44;
+      if (top < 58) top = rect.bottom + 9;
+      const cx = Math.max(14, Math.min(pw - 14, rect.left + rect.width / 2 - left));
+      setSel({ pick, top, left, cx });
+    }, 0);
+  }, [canStart]);
+
+  useEffect(() => {
+    if (!sel) return;
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.sel-pop')) setSel(null);
+    };
+    const onScroll = () => setSel(null);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [sel]);
+
+  const startCompose = (pick: AnchorPick) => {
+    setSel(null);
+    window.getSelection()?.removeAllRanges();
+    setComposeAt(pick);
+  };
+
   if (files.length === 0) {
     return (
       <div className="diff pane" ref={ref}>
@@ -72,7 +161,7 @@ export function DiffPane(props: DiffPaneProps) {
   }
 
   return (
-    <div className="diff pane" ref={ref}>
+    <div className="diff pane" ref={ref} onMouseUp={onMouseUp}>
       {files.map((f) => (
         <DiffFileView
           key={f.path}
@@ -87,10 +176,73 @@ export function DiffPane(props: DiffPaneProps) {
           collapsed={props.collapsed.has(f.path)}
           onToggleViewed={() => props.onToggleViewed(f.path)}
           onToggleCollapsed={() => props.onToggleCollapsed(f.path)}
+          onAddThread={
+            canStart
+              ? (line, snippet) =>
+                  startCompose({
+                    anchor: { file: f.path, line, lineEnd: null },
+                    placeLine: line,
+                    label: `${basename(f.path)}:${line}`,
+                    snippet,
+                  })
+              : undefined
+          }
+          compose={composeAt && composeAt.anchor.file === f.path ? composeAt : null}
+          onSendCompose={(text) => {
+            if (composeAt) onStartDiscussion?.(composeAt.anchor, text);
+            setComposeAt(null);
+          }}
+          onCancelCompose={() => setComposeAt(null)}
         />
       ))}
+
+      {sel && (
+        <SelectionPopover
+          label={sel.pick.label}
+          top={sel.top}
+          left={sel.left}
+          cx={sel.cx}
+          onDiscussion={() => startCompose(sel.pick)}
+          onAsk={() => {
+            onAskCodex?.(sel.pick.anchor, sel.pick.label);
+            setSel(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+        />
+      )}
     </div>
   );
+}
+
+/** 选中节点向上找到所在 diff 行 */
+function rowOf(node: Node | null): HTMLElement | null {
+  if (!node) return null;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as HTMLElement);
+  return el?.closest?.('.row') ?? null;
+}
+
+/** 行的新侧行号(data-new-line);删除行无 */
+function rowNewLine(tr: HTMLElement): number | null {
+  const v = tr.getAttribute('data-new-line');
+  return v ? Number(v) : null;
+}
+
+/** 同一 tbody 内取 a..b 之间的所有行 */
+function rowsBetween(a: HTMLElement, b: HTMLElement | null): HTMLElement[] {
+  if (!b) return [a];
+  const tb = a.closest('tbody');
+  if (!tb || b.closest('tbody') !== tb) return [a, b];
+  const all = [...tb.querySelectorAll<HTMLElement>('.row')];
+  let i = all.indexOf(a);
+  let j = all.indexOf(b);
+  if (i > j) [i, j] = [j, i];
+  return all.slice(i, j + 1);
+}
+
+/** 行的新侧源码片段(优先 .src.new) */
+function snippetOf(tr: HTMLElement): string {
+  const el = tr.querySelector('.src.new') ?? tr.querySelector('.src');
+  return (el?.textContent ?? '').trim().slice(0, 60);
 }
 
 function DiffFileView({
@@ -105,6 +257,10 @@ function DiffFileView({
   collapsed,
   onToggleViewed,
   onToggleCollapsed,
+  onAddThread,
+  compose,
+  onSendCompose,
+  onCancelCompose,
 }: {
   file: DiffFile;
   findings: Finding[];
@@ -117,6 +273,10 @@ function DiffFileView({
   collapsed: boolean;
   onToggleViewed: () => void;
   onToggleCollapsed: () => void;
+  onAddThread?: (line: number, snippet: string) => void;
+  compose: AnchorPick | null;
+  onSendCompose: (text: string) => void;
+  onCancelCompose: () => void;
 }) {
   // 新侧存在的行号集合;锚点不在其中的 finding 归 off-diff
   const newLines = useMemo(() => {
@@ -136,8 +296,17 @@ function DiffFileView({
     byLine.set(f.line, arr);
   }
 
+  const composeNode = compose ? (
+    <InlineComposer
+      label={compose.label}
+      snippet={compose.snippet}
+      onSend={onSendCompose}
+      onCancel={onCancelCompose}
+    />
+  ) : null;
+
   return (
-    <section className={`diff-file${collapsed ? ' collapsed' : ''}`}>
+    <section className={`diff-file${collapsed ? ' collapsed' : ''}`} data-path={file.path}>
       <div className="file-header" id={fileAnchorId(file.path)}>
         <span className="fp">
           {file.oldPath && file.oldPath !== file.path && (
@@ -215,6 +384,9 @@ function DiffFileView({
             view={view}
             onTriage={onTriage}
             onUpdate={onUpdate}
+            onAddThread={onAddThread}
+            composeLine={compose?.placeLine ?? null}
+            composeNode={composeNode}
           />
         ))
       )}
@@ -224,29 +396,29 @@ function DiffFileView({
 
 interface CardSeg<T> {
   rows: T[];
-  cardsAfter: Finding[];
+  /** 该段结尾命中的新侧行号(用于取 finding 卡 / 插 composer);无则 null */
+  endAnchor: number | null;
 }
 
-/** 把行流按「命中锚点即断段」切成 [段, 卡, 段, 卡, …],unified/split 共用。 */
+/** 把行流按断点切成 [段, (卡/composer), 段, …];断点 = 有 finding 或正是 composeLine。 */
 function segmentByAnchor<T>(
   items: { row: T; anchor: number | null }[],
-  byLine: Map<number, Finding[]>,
+  shouldBreak: (anchor: number) => boolean,
 ): CardSeg<T>[] {
   const segs: CardSeg<T>[] = [];
   let cur: T[] = [];
   for (const { row, anchor } of items) {
     cur.push(row);
-    const hit = anchor != null ? byLine.get(anchor) : undefined;
-    if (hit && hit.length > 0) {
-      segs.push({ rows: cur, cardsAfter: hit });
+    if (anchor != null && shouldBreak(anchor)) {
+      segs.push({ rows: cur, endAnchor: anchor });
       cur = [];
     }
   }
-  if (cur.length > 0) segs.push({ rows: cur, cardsAfter: [] });
+  if (cur.length > 0) segs.push({ rows: cur, endAnchor: null });
   return segs;
 }
 
-/** 单个 hunk:在锚点行处把 code 表切段插内联卡(对齐 mockup table → .inline card → table)。 */
+/** 单个 hunk:在锚点行处把 code 表切段插内联卡 / composer(对齐 mockup table → 卡 → table)。 */
 function HunkView({
   hunk,
   lang,
@@ -255,6 +427,9 @@ function HunkView({
   view,
   onTriage,
   onUpdate,
+  onAddThread,
+  composeLine,
+  composeNode,
 }: {
   hunk: DiffHunk;
   lang: string | null;
@@ -263,9 +438,12 @@ function HunkView({
   view: DiffView;
   onTriage?: (finding: Finding, triage: Triage) => void;
   onUpdate?: (input: FindingEditInput) => void;
+  onAddThread?: (line: number, snippet: string) => void;
+  composeLine: number | null;
+  composeNode: React.ReactNode;
 }) {
-  const cards = (list: Finding[]) =>
-    list.map((f) => (
+  const cards = (line: number | null) =>
+    (line != null ? byLine.get(line) ?? [] : []).map((f) => (
       <InlineCard
         key={f.id}
         finding={f}
@@ -274,6 +452,8 @@ function HunkView({
         onUpdate={onUpdate}
       />
     ));
+
+  const shouldBreak = (anchor: number) => byLine.has(anchor) || anchor === composeLine;
 
   return (
     <div className="hunk">
@@ -284,32 +464,34 @@ function HunkView({
       {view === 'split'
         ? segmentByAnchor(
             toSplitRows(hunk.lines).map((r) => ({ row: r, anchor: r.right?.newLine ?? null })),
-            byLine,
+            shouldBreak,
           ).map((seg, i) => (
             <div key={i}>
               <table className="code split">
                 <tbody>
                   {seg.rows.map((r, j) => (
-                    <SplitRow key={j} row={r} lang={lang} />
+                    <SplitRow key={j} row={r} lang={lang} onAddThread={onAddThread} />
                   ))}
                 </tbody>
               </table>
-              {cards(seg.cardsAfter)}
+              {cards(seg.endAnchor)}
+              {seg.endAnchor === composeLine && composeNode}
             </div>
           ))
         : segmentByAnchor(
             hunk.lines.map((l) => ({ row: l, anchor: l.newLine })),
-            byLine,
+            shouldBreak,
           ).map((seg, i) => (
             <div key={i}>
               <table className="code unified">
                 <tbody>
                   {seg.rows.map((l, j) => (
-                    <LineRow key={j} line={l} lang={lang} />
+                    <LineRow key={j} line={l} lang={lang} onAddThread={onAddThread} />
                   ))}
                 </tbody>
               </table>
-              {cards(seg.cardsAfter)}
+              {cards(seg.endAnchor)}
+              {seg.endAnchor === composeLine && composeNode}
             </div>
           ))}
     </div>
@@ -344,20 +526,62 @@ function toSplitRows(lines: DiffLine[]): SplitPair[] {
   return rows;
 }
 
-function LineRow({ line, lang }: { line: DiffLine; lang: string | null }) {
+/** hover 才显影的行内「发起 discussion」＋(仅新侧行) */
+function AddThread({ line, text, onAddThread }: { line: number; text: string; onAddThread?: (line: number, snippet: string) => void }) {
+  if (!onAddThread) return null;
+  return (
+    <button
+      className="add-thread"
+      title="发起 discussion"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onAddThread(line, text.trim().slice(0, 60));
+      }}
+    >
+      ＋
+    </button>
+  );
+}
+
+function LineRow({
+  line,
+  lang,
+  onAddThread,
+}: {
+  line: DiffLine;
+  lang: string | null;
+  onAddThread?: (line: number, snippet: string) => void;
+}) {
   const gutter = line.kind === 'add' ? '＋' : line.kind === 'del' ? '−' : '';
   const lineNo = line.kind === 'del' ? line.oldLine : line.newLine;
   const html = line.text === '' ? '&nbsp;' : highlightLine(line.text, lang);
   return (
-    <tr className={`row${line.kind === 'add' ? ' add' : line.kind === 'del' ? ' del' : ''}`}>
+    <tr
+      className={`row${line.kind === 'add' ? ' add' : line.kind === 'del' ? ' del' : ''}`}
+      data-new-line={line.newLine ?? undefined}
+    >
       <td className="ln">{lineNo}</td>
       <td className="gutter">{gutter}</td>
-      <td className="src" dangerouslySetInnerHTML={{ __html: html }} />
+      <td className="src">
+        <span dangerouslySetInnerHTML={{ __html: html }} />
+        {line.newLine != null && <AddThread line={line.newLine} text={line.text} onAddThread={onAddThread} />}
+      </td>
     </tr>
   );
 }
 
-function SplitCell({ line, side, lang }: { line: DiffLine | null; side: 'old' | 'new'; lang: string | null }) {
+function SplitCell({
+  line,
+  side,
+  lang,
+  onAddThread,
+}: {
+  line: DiffLine | null;
+  side: 'old' | 'new';
+  lang: string | null;
+  onAddThread?: (line: number, snippet: string) => void;
+}) {
   const lnBase = side === 'new' ? 'ln new' : 'ln';
   const srcBase = side === 'new' ? 'src new' : 'src';
   if (!line) {
@@ -374,16 +598,29 @@ function SplitCell({ line, side, lang }: { line: DiffLine | null; side: 'old' | 
   return (
     <>
       <td className={lnBase + mod}>{lineNo}</td>
-      <td className={srcBase + mod} dangerouslySetInnerHTML={{ __html: html }} />
+      <td className={srcBase + mod}>
+        <span dangerouslySetInnerHTML={{ __html: html }} />
+        {side === 'new' && line.newLine != null && (
+          <AddThread line={line.newLine} text={line.text} onAddThread={onAddThread} />
+        )}
+      </td>
     </>
   );
 }
 
-function SplitRow({ row, lang }: { row: SplitPair; lang: string | null }) {
+function SplitRow({
+  row,
+  lang,
+  onAddThread,
+}: {
+  row: SplitPair;
+  lang: string | null;
+  onAddThread?: (line: number, snippet: string) => void;
+}) {
   return (
-    <tr className="row">
+    <tr className="row" data-new-line={row.right?.newLine ?? undefined}>
       <SplitCell line={row.left} side="old" lang={lang} />
-      <SplitCell line={row.right} side="new" lang={lang} />
+      <SplitCell line={row.right} side="new" lang={lang} onAddThread={onAddThread} />
     </tr>
   );
 }

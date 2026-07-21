@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Discussion, Finding, Message, Review } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AgentEvent } from '@shared/agent-events';
@@ -14,6 +14,8 @@ export interface ReviewStreamState {
   status: Review['status'] | null;
   tokenUsage: { used: number; total?: number } | null;
   lastTool: string | null;
+  /** 懒加载一条 discussion 的历史消息(续接的旧 review);实时消息仍走事件流。 */
+  ensureMessages: (discussionId: string) => void;
 }
 
 /**
@@ -29,12 +31,33 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [status, setStatus] = useState<Review['status'] | null>(null);
   const [tokenUsage, setTokenUsage] = useState<{ used: number; total?: number } | null>(null);
   const [lastTool, setLastTool] = useState<string | null>(null);
+  // 已发起过历史拉取的 discussionId,避免重复 fetch(实时消息由事件流补充)
+  const fetched = useRef<Set<string>>(new Set());
+
+  const ensureMessages = useCallback(
+    (discussionId: string) => {
+      if (!reviewId || fetched.current.has(discussionId)) return;
+      fetched.current.add(discussionId);
+      void window.duetlens.review.messages(discussionId).then((list) => {
+        if (list.length === 0) return;
+        setMessages((prev) => {
+          const bucket = prev[discussionId] ?? [];
+          const seen = new Set(bucket.map((m) => m.id));
+          const merged = [...bucket, ...list.filter((m) => !seen.has(m.id))];
+          merged.sort((a, b) => a.createdAt - b.createdAt);
+          return { ...prev, [discussionId]: merged };
+        });
+      });
+    },
+    [reviewId],
+  );
 
   useEffect(() => {
     if (!reviewId) return;
     let alive = true;
     setMessages({});
     setDiff([]);
+    fetched.current = new Set();
 
     void window.duetlens.review.get(reviewId).then((r) => {
       if (alive) {
@@ -83,5 +106,5 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     };
   }, [reviewId]);
 
-  return { review, findings, discussions, diff, messages, status, tokenUsage, lastTool };
+  return { review, findings, discussions, diff, messages, status, tokenUsage, lastTool, ensureMessages };
 }

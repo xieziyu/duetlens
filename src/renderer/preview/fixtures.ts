@@ -5,7 +5,7 @@
  */
 import { parseUnifiedDiff } from '@shared/diff';
 import type { DuetlensApi, ReviewEvent } from '@shared/ipc';
-import type { Discussion, Finding, Review, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, UiSettings } from '@shared/domain';
 
 const RAW_DIFF = `diff --git a/src/pipeline.ts b/src/pipeline.ts
 index 1111111..2222222 100644
@@ -143,15 +143,40 @@ const UI_SETTINGS: UiSettings = {
   defaultDiffView: 'unified',
 };
 
-/** 装一个 stub 到 window.duetlens;写路径(triage/编辑)真的改内存态并经事件回推,便于自查闭环。 */
+/** 一条 finding discussion 预置对话,便于点开 f1 即见真实线程。 */
+const SEED_MESSAGES: Record<string, Message[]> = {
+  'd-f1': [
+    {
+      id: 'm-seed-1',
+      discussionId: 'd-f1',
+      role: 'user',
+      text: '如果只想要个近似进度、不追求精确,能不能不加锁?',
+      createdAt: now + 1000,
+    },
+    {
+      id: 'm-seed-2',
+      discussionId: 'd-f1',
+      role: 'agent',
+      text: '近似进度也要跨线程,所以仍需原子类型,但 Relaxed 顺序就够——它保证单变量原子性、开销接近裸加:\ncounter.fetch_add(1, Ordering::Relaxed);',
+      createdAt: now + 2000,
+    },
+  ],
+};
+
+/** 装一个 stub 到 window.duetlens;写路径(triage/编辑/讨论)真的改内存态并经事件回推,便于自查闭环。 */
 export function installPreviewApi(): void {
   const diff = parseUnifiedDiff(RAW_DIFF);
   const findings = FINDINGS.map((f) => ({ ...f }));
+  const discussions = DISCUSSIONS.map((d) => ({ ...d }));
+  const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const listeners = new Set<(e: ReviewEvent) => void>();
+  const fire = (e: ReviewEvent) => {
+    for (const l of listeners) l(e);
+  };
   const emit = (payload: Finding) => {
     const i = findings.findIndex((f) => f.id === payload.id);
     if (i >= 0) findings[i] = payload;
-    for (const l of listeners) l({ reviewId: 'demo', type: 'finding', payload });
+    fire({ reviewId: 'demo', type: 'finding', payload });
   };
 
   const api: DuetlensApi = {
@@ -168,29 +193,50 @@ export function installPreviewApi(): void {
       get: async () => REVIEW,
       findings: async () => findings,
       diff: async () => diff,
-      discussions: async () => DISCUSSIONS,
-      messages: async () => [],
+      discussions: async () => discussions,
+      messages: async (discussionId) => msgStore[discussionId] ?? [],
       start: async () => REVIEW,
       startDemo: async () => REVIEW,
       resume: async () => REVIEW,
       release: async () => {},
-      addDiscussion: async (_r, anchor) => ({
-        id: `d-${anchor.line}`,
-        reviewId: 'demo',
-        kind: 'user',
-        origin: 'manual',
-        file: anchor.file,
-        line: anchor.line,
-        lineEnd: anchor.lineEnd ?? null,
-        createdAt: Date.now(),
-      }),
-      sendMessage: async (_r, discussionId, text) => ({
-        id: `m-${Date.now()}`,
-        discussionId,
-        role: 'user',
-        text,
-        createdAt: Date.now(),
-      }),
+      addDiscussion: async (_r, anchor) => {
+        const d: Discussion = {
+          id: `d-user-${Date.now()}`,
+          reviewId: 'demo',
+          kind: 'user',
+          origin: 'manual',
+          file: anchor.file,
+          line: anchor.line,
+          lineEnd: anchor.lineEnd ?? null,
+          createdAt: Date.now(),
+        };
+        discussions.push(d);
+        fire({ reviewId: 'demo', type: 'discussion', payload: d });
+        return d;
+      },
+      // 模拟真实回路:先回推 user 消息,延迟后回推 agent 回复;返回 agent 消息。
+      sendMessage: async (_r, discussionId, text) => {
+        const userMsg: Message = {
+          id: `m-${Date.now()}-u`,
+          discussionId,
+          role: 'user',
+          text,
+          createdAt: Date.now(),
+        };
+        (msgStore[discussionId] ??= []).push(userMsg);
+        fire({ reviewId: 'demo', type: 'message', payload: userMsg });
+        await new Promise((r) => setTimeout(r, 900));
+        const agentMsg: Message = {
+          id: `m-${Date.now()}-a`,
+          discussionId,
+          role: 'agent',
+          text: '收到。我基于本讨论看了这段改动,建议用原子计数替代共享 Cell,并在每段完成时增量上报进度。',
+          createdAt: Date.now(),
+        };
+        msgStore[discussionId].push(agentMsg);
+        fire({ reviewId: 'demo', type: 'message', payload: agentMsg });
+        return agentMsg;
+      },
       setTriage: async (_r, findingId, triage) => {
         const f = findings.find((x) => x.id === findingId)!;
         const next = { ...f, triage, updatedAt: Date.now() };
