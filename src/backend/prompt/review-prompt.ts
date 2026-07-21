@@ -4,11 +4,12 @@
  * 合并结果 + 操作性前言 = 注入 codex `baseInstructions` 的文本。
  * 层文件:project = `<cwd>/.duetlens/review.md`,global = `~/.duetlens/review.md`。
  */
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { FINDING_CATEGORIES } from '@shared/domain';
 import {
+  type EditablePromptLayer,
   type PromptLayer,
   type PromptLayerSection,
   type PromptSectionKey,
@@ -79,6 +80,11 @@ export function globalPromptPath(homeDir: string = os.homedir()): string {
   return path.join(homeDir, '.duetlens', 'review.md');
 }
 
+/** project 层文件路径;未选仓库(无 cwd)时为 null,此时 project 层不可编辑。 */
+export function projectPromptPath(cwd?: string): string | null {
+  return cwd ? path.join(cwd, PROJECT_PROMPT_RELPATH) : null;
+}
+
 /**
  * 解析一层 review.md 为「节 key → 正文」。按 H2 分节,正文取到下一个 H1/H2 前;
  * 空正文的节视为**未覆盖**(不计入,让下层生效)。未识别的标题忽略。
@@ -141,6 +147,38 @@ export function composeBaseInstructions(resolved: readonly ResolvedPromptSection
 /** 无任何层文件时的 baseInstructions(前言 + builtin 各节);直调 session 的兜底。 */
 export const BUILTIN_BASE_INSTRUCTIONS = composeBaseInstructions(mergeLayers({}, {}).resolved);
 
+/**
+ * 把一层的覆盖节序列化为 review.md:按 BUILTIN_SECTIONS 固定顺序、H2 用节标题,
+ * 只写有正文的节(空/缺=不覆盖)。可被 parseReviewMarkdown 无损回读。
+ */
+export function serializeLayer(sections: Partial<Record<PromptSectionKey, string>>): string {
+  const blocks: string[] = [];
+  for (const s of BUILTIN_SECTIONS) {
+    const text = sections[s.key]?.trim();
+    if (text) blocks.push(`## ${s.title}\n${text}`);
+  }
+  return blocks.length ? `${blocks.join('\n\n')}\n` : '';
+}
+
+export interface SaveReviewLayerOptions {
+  /** project 层落 `<cwd>/.duetlens/review.md`;缺省则 project 层无处可写。 */
+  cwd?: string;
+  /** 覆盖 home(测试隔离用);缺省 os.homedir()。 */
+  homeDir?: string;
+}
+
+/** 整层重写某一可编辑层的 review.md(自动建 `.duetlens/` 目录)。 */
+export async function saveReviewLayer(
+  layer: EditablePromptLayer,
+  sections: Partial<Record<PromptSectionKey, string>>,
+  opts: SaveReviewLayerOptions = {},
+): Promise<void> {
+  const file = layer === 'project' ? projectPromptPath(opts.cwd) : globalPromptPath(opts.homeDir);
+  if (!file) throw new Error('project 层需要仓库目录(cwd)才能写入');
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, serializeLayer(sections), 'utf8');
+}
+
 async function readLayerFile(p: string): Promise<string | null> {
   // 层文件是附加增强:缺失(ENOENT)或读失败一律降级为「该层未覆盖」,绝不阻断 review。
   try {
@@ -159,11 +197,13 @@ export interface LoadReviewPromptOptions {
 
 /** 读 project + global 两层文件,与 builtin 合并,返回编辑器视图 + 注入用 baseInstructions。 */
 export async function loadReviewPrompt(opts: LoadReviewPromptOptions = {}): Promise<ReviewPromptView> {
-  const projectMd = opts.cwd ? await readLayerFile(path.join(opts.cwd, PROJECT_PROMPT_RELPATH)) : null;
-  const globalMd = await readLayerFile(globalPromptPath(opts.homeDir));
+  const projectPath = projectPromptPath(opts.cwd);
+  const globalPath = globalPromptPath(opts.homeDir);
+  const projectMd = projectPath ? await readLayerFile(projectPath) : null;
+  const globalMd = await readLayerFile(globalPath);
   const { sections, resolved } = mergeLayers(
     projectMd ? parseReviewMarkdown(projectMd) : {},
     globalMd ? parseReviewMarkdown(globalMd) : {},
   );
-  return { sections, baseInstructions: composeBaseInstructions(resolved) };
+  return { sections, baseInstructions: composeBaseInstructions(resolved), projectPath, globalPath };
 }

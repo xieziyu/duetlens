@@ -15,6 +15,7 @@ import type {
 import type { DiffFile } from './diff';
 import type { AgentEvent } from './agent-events';
 import type { GhReviewEvent } from './github-review';
+import type { PromptSaveInput, ReviewPromptView } from './prompt';
 
 // ---- 请求/响应(ipcRenderer.invoke ↔ ipcMain.handle)----
 export const IpcChannels = {
@@ -41,6 +42,8 @@ export const IpcChannels = {
   reviewSaveUiState: 'review:save-ui-state',
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
+  promptGet: 'prompt:get',
+  promptSave: 'prompt:save',
   dialogPickDirectory: 'dialog:pick-directory',
   dialogSaveTextFile: 'dialog:save-text-file',
 } as const;
@@ -163,6 +166,12 @@ export interface DuetlensApi {
   ui: {
     getSettings(): Promise<UiSettings>;
     saveSettings(settings: UiSettings): Promise<void>;
+  };
+  prompt: {
+    /** 读三层审核规则(project 需仓库 cwd,缺省则只有 global+builtin)。 */
+    get(cwd?: string): Promise<ReviewPromptView>;
+    /** 整层重写某可编辑层,回读并返回合并后的最新视图。 */
+    save(input: PromptSaveInput): Promise<ReviewPromptView>;
   };
   dialog: {
     /** 打开系统目录选择器,返回所选绝对路径(取消返回 null)。 */

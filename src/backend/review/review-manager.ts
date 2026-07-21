@@ -5,11 +5,12 @@ import path from 'node:path';
 import type { Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, FindingEditInput, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, isSubmittable } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
-import { loadReviewPrompt } from '../prompt/review-prompt';
+import { loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
 import { createSource } from '../source/create-source';
 import type { ReviewTarget } from '../source/source';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
@@ -238,6 +239,17 @@ export class ReviewManager extends EventEmitter {
 
   saveReviewUiState(reviewId: string, state: ReviewUiState): void {
     this.store.saveReviewUiState(reviewId, state);
+  }
+
+  /** 读三层审核规则提示词(project 层需仓库 cwd,缺省则只有 global+builtin)。 */
+  getReviewPrompt(cwd?: string): Promise<ReviewPromptView> {
+    return loadReviewPrompt({ cwd });
+  }
+
+  /** 整层重写某可编辑层,再回读合并后的最新视图返回给编辑器。 */
+  async saveReviewPrompt(input: PromptSaveInput): Promise<ReviewPromptView> {
+    await saveReviewLayer(input.layer, input.sections, { cwd: input.cwd });
+    return loadReviewPrompt({ cwd: input.cwd });
   }
 
   /** 起真实审核:按 target 建 source,拉元数据落库,后台跑首轮扫描。 */

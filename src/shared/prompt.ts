@@ -32,4 +32,19 @@ export interface ReviewPromptView {
   sections: PromptLayerSection[];
   /** 分节合并后注入 baseInstructions 的最终文本(含操作性前言)。 */
   baseInstructions: string;
+  /** project 层文件绝对路径;无 cwd(未选仓库)时为 null,此时 project 层不可编辑。 */
+  projectPath: string | null;
+  /** global 层文件绝对路径(`~/.duetlens/review.md`)。 */
+  globalPath: string;
+}
+
+/** 可编辑的两层(builtin 只读);编辑器写回其一。 */
+export type EditablePromptLayer = Exclude<PromptLayer, 'builtin'>;
+
+/** 写回一层 review.md 的入参:sections 为该层的全部覆盖(缺/空节=不覆盖,整层重写)。 */
+export interface PromptSaveInput {
+  layer: EditablePromptLayer;
+  /** project 层落 `<cwd>/.duetlens/review.md`;global 层忽略此字段。 */
+  cwd?: string;
+  sections: Partial<Record<PromptSectionKey, string>>;
 }

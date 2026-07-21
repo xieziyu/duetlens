@@ -15,10 +15,18 @@ installPreviewApi();
 const container = document.getElementById('root');
 if (!container) throw new Error('#root 未找到');
 
+// ?screen=prompt 直达三层审核规则编辑器自查;缺省进 demo 审核屏
+const initialScreen = new URLSearchParams(window.location.search).get('screen') as
+  | 'entry'
+  | 'review'
+  | 'submit'
+  | 'prompt'
+  | null;
+
 createRoot(container).render(
   <StrictMode>
     <SettingsProvider>
-      <App initialReviewId="demo" />
+      <App initialReviewId="demo" initialScreen={initialScreen ?? undefined} />
     </SettingsProvider>
   </StrictMode>,
 );

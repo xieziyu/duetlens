@@ -6,6 +6,13 @@
 import { parseUnifiedDiff } from '@shared/diff';
 import type { DuetlensApi, ReviewEvent } from '@shared/ipc';
 import type { Discussion, Finding, Message, Review, ReviewUiState, UiSettings } from '@shared/domain';
+import type {
+  EditablePromptLayer,
+  PromptLayer,
+  PromptLayerSection,
+  PromptSectionKey,
+  ReviewPromptView,
+} from '@shared/prompt';
 
 const RAW_DIFF = `diff --git a/src/pipeline.ts b/src/pipeline.ts
 index 1111111..2222222 100644
@@ -186,6 +193,62 @@ const SEED_MESSAGES: Record<string, Message[]> = {
     },
   ],
 };
+
+// 三层审核规则 fixture:镜像后端 BUILTIN_SECTIONS 结构 + 预置若干覆盖,供三层编辑器双主题自查。
+const PROMPT_BUILTIN: readonly { key: PromptSectionKey; title: string; builtin: string }[] = [
+  {
+    key: 'focus',
+    title: '审核重点',
+    builtin: '按类别审查改动,只报告需要修复的真实问题:Scope / Correctness / Security / Architecture / Performance / Naming。\n超出 diff 的架构隐患以 off-diff finding 提出,并说明为何 off-diff。',
+  },
+  {
+    key: 'severity',
+    title: '严重度判定',
+    builtin: 'high = 崩溃 / 数据损坏 / 安全问题;\nmed = 边界 / 健壮性 / 可维护性隐患;\nlow = 风格 / 命名 / 可读性。',
+  },
+  { key: 'ignore', title: '忽略范围', builtin: '忽略纯格式化、生成文件、lockfile、无语义的行重排。' },
+  {
+    key: 'tone',
+    title: '输出与语气',
+    builtin: 'finding 正文用简体中文,代码标识符 / 路径 / category 用英文;\n每条给出 file:line 锚点与可选 suggestion 块。',
+  },
+  { key: 'context', title: '项目上下文', builtin: '' },
+];
+
+// 预置覆盖:project 覆盖 focus/ignore/context,global 覆盖 tone,其余落 builtin
+const promptLayers: Record<EditablePromptLayer, Partial<Record<PromptSectionKey, string>>> = {
+  project: {
+    focus:
+      '除通用重点外,特别关注:\n- Electron IPC 边界的输入校验\n- 直接拼接的 SQL / shell,警惕注入\n- codex thread 只读沙箱假设是否被打破',
+    ignore: '额外忽略:mockup/*.html 的内联样式与演示 JS(设计稿,不进产物)。',
+    context: '本仓库:Electron + Node/TS 主进程后端 + codex app-server;前端为 React SPA;审核 agent 只读代码,不改动。',
+  },
+  global: {
+    tone: '追问回复保持简洁,不复述已在 diff 中的代码;\n先给结论,再给依据。',
+  },
+};
+
+function buildPromptView(cwd?: string): ReviewPromptView {
+  const project = promptLayers.project;
+  const global = promptLayers.global;
+  const sections: PromptLayerSection[] = PROMPT_BUILTIN.map((s) => {
+    const p = project[s.key] ?? null;
+    const g = global[s.key] ?? null;
+    const winner: PromptLayer = p != null ? 'project' : g != null ? 'global' : 'builtin';
+    return { key: s.key, title: s.title, builtin: s.builtin, global: g, project: p, winner };
+  });
+  const baseInstructions = sections
+    .map((s) => (s.winner === 'project' ? s.project : s.winner === 'global' ? s.global : s.builtin) ?? '')
+    .filter((t) => t.trim())
+    .join('\n\n');
+  // 预览恒返回 project 路径(免选目录直接编辑);真实后端仍按 cwd 门控
+  return {
+    sections,
+    baseInstructions,
+    projectPath: `${cwd ?? '/repo'}/.duetlens/review.md`,
+    globalPath: '~/.duetlens/review.md',
+  };
+}
 
 /** 装一个 stub 到 window.duetlens;写路径(triage/编辑/讨论)真的改内存态并经事件回推,便于自查闭环。 */
 export function installPreviewApi(): void {
@@ -400,6 +463,13 @@ export function installPreviewApi(): void {
       getSettings: async () => uiSettings,
       saveSettings: async (s) => {
         uiSettings = s;
+      },
+    },
+    prompt: {
+      get: async (cwd) => buildPromptView(cwd),
+      save: async (input) => {
+        promptLayers[input.layer] = { ...input.sections };
+        return buildPromptView(input.cwd);
       },
     },
     dialog: {

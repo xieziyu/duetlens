@@ -5,7 +5,7 @@
  *   运行:npm run spike:prompt
  */
 import { strict as assert } from 'node:assert';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -14,6 +14,8 @@ import {
   loadReviewPrompt,
   parseReviewMarkdown,
   mergeLayers,
+  saveReviewLayer,
+  serializeLayer,
 } from '../src/backend/prompt/review-prompt';
 
 const log = (m: string) => process.stdout.write(`[prompt] ${m}\n`);
@@ -68,6 +70,38 @@ async function main() {
   log('两层读盘 + 合并 + 注入 ✓');
 
   assert.equal(BUILTIN_SECTIONS.length, 5, '固定 5 节');
+
+  // 序列化:固定节序、H2 用节标题、空节略去、可被 parse 无损回读
+  const md = serializeLayer({ ignore: 'X', focus: 'Y', severity: '' });
+  assert.equal(md, '## 审核重点\nY\n\n## 忽略范围\nX\n', 'serialize 固定序 + 空节略去');
+  const round = parseReviewMarkdown(md);
+  assert.equal(round.focus, 'Y');
+  assert.equal(round.ignore, 'X');
+  assert.ok(!('severity' in round), '空节不回读');
+  assert.equal(serializeLayer({}), '', '无覆盖序列化为空串');
+  log('序列化:固定序 + 空节略去 + parse 无损回读 ✓');
+
+  // 写路径:save 落盘 → loadReviewPrompt 读回,project 覆盖生效
+  const home2 = mkdtempSync(path.join(tmpdir(), 'duetlens-home2-'));
+  const repo2 = mkdtempSync(path.join(tmpdir(), 'duetlens-repo2-'));
+  await saveReviewLayer('project', { focus: '只看 IPC 边界。' }, { cwd: repo2 });
+  await saveReviewLayer('global', { tone: '先结论。' }, { homeDir: home2 });
+  const saved = readFileSync(path.join(repo2, '.duetlens', 'review.md'), 'utf8');
+  assert.ok(saved.includes('## 审核重点\n只看 IPC 边界。'), 'project 层落盘含节标题');
+  const afterSave = await loadReviewPrompt({ cwd: repo2, homeDir: home2 });
+  const wn = Object.fromEntries(afterSave.sections.map((s) => [s.key, s.winner]));
+  assert.equal(wn.focus, 'project', '落盘后 focus 由 project 胜出');
+  assert.equal(wn.tone, 'global', '落盘后 tone 由 global 胜出');
+  assert.equal(afterSave.projectPath, path.join(repo2, '.duetlens', 'review.md'), 'view 回报 project 路径');
+  assert.ok(afterSave.globalPath.endsWith(path.join('.duetlens', 'review.md')), 'view 回报 global 路径');
+  // 重写为无覆盖 → 该节回落下层
+  await saveReviewLayer('project', {}, { cwd: repo2 });
+  const cleared = await loadReviewPrompt({ cwd: repo2, homeDir: home2 });
+  assert.equal(cleared.sections.find((s) => s.key === 'focus')?.winner, 'builtin', '清空 project 后 focus 回落 builtin');
+  // 无 cwd 写 project 应报错
+  await assert.rejects(() => saveReviewLayer('project', { focus: 'x' }, {}), /cwd/, '无仓库目录写 project 应报错');
+  log('写路径:save 落盘 + 读回 + 清空回落 + 无 cwd 守卫 ✓');
+
   log('全部通过 ✓');
 }
 

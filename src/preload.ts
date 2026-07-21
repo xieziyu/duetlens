@@ -43,6 +43,10 @@ const api: DuetlensApi = {
     getSettings: () => ipcRenderer.invoke(IpcChannels.uiGetSettings),
     saveSettings: (settings: UiSettings) => ipcRenderer.invoke(IpcChannels.uiSaveSettings, settings),
   },
+  prompt: {
+    get: (cwd) => ipcRenderer.invoke(IpcChannels.promptGet, cwd),
+    save: (input) => ipcRenderer.invoke(IpcChannels.promptSave, input),
+  },
   dialog: {
     pickDirectory: () => ipcRenderer.invoke(IpcChannels.dialogPickDirectory),
     saveTextFile: (defaultName, content) =>

@@ -13,6 +13,7 @@ import {
   type SubmitReviewInput,
 } from '@shared/ipc';
 import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
+import type { PromptSaveInput } from '@shared/prompt';
 import type { ReviewManager } from '../review/review-manager';
 
 export interface IpcDeps {
@@ -82,6 +83,9 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
 
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());
   ipcMain.handle(IpcChannels.uiSaveSettings, (_e, settings: UiSettings) => manager.saveUiSettings(settings));
+
+  ipcMain.handle(IpcChannels.promptGet, (_e, cwd?: string) => manager.getReviewPrompt(cwd));
+  ipcMain.handle(IpcChannels.promptSave, (_e, input: PromptSaveInput) => manager.saveReviewPrompt(input));
 
   ipcMain.handle(IpcChannels.dialogPickDirectory, async () => {
     const win = BrowserWindow.getFocusedWindow();
