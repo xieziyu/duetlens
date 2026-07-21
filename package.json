@@ -10,6 +10,8 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
+    "rebuild:node": "npm rebuild better-sqlite3",
     "typecheck": "tsc --noEmit",
     "lint": "eslint --ext .ts,.tsx .",
     "spike:codex": "tsx scripts/spike-codex.ts",

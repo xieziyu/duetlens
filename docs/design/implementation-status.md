@@ -25,7 +25,7 @@
 
 ## 端到端验证(headless spike)
 
-`npm run spike:<name>`。前四个真跑 codex(需 `codex login`、耗 token);`mcp` 确定性、不烧 token。原生模块 ABI:跑过 `npm start`(Electron ABI)后再跑 spike 需 `npm rebuild better-sqlite3` 切回 Node ABI。
+`npm run spike:<name>`。前四个真跑 codex(需 `codex login`、耗 token);`mcp`/`diff`/`prompt`/`gitbutler` 确定性、不烧 token。**原生模块 ABI 切换**:同一个 `better-sqlite3` 服务两个运行时——跑 app(`npm start`)需 Electron ABI(`npm run rebuild:electron`),跑 spike(tsx/Node)需 Node ABI(`npm run rebuild:node`);两者切换后对方即失效,按当前要跑的目标先执行对应 rebuild。
 
 | spike | 验证 |
 | --- | --- |
