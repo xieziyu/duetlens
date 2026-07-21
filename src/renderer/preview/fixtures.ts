@@ -84,6 +84,8 @@ const REVIEW: Review = {
   sourceRef: 'feat/streaming-transcode',
   repoPath: '/Users/dev/podcast-go',
   codexThreadId: 'thread-demo',
+  model: 'gpt-5-codex',
+  reasoningEffort: 'high',
   title: 'feat: streaming transcode pipeline',
   status: 'reviewing',
   summaryBody: '本次改动引入并发编码管线,整体方向合理,但并发计数存在数据竞争,需修正。',
@@ -180,6 +182,8 @@ const UI_SETTINGS: UiSettings = {
   rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
+  defaultModel: '',
+  defaultEffort: 'medium',
 };
 
 /** 一条 finding discussion 预置对话,便于点开 f1 即见真实线程。 */

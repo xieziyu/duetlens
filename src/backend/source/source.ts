@@ -9,6 +9,10 @@ export interface ReviewTarget {
   repoPath: string;
   /** local-branch 的 diff 基线;缺省自动探测默认分支 */
   baseRef?: string;
+  /** codex 模型(空=账号默认);仅审核配置,不影响 source 定位 */
+  model?: string | null;
+  /** reasoning effort(缺省 codex medium) */
+  reasoningEffort?: string | null;
 }
 
 export interface PreparedSource {

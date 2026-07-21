@@ -50,6 +50,14 @@ export type MessageRole = (typeof MESSAGE_ROLES)[number];
 export const REVIEW_STATUSES = ['scanning', 'reviewing', 'submitted', 'exported', 'failed'] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
+/**
+ * codex reasoning effort(透传 config.toml 的 model_reasoning_effort)。
+ * codex 全集含 none/max/ultra,此处取通用且对审核有意义的子集;medium 为 codex 缺省。
+ */
+export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
+
 // ---- MCP ingress schema(agent 经工具回传的字段;triage/submission 由用户侧决定,不在此)----
 export const reportFindingSchema = z.object({
   severity: z.enum(SEVERITIES),
@@ -83,6 +91,10 @@ export interface Review {
   repoPath: string | null;
   /** codex 侧会话 id(续接用) */
   codexThreadId: string | null;
+  /** 用户指定的 codex 模型(null=账号默认);续接会话时复用 */
+  model: string | null;
+  /** 用户指定的 reasoning effort(null=codex 缺省 medium) */
+  reasoningEffort: ReasoningEffort | null;
   title: string | null;
   status: ReviewStatus;
   /** codex 生成、用户可编辑的总结正文(提交屏 review body 来源) */
@@ -140,6 +152,10 @@ export interface UiSettings {
   rightWidth: number;
   defaultTab: 'discussion' | 'findings' | 'summary';
   defaultDiffView: 'unified' | 'split';
+  /** 发起表单预填的模型(空=账号默认) */
+  defaultModel: string;
+  /** 发起表单预填的 reasoning effort */
+  defaultEffort: ReasoningEffort;
 }
 
 export const DEFAULT_UI_SETTINGS: UiSettings = {
@@ -149,6 +165,8 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
+  defaultModel: '',
+  defaultEffort: DEFAULT_REASONING_EFFORT,
 };
 
 /** per-review 的进度态(随会话恢复);viewedFiles = 已标记「已看」的文件路径。 */

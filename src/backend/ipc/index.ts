@@ -45,6 +45,8 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
       ref: input.ref,
       repoPath: input.repoPath ?? '',
       baseRef: input.baseRef,
+      model: input.model,
+      reasoningEffort: input.reasoningEffort,
     }),
   );
   ipcMain.handle(IpcChannels.reviewStartDemo, () => manager.startDemoReview());

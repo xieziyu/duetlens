@@ -18,6 +18,10 @@ export interface StartConversationOptions {
   mcpUrl?: string;
   /** 自建 MCP 的 bearer 令牌;codex 经 bearer_token_env_var 携带以隔离本地其他进程 */
   mcpToken?: string;
+  /** 指定 codex 模型(空/缺省=账号默认) */
+  model?: string | null;
+  /** reasoning effort(透传 config.model_reasoning_effort;缺省 codex medium) */
+  reasoningEffort?: string | null;
 }
 
 /** 续接已存在会话:同 start 的注入项 + 要续接的 conversationId。 */

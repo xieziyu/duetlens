@@ -22,6 +22,8 @@ const review: Review = {
   sourceRef: 'feat/streaming-transcode',
   repoPath: '/repo',
   codexThreadId: null,
+  model: null,
+  reasoningEffort: null,
   title: null,
   status: 'reviewing',
   summaryBody: '并发方向合理,需收口共享状态的线程安全。',

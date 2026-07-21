@@ -273,6 +273,8 @@ export class ReviewManager extends EventEmitter {
       sourceRef: target.ref,
       repoPath: target.repoPath || null,
       title: prepared.title,
+      model: target.model || null,
+      reasoningEffort: target.reasoningEffort || null,
     });
     // 预取 diff 落库:MCP 与 renderer 共用同一份,省 codex 侧一次 get_diff 往返。
     const rawDiff = await source.getDiff();
@@ -314,7 +316,13 @@ export class ReviewManager extends EventEmitter {
     const session = this.createSession(review.id, onDone);
     // 不 await:扫描后台跑,调用方(IPC)立即返回。source 清理延到 dispose,续问仍能读文件。
     session
-      .start({ cwd, providers, baseInstructions })
+      .start({
+        cwd,
+        providers,
+        baseInstructions,
+        model: review.model,
+        reasoningEffort: review.reasoningEffort,
+      })
       .catch(() => this.forward({ reviewId: review.id, type: 'status', payload: 'failed' }));
   }
 
@@ -337,6 +345,8 @@ export class ReviewManager extends EventEmitter {
         cwd: prepared.cwd,
         providers: { getDiff: () => source.getDiff(), getFile: (p) => source.getFile(p) },
         baseInstructions,
+        model: review.model,
+        reasoningEffort: review.reasoningEffort,
       });
     } catch (e) {
       this.sessions.delete(reviewId);

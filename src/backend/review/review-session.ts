@@ -21,6 +21,10 @@ export interface StartReviewOptions {
   providers: McpContentProviders;
   baseInstructions?: string;
   scanPrompt?: string;
+  /** 用户指定的 codex 模型(空/缺省=账号默认) */
+  model?: string | null;
+  /** reasoning effort(缺省 codex medium) */
+  reasoningEffort?: string | null;
 }
 
 /**
@@ -57,6 +61,8 @@ export class ReviewSession extends EventEmitter {
       mcpUrl,
       mcpToken: this.mcp!.token,
       baseInstructions: opts.baseInstructions ?? BUILTIN_BASE_INSTRUCTIONS,
+      model: opts.model,
+      reasoningEffort: opts.reasoningEffort,
     });
     this.conversationId = handle.conversationId;
     this.store.setCodexThreadId(this.reviewId, handle.conversationId);
@@ -89,6 +95,8 @@ export class ReviewSession extends EventEmitter {
       mcpUrl,
       mcpToken: this.mcp!.token,
       baseInstructions: opts.baseInstructions ?? BUILTIN_BASE_INSTRUCTIONS,
+      model: opts.model,
+      reasoningEffort: opts.reasoningEffort,
     });
     this.conversationId = handle.conversationId;
     return this.store.listFindings(this.reviewId);

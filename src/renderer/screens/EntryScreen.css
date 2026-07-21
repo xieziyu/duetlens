@@ -59,6 +59,15 @@
   display: flex;
   gap: 8px;
 }
+/* 模型 + effort 并排,每项各半 */
+.field-pair {
+  display: flex;
+  gap: 12px;
+}
+.field-pair .field {
+  flex: 1;
+  min-width: 0;
+}
 .field-input {
   flex: 1;
   min-width: 0;

@@ -54,6 +54,8 @@ export interface ThreadResumeParams {
   sandbox?: SandboxMode;
   config?: Record<string, unknown>;
   baseInstructions?: string;
+  /** 覆盖持久化模型;缺省 codex 复用 thread 落库的 model/effort */
+  model?: string;
 }
 
 export interface ThreadResumeResponse {

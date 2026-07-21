@@ -256,8 +256,11 @@ export function ReviewScreen({
         <span className="spacer" />
         <div className="meta">
           <span className="model" title="审阅 agent">
-            <span className="glyph" /> codex
+            <span className="glyph" /> codex{review?.model ? ` · ${review.model}` : ''}
           </span>
+          {review?.reasoningEffort && (
+            <span className="mono effort" title="reasoning effort">{review.reasoningEffort}</span>
+          )}
           {lastTool && <span className="mono tool" title="最近工具调用">{lastTool}</span>}
           {tokenUsage && (
             <span className="tokens">

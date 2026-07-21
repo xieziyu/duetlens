@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import type { Review, SourceKind } from '@shared/domain';
+import { useEffect, useRef, useState } from 'react';
+import { REASONING_EFFORTS, type ReasoningEffort, type Review, type SourceKind } from '@shared/domain';
 import type { ReviewStartInput } from '@shared/ipc';
+import { useSettings } from '../settings/SettingsProvider';
 import './EntryScreen.css';
 
 const SOURCE_OPTIONS: { value: SourceKind; label: string; disabled?: boolean }[] = [
@@ -9,13 +10,24 @@ const SOURCE_OPTIONS: { value: SourceKind; label: string; disabled?: boolean }[]
   { value: 'gitbutler-vbranch', label: 'GitButler 虚拟分支' },
 ];
 
+const EFFORT_LABELS: Record<ReasoningEffort, string> = {
+  minimal: 'minimal · 最快',
+  low: 'low',
+  medium: 'medium · 默认',
+  high: 'high',
+  xhigh: 'xhigh · 最深',
+};
+
 // → mockup/entry.html:Hero + 发起审核卡片 + 最近的审核
 export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => void }) {
+  const { settings, update, loaded } = useSettings();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [source, setSource] = useState<SourceKind>('local-branch');
   const [ref, setRef] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const [baseRef, setBaseRef] = useState('');
+  const [model, setModel] = useState('');
+  const [effort, setEffort] = useState<ReasoningEffort>('medium');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,6 +35,16 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   useEffect(() => {
     void refresh();
   }, []);
+
+  // 首帧用默认渲染,settings 落地后预填一次(不覆盖用户随后的编辑)
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (loaded && !prefilled.current) {
+      prefilled.current = true;
+      setModel(settings.defaultModel);
+      setEffort(settings.defaultEffort);
+    }
+  }, [loaded, settings.defaultModel, settings.defaultEffort]);
 
   const isLocal = source === 'local-branch';
   const isGithub = source === 'github-pr';
@@ -40,12 +62,17 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   const start = async () => {
     setBusy(true);
     setError(null);
+    const trimmedModel = model.trim();
     const input: ReviewStartInput = {
       source,
       ref: ref.trim(),
       repoPath: repoPath.trim() || undefined,
       baseRef: baseRef.trim() || undefined,
+      model: trimmedModel || undefined,
+      reasoningEffort: effort,
     };
+    // 记住本次选择作为下次发起的缺省
+    update({ defaultModel: trimmedModel, defaultEffort: effort });
     try {
       const review = await window.duetlens.review.start(input);
       onOpenReview(review.id);
@@ -141,6 +168,32 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
               />
             </label>
           )}
+
+          <div className="field-pair">
+            <label className="field">
+              <span className="field-label">模型</span>
+              <input
+                className="field-input mono"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="codex 模型(留空=账号默认)"
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">effort</span>
+              <select
+                className="field-input mono"
+                value={effort}
+                onChange={(e) => setEffort(e.target.value as ReasoningEffort)}
+              >
+                {REASONING_EFFORTS.map((v) => (
+                  <option key={v} value={v}>
+                    {EFFORT_LABELS[v]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
         {error && <p className="start-error">{error}</p>}

@@ -6,6 +6,7 @@ import type {
   Discussion,
   Finding,
   Message,
+  ReasoningEffort,
   Review,
   ReviewUiState,
   SourceKind,
@@ -57,6 +58,10 @@ export interface ReviewStartInput {
   repoPath?: string;
   /** local-branch diff 基线;缺省自动探测默认分支 */
   baseRef?: string;
+  /** codex 模型(空=账号默认) */
+  model?: string;
+  /** reasoning effort(缺省 codex medium) */
+  reasoningEffort?: ReasoningEffort;
 }
 
 /** 用户就地编辑一条 finding 的可编辑字段(缺省字段不改;suggestion 传 null 清空)。 */

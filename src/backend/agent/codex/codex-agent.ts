@@ -66,7 +66,8 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
       sandbox: 'read-only',
       approvalPolicy: 'never',
       baseInstructions: opts.baseInstructions,
-      config: this.mcpConfig(opts),
+      model: opts.model || undefined,
+      config: this.threadConfig(opts),
     });
     return { conversationId: res.thread.id };
   }
@@ -79,7 +80,8 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
       sandbox: 'read-only',
       approvalPolicy: 'never',
       baseInstructions: opts.baseInstructions,
-      config: this.mcpConfig(opts),
+      model: opts.model || undefined,
+      config: this.threadConfig(opts),
     });
     return { conversationId: res.thread.id };
   }
@@ -90,12 +92,16 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
     await this.server.initialize({ name: 'duetlens', version: '2.0.0-dev' });
   }
 
-  /** per-thread 注入自建 MCP;有令牌时让 codex 经 bearer_token_env_var 携带。 */
-  private mcpConfig(opts: StartConversationOptions): Record<string, unknown> | undefined {
-    if (!opts.mcpUrl) return undefined;
-    const duetlens: Record<string, unknown> = { url: opts.mcpUrl };
-    if (opts.mcpToken) duetlens.bearer_token_env_var = MCP_TOKEN_ENV;
-    return { mcp_servers: { duetlens } };
+  /** per-thread config 覆盖:注入自建 MCP + reasoning effort(config.toml 形状透传)。 */
+  private threadConfig(opts: StartConversationOptions): Record<string, unknown> | undefined {
+    const config: Record<string, unknown> = {};
+    if (opts.mcpUrl) {
+      const duetlens: Record<string, unknown> = { url: opts.mcpUrl };
+      if (opts.mcpToken) duetlens.bearer_token_env_var = MCP_TOKEN_ENV;
+      config.mcp_servers = { duetlens };
+    }
+    if (opts.reasoningEffort) config.model_reasoning_effort = opts.reasoningEffort;
+    return Object.keys(config).length ? config : undefined;
   }
 
   /** 发一轮对话;resolve 于 turn 启动,完成经 streamEvents 的 turn-completed。 */

@@ -22,7 +22,22 @@ function main() {
   });
   assert.equal(review.status, 'scanning');
   assert.ok(review.id);
+  assert.equal(review.model, null, '未指定模型应落库为 null');
+  assert.equal(review.reasoningEffort, null, '未指定 effort 应落库为 null');
   log(`review 建立 ${review.id} (${review.status})`);
+
+  // 指定模型/effort 的 review:落库并回读一致(续接会话据此复用)
+  const configured = store.createReview({
+    source: 'local-branch',
+    sourceRef: 'feat/x',
+    model: 'gpt-5-codex',
+    reasoningEffort: 'high',
+  });
+  const reloaded = store.getReview(configured.id)!;
+  assert.equal(reloaded.model, 'gpt-5-codex');
+  assert.equal(reloaded.reasoningEffort, 'high');
+  db.prepare('DELETE FROM reviews WHERE id = ?').run(configured.id);
+  log('review model/effort 往返 ok');
 
   store.setCodexThreadId(review.id, '019f-thread');
   store.setReviewStatus(review.id, 'reviewing');
@@ -81,10 +96,20 @@ function main() {
 
   // UI 设置默认值 + 持久化往返
   assert.equal(store.getUiSettings().dataMode, 'dark');
-  store.saveUiSettings({ ...store.getUiSettings(), dataMode: 'light', leftWidth: 300 });
+  assert.equal(store.getUiSettings().defaultModel, '');
+  assert.equal(store.getUiSettings().defaultEffort, 'medium');
+  store.saveUiSettings({
+    ...store.getUiSettings(),
+    dataMode: 'light',
+    leftWidth: 300,
+    defaultModel: 'o3',
+    defaultEffort: 'xhigh',
+  });
   assert.equal(store.getUiSettings().dataMode, 'light');
   assert.equal(store.getUiSettings().leftWidth, 300);
-  log('ui_settings 默认 + 往返 ok');
+  assert.equal(store.getUiSettings().defaultModel, 'o3');
+  assert.equal(store.getUiSettings().defaultEffort, 'xhigh');
+  log('ui_settings 默认 + 往返 ok(含 model/effort)');
 
   // 级联删除:删 review 应清空其 findings/discussions/messages
   db.prepare('DELETE FROM reviews WHERE id = ?').run(review.id);

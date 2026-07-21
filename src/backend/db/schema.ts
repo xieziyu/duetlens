@@ -87,7 +87,15 @@ CREATE TABLE review_diffs (
 );
 `;
 
-const MIGRATIONS: string[] = [V1, V2];
+// 用户在发起时可选的 codex 模型/effort:落库以便续接会话复用;ui_settings 存发起表单缺省。
+const V3 = `
+ALTER TABLE reviews ADD COLUMN model TEXT;
+ALTER TABLE reviews ADD COLUMN reasoning_effort TEXT;
+ALTER TABLE ui_settings ADD COLUMN default_model TEXT NOT NULL DEFAULT '';
+ALTER TABLE ui_settings ADD COLUMN default_effort TEXT NOT NULL DEFAULT 'medium';
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

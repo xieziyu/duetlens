@@ -26,6 +26,8 @@ interface ReviewRow {
   source_ref: string;
   repo_path: string | null;
   codex_thread_id: string | null;
+  model: string | null;
+  reasoning_effort: string | null;
   title: string | null;
   status: string;
   summary_body: string | null;
@@ -78,6 +80,8 @@ function toReview(r: ReviewRow): Review {
     sourceRef: r.source_ref,
     repoPath: r.repo_path,
     codexThreadId: r.codex_thread_id,
+    model: r.model,
+    reasoningEffort: r.reasoning_effort as Review['reasoningEffort'],
     title: r.title,
     status: r.status as ReviewStatus,
     summaryBody: r.summary_body,
@@ -143,6 +147,8 @@ export class ReviewStore {
     sourceRef: string;
     repoPath?: string | null;
     title?: string | null;
+    model?: string | null;
+    reasoningEffort?: string | null;
   }): Review {
     const ts = now();
     const row: ReviewRow = {
@@ -151,6 +157,8 @@ export class ReviewStore {
       source_ref: input.sourceRef,
       repo_path: input.repoPath ?? null,
       codex_thread_id: null,
+      model: input.model ?? null,
+      reasoning_effort: input.reasoningEffort ?? null,
       title: input.title ?? null,
       status: 'scanning',
       summary_body: null,
@@ -159,8 +167,8 @@ export class ReviewStore {
     };
     this.db
       .prepare(
-        `INSERT INTO reviews (id, source, source_ref, repo_path, codex_thread_id, title, status, summary_body, created_at, updated_at)
-         VALUES (@id, @source, @source_ref, @repo_path, @codex_thread_id, @title, @status, @summary_body, @created_at, @updated_at)`,
+        `INSERT INTO reviews (id, source, source_ref, repo_path, codex_thread_id, model, reasoning_effort, title, status, summary_body, created_at, updated_at)
+         VALUES (@id, @source, @source_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @title, @status, @summary_body, @created_at, @updated_at)`,
       )
       .run(row);
     return toReview(row);
@@ -429,17 +437,20 @@ export class ReviewStore {
       rightWidth: r.right_width as number,
       defaultTab: r.default_tab as UiSettings['defaultTab'],
       defaultDiffView: r.default_diff_view as UiSettings['defaultDiffView'],
+      defaultModel: (r.default_model as string | null) ?? DEFAULT_UI_SETTINGS.defaultModel,
+      defaultEffort: (r.default_effort as UiSettings['defaultEffort'] | null) ?? DEFAULT_UI_SETTINGS.defaultEffort,
     };
   }
 
   saveUiSettings(s: UiSettings): void {
     this.db
       .prepare(
-        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view)
-         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView)
+        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_model, default_effort)
+         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultModel, @defaultEffort)
          ON CONFLICT(id) DO UPDATE SET
            data_mode = @dataMode, data_theme = @dataTheme, left_width = @leftWidth,
-           right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView`,
+           right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView,
+           default_model = @defaultModel, default_effort = @defaultEffort`,
       )
       .run(s);
   }
