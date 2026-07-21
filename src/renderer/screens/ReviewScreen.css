@@ -1094,3 +1094,148 @@
   font-size: 11px;
   color: var(--text-faint);
 }
+
+/* ---------- diff 导航:per-file viewed / 折叠 / split 视图 ---------- */
+.tree .head .count .vn {
+  color: var(--add);
+}
+.file .vtick {
+  margin-left: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: transparent;
+  flex: none;
+  cursor: pointer;
+}
+.file:hover .vtick {
+  border-color: var(--agent-line);
+  color: var(--text-faint);
+}
+.file.viewed .vtick {
+  background: var(--add-bg);
+  border-color: var(--add-gutter);
+  color: var(--add);
+}
+.file.viewed .name {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-soft);
+}
+.file.viewed .stat,
+.file.viewed .badge {
+  opacity: 0.45;
+}
+
+.view-seg {
+  display: flex;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 2px;
+}
+.view-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 9px;
+  font-family: var(--mono);
+}
+.view-seg button.on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--agent-line) inset;
+}
+.icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--text);
+  border-color: var(--agent-line);
+}
+.icon-btn.on {
+  background: var(--add-bg);
+  border-color: var(--add-gutter);
+  color: var(--add);
+}
+
+.file-collapsed-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-faint);
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--surface);
+}
+.file-collapsed-bar .cb-ic {
+  color: var(--add);
+}
+.file-collapsed-bar .cb-x {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--agent-2);
+}
+
+.code.split {
+  table-layout: fixed;
+}
+.code.split .ln {
+  width: 44px;
+  border-right: 1px solid var(--border-soft);
+}
+.code.split .ln.new {
+  border-left: 1px solid var(--border);
+}
+.code.split .src {
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.code.split .src.add {
+  background: var(--add-bg);
+}
+.code.split .ln.add {
+  background: var(--add-gutter);
+  color: var(--add);
+}
+.code.split .src.del {
+  background: var(--del-bg);
+}
+.code.split .ln.del {
+  background: var(--del-gutter);
+  color: var(--del);
+}
+.code.split .src.blank,
+.code.split .ln.blank {
+  background: color-mix(in oklab, var(--text-faint) 7%, transparent);
+}
+.code.split .row:hover .src:not(.blank) {
+  background: var(--hover);
+}
+.code.split .row:hover .src.add {
+  background: var(--add-bg);
+}
+.code.split .row:hover .src.del {
+  background: var(--del-bg);
+}

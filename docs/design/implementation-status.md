@@ -21,7 +21,7 @@
 | 领域模型 | `src/shared/domain.ts` | ✅ 类型 + zod ingress schema |
 | IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令(start/resume/send-message)/事件推送 + dialog 目录选择 + `review:diff` |
 | 结构化 diff | `src/shared/diff.ts`(parseUnifiedDiff)+ `review_diffs` 表(schema V2) | ✅ 后端预取落库、MCP 与 renderer 共用;add/del/modify/rename/binary |
-| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 三栏 + FileTree/DiffPane/InlineCard/Resizer) | 🚧 三栏 shell + 只读 unified diff + 语法高亮(highlight.js)+ 拖拽栏宽 + 锚定内联 finding 卡 + off-diff + **finding 写路径(triage + 就地编辑)**已落;split/框选/discussion/summary 待做 |
+| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 三栏 + FileTree/DiffPane/InlineCard/Resizer) | 🚧 三栏 shell + unified/split diff + 语法高亮(highlight.js)+ 拖拽栏宽 + 锚定内联 finding 卡 + off-diff + **finding 写路径(triage + 就地编辑)** + **per-file viewed/折叠**已落;框选/discussion/summary/持久化 待做 |
 
 ## 端到端验证(headless spike)
 
@@ -69,6 +69,7 @@
    - ✅ 锚定内联 finding 卡(read-only view 态,table→card→table 切段)+ off-diff banner + 右栏点选定位高亮
    - ✅ wordmark 多色 + 闪烁光标(App.tsx/App.css);删 DevBridgeProbe 骨架件
    - ✅ finding 写路径 · triage + 就地编辑:`review:set-triage` / `review:update-finding` IPC(ReviewManager.setTriage/updateFinding 落库后外发 `finding` 事件,useReviewStream upsert)+ InlineCard view/edit/dismissed 三态(severity/category/title/body/suggestion 编辑,⌘↵ 保存 / Esc 取消,✕ 剔除 / ↩ 恢复;submitted 只读)+ 右栏 Findings tab triage 保留/剔除/恢复 + 保留·剔除 tally。preview fixtures 写路径改内存态并回推事件,双主题实测闭环。**promote(discussion→finding)/ 手动新增 finding / submission 落 submit 屏归后续切片**
-   - ⏳ split 视图 · file-header viewed✓/折叠 · gutter 锚点圆点 · hover ＋ · 框选发起 discussion(SelectionPopover)· Composer · Discussion/Summary tab · 扫描 timeline · per-file viewed · 键盘快捷键
+   - ✅ diff 视图交互:unified/split 切换(file-header segmented,全局态;`toSplitRows` 把连续 del/add 两两配成并排双列,pure-add/pure-del 一侧留 blank,内联卡与 unified 共用 InlineCard、锚点一律新侧行号,split 亦逐行语法高亮)+ per-file viewed✓/折叠(file-header ✓=标记已看并折叠、⌄=仅折叠,折叠显 file-collapsed-bar;FileTree viewed tick + 划线灰显 + 树头「N 改动 · M 已看」进度)。**均为本地态,持久化统一留 ④**
+   - ⏳ gutter 锚点圆点 · hover ＋ · 框选发起 discussion(SelectionPopover)· Composer · Discussion/Summary tab · 扫描 timeline · 键盘快捷键
    - ⏳ 顶栏合并(App 全局栏 + rev-topbar 现为两条,mockup 是单条含 submit CTA/模型/⌘)· 主题+栏宽持久化(settings IPC)
    - ⏳ 审核规则三层编辑器(`mockup/prompt-rules.html`)+ 读写 IPC(读走 `review-prompt.ts`,写落 `.duetlens/review.md`)

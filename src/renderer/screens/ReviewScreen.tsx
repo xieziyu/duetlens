@@ -3,7 +3,7 @@ import type { Finding, Severity, Triage } from '@shared/domain';
 import type { FindingEditInput } from '@shared/ipc';
 import { useReviewStream } from '../review/useReviewStream';
 import { FileTree } from './review/FileTree';
-import { DiffPane } from './review/DiffPane';
+import { DiffPane, type DiffView } from './review/DiffPane';
 import { Resizer } from './review/Resizer';
 import './ReviewScreen.css';
 import './review/review-syntax.css';
@@ -33,6 +33,26 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   // 栏宽:本地拖拽态,持久化(后端 settings)后续接入
   const [leftW, setLeftW] = useState(236);
   const [rightW, setRightW] = useState(380);
+  // diff 视图 + per-file 已看/折叠:本地态,持久化统一留后续切片
+  const [diffView, setDiffView] = useState<DiffView>('unified');
+  const [viewed, setViewed] = useState<Set<string>>(() => new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+  const toggle = (s: Set<string>, path: string, on: boolean): Set<string> => {
+    const next = new Set(s);
+    if (on) next.add(path);
+    else next.delete(path);
+    return next;
+  };
+  const onToggleCollapsed = (path: string) =>
+    setCollapsed((prev) => toggle(prev, path, !prev.has(path)));
+  // 标记已看同时折叠;取消已看则展开
+  const onToggleViewed = (path: string) =>
+    setViewed((prev) => {
+      const nowViewed = !prev.has(path);
+      setCollapsed((c) => toggle(c, path, nowViewed));
+      return toggle(prev, path, nowViewed);
+    });
 
   const focusFinding = (f: Finding) => {
     setActivePath(f.file);
@@ -103,6 +123,8 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           findings={findings}
           activePath={activePath}
           onSelect={setActivePath}
+          viewed={viewed}
+          onToggleViewed={onToggleViewed}
         />
         <Resizer onDrag={(dx) => setLeftW((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))} />
         <DiffPane
@@ -112,6 +134,12 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           focusFindingId={focusFindingId}
           onTriage={onTriage}
           onUpdate={onUpdate}
+          view={diffView}
+          onViewChange={setDiffView}
+          viewed={viewed}
+          collapsed={collapsed}
+          onToggleViewed={onToggleViewed}
+          onToggleCollapsed={onToggleCollapsed}
         />
         <Resizer onDrag={(dx) => setRightW((w) => clamp(w - dx, RIGHT_MIN, RIGHT_MAX))} />
         <RightPanel

@@ -15,13 +15,16 @@ export interface FileTreeProps {
   findings: Finding[];
   activePath: string | null;
   onSelect: (path: string) => void;
+  /** per-file 已看集合;tick 标记同步折叠 diff */
+  viewed: Set<string>;
+  onToggleViewed: (path: string) => void;
 }
 
 /**
- * 左栏文件树(对齐 mockup .tree):每行文件名 + diffstat + 该文件的 finding 计数徽标。
- * 目录分组暂略,先扁平列表;viewed tick 归后续切片。
+ * 左栏文件树(对齐 mockup .tree):每行文件名 + diffstat + finding 徽标 + viewed tick。
+ * 目录分组暂略,先扁平列表。树头显示「N 改动 · M 已看」进度。
  */
-export function FileTree({ files, findings, activePath, onSelect }: FileTreeProps) {
+export function FileTree({ files, findings, activePath, onSelect, viewed, onToggleViewed }: FileTreeProps) {
   // 按文件聚合 open finding 数(triage!=dismiss),用于徽标
   const findingCount = useMemo(() => {
     const m = new Map<string, number>();
@@ -31,20 +34,24 @@ export function FileTree({ files, findings, activePath, onSelect }: FileTreeProp
     }
     return m;
   }, [findings]);
+  const viewedCount = files.filter((f) => viewed.has(f.path)).length;
 
   return (
     <div className="tree pane">
       <div className="head">
         <h3>Files</h3>
-        <span className="count">{files.length}</span>
+        <span className="count">
+          {files.length} 改动 · <span className="vn">{viewedCount}</span> 已看
+        </span>
       </div>
       <div className="group">
         {files.map((f) => {
           const count = findingCount.get(f.path) ?? 0;
+          const isViewed = viewed.has(f.path);
           return (
             <div
               key={f.path}
-              className={`file${f.path === activePath ? ' active' : ''}`}
+              className={`file${f.path === activePath ? ' active' : ''}${isViewed ? ' viewed' : ''}`}
               onClick={() => onSelect(f.path)}
               title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
             >
@@ -59,6 +66,16 @@ export function FileTree({ files, findings, activePath, onSelect }: FileTreeProp
                   <span className="d">−{f.deletions}</span>
                 </span>
               )}
+              <span
+                className="vtick"
+                title={isViewed ? '取消已看' : '标记已看'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleViewed(f.path);
+                }}
+              >
+                ✓
+              </span>
             </div>
           );
         })}
