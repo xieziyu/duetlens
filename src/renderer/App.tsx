@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useTheme, type ColorTheme } from './theme/ThemeProvider';
+import { useSettings, type ColorTheme } from './settings/SettingsProvider';
 import { EntryScreen } from './screens/EntryScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { SubmitExportScreen } from './screens/SubmitExportScreen';
@@ -18,7 +18,9 @@ const SCREENS: { id: Screen; label: string }[] = [
 export function App({ initialReviewId = null }: { initialReviewId?: string | null } = {}) {
   const [screen, setScreen] = useState<Screen>(initialReviewId ? 'review' : 'entry');
   const [activeReviewId, setActiveReviewId] = useState<string | null>(initialReviewId);
-  const { mode, theme, toggleMode, setTheme } = useTheme();
+  const { settings, update } = useSettings();
+  const mode = settings.dataMode;
+  const theme = settings.dataTheme;
 
   const openReview = (id: string) => {
     setActiveReviewId(id);
@@ -49,13 +51,17 @@ export function App({ initialReviewId = null }: { initialReviewId?: string | nul
           <select
             className="mono theme-select"
             value={theme}
-            onChange={(e) => setTheme(e.target.value as ColorTheme)}
+            onChange={(e) => update({ dataTheme: e.target.value as ColorTheme })}
             aria-label="配色主题"
           >
             <option value="duetlens">duetlens</option>
             <option value="github">github</option>
           </select>
-          <button className="mode-toggle" onClick={toggleMode} aria-label="切换明暗">
+          <button
+            className="mode-toggle"
+            onClick={() => update({ dataMode: mode === 'dark' ? 'light' : 'dark' })}
+            aria-label="切换明暗"
+          >
             {mode === 'dark' ? '🌙' : '☀️'}
           </button>
         </div>

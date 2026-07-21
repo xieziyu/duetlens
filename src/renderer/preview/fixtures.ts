@@ -134,11 +134,12 @@ const DISCUSSIONS: Discussion[] = FINDINGS.map((f) => ({
   createdAt: now,
 }));
 
+// 刻意用非默认栏宽,便于自查「启动即从 ui_settings 应用」而非用组件默认值
 const UI_SETTINGS: UiSettings = {
   dataMode: 'dark',
   dataTheme: 'duetlens',
-  leftWidth: 236,
-  rightWidth: 380,
+  leftWidth: 300,
+  rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
 };
@@ -167,6 +168,7 @@ const SEED_MESSAGES: Record<string, Message[]> = {
 export function installPreviewApi(): void {
   const diff = parseUnifiedDiff(RAW_DIFF);
   const review: Review = { ...REVIEW };
+  let uiSettings: UiSettings = { ...UI_SETTINGS };
   const findings = FINDINGS.map((f) => ({ ...f }));
   const discussions = DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
@@ -270,8 +272,10 @@ export function installPreviewApi(): void {
       },
     },
     ui: {
-      getSettings: async () => UI_SETTINGS,
-      saveSettings: async () => {},
+      getSettings: async () => uiSettings,
+      saveSettings: async (s) => {
+        uiSettings = s;
+      },
     },
     dialog: {
       pickDirectory: async () => null,

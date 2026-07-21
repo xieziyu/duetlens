@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Discussion, Finding, Message, Review, Severity, Triage } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
+import { useSettings } from '../settings/SettingsProvider';
 import { useReviewStream } from '../review/useReviewStream';
 import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
@@ -31,20 +32,24 @@ const STATUS_LABEL: Record<string, string> = {
 export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   const { review, findings, discussions, messages, diff, status, tokenUsage, lastTool, ensureMessages } =
     useReviewStream(reviewId);
+  // 布局 / tab / diff 视图 = 全局持久化偏好(后端 ui_settings);改动去抖写回。
+  const { settings, update } = useSettings();
+  const tab = settings.defaultTab;
+  const setTab = (t: RightTab) => update({ defaultTab: t });
   const [activePath, setActivePath] = useState<string | null>(null);
   const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
-  const [tab, setTab] = useState<RightTab>('findings');
   // discussion 协同态:活跃线程 / 待发引用(框选追问带入)/ 正在等 agent 回复
   const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
   const [pendingRef, setPendingRef] = useState<{ anchor: DiscussionAnchor; label: string } | null>(null);
   const [awaitingReply, setAwaitingReply] = useState<string | null>(null);
   // Summary 关注主题 → 筛 Findings tab
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
-  // 栏宽:本地拖拽态,持久化(后端 settings)后续接入
-  const [leftW, setLeftW] = useState(236);
-  const [rightW, setRightW] = useState(380);
-  // diff 视图 + per-file 已看/折叠:本地态,持久化统一留后续切片
-  const [diffView, setDiffView] = useState<DiffView>('unified');
+  // 栏宽 + diff 视图:持久化偏好,拖拽 / 切换即写回(去抖)
+  const leftW = settings.leftWidth;
+  const rightW = settings.rightWidth;
+  const diffView = settings.defaultDiffView;
+  const setDiffView = (v: DiffView) => update({ defaultDiffView: v });
+  // per-file 已看/折叠:per-review 本地态(review_ui_state 持久化留后续切片)
   const [viewed, setViewed] = useState<Set<string>>(() => new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
@@ -213,7 +218,7 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           viewed={viewed}
           onToggleViewed={onToggleViewed}
         />
-        <Resizer onDrag={(dx) => setLeftW((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))} />
+        <Resizer onDrag={(dx) => update({ leftWidth: clamp(leftW + dx, LEFT_MIN, LEFT_MAX) })} />
         <DiffPane
           files={diff}
           findings={findings}
@@ -230,7 +235,7 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           onToggleViewed={onToggleViewed}
           onToggleCollapsed={onToggleCollapsed}
         />
-        <Resizer onDrag={(dx) => setRightW((w) => clamp(w - dx, RIGHT_MIN, RIGHT_MAX))} />
+        <Resizer onDrag={(dx) => update({ rightWidth: clamp(rightW - dx, RIGHT_MIN, RIGHT_MAX) })} />
         <RightPanel
           tab={tab}
           onTab={setTab}

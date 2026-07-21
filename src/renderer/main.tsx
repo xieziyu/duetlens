@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ThemeProvider } from './theme/ThemeProvider';
+import { SettingsProvider } from './settings/SettingsProvider';
 import { App } from './App';
 import './index.css';
 
@@ -9,8 +9,8 @@ if (!container) throw new Error('#root 未找到');
 
 createRoot(container).render(
   <StrictMode>
-    <ThemeProvider>
+    <SettingsProvider>
       <App />
-    </ThemeProvider>
+    </SettingsProvider>
   </StrictMode>,
 );
