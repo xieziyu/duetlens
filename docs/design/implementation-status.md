@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:后端垂直打通 · 最后更新 2026-07-20(`origin/main` = ebd726a) —— backlog #1–#6 已落地并合入 main,仅剩 #7 前端;后端文件名统一 kebab-case
+> 状态:后端垂直打通 + 前端 diff-review 起步 · 最后更新 2026-07-21(分支 `feat/dev`) —— backlog #1–#6 已合入 main;#7 前端已落三栏 diff-review shell(见下)
 
 设计文档描述目标结构;本页记录**已落地到代码**的部分、验证方式与剩余 backlog。实现细节以代码为准,本页只做导航与状态。
 
@@ -19,8 +19,9 @@
 | source 层 | `src/backend/source/`(source / local-git-source / github-pr-source / gitbutler-source / create-source) | ✅ git / gh / but(三种 source 齐备) |
 | 持久化 | `src/backend/db/`(schema / database / review-store) | ✅ better-sqlite3、迁移、六表 |
 | 领域模型 | `src/shared/domain.ts` | ✅ 类型 + zod ingress schema |
-| IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令(start/resume/send-message)/事件推送 + dialog 目录选择 |
-| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 演示流 + useReviewStream) | 🚧 入口可对真实 source 发起;diff-review 三栏真实屏未做 |
+| IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令(start/resume/send-message)/事件推送 + dialog 目录选择 + `review:diff` |
+| 结构化 diff | `src/shared/diff.ts`(parseUnifiedDiff)+ `review_diffs` 表(schema V2) | ✅ 后端预取落库、MCP 与 renderer 共用;add/del/modify/rename/binary |
+| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 三栏 + FileTree/DiffPane/InlineCard) | 🚧 三栏 shell + 只读 unified diff + 锚定内联 finding 卡 + off-diff 已落;编辑/triage/split/框选/discussion/summary 待做 |
 
 ## 端到端验证(headless spike)
 
@@ -37,6 +38,7 @@
 | `gitbutler` | `but diff --format json` 重建标准 unified + 路径穿越防护 + 实仓 smoke;不烧 token |
 | `mcp` | MCP client 驱动 report_finding/update_finding 回写 store + bearer 令牌鉴权(无/错令牌 401);不烧 token |
 | `prompt` | 审核规则提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ 空节忽略 + 两层读盘 + baseInstructions 组装;不烧 token |
+| `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store setDiff/getRawDiff 回环;不烧 token |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` 在 Electron ABI 下加载、六表迁移到位、IPC 注册无崩溃。
 
@@ -56,4 +58,11 @@
 4. ✅ GitButler source(`but diff <branch> --format json` 重建 unified;文件读 worktree 磁盘;EntryScreen 选项已启用)
 5. 生命周期健壮性:✅ MCP bearer 令牌隔离(codex 经 `bearer_token_env_var` 携带,无/错令牌 401)· ✅ `get_file` 路径穿越防护 · ✅ dispose 对齐(`disposeReview`/`review:release` + LRU 会话上限逐出闲置子进程)· ✅ 审批面收敛(反向审批归一成 `approval` 领域事件:受信 elicitation 自动 accept 为 expected,`execCommandApproval`/`applyPatchApproval` 等一律 denied 且上报)· ✅ 长会话 compaction 观测(依赖 codex 内置 auto-compact——按模型 `effective_context_window_percent` 默认开启、可 turn 内触发,优于我们只能插在 turn 间的手动 `thread/compact/start`;经 `contextCompaction` item 归一成 `compaction` 领域事件,压缩只摘要 codex 历史,不碰 DB 锚点/finding)
 6. ✅ 多层级提示词(project→global→builtin **分节覆盖**注入 baseInstructions):resolver 在 `src/backend/prompt/review-prompt.ts`(5 固定节 focus/severity/ignore/tone/context + builtin 默认;层文件 `<cwd>/.duetlens/review.md` 与 `~/.duetlens/review.md`,H2 分节、空节不算覆盖、缺失/读错降级为不覆盖不阻断);每节独立取最高优先层,合并 + 操作性前言 = baseInstructions,经 ReviewManager 注入 start/demo/resume。spike:prompt 覆盖。builtin `focus` 用 better-review 1.0 builtin-rules 的 8 大类规范(非 mockup 占位);severity 保持 high/med/low;`category` 软规范集见 `FINDING_CATEGORIES`(自由串 + 建议取值,MCP 工具描述与 tone 节引用)。分节覆盖比 1.0 整档 winner-takes-all 更细,但仍是整节替换(节内追加待议)。**三层编辑器 UI + 读写 IPC 归入 #7**(与前端一起做)。
-7. 前端:diff-review 三栏真实屏(抽 InlineCard / SelectionPopover / Composer),删 DevBridgeProbe 骨架件;含审核规则三层编辑器(`mockup/prompt-rules.html`)+ 其读写 IPC(读走 `review-prompt.ts`,写落 `.duetlens/review.md`)
+7. 前端:diff-review 三栏真实屏(分支 `feat/dev`,进行中)
+   - ✅ 后端 diff 暴露:`parseUnifiedDiff` + `review_diffs` 预取落库 + `review:diff` IPC(见上表)
+   - ✅ 三栏 shell(FileTree | DiffPane | RightPanel)+ 只读 unified diff + 右栏 findings/扫描态
+   - ✅ 锚定内联 finding 卡(read-only view 态,table→card→table 切段)+ off-diff banner + 右栏点选定位高亮
+   - ⏳ InlineCard edit/dismissed/submitted 态 + 写路径(triage / update_finding / promote IPC)
+   - ⏳ split 视图 · 框选发起 discussion(SelectionPopover)· Composer · Discussion/Summary tab · 扫描 timeline · per-file viewed · 键盘快捷键
+   - ⏳ 审核规则三层编辑器(`mockup/prompt-rules.html`)+ 读写 IPC(读走 `review-prompt.ts`,写落 `.duetlens/review.md`)
+   - ⏳ 删 DevBridgeProbe 骨架件
