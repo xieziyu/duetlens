@@ -20,6 +20,10 @@ const api: DuetlensApi = {
       ipcRenderer.invoke(IpcChannels.reviewAddDiscussion, reviewId, anchor),
     sendMessage: (reviewId, discussionId, text) =>
       ipcRenderer.invoke(IpcChannels.reviewSendMessage, reviewId, discussionId, text),
+    setTriage: (reviewId, findingId, triage) =>
+      ipcRenderer.invoke(IpcChannels.reviewSetTriage, reviewId, findingId, triage),
+    updateFinding: (reviewId, input) =>
+      ipcRenderer.invoke(IpcChannels.reviewUpdateFinding, reviewId, input),
     onEvent: (handler: (e: ReviewEvent) => void) => {
       const listener = (_e: IpcRendererEvent, payload: ReviewEvent) => handler(payload);
       ipcRenderer.on(IpcEvents.reviewEvent, listener);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import type { DiffFile, DiffHunk, DiffLine } from '@shared/diff';
-import type { Finding } from '@shared/domain';
+import type { Finding, Triage } from '@shared/domain';
+import type { FindingEditInput } from '@shared/ipc';
 import { InlineCard } from './InlineCard';
 import { highlightLine, langOf } from './highlight';
 
@@ -16,13 +17,16 @@ export interface DiffPaneProps {
   activePath: string | null;
   /** 右栏点选的 finding;变化时滚动到内联卡并高亮 */
   focusFindingId: string | null;
+  /** finding 写路径:裁决 / 就地编辑,缺省则内联卡为只读 */
+  onTriage?: (finding: Finding, triage: Triage) => void;
+  onUpdate?: (input: FindingEditInput) => void;
 }
 
 /**
- * 中栏 diff 主场(对齐 mockup .diff):只读 unified 渲染 + 锚定内联 finding 卡。
- * split 视图、框选发起 discussion、就地编辑归后续切片。
+ * 中栏 diff 主场(对齐 mockup .diff):只读 unified 渲染 + 锚定内联 finding 卡(view/edit/dismissed)。
+ * split 视图、框选发起 discussion 归后续切片。
  */
-export function DiffPane({ files, findings, activePath, focusFindingId }: DiffPaneProps) {
+export function DiffPane({ files, findings, activePath, focusFindingId, onTriage, onUpdate }: DiffPaneProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   // 按文件聚合 findings,便于每个 DiffFileView 只拿自己的
@@ -64,6 +68,8 @@ export function DiffPane({ files, findings, activePath, focusFindingId }: DiffPa
           file={f}
           findings={byFile.get(f.path) ?? []}
           focusFindingId={focusFindingId}
+          onTriage={onTriage}
+          onUpdate={onUpdate}
         />
       ))}
     </div>
@@ -74,10 +80,14 @@ function DiffFileView({
   file,
   findings,
   focusFindingId,
+  onTriage,
+  onUpdate,
 }: {
   file: DiffFile;
   findings: Finding[];
   focusFindingId: string | null;
+  onTriage?: (finding: Finding, triage: Triage) => void;
+  onUpdate?: (input: FindingEditInput) => void;
 }) {
   // 新侧存在的行号集合;锚点不在其中的 finding 归 off-diff
   const newLines = useMemo(() => {
@@ -121,7 +131,13 @@ function DiffFileView({
         <div className="offdiff">
           <div className="offdiff-head">◇ {offDiff.length} 条 off-diff finding(锚点不在当前改动新侧)</div>
           {offDiff.map((f) => (
-            <InlineCard key={f.id} finding={f} focused={f.id === focusFindingId} />
+            <InlineCard
+              key={f.id}
+              finding={f}
+              focused={f.id === focusFindingId}
+              onTriage={onTriage}
+              onUpdate={onUpdate}
+            />
           ))}
         </div>
       )}
@@ -132,7 +148,15 @@ function DiffFileView({
         <div className="diff-note">无内容改动(仅重命名/模式变更)。</div>
       ) : (
         file.hunks.map((h, i) => (
-          <HunkView key={i} hunk={h} lang={lang} byLine={byLine} focusFindingId={focusFindingId} />
+          <HunkView
+            key={i}
+            hunk={h}
+            lang={lang}
+            byLine={byLine}
+            focusFindingId={focusFindingId}
+            onTriage={onTriage}
+            onUpdate={onUpdate}
+          />
         ))
       )}
     </section>
@@ -148,11 +172,15 @@ function HunkView({
   lang,
   byLine,
   focusFindingId,
+  onTriage,
+  onUpdate,
 }: {
   hunk: DiffHunk;
   lang: string | null;
   byLine: Map<number, Finding[]>;
   focusFindingId: string | null;
+  onTriage?: (finding: Finding, triage: Triage) => void;
+  onUpdate?: (input: FindingEditInput) => void;
 }) {
   // 把行流按「命中锚点即断段」切成 [段, 卡, 段, 卡, …]
   const segments: { lines: DiffLine[]; cardsAfter: Finding[] }[] = [];
@@ -183,7 +211,13 @@ function HunkView({
             </tbody>
           </table>
           {seg.cardsAfter.map((f) => (
-            <InlineCard key={f.id} finding={f} focused={f.id === focusFindingId} />
+            <InlineCard
+              key={f.id}
+              finding={f}
+              focused={f.id === focusFindingId}
+              onTriage={onTriage}
+              onUpdate={onUpdate}
+            />
           ))}
         </div>
       ))}

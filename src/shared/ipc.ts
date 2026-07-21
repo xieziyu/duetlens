@@ -2,7 +2,15 @@
  * IPC 契约:main(Node 后端)与 renderer(React)之间的唯一通道定义。
  * preload 经 contextBridge 暴露 `window.duetlens`,renderer 只依赖这里的类型。
  */
-import type { Discussion, Finding, Message, Review, SourceKind, UiSettings } from './domain';
+import type {
+  Discussion,
+  Finding,
+  Message,
+  Review,
+  SourceKind,
+  Triage,
+  UiSettings,
+} from './domain';
 import type { DiffFile } from './diff';
 import type { AgentEvent } from './agent-events';
 
@@ -21,6 +29,8 @@ export const IpcChannels = {
   reviewMessages: 'review:messages',
   reviewAddDiscussion: 'review:add-discussion',
   reviewSendMessage: 'review:send-message',
+  reviewSetTriage: 'review:set-triage',
+  reviewUpdateFinding: 'review:update-finding',
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
   dialogPickDirectory: 'dialog:pick-directory',
@@ -34,6 +44,16 @@ export interface ReviewStartInput {
   repoPath?: string;
   /** local-branch diff 基线;缺省自动探测默认分支 */
   baseRef?: string;
+}
+
+/** 用户就地编辑一条 finding 的可编辑字段(缺省字段不改;suggestion 传 null 清空)。 */
+export interface FindingEditInput {
+  findingId: string;
+  severity?: Finding['severity'];
+  category?: string | null;
+  title?: string;
+  body?: string;
+  suggestion?: string | null;
 }
 
 /** 用户发起 discussion 的锚点。 */
@@ -88,6 +108,10 @@ export interface DuetlensApi {
     addDiscussion(reviewId: string, anchor: DiscussionAnchor): Promise<Discussion>;
     /** 就某条 discussion 向 agent 追问;返回 agent 回复(无文本时返回用户消息)。 */
     sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message>;
+    /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推更新。 */
+    setTriage(reviewId: string, findingId: string, triage: Triage): Promise<Finding>;
+    /** 用户就地编辑 finding 可编辑字段(与 codex update_finding 同一落库路径)。 */
+    updateFinding(reviewId: string, input: FindingEditInput): Promise<Finding>;
     /** 订阅领域事件;返回取消订阅函数。 */
     onEvent(handler: (e: ReviewEvent) => void): () => void;
   };

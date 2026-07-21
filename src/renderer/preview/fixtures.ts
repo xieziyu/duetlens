@@ -4,7 +4,7 @@
  * 仅 preview 入口引用,不进 app 打包路径。
  */
 import { parseUnifiedDiff } from '@shared/diff';
-import type { DuetlensApi } from '@shared/ipc';
+import type { DuetlensApi, ReviewEvent } from '@shared/ipc';
 import type { Discussion, Finding, Review, UiSettings } from '@shared/domain';
 
 const RAW_DIFF = `diff --git a/src/pipeline.ts b/src/pipeline.ts
@@ -143,9 +143,17 @@ const UI_SETTINGS: UiSettings = {
   defaultDiffView: 'unified',
 };
 
-/** 装一个静态 stub 到 window.duetlens;命令类方法多为空操作。 */
+/** 装一个 stub 到 window.duetlens;写路径(triage/编辑)真的改内存态并经事件回推,便于自查闭环。 */
 export function installPreviewApi(): void {
   const diff = parseUnifiedDiff(RAW_DIFF);
+  const findings = FINDINGS.map((f) => ({ ...f }));
+  const listeners = new Set<(e: ReviewEvent) => void>();
+  const emit = (payload: Finding) => {
+    const i = findings.findIndex((f) => f.id === payload.id);
+    if (i >= 0) findings[i] = payload;
+    for (const l of listeners) l({ reviewId: 'demo', type: 'finding', payload });
+  };
+
   const api: DuetlensApi = {
     getAppInfo: async () => ({
       name: 'Duetlens (preview)',
@@ -158,7 +166,7 @@ export function installPreviewApi(): void {
     review: {
       list: async () => [REVIEW],
       get: async () => REVIEW,
-      findings: async () => FINDINGS,
+      findings: async () => findings,
       diff: async () => diff,
       discussions: async () => DISCUSSIONS,
       messages: async () => [],
@@ -183,7 +191,30 @@ export function installPreviewApi(): void {
         text,
         createdAt: Date.now(),
       }),
-      onEvent: () => () => {},
+      setTriage: async (_r, findingId, triage) => {
+        const f = findings.find((x) => x.id === findingId)!;
+        const next = { ...f, triage, updatedAt: Date.now() };
+        emit(next);
+        return next;
+      },
+      updateFinding: async (_r, input) => {
+        const f = findings.find((x) => x.id === input.findingId)!;
+        const next: Finding = {
+          ...f,
+          severity: input.severity ?? f.severity,
+          category: input.category === undefined ? f.category : input.category,
+          title: input.title ?? f.title,
+          body: input.body ?? f.body,
+          suggestion: input.suggestion === undefined ? f.suggestion : input.suggestion,
+          updatedAt: Date.now(),
+        };
+        emit(next);
+        return next;
+      },
+      onEvent: (handler) => {
+        listeners.add(handler);
+        return () => listeners.delete(handler);
+      },
     },
     ui: {
       getSettings: async () => UI_SETTINGS,

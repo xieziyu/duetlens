@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:后端垂直打通 + 前端 diff-review 起步 · 最后更新 2026-07-21(`origin/main` = d83d8c5) —— backlog #1–#6 已合入 main;#7 前端三栏 diff-review shell + 语法高亮 + 拖拽栏宽已合入 main;另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查)(见下)
+> 状态:后端垂直打通 + 前端 diff-review 推进中 · 最后更新 2026-07-21(main = d83d8c5;进行分支 `feat/dev`) —— backlog #1–#6 已合入 main;#7 前端三栏 diff-review shell + 语法高亮 + 拖拽栏宽已合入 main;**finding 写路径(triage + 就地编辑)在 `feat/dev` 落地**;另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查)(见下)
 
 设计文档描述目标结构;本页记录**已落地到代码**的部分、验证方式与剩余 backlog。实现细节以代码为准,本页只做导航与状态。
 
@@ -21,7 +21,7 @@
 | 领域模型 | `src/shared/domain.ts` | ✅ 类型 + zod ingress schema |
 | IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令(start/resume/send-message)/事件推送 + dialog 目录选择 + `review:diff` |
 | 结构化 diff | `src/shared/diff.ts`(parseUnifiedDiff)+ `review_diffs` 表(schema V2) | ✅ 后端预取落库、MCP 与 renderer 共用;add/del/modify/rename/binary |
-| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 三栏 + FileTree/DiffPane/InlineCard/Resizer) | 🚧 三栏 shell + 只读 unified diff + 语法高亮(highlight.js)+ 拖拽栏宽 + 锚定内联 finding 卡 + off-diff 已落;编辑/triage/split/框选/discussion/summary 待做 |
+| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 三栏 + FileTree/DiffPane/InlineCard/Resizer) | 🚧 三栏 shell + 只读 unified diff + 语法高亮(highlight.js)+ 拖拽栏宽 + 锚定内联 finding 卡 + off-diff + **finding 写路径(triage + 就地编辑)**已落;split/框选/discussion/summary 待做 |
 
 ## 端到端验证(headless spike)
 
@@ -39,6 +39,7 @@
 | `mcp` | MCP client 驱动 report_finding/update_finding 回写 store + bearer 令牌鉴权(无/错令牌 401);不烧 token |
 | `prompt` | 审核规则提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ 空节忽略 + 两层读盘 + baseInstructions 组装;不烧 token |
 | `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store setDiff/getRawDiff 回环;不烧 token |
+| `write` | finding 写路径:ReviewManager.setTriage/updateFinding 落库 + 外发 `finding` 事件(dismiss→keep 往返、编辑不重置 triage、suggestion 清空、未知 id 抛错);不烧 token |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` 在 Electron ABI 下加载、六表迁移到位、IPC 注册无崩溃。
 
@@ -67,7 +68,7 @@
    - ✅ 可拖拽栏宽(`screens/review/Resizer.tsx`,左右 pane 间 5px handle;**本地态,未持久化**)
    - ✅ 锚定内联 finding 卡(read-only view 态,table→card→table 切段)+ off-diff banner + 右栏点选定位高亮
    - ✅ wordmark 多色 + 闪烁光标(App.tsx/App.css);删 DevBridgeProbe 骨架件
-   - ⏳ InlineCard edit/dismissed/submitted 态 + 写路径(triage / update_finding / promote IPC)
+   - ✅ finding 写路径 · triage + 就地编辑:`review:set-triage` / `review:update-finding` IPC(ReviewManager.setTriage/updateFinding 落库后外发 `finding` 事件,useReviewStream upsert)+ InlineCard view/edit/dismissed 三态(severity/category/title/body/suggestion 编辑,⌘↵ 保存 / Esc 取消,✕ 剔除 / ↩ 恢复;submitted 只读)+ 右栏 Findings tab triage 保留/剔除/恢复 + 保留·剔除 tally。preview fixtures 写路径改内存态并回推事件,双主题实测闭环。**promote(discussion→finding)/ 手动新增 finding / submission 落 submit 屏归后续切片**
    - ⏳ split 视图 · file-header viewed✓/折叠 · gutter 锚点圆点 · hover ＋ · 框选发起 discussion(SelectionPopover)· Composer · Discussion/Summary tab · 扫描 timeline · per-file viewed · 键盘快捷键
    - ⏳ 顶栏合并(App 全局栏 + rev-topbar 现为两条,mockup 是单条含 submit CTA/模型/⌘)· 主题+栏宽持久化(settings IPC)
    - ⏳ 审核规则三层编辑器(`mockup/prompt-rules.html`)+ 读写 IPC(读走 `review-prompt.ts`,写落 `.duetlens/review.md`)

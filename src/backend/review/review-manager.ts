@@ -2,9 +2,9 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { Discussion, Finding, Message, Review, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, Triage, UiSettings } from '@shared/domain';
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { ReviewEvent } from '@shared/ipc';
+import type { FindingEditInput, ReviewEvent } from '@shared/ipc';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
@@ -87,6 +87,30 @@ export class ReviewManager extends EventEmitter {
     const discussion = this.store.addUserDiscussion(reviewId, anchor);
     this.forward({ reviewId, type: 'discussion', payload: discussion });
     return discussion;
+  }
+
+  /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推。 */
+  setTriage(reviewId: string, findingId: string, triage: Triage): Finding {
+    this.store.setTriage(findingId, triage);
+    const finding = this.store.getFinding(findingId);
+    if (!finding) throw new Error(`finding 不存在: ${findingId}`);
+    this.forward({ reviewId, type: 'finding', payload: finding });
+    return finding;
+  }
+
+  /** 用户就地编辑 finding 可编辑字段(与 codex update_finding 共用 store 路径)。 */
+  updateFinding(reviewId: string, input: FindingEditInput): Finding {
+    const finding = this.store.updateFinding({
+      findingId: input.findingId,
+      severity: input.severity,
+      category: input.category ?? undefined,
+      title: input.title,
+      body: input.body,
+      suggestion: input.suggestion,
+    });
+    if (!finding) throw new Error(`finding 不存在: ${input.findingId}`);
+    this.forward({ reviewId, type: 'finding', payload: finding });
+    return finding;
   }
 
   /** 向某条 discussion 追问;会话不在内存时先按 codexThreadId 续接。 */

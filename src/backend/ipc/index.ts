@@ -5,10 +5,11 @@ import {
   IpcEvents,
   type AppInfo,
   type DiscussionAnchor,
+  type FindingEditInput,
   type ReviewEvent,
   type ReviewStartInput,
 } from '@shared/ipc';
-import type { UiSettings } from '@shared/domain';
+import type { Triage, UiSettings } from '@shared/domain';
 import type { ReviewManager } from '../review/review-manager';
 
 export interface IpcDeps {
@@ -50,6 +51,12 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   );
   ipcMain.handle(IpcChannels.reviewSendMessage, (_e, reviewId: string, discussionId: string, text: string) =>
     manager.sendMessage(reviewId, discussionId, text),
+  );
+  ipcMain.handle(IpcChannels.reviewSetTriage, (_e, reviewId: string, findingId: string, triage: Triage) =>
+    manager.setTriage(reviewId, findingId, triage),
+  );
+  ipcMain.handle(IpcChannels.reviewUpdateFinding, (_e, reviewId: string, input: FindingEditInput) =>
+    manager.updateFinding(reviewId, input),
   );
 
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());

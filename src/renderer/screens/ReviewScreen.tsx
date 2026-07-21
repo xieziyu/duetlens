@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { Finding, Severity } from '@shared/domain';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Finding, Severity, Triage } from '@shared/domain';
+import type { FindingEditInput } from '@shared/ipc';
 import { useReviewStream } from '../review/useReviewStream';
 import { FileTree } from './review/FileTree';
 import { DiffPane } from './review/DiffPane';
@@ -37,6 +38,22 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
     setActivePath(f.file);
     setFocusFindingId(f.id);
   };
+
+  // 写路径:落库后经 review:event 回推刷新(useReviewStream upsert),前端不本地臆造。
+  const onTriage = useCallback(
+    (finding: Finding, triage: Triage) => {
+      if (!reviewId) return;
+      void window.duetlens.review.setTriage(reviewId, finding.id, triage);
+    },
+    [reviewId],
+  );
+  const onUpdate = useCallback(
+    (input: FindingEditInput) => {
+      if (!reviewId) return;
+      void window.duetlens.review.updateFinding(reviewId, input);
+    },
+    [reviewId],
+  );
 
   // diff 到达后默认选中首个文件
   useEffect(() => {
@@ -93,6 +110,8 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           findings={findings}
           activePath={activePath}
           focusFindingId={focusFindingId}
+          onTriage={onTriage}
+          onUpdate={onUpdate}
         />
         <Resizer onDrag={(dx) => setRightW((w) => clamp(w - dx, RIGHT_MIN, RIGHT_MAX))} />
         <RightPanel
@@ -101,6 +120,7 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
           findings={findings}
           scanning={status === 'scanning' || !status}
           onPickFinding={focusFinding}
+          onTriage={onTriage}
         />
       </div>
     </div>
@@ -116,18 +136,22 @@ function RightPanel({
   findings,
   scanning,
   onPickFinding,
+  onTriage,
 }: {
   tab: RightTab;
   onTab: (t: RightTab) => void;
   findings: Finding[];
   scanning: boolean;
   onPickFinding: (f: Finding) => void;
+  onTriage: (finding: Finding, triage: Triage) => void;
 }) {
   const grouped = useMemo(() => {
     const g: Record<Severity, Finding[]> = { high: [], medium: [], low: [] };
     for (const f of findings) g[f.severity].push(f);
     return g;
   }, [findings]);
+  const kept = findings.filter((f) => f.triage === 'keep').length;
+  const dropped = findings.filter((f) => f.triage === 'dismiss').length;
 
   return (
     <div className="right pane">
@@ -148,23 +172,23 @@ function RightPanel({
             </div>
           )}
           {findings.length === 0 && !scanning && <p className="empty-note">暂无 findings。</p>}
+          {findings.length > 0 && (
+            <div className="fp-toolbar">
+              <span className="fp-tally">
+                保留 <b>{kept}</b> · 剔除 {dropped}
+              </span>
+            </div>
+          )}
           {SEV_ORDER.map((sev) =>
             grouped[sev].length === 0 ? null : (
-              <div key={sev} className="frow-group">
-                <div className={`frow-head sev-${sev}`}>
-                  {SEV_LABEL[sev]} <span className="n">{grouped[sev].length}</span>
+              <div key={sev} className="fgroup">
+                <div className="fg-head">
+                  <span className={`sev sev-${sev}`}>{SEV_LABEL[sev]}</span>
+                  <span className="fg-n">{grouped[sev].length}</span>
+                  <span className="fg-line" />
                 </div>
                 {grouped[sev].map((f) => (
-                  <button key={f.id} className="frow" onClick={() => onPickFinding(f)}>
-                    <span className={`sev sev-${f.severity}`}>{SEV_LABEL[f.severity]}</span>
-                    <span className="frow-main">
-                      <span className="frow-title">{f.title}</span>
-                      <span className="mono frow-anchor">
-                        {f.category ? `${f.category} · ` : ''}
-                        {f.file}:{f.line}
-                      </span>
-                    </span>
-                  </button>
+                  <FindingRow key={f.id} finding={f} onPick={onPickFinding} onTriage={onTriage} />
                 ))}
               </div>
             ),
@@ -182,6 +206,72 @@ function RightPanel({
           <p className="empty-note">审核总结即将接入(后续切片)。</p>
         </div>
       )}
+    </div>
+  );
+}
+
+const ORIGIN_LABEL: Record<Finding['origin'], string> = {
+  agent: 'codex',
+  manual: '你',
+  promoted: '你 · 提升',
+};
+
+/** 右栏 Findings tab 单行:锚点导航 + triage(保留/剔除/恢复)。 */
+function FindingRow({
+  finding: f,
+  onPick,
+  onTriage,
+}: {
+  finding: Finding;
+  onPick: (f: Finding) => void;
+  onTriage: (finding: Finding, triage: Triage) => void;
+}) {
+  const submitted = f.submission === 'submitted';
+  const dismissed = f.triage === 'dismiss';
+  const rowClass =
+    'frow' +
+    (submitted ? ' submitted' : f.triage === 'keep' ? ' kept' : '') +
+    (dismissed ? ' dismissed' : '');
+  const triage = (t: Triage) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onTriage(f, t);
+  };
+
+  return (
+    <div className={rowClass} onClick={() => onPick(f)} title="跳到 diff / 打开 discussion">
+      <div className="fr-top">
+        <span className={`sev sev-${f.severity}`}>
+          {SEV_LABEL[f.severity]}
+          {f.category ? ` · ${f.category}` : ''}
+        </span>
+        <span className={`origin ${f.origin === 'agent' ? 'agent' : 'human'}`}>
+          <span className="d" />
+          {ORIGIN_LABEL[f.origin]}
+        </span>
+      </div>
+      <div className="fr-title">{f.title}</div>
+      <div className="fr-foot">
+        <span className="mono anchor">
+          {f.file}:{f.line}
+        </span>
+        {f.suggestion && <span className="sugg-tag">◇ suggestion</span>}
+        {submitted ? (
+          <span className="subm">✓ 已提交</span>
+        ) : dismissed ? (
+          <button className="fr-restore" onClick={triage('keep')}>
+            ↩ 恢复
+          </button>
+        ) : (
+          <span className="triage">
+            <button className={`t-keep${f.triage === 'keep' ? ' on' : ''}`} onClick={triage('keep')}>
+              保留
+            </button>
+            <button className="t-drop" onClick={triage('dismiss')}>
+              剔除
+            </button>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
