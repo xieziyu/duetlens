@@ -9,6 +9,7 @@ import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
 import { SummaryTab } from './review/SummaryTab';
+import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
 import './ReviewScreen.css';
 import './review/review-syntax.css';
@@ -45,6 +46,8 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
   const [awaitingReply, setAwaitingReply] = useState<string | null>(null);
   // Summary 关注主题 → 筛 Findings tab
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  // 键盘快捷键帮助浮层
+  const [helpOpen, setHelpOpen] = useState(false);
   // 栏宽 + diff 视图:持久化偏好,拖拽 / 切换即写回(去抖)
   const leftW = settings.leftWidth;
   const rightW = settings.rightWidth;
@@ -156,6 +159,41 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
     if (!activePath && diff.length > 0) setActivePath(diff[0].path);
   }, [diff, activePath]);
 
+  // 全局导航快捷键(→ mockup #kbdHelp):? 帮助 / 1-3 切 tab / u 切 diff / Esc 关闭。
+  // 焦点在输入框或按住修饰键时让位;编辑/发送的 ⌘↵·Esc·↵ 由各 composer/编辑器自理。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
+      if (e.key === 'Escape') {
+        if (helpOpen) setHelpOpen(false);
+        return;
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '?') {
+        e.preventDefault();
+        setHelpOpen((v) => !v);
+        return;
+      }
+      if (helpOpen) return; // 帮助打开时不抢导航键
+      if (e.key === '1') {
+        e.preventDefault();
+        update({ defaultTab: 'discussion' });
+      } else if (e.key === '2') {
+        e.preventDefault();
+        update({ defaultTab: 'findings' });
+      } else if (e.key === '3') {
+        e.preventDefault();
+        update({ defaultTab: 'summary' });
+      } else if (e.key === 'u') {
+        e.preventDefault();
+        update({ defaultDiffView: diffView === 'unified' ? 'split' : 'unified' });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [helpOpen, diffView, update]);
+
   const pct = tokenUsage?.total ? Math.round((tokenUsage.used / tokenUsage.total) * 100) : null;
 
   if (!reviewId) {
@@ -190,8 +228,12 @@ export function ReviewScreen({ reviewId }: { reviewId: string | null }) {
             {(status === 'scanning' || !status) && <span className="pulse" />}
             {STATUS_LABEL[status ?? 'scanning'] ?? status}
           </span>
+          <button className="kbd-btn" onClick={() => setHelpOpen(true)} title="键盘快捷键 (?)">
+            ⌘
+          </button>
         </div>
       </div>
+      {helpOpen && <KbdHelp onClose={() => setHelpOpen(false)} />}
 
       <div className="rev-main">
         <FileTree
