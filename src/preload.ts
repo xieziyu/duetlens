@@ -9,6 +9,7 @@ const api: DuetlensApi = {
     list: () => ipcRenderer.invoke(IpcChannels.reviewList),
     get: (id) => ipcRenderer.invoke(IpcChannels.reviewGet, id),
     findings: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewFindings, reviewId),
+    diff: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewDiff, reviewId),
     discussions: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewDiscussions, reviewId),
     messages: (discussionId) => ipcRenderer.invoke(IpcChannels.reviewMessages, discussionId),
     start: (input) => ipcRenderer.invoke(IpcChannels.reviewStart, input),

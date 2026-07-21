@@ -14,6 +14,7 @@
     "lint": "eslint --ext .ts,.tsx .",
     "spike:codex": "tsx scripts/spike-codex.ts",
     "spike:db": "tsx scripts/spike-db.ts",
+    "spike:diff": "tsx scripts/spike-diff.ts",
     "spike:review": "tsx scripts/spike-review.ts",
     "spike:discussion": "tsx scripts/spike-discussion.ts",
     "spike:resume": "tsx scripts/spike-resume.ts",

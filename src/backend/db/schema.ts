@@ -78,7 +78,16 @@ CREATE TABLE review_ui_state (
 );
 `;
 
-const MIGRATIONS: string[] = [V1];
+// 缓存本次改动的 unified diff 原文;单独一表,避免 reviews 的 SELECT * 拖大 blob。
+const V2 = `
+CREATE TABLE review_diffs (
+  review_id  TEXT PRIMARY KEY REFERENCES reviews(id) ON DELETE CASCADE,
+  raw        TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+`;
+
+const MIGRATIONS: string[] = [V1, V2];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

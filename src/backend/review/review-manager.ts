@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Discussion, Finding, Message, Review, UiSettings } from '@shared/domain';
+import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { ReviewEvent } from '@shared/ipc';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
@@ -72,6 +73,12 @@ export class ReviewManager extends EventEmitter {
     return this.store.listMessages(discussionId);
   }
 
+  /** 本次改动的结构化 diff(供 DiffPane 渲染);未缓存时返回空。 */
+  getDiff(reviewId: string): DiffFile[] {
+    const raw = this.store.getRawDiff(reviewId);
+    return raw ? parseUnifiedDiff(raw) : [];
+  }
+
   /** 新建一条用户发起的、锚定代码位置的 discussion(不落 finding)。 */
   addUserDiscussion(
     reviewId: string,
@@ -120,9 +127,12 @@ export class ReviewManager extends EventEmitter {
       repoPath: target.repoPath || null,
       title: prepared.title,
     });
+    // 预取 diff 落库:MCP 与 renderer 共用同一份,省 codex 侧一次 get_diff 往返。
+    const rawDiff = await source.getDiff();
+    this.store.setDiff(review.id, rawDiff);
     const { baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd });
     this.launch(review, prepared.cwd, {
-      getDiff: () => source.getDiff(),
+      getDiff: () => rawDiff,
       getFile: (p) => source.getFile(p),
     }, () => source.dispose(), baseInstructions);
     return review;
@@ -140,6 +150,7 @@ export class ReviewManager extends EventEmitter {
       repoPath: workdir,
       title: 'Demo · login.js 审核',
     });
+    this.store.setDiff(review.id, DEMO_DIFF);
     const { baseInstructions } = await loadReviewPrompt({ cwd: workdir });
     this.launch(review, workdir, { getDiff: () => DEMO_DIFF, getFile: () => DEMO_SRC }, undefined, baseInstructions);
     return review;

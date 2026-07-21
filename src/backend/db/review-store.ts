@@ -194,6 +194,23 @@ export class ReviewStore {
       .run(body, now(), reviewId);
   }
 
+  // ---- diff 缓存(unified 原文;renderer 侧解析成结构化 diff 渲染)----
+  setDiff(reviewId: string, raw: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO review_diffs (review_id, raw, created_at) VALUES (?, ?, ?)
+         ON CONFLICT(review_id) DO UPDATE SET raw = excluded.raw, created_at = excluded.created_at`,
+      )
+      .run(reviewId, raw, now());
+  }
+
+  getRawDiff(reviewId: string): string | null {
+    const r = this.db.prepare('SELECT raw FROM review_diffs WHERE review_id = ?').get(reviewId) as
+      | { raw: string }
+      | undefined;
+    return r?.raw ?? null;
+  }
+
   // ---- findings(每条 finding 同时建一条 kind=finding 的 discussion 承载后续追问)----
   // id 可显式传入(用 MCP 生成的 id,使 codex 的 finding id === 存储 id,便于 update_finding)
   addFinding(

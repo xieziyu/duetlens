@@ -31,6 +31,7 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewList, () => manager.listReviews());
   ipcMain.handle(IpcChannels.reviewGet, (_e, id: string) => manager.getReview(id));
   ipcMain.handle(IpcChannels.reviewFindings, (_e, reviewId: string) => manager.getFindings(reviewId));
+  ipcMain.handle(IpcChannels.reviewDiff, (_e, reviewId: string) => manager.getDiff(reviewId));
   ipcMain.handle(IpcChannels.reviewDiscussions, (_e, reviewId: string) => manager.getDiscussions(reviewId));
   ipcMain.handle(IpcChannels.reviewMessages, (_e, discussionId: string) => manager.getMessages(discussionId));
   ipcMain.handle(IpcChannels.reviewStart, (_e, input: ReviewStartInput) =>

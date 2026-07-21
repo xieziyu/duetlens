@@ -3,6 +3,7 @@
  * preload 经 contextBridge 暴露 `window.duetlens`,renderer 只依赖这里的类型。
  */
 import type { Discussion, Finding, Message, Review, SourceKind, UiSettings } from './domain';
+import type { DiffFile } from './diff';
 import type { AgentEvent } from './agent-events';
 
 // ---- 请求/响应(ipcRenderer.invoke ↔ ipcMain.handle)----
@@ -11,6 +12,7 @@ export const IpcChannels = {
   reviewList: 'review:list',
   reviewGet: 'review:get',
   reviewFindings: 'review:findings',
+  reviewDiff: 'review:diff',
   reviewStart: 'review:start',
   reviewStartDemo: 'review:start-demo',
   reviewResume: 'review:resume',
@@ -70,6 +72,8 @@ export interface DuetlensApi {
     list(): Promise<Review[]>;
     get(id: string): Promise<Review | null>;
     findings(reviewId: string): Promise<Finding[]>;
+    /** 本次改动的结构化 diff(DiffPane 渲染);未缓存返回空数组。 */
+    diff(reviewId: string): Promise<DiffFile[]>;
     discussions(reviewId: string): Promise<Discussion[]>;
     messages(discussionId: string): Promise<Message[]>;
     /** 对真实 target 发起审核;立即返回 review,首轮扫描后台跑、findings 经事件流入。 */
