@@ -59,6 +59,9 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewSetTriage, (_e, reviewId: string, findingId: string, triage: Triage) =>
     manager.setTriage(reviewId, findingId, triage),
   );
+  ipcMain.handle(IpcChannels.reviewSetFindingAnchor, (_e, reviewId: string, findingId: string, line: number) =>
+    manager.setFindingAnchor(reviewId, findingId, line),
+  );
   ipcMain.handle(IpcChannels.reviewAddFinding, (_e, reviewId: string, input: AddFindingInput) =>
     manager.addManualFinding(reviewId, input),
   );

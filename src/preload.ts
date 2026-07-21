@@ -22,6 +22,8 @@ const api: DuetlensApi = {
       ipcRenderer.invoke(IpcChannels.reviewSendMessage, reviewId, discussionId, text),
     setTriage: (reviewId, findingId, triage) =>
       ipcRenderer.invoke(IpcChannels.reviewSetTriage, reviewId, findingId, triage),
+    setFindingAnchor: (reviewId, findingId, line) =>
+      ipcRenderer.invoke(IpcChannels.reviewSetFindingAnchor, reviewId, findingId, line),
     addFinding: (reviewId, input) => ipcRenderer.invoke(IpcChannels.reviewAddFinding, reviewId, input),
     promoteDiscussion: (reviewId, discussionId) =>
       ipcRenderer.invoke(IpcChannels.reviewPromoteDiscussion, reviewId, discussionId),

@@ -3,6 +3,7 @@
  * 纯函数:不碰网络,便于单测与「按钮标签=实际提交内容」一致。见 docs/design/findings-submit.md。
  */
 import type { Finding, Review } from './domain';
+import type { DiffFile } from './diff';
 
 /** UI 侧 event 值 → GitHub `POST .../reviews` 的 event 枚举。 */
 export const GH_REVIEW_EVENTS = ['comment', 'request_changes', 'approve'] as const;
@@ -82,3 +83,37 @@ export function buildPrReviewPayload(
 /** 待提交集:保留(triage!=dismiss)且未提交。 */
 export const isSubmittable = (f: Finding): boolean =>
   f.triage !== 'dismiss' && f.submission !== 'submitted';
+
+// ---- 行锚点存活预判(本地据最新 diff 判断,GitHub 422 不告知是哪条)----
+
+/** 遍历某文件所有 hunk 里可作为 RIGHT 侧评论的新侧行号(add/context 行)。 */
+function liveLines(file: string, diff: DiffFile[]): number[] {
+  const df = diff.find((f) => f.path === file);
+  if (!df) return [];
+  const out: number[] = [];
+  for (const h of df.hunks) {
+    for (const l of h.lines) {
+      if ((l.kind === 'add' || l.kind === 'context') && l.newLine != null) out.push(l.newLine);
+    }
+  }
+  return out;
+}
+
+/** (path,line) 是否是最新 diff 里合法的 RIGHT 侧行评论位置。diff 为空时不预判(返回 true 放行)。 */
+export function isAnchorLive(file: string, line: number, diff: DiffFile[]): boolean {
+  if (!file || line <= 0) return false;
+  if (diff.length === 0) return true; // 无 diff 可比对时不误报,交由 GitHub 裁决
+  return liveLines(file, diff).includes(line);
+}
+
+/** 待提交 + 有锚点 + 锚点不在最新 diff 新增侧 → 会让整份 PR review 被 422 拒。 */
+export function isStaleAnchor(f: Finding, diff: DiffFile[]): boolean {
+  return isSubmittable(f) && hasAnchor(f) && !isAnchorLive(f.file, f.line, diff);
+}
+
+/** 同文件里离原行最近的可评论新侧行号(改锚点用);无可锚行返回 null。 */
+export function nearestLiveLine(file: string, line: number, diff: DiffFile[]): number | null {
+  const lines = liveLines(file, diff);
+  if (lines.length === 0) return null;
+  return lines.reduce((best, l) => (Math.abs(l - line) < Math.abs(best - line) ? l : best), lines[0]);
+}

@@ -33,6 +33,7 @@ export const IpcChannels = {
   reviewAddDiscussion: 'review:add-discussion',
   reviewSendMessage: 'review:send-message',
   reviewSetTriage: 'review:set-triage',
+  reviewSetFindingAnchor: 'review:set-finding-anchor',
   reviewAddFinding: 'review:add-finding',
   reviewPromoteDiscussion: 'review:promote-discussion',
   reviewUpdateFinding: 'review:update-finding',
@@ -146,6 +147,8 @@ export interface DuetlensApi {
     sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message>;
     /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推更新。 */
     setTriage(reviewId: string, findingId: string, triage: Triage): Promise<Finding>;
+    /** 改一条 finding 的行锚点(提交屏修 422 失效锚点):line>0 改锚,line=0 脱锚(降级为摘要)。 */
+    setFindingAnchor(reviewId: string, findingId: string, line: number): Promise<Finding>;
     /** 用户手动新增一条锚定 finding(origin=manual),同 agent finding 的 schema/提交路径。 */
     addFinding(reviewId: string, input: AddFindingInput): Promise<Finding>;
     /** 把一条用户 discussion 提升为 finding(origin=promoted),保留会话历史;返回新 finding。 */

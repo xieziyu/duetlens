@@ -347,6 +347,12 @@ export function installPreviewApi(): void {
         emit(next);
         return next;
       },
+      setFindingAnchor: async (_r, findingId, line) => {
+        const f = findings.find((x) => x.id === findingId)!;
+        const next = { ...f, line, updatedAt: Date.now() };
+        emit(next);
+        return next;
+      },
       // 手动新增 finding(origin=manual):建 finding + 承载 discussion,回推两事件
       addFinding: async (_r, input) => {
         const ts = Date.now();

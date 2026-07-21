@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Finding, Review } from '@shared/domain';
+import type { DiffFile } from '@shared/diff';
 import type { SubmitReviewResult } from '@shared/ipc';
-import { GH_REVIEW_EVENTS, hasAnchor, isSubmittable, type GhReviewEvent } from '@shared/github-review';
+import {
+  GH_REVIEW_EVENTS,
+  hasAnchor,
+  isStaleAnchor,
+  isSubmittable,
+  nearestLiveLine,
+  type GhReviewEvent,
+} from '@shared/github-review';
 import './SubmitGitHubScreen.css';
 
 const SEV_CLASS: Record<Finding['severity'], string> = { high: 'high', medium: 'med', low: 'low' };
@@ -27,15 +35,30 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   const [sub, setSub] = useState<SubState>('ready');
   const [result, setResult] = useState<SubmitReviewResult | null>(null);
   const [summary, setSummary] = useState(review.summaryBody ?? '');
+  const [diff, setDiff] = useState<DiffFile[]>([]);
 
   // review body 若被别处(diff 屏 Summary tab)改动,同步进草稿(未编辑时)
   useEffect(() => setSummary(review.summaryBody ?? ''), [review.summaryBody]);
+  // 拉最新 diff 以本地预判哪条 finding 行锚点已失效(GitHub 422 不告知是哪条)
+  useEffect(() => {
+    void window.duetlens.review.diff(reviewId).then(setDiff);
+  }, [reviewId]);
 
   const pending = useMemo(() => findings.filter(isSubmittable), [findings]);
   const submitted = useMemo(() => findings.filter((f) => f.submission === 'submitted'), [findings]);
   const dismissed = useMemo(() => findings.filter((f) => f.triage === 'dismiss'), [findings]);
+  const staleIds = useMemo(
+    () => new Set(findings.filter((f) => isStaleAnchor(f, diff)).map((f) => f.id)),
+    [findings, diff],
+  );
   const inlineCount = pending.filter(hasAnchor).length;
   const keptCount = findings.filter((f) => f.triage !== 'dismiss').length;
+
+  const degradeToSummary = (f: Finding) => void window.duetlens.review.setFindingAnchor(reviewId, f.id, 0);
+  const reAnchor = (f: Finding) => {
+    const line = nearestLiveLine(f.file, f.line, diff);
+    if (line != null) void window.duetlens.review.setFindingAnchor(reviewId, f.id, line);
+  };
 
   const toggleKeep = (f: Finding) => {
     if (f.submission === 'submitted') return; // 已提交锁定
@@ -102,9 +125,13 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
           {findings.map((f) => {
             const isSubmitted = f.submission === 'submitted';
             const isDismissed = f.triage === 'dismiss';
-            // 422 只说「某条锚点失效」,GitHub 不告诉是哪条 → 不逐条误标,只在 banner 提示。
+            // GitHub 422 不告知是哪条锚点失效 → 本地据最新 diff 预判并逐条标红。
+            const isStale = staleIds.has(f.id);
+            const canReAnchor = isStale && nearestLiveLine(f.file, f.line, diff) != null;
             const cls =
-              'finding' + (isSubmitted ? ' locked' : isDismissed ? ' dismissed' : ' kept');
+              'finding' +
+              (isSubmitted ? ' locked' : isDismissed ? ' dismissed' : ' kept') +
+              (isStale ? ' risky' : '');
             return (
               <div key={f.id} className={cls}>
                 <span
@@ -143,6 +170,21 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                       已提交{f.submittedUrl ? '' : ''} · inline {f.file}:{f.line}
                     </div>
                   )}
+                  {isStale && !isDismissed && !isSubmitted && (
+                    <div className={'f-invalid' + (sub === 'invalid' ? ' escalated' : '')}>
+                      <b>⛔ 行锚点失效</b> —— <code>{f.file}:{f.line}</code>{' '}
+                      不在最新 diff 的新增侧(base 已更新,原行已移位)。作为 inline 评论会让整份 review 被 422 拒。
+                      <div className="fix">
+                        <span onClick={() => degradeToSummary(f)}>降级为摘要评论</span>
+                        {canReAnchor && (
+                          <span onClick={() => reAnchor(f)}>
+                            改锚点到最近改动行(:{nearestLiveLine(f.file, f.line, diff)})
+                          </span>
+                        )}
+                        <span onClick={() => toggleKeep(f)}>剔除此条</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {isDismissed && !isSubmitted && (
                   <button className="restore" onClick={() => toggleKeep(f)}>
@@ -176,7 +218,10 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
             <div className="sub-banner err">
               <span className="bi">⛔</span>
               <div className="bt">
-                <b>提交被 GitHub 拒绝(422)</b> —— {result.message} PR review 是原子提交,须先处理该条(改锚点 / 降级为摘要 / 剔除)再整份重提。
+                <b>提交被 GitHub 拒绝(422)</b> ——{' '}
+                {staleIds.size > 0
+                  ? `已在左侧定位 ${staleIds.size} 条失效锚点(红框),逐条处理(改锚点 / 降级为摘要 / 剔除)后整份重提。`
+                  : `${result.message} PR review 是原子提交,须先处理失效锚点再整份重提。`}
               </div>
             </div>
           )}
@@ -250,7 +295,9 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                 <div className="foot-note">
                   {sub === 'invalid'
                     ? '修正红框那条后再整份提交'
-                    : '经 gh 创建一次 PR review(原子) · 只读 sandbox 不影响'}
+                    : staleIds.size > 0
+                      ? `⛔ ${staleIds.size} 条锚点已失效(红框),提交会被 422 拒 —— 建议先处理`
+                      : '经 gh 创建一次 PR review(原子) · 只读 sandbox 不影响'}
                 </div>
               </>
             )}

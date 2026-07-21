@@ -7,7 +7,13 @@ import { strict as assert } from 'node:assert';
 import { openDatabase } from '../src/backend/db/database';
 import { ReviewStore } from '../src/backend/db/review-store';
 import { ReviewManager } from '../src/backend/review/review-manager';
-import { buildPrReviewPayload } from '../src/shared/github-review';
+import {
+  buildPrReviewPayload,
+  isAnchorLive,
+  isStaleAnchor,
+  nearestLiveLine,
+} from '../src/shared/github-review';
+import { parseUnifiedDiff } from '../src/shared/diff';
 import type { GitHubSubmitter } from '../src/backend/review/github-submitter';
 import type { PrReviewPayload } from '../src/shared/github-review';
 import type { Review } from '../src/shared/domain';
@@ -125,8 +131,63 @@ async function main() {
     log('非 github source 拒绝 ok');
   }
 
+  // ---- 行锚点存活预判 + 修锚点/降级为摘要(422 定位)----
+  {
+    // src/p.ts 新侧活行 20..24;off-diff 行 99 不在其中
+    const diff = parseUnifiedDiff(
+      [
+        'diff --git a/src/p.ts b/src/p.ts',
+        'index 111..222 100644',
+        '--- a/src/p.ts',
+        '+++ b/src/p.ts',
+        '@@ -18,3 +20,4 @@',
+        ' ctx20',
+        '+add21',
+        '+add22',
+        ' ctx23',
+      ].join('\n'),
+    );
+    assert.equal(isAnchorLive('src/p.ts', 21, diff), true, '新增行 21 可锚');
+    assert.equal(isAnchorLive('src/p.ts', 20, diff), true, '上下文行 20 可锚');
+    assert.equal(isAnchorLive('src/p.ts', 99, diff), false, 'off-diff 行不可锚');
+    assert.equal(isAnchorLive('nope.ts', 20, diff), false, '不在 diff 的文件不可锚');
+    assert.equal(isAnchorLive('src/p.ts', 20, []), true, '无 diff 时不误报');
+    assert.equal(nearestLiveLine('src/p.ts', 99, diff), 23, '最近改动行取 23');
+    assert.equal(nearestLiveLine('nope.ts', 5, diff), null, '无可锚行返回 null');
+
+    const db = openDatabase(':memory:');
+    const store = new ReviewStore(db);
+    const review = store.createReview({ source: 'github-pr', sourceRef: 'acme/repo#7' });
+    store.setReviewSummary(review.id, '整体 OK。');
+    const live = store.addFinding(review.id, { severity: 'high', title: '活锚点', body: 'b', file: 'src/p.ts', line: 21 });
+    const stale = store.addFinding(review.id, { severity: 'medium', title: '失效锚点', body: '架构点', file: 'src/p.ts', line: 99 });
+    assert.equal(isStaleAnchor(store.getFinding(live.id)!, diff), false, '活锚点不算 stale');
+    assert.equal(isStaleAnchor(store.getFinding(stale.id)!, diff), true, 'off-diff 锚点算 stale');
+
+    const manager = new ReviewManager(store, undefined, {
+      submitter: new FakeSubmitter({ status: 'success', url: 'u', submittedCount: 0 }),
+    });
+    // 降级为摘要:line=0 脱锚 → 从 inline 移到 review body
+    manager.setFindingAnchor(review.id, stale.id, 0);
+    assert.equal(store.getFinding(stale.id)!.line, 0, 'line 置 0');
+    const degraded = buildPrReviewPayload(
+      store.getReview(review.id)!,
+      [store.getFinding(live.id)!, store.getFinding(stale.id)!],
+      'comment',
+    );
+    assert.equal(degraded.comments.length, 1, '降级后只剩 1 条 inline');
+    assert.match(degraded.body, /失效锚点/, '降级项并入 review body');
+
+    // 改锚点:把另一条改到最近活行 → 回到 inline
+    const stale2 = store.addFinding(review.id, { severity: 'low', title: '再失效', body: 'x', file: 'src/p.ts', line: 88 });
+    const near = nearestLiveLine('src/p.ts', 88, diff)!;
+    manager.setFindingAnchor(review.id, stale2.id, near);
+    assert.equal(isStaleAnchor(store.getFinding(stale2.id)!, diff), false, '改锚点后不再 stale');
+    log('行锚点预判 + 降级为摘要 + 改锚点 ok');
+  }
+
   log('────────────────────────');
-  log('✅ PASS — 提交:payload/成功锁定/增量/被拒不改态/source 守卫全通过');
+  log('✅ PASS — 提交:payload/成功锁定/增量/被拒不改态/source 守卫/锚点预判全通过');
 }
 
 main().then(

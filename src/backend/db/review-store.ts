@@ -309,6 +309,13 @@ export class ReviewStore {
       .run(submission, url, now(), findingId);
   }
 
+  /** 改锚点行(提交屏修锚点 / 降级为摘要):line=0 表示脱锚,归入 review 摘要。 */
+  setFindingAnchor(findingId: string, line: number): void {
+    this.db
+      .prepare('UPDATE findings SET line = ?, updated_at = ? WHERE id = ?')
+      .run(line, now(), findingId);
+  }
+
   // ---- discussions / messages ----
   addUserDiscussion(
     reviewId: string,

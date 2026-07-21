@@ -166,6 +166,54 @@
   opacity: 0.5;
   border-style: dashed;
 }
+.finding.risky {
+  border-left: 3px solid var(--sev-high);
+}
+/* 行锚点失效预警块:未提交时琥珀提示,422 后(escalated)升级为红 */
+.f-invalid {
+  margin-top: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--human-line);
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--human) 7%, var(--bg));
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+.f-invalid.escalated {
+  border-color: color-mix(in oklab, var(--sev-high) 34%, transparent);
+  background: color-mix(in oklab, var(--sev-high) 7%, var(--bg));
+}
+.f-invalid b {
+  color: var(--human);
+}
+.f-invalid.escalated b {
+  color: var(--sev-high);
+}
+.f-invalid code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+}
+.f-invalid .fix {
+  display: flex;
+  gap: 7px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.f-invalid .fix span {
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.f-invalid .fix span:hover {
+  border-color: var(--agent-line);
+  color: var(--text);
+}
 .finding.dismissed .f-title {
   text-decoration: line-through;
   color: var(--text-faint);

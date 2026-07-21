@@ -161,6 +161,18 @@ export class ReviewManager extends EventEmitter {
     return finding;
   }
 
+  /**
+   * 改一条 finding 的行锚点(提交屏处理 422 失效锚点):line>0 改锚到新行,line=0 脱锚
+   * (降级为 review 摘要评论)。落库后外发 `finding` 事件。
+   */
+  setFindingAnchor(reviewId: string, findingId: string, line: number): Finding {
+    this.store.setFindingAnchor(findingId, line);
+    const finding = this.store.getFinding(findingId);
+    if (!finding) throw new Error(`finding 不存在: ${findingId}`);
+    this.forward({ reviewId, type: 'finding', payload: finding });
+    return finding;
+  }
+
   /** 编辑审核总结正文(提交屏 review body 来源);落库后外发 `review` 事件。 */
   updateSummary(reviewId: string, body: string): Review {
     this.store.setReviewSummary(reviewId, body);
