@@ -68,6 +68,7 @@ export const IpcChannels = {
   promptGet: 'prompt:get',
   promptSave: 'prompt:save',
   dialogPickDirectory: 'dialog:pick-directory',
+  dialogPickFile: 'dialog:pick-file',
   dialogSaveTextFile: 'dialog:save-text-file',
 } as const;
 
@@ -265,6 +266,8 @@ export interface DuetlensApi {
   dialog: {
     /** 打开系统目录选择器,返回所选绝对路径(取消返回 null)。 */
     pickDirectory(): Promise<string | null>;
+    /** 打开系统文件选择器(选可执行文件,如 codex / gh),返回绝对路径(取消返回 null)。 */
+    pickFile(): Promise<string | null>;
     /** 经系统保存对话框把文本写入本地文件(如 Markdown 报告);返回落盘路径,取消返回 null。 */
     saveTextFile(defaultName: string, content: string): Promise<string | null>;
   };

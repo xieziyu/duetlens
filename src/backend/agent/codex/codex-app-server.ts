@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { resolveTool } from '../../config/tool-paths';
 import { JsonRpcConnection } from './jsonrpc';
 import {
   CodexMethod,
@@ -47,7 +48,7 @@ export class CodexAppServer extends EventEmitter {
   }
 
   start(extraEnv?: Record<string, string>): void {
-    const bin = this.opts.codexBin ?? 'codex';
+    const bin = this.opts.codexBin ?? resolveTool('codex');
     const env = { ...process.env, ...extraEnv };
     if (this.opts.codexHome) env.CODEX_HOME = this.opts.codexHome;
 

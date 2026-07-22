@@ -468,25 +468,38 @@ export class ReviewStore {
       rightWidth: r.right_width as number,
       defaultTab: r.default_tab as UiSettings['defaultTab'],
       defaultDiffView: r.default_diff_view as UiSettings['defaultDiffView'],
+      defaultSource: (r.default_source as UiSettings['defaultSource'] | null) ?? DEFAULT_UI_SETTINGS.defaultSource,
+      findingsGrouping:
+        (r.findings_grouping as UiSettings['findingsGrouping'] | null) ?? DEFAULT_UI_SETTINGS.findingsGrouping,
+      collapseViewedFiles:
+        r.collapse_viewed == null ? DEFAULT_UI_SETTINGS.collapseViewedFiles : !!r.collapse_viewed,
       defaultModel: (r.default_model as string | null) ?? DEFAULT_UI_SETTINGS.defaultModel,
       defaultEffort: (r.default_effort as UiSettings['defaultEffort'] | null) ?? DEFAULT_UI_SETTINGS.defaultEffort,
       notifyOnComplete:
         r.notify_on_complete == null ? DEFAULT_UI_SETTINGS.notifyOnComplete : !!r.notify_on_complete,
+      codexPath: (r.codex_path as string | null) ?? DEFAULT_UI_SETTINGS.codexPath,
+      ghPath: (r.gh_path as string | null) ?? DEFAULT_UI_SETTINGS.ghPath,
     };
   }
 
   saveUiSettings(s: UiSettings): void {
     this.db
       .prepare(
-        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_model, default_effort, notify_on_complete)
-         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultModel, @defaultEffort, @notifyOnComplete)
+        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_source, findings_grouping, collapse_viewed, default_model, default_effort, notify_on_complete, codex_path, gh_path)
+         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultSource, @findingsGrouping, @collapseViewedFiles, @defaultModel, @defaultEffort, @notifyOnComplete, @codexPath, @ghPath)
          ON CONFLICT(id) DO UPDATE SET
            data_mode = @dataMode, data_theme = @dataTheme, left_width = @leftWidth,
            right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView,
-           default_model = @defaultModel, default_effort = @defaultEffort, notify_on_complete = @notifyOnComplete`,
+           default_source = @defaultSource, findings_grouping = @findingsGrouping, collapse_viewed = @collapseViewedFiles,
+           default_model = @defaultModel, default_effort = @defaultEffort, notify_on_complete = @notifyOnComplete,
+           codex_path = @codexPath, gh_path = @ghPath`,
       )
-      // SQLite 不能绑定 boolean:notifyOnComplete 转 0/1
-      .run({ ...s, notifyOnComplete: s.notifyOnComplete ? 1 : 0 });
+      // SQLite 不能绑定 boolean:布尔字段转 0/1
+      .run({
+        ...s,
+        collapseViewedFiles: s.collapseViewedFiles ? 1 : 0,
+        notifyOnComplete: s.notifyOnComplete ? 1 : 0,
+      });
   }
 
   getReviewUiState(reviewId: string): ReviewUiState {

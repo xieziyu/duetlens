@@ -209,9 +209,14 @@ const UI_SETTINGS: UiSettings = {
   rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
+  defaultSource: 'github-pr',
+  findingsGrouping: 'severity',
+  collapseViewedFiles: true,
   defaultModel: '',
   defaultEffort: 'medium',
   notifyOnComplete: true,
+  codexPath: '',
+  ghPath: '',
 };
 
 /** 一条 finding discussion 预置对话,便于点开 f1 即见真实线程。 */
@@ -631,6 +636,7 @@ export function installPreviewApi(): void {
     dialog: {
       // 预览无原生目录选择器:回一个假路径,让入口的本地/vbranch 选择流程能继续跑
       pickDirectory: async () => '~/Projects/podcast-go',
+      pickFile: async () => '/opt/homebrew/bin/codex',
       // 浏览器里无原生保存对话框:用 <a download> 下载作预览替身,回一个假路径证明闭环
       saveTextFile: async (defaultName, content) => {
         const blob = new Blob([content], { type: 'text/markdown' });

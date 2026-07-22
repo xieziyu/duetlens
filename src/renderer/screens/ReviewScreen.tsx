@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Discussion, Finding, Message, Review, Severity, Triage } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, Severity, Triage, UiSettings } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
@@ -79,7 +79,7 @@ export function ReviewScreen({
   const setDiffView = (v: DiffView) => update({ defaultDiffView: v });
   // per-file 已看/折叠 + 最近 tab:per-review 持久化态(后端 review_ui_state),挂载拉取 + 去抖写回
   const { viewed, collapsed, activeTab, onToggleViewed, onToggleCollapsed, setActiveTab } =
-    useReviewUiState(reviewId);
+    useReviewUiState(reviewId, settings.collapseViewedFiles);
   // tab 优先用该 review 记住的;无记忆时回落到全局默认偏好。切 tab 只写 per-review。
   const tab: RightTab = isRightTab(activeTab) ? activeTab : settings.defaultTab;
   const setTab = (t: RightTab) => setActiveTab(t);
@@ -393,6 +393,7 @@ export function ReviewScreen({
         <RightPanel
           tab={tab}
           onTab={setTab}
+          grouping={settings.findingsGrouping}
           findings={findings}
           discussions={discussions}
           messages={messages}
@@ -429,6 +430,7 @@ const SEV_LABEL: Record<Severity, string> = { high: 'High', medium: 'Med', low: 
 function RightPanel({
   tab,
   onTab,
+  grouping,
   findings,
   discussions,
   messages,
@@ -456,6 +458,7 @@ function RightPanel({
 }: {
   tab: RightTab;
   onTab: (t: RightTab) => void;
+  grouping: UiSettings['findingsGrouping'];
   findings: Finding[];
   discussions: Discussion[];
   messages: Record<string, Message[]>;
@@ -485,11 +488,29 @@ function RightPanel({
     () => (categoryFilter ? findings.filter((f) => (f.category ?? '未分类') === categoryFilter) : findings),
     [findings, categoryFilter],
   );
-  const grouped = useMemo(() => {
-    const g: Record<Severity, Finding[]> = { high: [], medium: [], low: [] };
-    for (const f of shown) g[f.severity].push(f);
-    return g;
-  }, [shown]);
+  // findings 分组:按严重度(high▸low)或按文件;渲染统一走 groups 列表。
+  const groups = useMemo(() => {
+    if (grouping === 'file') {
+      const byFile = new Map<string, Finding[]>();
+      for (const f of shown) {
+        const arr = byFile.get(f.file);
+        if (arr) arr.push(f);
+        else byFile.set(f.file, [f]);
+      }
+      return [...byFile.entries()].map(([file, fs]) => ({
+        key: file,
+        header: <span className="fg-file mono">{file}</span>,
+        findings: fs,
+      }));
+    }
+    const bySev: Record<Severity, Finding[]> = { high: [], medium: [], low: [] };
+    for (const f of shown) bySev[f.severity].push(f);
+    return SEV_ORDER.filter((sev) => bySev[sev].length > 0).map((sev) => ({
+      key: sev,
+      header: <span className={`sev sev-${sev}`}>{SEV_LABEL[sev]}</span>,
+      findings: bySev[sev],
+    }));
+  }, [shown, grouping]);
   const kept = shown.filter((f) => f.triage === 'keep').length;
   const dropped = shown.filter((f) => f.triage === 'dismiss').length;
   const coverage = useMemo(() => {
@@ -561,20 +582,18 @@ function RightPanel({
                   </span>
                 </div>
               )}
-              {SEV_ORDER.map((sev) =>
-                grouped[sev].length === 0 ? null : (
-                  <div key={sev} className="fgroup">
-                    <div className="fg-head">
-                      <span className={`sev sev-${sev}`}>{SEV_LABEL[sev]}</span>
-                      <span className="fg-n">{grouped[sev].length}</span>
-                      <span className="fg-line" />
-                    </div>
-                    {grouped[sev].map((f) => (
-                      <FindingRow key={f.id} finding={f} onPick={onPickFinding} onTriage={onTriage} />
-                    ))}
+              {groups.map((g) => (
+                <div key={g.key} className="fgroup">
+                  <div className="fg-head">
+                    {g.header}
+                    <span className="fg-n">{g.findings.length}</span>
+                    <span className="fg-line" />
                   </div>
-                ),
-              )}
+                  {g.findings.map((f) => (
+                    <FindingRow key={f.id} finding={f} onPick={onPickFinding} onTriage={onTriage} />
+                  ))}
+                </div>
+              ))}
             </>
           )}
         </div>

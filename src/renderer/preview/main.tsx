@@ -23,6 +23,7 @@ const initialScreen = new URLSearchParams(window.location.search).get('screen') 
   | 'prompt'
   | 'onboarding'
   | 'history'
+  | 'settings'
   | null;
 
 createRoot(container).render(

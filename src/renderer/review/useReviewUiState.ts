@@ -29,7 +29,10 @@ const toggle = (s: Set<string>, path: string, on: boolean): Set<string> => {
  * - activeTab = 该 review 最近停留的右栏 tab(持久化),回来时定位到上次所在 tab。
  * viewed 与 activeTab 同占 review_ui_state 一行,故写回始终以镜像快照整体 upsert。
  */
-export function useReviewUiState(reviewId: string | null): ReviewUiStateHandle {
+export function useReviewUiState(
+  reviewId: string | null,
+  collapseOnViewed = true,
+): ReviewUiStateHandle {
   const [viewed, setViewed] = useState<Set<string>>(() => new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [activeTab, setActiveTabState] = useState<string | null>(null);
@@ -62,7 +65,7 @@ export function useReviewUiState(reviewId: string | null): ReviewUiStateHandle {
       if (!alive) return;
       const files = new Set(s.viewedFiles);
       setViewed(files);
-      setCollapsed(new Set(files));
+      setCollapsed(collapseOnViewed ? new Set(files) : new Set());
       setActiveTabState(s.lastActiveTab);
       stateRef.current = { viewedFiles: [...files], lastActiveTab: s.lastActiveTab };
       hydrating.current = false;
@@ -71,7 +74,7 @@ export function useReviewUiState(reviewId: string | null): ReviewUiStateHandle {
       alive = false;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [reviewId]);
+  }, [reviewId, collapseOnViewed]);
 
   const onToggleCollapsed = useCallback((path: string) => {
     setCollapsed((prev) => toggle(prev, path, !prev.has(path)));
@@ -82,14 +85,14 @@ export function useReviewUiState(reviewId: string | null): ReviewUiStateHandle {
     (path: string) => {
       setViewed((prev) => {
         const nowViewed = !prev.has(path);
-        setCollapsed((c) => toggle(c, path, nowViewed));
+        if (collapseOnViewed) setCollapsed((c) => toggle(c, path, nowViewed));
         const next = toggle(prev, path, nowViewed);
         stateRef.current = { ...stateRef.current, viewedFiles: [...next] };
         flush();
         return next;
       });
     },
-    [flush],
+    [flush, collapseOnViewed],
   );
 
   const setActiveTab = useCallback(

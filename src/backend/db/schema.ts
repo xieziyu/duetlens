@@ -100,7 +100,16 @@ const V4 = `
 ALTER TABLE ui_settings ADD COLUMN notify_on_complete INTEGER NOT NULL DEFAULT 1;
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4];
+// 独立设置屏引入的偏好:默认来源 / findings 分组 / 已看折叠 + 外部 CLI 路径覆盖。
+const V5 = `
+ALTER TABLE ui_settings ADD COLUMN default_source TEXT NOT NULL DEFAULT 'github-pr';
+ALTER TABLE ui_settings ADD COLUMN findings_grouping TEXT NOT NULL DEFAULT 'severity';
+ALTER TABLE ui_settings ADD COLUMN collapse_viewed INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE ui_settings ADD COLUMN codex_path TEXT NOT NULL DEFAULT '';
+ALTER TABLE ui_settings ADD COLUMN gh_path TEXT NOT NULL DEFAULT '';
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

@@ -14,6 +14,7 @@ import { loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
 import { createSource } from '../source/create-source';
 import { checkEnvironment } from '../env/environment-check';
 import type { EnvCheckOptions, EnvironmentReport } from '@shared/environment';
+import { setToolPath } from '../config/tool-paths';
 import type { ReviewTarget } from '../source/source';
 import {
   checkGhAuth,
@@ -83,6 +84,13 @@ export class ReviewManager extends EventEmitter {
     // 每个活跃会话 = 一个 codex 子进程 + MCP server;上限避免长时运行泄漏进程。
     this.maxLiveSessions = opts?.maxLiveSessions ?? 4;
     this.submitter = opts?.submitter ?? new GhReviewSubmitter();
+    this.applyToolPaths(this.store.getUiSettings());
+  }
+
+  /** 把设置里的 codex / gh 路径覆盖同步到进程内解析器(exec 与 codex 启动据此取二进制)。 */
+  private applyToolPaths(s: UiSettings): void {
+    setToolPath('codex', s.codexPath);
+    setToolPath('gh', s.ghPath);
   }
 
   listReviews(): Review[] {
@@ -341,6 +349,7 @@ export class ReviewManager extends EventEmitter {
 
   saveUiSettings(settings: UiSettings): void {
     this.store.saveUiSettings(settings);
+    this.applyToolPaths(settings);
   }
 
   getReviewUiState(reviewId: string): ReviewUiState {

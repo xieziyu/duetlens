@@ -134,6 +134,15 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0];
   });
 
+  ipcMain.handle(IpcChannels.dialogPickFile, async () => {
+    const win = BrowserWindow.getFocusedWindow();
+    const opts = { properties: ['openFile' as const] };
+    const res = win
+      ? await dialog.showOpenDialog(win, opts)
+      : await dialog.showOpenDialog(opts);
+    return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0];
+  });
+
   ipcMain.handle(IpcChannels.dialogSaveTextFile, async (_e, defaultName: string, content: string) => {
     const win = BrowserWindow.getFocusedWindow();
     const opts = {

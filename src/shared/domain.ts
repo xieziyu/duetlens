@@ -152,12 +152,22 @@ export interface UiSettings {
   rightWidth: number;
   defaultTab: 'discussion' | 'findings' | 'summary';
   defaultDiffView: 'unified' | 'split';
+  /** 发起表单预填的默认来源 */
+  defaultSource: SourceKind;
+  /** findings 右栏的默认分组方式 */
+  findingsGrouping: 'severity' | 'file';
+  /** 标记「已看」后是否自动折叠该文件的 diff */
+  collapseViewedFiles: boolean;
   /** 发起表单预填的模型(空=账号默认) */
   defaultModel: string;
   /** 发起表单预填的 reasoning effort */
   defaultEffort: ReasoningEffort;
   /** 扫描完成 / 追问回复时是否提示(未聚焦弹原生通知,聚焦弹应用内轻提示) */
   notifyOnComplete: boolean;
+  /** codex 可执行文件路径(空=用 PATH 中的 codex) */
+  codexPath: string;
+  /** gh 可执行文件路径(空=用 PATH 中的 gh) */
+  ghPath: string;
 }
 
 export const DEFAULT_UI_SETTINGS: UiSettings = {
@@ -167,9 +177,14 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
+  defaultSource: 'github-pr',
+  findingsGrouping: 'severity',
+  collapseViewedFiles: true,
   defaultModel: '',
   defaultEffort: DEFAULT_REASONING_EFFORT,
   notifyOnComplete: true,
+  codexPath: '',
+  ghPath: '',
 };
 
 /** per-review 的进度态(随会话恢复);viewedFiles = 已标记「已看」的文件路径。 */

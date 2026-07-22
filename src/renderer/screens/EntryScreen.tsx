@@ -60,15 +60,16 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     window.duetlens.agent.listModels().then(setModels).catch(() => setModels([]));
   }, []);
 
-  // settings 落地后预填模型/effort 一次(不覆盖用户随后编辑)
+  // settings 落地后预填默认来源/模型/effort 一次(不覆盖用户随后编辑)
   const prefilled = useRef(false);
   useEffect(() => {
     if (loaded && !prefilled.current) {
       prefilled.current = true;
+      setSource(settings.defaultSource);
       setModel(settings.defaultModel);
       setEffort(settings.defaultEffort);
     }
-  }, [loaded, settings.defaultModel, settings.defaultEffort]);
+  }, [loaded, settings.defaultSource, settings.defaultModel, settings.defaultEffort]);
 
   // 切来源时重置该来源无关的选择(仓库路径可跨来源沿用,便于三来源指同一仓库)
   const onSwitchSource = (next: SourceKind) => {
