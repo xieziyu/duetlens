@@ -64,6 +64,9 @@ const api: DuetlensApi = {
     getSettings: () => ipcRenderer.invoke(IpcChannels.uiGetSettings),
     saveSettings: (settings: UiSettings) => ipcRenderer.invoke(IpcChannels.uiSaveSettings, settings),
   },
+  agent: {
+    listModels: () => ipcRenderer.invoke(IpcChannels.agentListModels),
+  },
   prompt: {
     get: (cwd) => ipcRenderer.invoke(IpcChannels.promptGet, cwd),
     save: (input) => ipcRenderer.invoke(IpcChannels.promptSave, input),

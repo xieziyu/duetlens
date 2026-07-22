@@ -7,6 +7,8 @@ import {
   type InitializeParams,
   type McpServerElicitationRequestParams,
   type McpServerElicitationRequestResponse,
+  type ModelListParams,
+  type ModelListResponse,
   type ThreadResumeParams,
   type ThreadResumeResponse,
   type ThreadStartParams,
@@ -69,6 +71,10 @@ export class CodexAppServer extends EventEmitter {
 
   async initialize(clientInfo: InitializeParams['clientInfo']): Promise<unknown> {
     return this.rpcOrThrow().request(CodexMethod.initialize, { clientInfo });
+  }
+
+  async listModels(params: ModelListParams = {}): Promise<ModelListResponse> {
+    return this.rpcOrThrow().request<ModelListResponse>(CodexMethod.modelList, params);
   }
 
   async threadStart(params: ThreadStartParams): Promise<ThreadStartResponse> {

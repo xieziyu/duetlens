@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
+import type { CodexModelInfo, Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, FindingEditInput, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
@@ -251,6 +251,18 @@ export class ReviewManager extends EventEmitter {
 
   saveReviewUiState(reviewId: string, state: ReviewUiState): void {
     this.store.saveReviewUiState(reviewId, state);
+  }
+
+  /** 列举账号可用 codex 模型(发起表单下拉);未登录/出错向上抛,前端降级为手填。 */
+  async listModels(): Promise<CodexModelInfo[]> {
+    const models = await CodexAgent.listModels({ codexHome: this.codexHome });
+    return models.map((m) => ({
+      model: m.model,
+      id: m.id,
+      displayName: m.displayName,
+      description: m.description,
+      isDefault: m.isDefault,
+    }));
   }
 
   /** 读三层审核规则提示词(project 层需仓库 cwd,缺省则只有 global+builtin)。 */

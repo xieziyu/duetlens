@@ -3,6 +3,7 @@ import { CodexAppServer } from './codex-app-server';
 import {
   CodexItemType,
   CodexNotification,
+  type CodexModel,
   type McpServerElicitationAction,
   type McpServerElicitationRequestParams,
   type McpToolCallItem,
@@ -57,6 +58,30 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
       const server = (params as { serverName?: string } | undefined)?.serverName;
       this.emitEvent({ kind: 'approval', method, decision: 'denied', expected: false, server });
     });
+  }
+
+  /**
+   * 列举账号可用模型:起一次性 app-server、握手、`model/list`(分页取全)后即关。
+   * 不注入 MCP、不起 thread、不发 turn,故不烧 token;复用本机 codex 登录态。
+   */
+  static async listModels(opts: CodexAgentOptions = {}): Promise<CodexModel[]> {
+    const server = new CodexAppServer({ codexBin: opts.codexBin, codexHome: opts.codexHome, onLog: opts.onLog });
+    try {
+      server.start();
+      await server.initialize({ name: 'duetlens', version: '2.0.0-dev' });
+      const models: CodexModel[] = [];
+      let cursor: string | null | undefined;
+      // 分页兜底:cursor 续取,上限防御异常服务端不收敛
+      for (let page = 0; page < 20; page++) {
+        const res = await server.listModels({ cursor, includeHidden: false });
+        models.push(...res.data);
+        cursor = res.nextCursor;
+        if (!cursor) break;
+      }
+      return models.filter((m) => !m.hidden);
+    } finally {
+      server.stop();
+    }
   }
 
   async startConversation(opts: StartConversationOptions): Promise<ConversationHandle> {

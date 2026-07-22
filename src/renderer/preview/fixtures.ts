@@ -511,6 +511,13 @@ export function installPreviewApi(): void {
         uiSettings = s;
       },
     },
+    agent: {
+      // 预览无 codex:回一组假模型证明下拉渲染(真实里走 model/list)
+      listModels: async () => [
+        { model: 'gpt-5.6-sol', id: 'gpt-5.6-sol', displayName: 'GPT-5.6-Sol', description: '最新旗舰编码模型', isDefault: true },
+        { model: 'gpt-5.6-terra', id: 'gpt-5.6-terra', displayName: 'GPT-5.6-Terra', description: '更快的日常模型', isDefault: false },
+      ],
+    },
     prompt: {
       get: async (cwd) => buildPromptView(cwd),
       save: async (input) => {

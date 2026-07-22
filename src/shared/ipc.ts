@@ -3,6 +3,7 @@
  * preload 经 contextBridge 暴露 `window.duetlens`,renderer 只依赖这里的类型。
  */
 import type {
+  CodexModelInfo,
   Discussion,
   Finding,
   Message,
@@ -44,6 +45,7 @@ export const IpcChannels = {
   reviewSaveUiState: 'review:save-ui-state',
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
+  agentListModels: 'agent:list-models',
   promptGet: 'prompt:get',
   promptSave: 'prompt:save',
   dialogPickDirectory: 'dialog:pick-directory',
@@ -194,6 +196,10 @@ export interface DuetlensApi {
   ui: {
     getSettings(): Promise<UiSettings>;
     saveSettings(settings: UiSettings): Promise<void>;
+  };
+  agent: {
+    /** 列举账号可用的 codex 模型(供发起表单下拉);未登录/出错时抛错,前端降级为手填。 */
+    listModels(): Promise<CodexModelInfo[]>;
   };
   prompt: {
     /** 读三层审核规则(project 需仓库 cwd,缺省则只有 global+builtin)。 */

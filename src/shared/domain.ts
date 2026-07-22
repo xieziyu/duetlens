@@ -182,3 +182,13 @@ export const DEFAULT_REVIEW_UI_STATE: ReviewUiState = {
   viewedFiles: [],
   lastActiveTab: null,
 };
+
+/** 发起表单模型下拉的一项(codex `model/list` 归一,只留 UI 用得到的字段)。 */
+export interface CodexModelInfo {
+  /** 传给发起表单 / thread/start 的模型标识 */
+  model: string;
+  id: string;
+  displayName: string;
+  description: string;
+  isDefault: boolean;
+}

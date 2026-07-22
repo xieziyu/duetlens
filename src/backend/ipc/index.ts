@@ -89,6 +89,8 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());
   ipcMain.handle(IpcChannels.uiSaveSettings, (_e, settings: UiSettings) => manager.saveUiSettings(settings));
 
+  ipcMain.handle(IpcChannels.agentListModels, () => manager.listModels());
+
   ipcMain.handle(IpcChannels.promptGet, (_e, cwd?: string) => manager.getReviewPrompt(cwd));
   ipcMain.handle(IpcChannels.promptSave, (_e, input: PromptSaveInput) => manager.saveReviewPrompt(input));
 

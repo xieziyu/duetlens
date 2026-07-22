@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { REASONING_EFFORTS, type ReasoningEffort, type Review, type SourceKind } from '@shared/domain';
+import {
+  REASONING_EFFORTS,
+  type CodexModelInfo,
+  type ReasoningEffort,
+  type Review,
+  type SourceKind,
+} from '@shared/domain';
 import type { ReviewStartInput } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
 import './EntryScreen.css';
@@ -30,10 +36,17 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   const [effort, setEffort] = useState<ReasoningEffort>('medium');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 模型下拉:null=加载中,[]=拉取失败/为空 → 降级为手填输入框
+  const [models, setModels] = useState<CodexModelInfo[] | null>(null);
 
   const refresh = () => window.duetlens.review.list().then(setReviews);
   useEffect(() => {
     void refresh();
+    // 动态拉账号可用模型;未登录/出错则降级为手填(不阻断发起)
+    window.duetlens.agent
+      .listModels()
+      .then(setModels)
+      .catch(() => setModels([]));
   }, []);
 
   // 首帧用默认渲染,settings 落地后预填一次(不覆盖用户随后的编辑)
@@ -172,12 +185,34 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
           <div className="field-pair">
             <label className="field">
               <span className="field-label">模型</span>
-              <input
-                className="field-input mono"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="codex 模型(留空=账号默认)"
-              />
+              {models && models.length > 0 ? (
+                <select
+                  className="field-input mono"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                >
+                  <option value="">账号默认</option>
+                  {/* 保留旧记住的/自定义模型名,即使不在当前账号列表里也不丢失 */}
+                  {model && !models.some((m) => m.model === model) && (
+                    <option value={model}>{model}(自定义)</option>
+                  )}
+                  {models.map((m) => (
+                    <option key={m.id} value={m.model} title={m.description}>
+                      {m.displayName}
+                      {m.isDefault ? ' · 默认' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  className="field-input mono"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder={
+                    models === null ? '加载模型列表…' : 'codex 模型(留空=账号默认)'
+                  }
+                />
+              )}
             </label>
             <label className="field">
               <span className="field-label">effort</span>

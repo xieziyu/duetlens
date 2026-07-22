@@ -65,6 +65,29 @@ export interface ThreadResumeResponse {
   [k: string]: unknown;
 }
 
+// ---- model/list(列举账号可用模型;initialize 后即可调,复用本机登录,不烧 token)----
+export interface ModelListParams {
+  cursor?: string | null;
+  includeHidden?: boolean | null;
+  limit?: number | null;
+}
+
+/** 只取 Duetlens 用得到的字段;codex 侧字段更多(见 generate-ts 的 Model)。 */
+export interface CodexModel {
+  /** 传给 thread/start 的模型标识 */
+  model: string;
+  id: string;
+  displayName: string;
+  description: string;
+  hidden: boolean;
+  isDefault: boolean;
+}
+
+export interface ModelListResponse {
+  data: CodexModel[];
+  nextCursor?: string | null;
+}
+
 // ---- turn/start ----
 export type UserInput = { type: 'text'; text: string; text_elements?: unknown[] };
 
@@ -100,6 +123,7 @@ export interface McpServerElicitationRequestResponse {
 // ---- 方法 / 事件名(字符串常量,避免拼写漂移)----
 export const CodexMethod = {
   initialize: 'initialize',
+  modelList: 'model/list',
   threadStart: 'thread/start',
   threadResume: 'thread/resume',
   turnStart: 'turn/start',
