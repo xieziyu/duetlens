@@ -279,6 +279,27 @@
 .tree .group {
   padding: 4px 8px;
 }
+.tree .dir {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+}
+.tree .dir svg {
+  opacity: 0.6;
+  flex: none;
+}
+.tree .dir .dir-path {
+  font-family: var(--mono);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .file {
   display: flex;
   align-items: center;
