@@ -10,6 +10,8 @@ export interface InlineCardProps {
   finding: Finding;
   /** 被右栏点选定位时短暂高亮 */
   focused?: boolean;
+  /** 锚点不在当前改动新侧(off-diff 区),需自带行号定位;锚定卡则行号已由 gutter 呈现,不再重复。 */
+  offDiff?: boolean;
   /** 锚点新侧行的原文;有则 suggestion 预览渲染成 GitHub 式 diff(删原行 / 增 suggestion)。off-diff 无原行时缺省。 */
   originalLine?: string;
   /** 用户裁决(保留/剔除/复位);缺省时卡为纯只读(如预览/未接线场景) */
@@ -22,7 +24,7 @@ export interface InlineCardProps {
  * 锚定在 diff 行处的内联 finding 卡(对齐 mockup .card):view / edit / dismissed 三态。
  * submitted 为只读锁定;编辑经 IPC 落库,回推事件再刷新视图(前端不臆造权威数据)。
  */
-export function InlineCard({ finding, focused, originalLine, onTriage, onUpdate }: InlineCardProps) {
+export function InlineCard({ finding, focused, offDiff, originalLine, onTriage, onUpdate }: InlineCardProps) {
   const isAgent = finding.origin === 'agent';
   const submitted = finding.submission === 'submitted';
   const dismissed = finding.triage === 'dismiss';
@@ -64,6 +66,7 @@ export function InlineCard({ finding, focused, originalLine, onTriage, onUpdate 
             isAgent={isAgent}
             submitted={submitted}
             writable={writable}
+            offDiff={offDiff}
             originalLine={originalLine}
             onEdit={onUpdate ? () => setEditing(true) : undefined}
             onDismiss={onTriage ? () => onTriage(finding, 'dismiss') : undefined}
@@ -79,6 +82,7 @@ function CardView({
   isAgent,
   submitted,
   writable,
+  offDiff,
   originalLine,
   onEdit,
   onDismiss,
@@ -87,6 +91,7 @@ function CardView({
   isAgent: boolean;
   submitted: boolean;
   writable: boolean;
+  offDiff?: boolean;
   originalLine?: string;
   onEdit?: () => void;
   onDismiss?: () => void;
@@ -140,17 +145,15 @@ function CardView({
               ✕ 剔除
             </button>
           )}
-          <span className="reply-hint mono anchor-tag">
-            {finding.file}:{finding.line}
-          </span>
+          {offDiff && <span className="reply-hint mono anchor-tag">L{finding.line}</span>}
         </div>
       ) : (
-        <div className="card-foot">
-          <span className="mono anchor-tag">
-            {finding.file}:{finding.line}
-          </span>
-          {submitted && <span className="sub-tag">✓ 已提交</span>}
-        </div>
+        (offDiff || submitted) && (
+          <div className="card-foot">
+            {offDiff && <span className="mono anchor-tag">L{finding.line}</span>}
+            {submitted && <span className="sub-tag">✓ 已提交</span>}
+          </div>
+        )
       )}
     </div>
   );

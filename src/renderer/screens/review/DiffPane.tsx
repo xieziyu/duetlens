@@ -727,6 +727,7 @@ function DiffFileView({
               key={f.id}
               finding={f}
               focused={f.id === focusFindingId}
+              offDiff
               onTriage={onTriage}
               onUpdate={onUpdate}
             />
