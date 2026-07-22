@@ -32,9 +32,9 @@ export function Composer({ refLabel, onRemoveRef, disabled, placeholder, scope, 
         {refLabel && (
           <div className="refchip">
             ↳ <span className="lnref">{refLabel}</span>
-            <span className="x" title="移除引用" onClick={onRemoveRef}>
+            <button type="button" className="x" title="移除引用" aria-label="移除引用" onClick={onRemoveRef}>
               ✕
-            </span>
+            </button>
           </div>
         )}
         <textarea

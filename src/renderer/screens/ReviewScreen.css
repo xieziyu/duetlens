@@ -2051,6 +2051,10 @@
   cursor: pointer;
   color: var(--text-faint);
   font-size: 11px;
+  border: 0;
+  background: none;
+  padding: 0;
+  line-height: 1;
 }
 .composer .refchip .x:hover {
   color: var(--del);

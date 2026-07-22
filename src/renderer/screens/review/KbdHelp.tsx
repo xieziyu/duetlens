@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 // → mockup/diff-review.html:#kbdHelp 键盘快捷键浮层。仅列已实现的快捷键。
 const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
   {
@@ -28,14 +30,54 @@ const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
   },
 ];
 
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export function KbdHelp({ onClose }: { onClose: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // 模态焦点管理:打开时把焦点移入弹层并记住来处,关闭后归还;Tab 在弹层内循环。
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    return () => opener?.focus?.();
+  }, []);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const nodes = panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE);
+    if (!nodes || nodes.length === 0) return;
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    const act = document.activeElement;
+    if (e.shiftKey && act === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && act === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div className="kbd-overlay show" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="kbd-panel" role="dialog" aria-label="键盘快捷键">
+      <div
+        className="kbd-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="键盘快捷键"
+        ref={panelRef}
+        onKeyDown={onKeyDown}
+      >
         <div className="kh">
           <h2>键盘快捷键</h2>
           <span className="khs">按 ? 随时唤起</span>
-          <button className="kx" onClick={onClose} title="关闭 (Esc)">
+          <button className="kx" onClick={onClose} title="关闭 (Esc)" ref={closeRef}>
             ✕
           </button>
         </div>
