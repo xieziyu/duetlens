@@ -10,6 +10,7 @@ import {
   nearestLiveLine,
   type GhReviewEvent,
 } from '@shared/github-review';
+import { renderMarkdown } from '../review/markdown';
 import './SubmitGitHubScreen.css';
 
 const SEV_CLASS: Record<Finding['severity'], string> = { high: 'high', medium: 'med', low: 'low' };
@@ -53,6 +54,15 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   );
   const inlineCount = pending.filter(hasAnchor).length;
   const keptCount = findings.filter((f) => f.triage !== 'dismiss').length;
+
+  // suggestion diff 的「原行」文本:按 file+新侧行号从最新 diff 取,取不到则只渲染增行。
+  const originalLineOf = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const file of diff)
+      for (const hunk of file.hunks)
+        for (const l of hunk.lines) if (l.newLine != null) byKey.set(`${file.path}:${l.newLine}`, l.text);
+    return (f: Finding) => byKey.get(`${f.file}:${f.line}`);
+  }, [diff]);
 
   const degradeToSummary = (f: Finding) => void window.duetlens.review.setFindingAnchor(reviewId, f.id, 0);
   const reAnchor = (f: Finding) => {
@@ -101,9 +111,6 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
         <div className="pane curate">
           <div className="c-head">
             <h1>Submit review</h1>
-            <span className="to">
-              提交到 <b>{review.sourceRef}</b>
-            </span>
           </div>
           <div className="c-sub">
             勾选要提交的 findings,剔除无用项。有行锚点的作为 inline 行评论,无锚点的归入 review 摘要。
@@ -155,14 +162,34 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                     </span>
                     <span className={'origin' + (f.origin === 'agent' ? ' agent' : ' human')}>
                       <span className="d" />
-                      {f.origin === 'agent' ? 'agent · report_finding' : '你 · ' + (f.origin === 'promoted' ? '由 discussion 提升' : '手动新增')}
+                      {f.origin === 'agent' ? 'agent' : '你 · ' + (f.origin === 'promoted' ? '由 discussion 提升' : '手动新增')}
                     </span>
                   </div>
-                  {!isDismissed && f.body.trim() && <div className="f-body">{f.body}</div>}
+                  {!isDismissed && f.body.trim() && (
+                    <div className="f-body">{renderMarkdown(f.body)}</div>
+                  )}
                   {!isDismissed && f.suggestion?.trim() && (
                     <div className="f-sugg">
-                      <div className="h">suggestion · 将作为 GitHub suggestion 块</div>
-                      <pre>{f.suggestion}</pre>
+                      <div className="f-sugg-lbl">
+                        <span className="dia">◇</span> suggestion
+                      </div>
+                      <div className="f-sugg-diff">
+                        {(() => {
+                          const orig = originalLineOf(f);
+                          return orig != null ? (
+                            <div className="fsd-row del">
+                              <span className="fsd-gut">−</span>
+                              <span className="fsd-code">{orig || ' '}</span>
+                            </div>
+                          ) : null;
+                        })()}
+                        {f.suggestion.split('\n').map((l, i) => (
+                          <div className="fsd-row add" key={i}>
+                            <span className="fsd-gut">＋</span>
+                            <span className="fsd-code">{l || ' '}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {isSubmitted && (
@@ -200,7 +227,6 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
         <div className="pane finish">
           <div className="h">
             <div className="t">◆ Finish your review</div>
-            <div className="s">将组成 {review.sourceRef} 的一次 review 提交</div>
           </div>
 
           {sub === 'success' && result?.status === 'success' && (
@@ -235,17 +261,17 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
           )}
 
           <div className="finish-body">
-            <div className="field-lbl">Review 摘要(body)</div>
+            <div className="field-lbl">Review 意见</div>
             <textarea
               className="summary"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
               onBlur={saveSummary}
-              placeholder="review 的整体结论;无锚点 finding 会并入这里…"
+              placeholder="可选"
               rows={5}
             />
 
-            <div className="field-lbl mt">提交类型(event)</div>
+            <div className="field-lbl mt">提交类型</div>
             <div className="events">
               {GH_REVIEW_EVENTS.map((ev) => {
                 const m = EVENT_META[ev];
@@ -292,13 +318,13 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                 >
                   {sub === 'failed' ? '↻ 重试提交' : pending.length === 0 ? '无可提交的 finding' : btnLabel}
                 </button>
-                <div className="foot-note">
-                  {sub === 'invalid'
-                    ? '修正红框那条后再整份提交'
-                    : staleIds.size > 0
-                      ? `⛔ ${staleIds.size} 条锚点已失效(红框),提交会被 422 拒 —— 建议先处理`
-                      : '经 gh 创建一次 PR review(原子) · 只读 sandbox 不影响'}
-                </div>
+                {(sub === 'invalid' || staleIds.size > 0) && (
+                  <div className="foot-note">
+                    {sub === 'invalid'
+                      ? '修正红框那条后再整份提交'
+                      : `⛔ ${staleIds.size} 条锚点已失效(红框),提交会被 422 拒 —— 建议先处理`}
+                  </div>
+                )}
               </>
             )}
           </div>
