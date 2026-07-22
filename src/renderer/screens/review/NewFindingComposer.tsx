@@ -115,12 +115,9 @@ export function NewFindingComposer({ label, snippet, onCreate, onCancel }: NewFi
           <div className="fe-field">
             <label className="fe-sugg-tog" onClick={() => setHasSugg((v) => !v)}>
               <span className="sw" />
-              <span className="dia">◇</span> 附给 author 的 suggestion
+              <span className="dia">◇</span> suggestion
             </label>
             <div className="fe-sugg">
-              <div className="fe-cap">
-                <span className="dia">◇</span> suggestion · 提交时渲染为 GitHub suggestion 块
-              </div>
               <textarea
                 className="fe-textarea fe-code"
                 value={suggestion}

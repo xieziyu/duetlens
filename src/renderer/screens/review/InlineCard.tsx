@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Finding, Severity, Triage } from '@shared/domain';
 import type { FindingEditInput } from '@shared/ipc';
+import { renderMarkdown } from './markdown';
 
 const SEV_LABEL: Record<Severity, string> = { high: 'high', medium: 'med', low: 'low' };
 const SEV_OPTIONS: Severity[] = ['high', 'medium', 'low'];
@@ -9,6 +10,8 @@ export interface InlineCardProps {
   finding: Finding;
   /** 被右栏点选定位时短暂高亮 */
   focused?: boolean;
+  /** 锚点新侧行的原文;有则 suggestion 预览渲染成 GitHub 式 diff(删原行 / 增 suggestion)。off-diff 无原行时缺省。 */
+  originalLine?: string;
   /** 用户裁决(保留/剔除/复位);缺省时卡为纯只读(如预览/未接线场景) */
   onTriage?: (finding: Finding, triage: Triage) => void;
   /** 就地编辑保存 */
@@ -19,7 +22,7 @@ export interface InlineCardProps {
  * 锚定在 diff 行处的内联 finding 卡(对齐 mockup .card):view / edit / dismissed 三态。
  * submitted 为只读锁定;编辑经 IPC 落库,回推事件再刷新视图(前端不臆造权威数据)。
  */
-export function InlineCard({ finding, focused, onTriage, onUpdate }: InlineCardProps) {
+export function InlineCard({ finding, focused, originalLine, onTriage, onUpdate }: InlineCardProps) {
   const isAgent = finding.origin === 'agent';
   const submitted = finding.submission === 'submitted';
   const dismissed = finding.triage === 'dismiss';
@@ -61,6 +64,7 @@ export function InlineCard({ finding, focused, onTriage, onUpdate }: InlineCardP
             isAgent={isAgent}
             submitted={submitted}
             writable={writable}
+            originalLine={originalLine}
             onEdit={onUpdate ? () => setEditing(true) : undefined}
             onDismiss={onTriage ? () => onTriage(finding, 'dismiss') : undefined}
           />
@@ -75,6 +79,7 @@ function CardView({
   isAgent,
   submitted,
   writable,
+  originalLine,
   onEdit,
   onDismiss,
 }: {
@@ -82,6 +87,7 @@ function CardView({
   isAgent: boolean;
   submitted: boolean;
   writable: boolean;
+  originalLine?: string;
   onEdit?: () => void;
   onDismiss?: () => void;
 }) {
@@ -96,19 +102,30 @@ function CardView({
           {SEV_LABEL[finding.severity]}
           {finding.category ? ` · ${finding.category}` : ''}
         </span>
-        {isAgent && (
-          <span className="tool-tag">
-            via <b>report_finding()</b>
-          </span>
-        )}
       </div>
       <div className="c-body">
-        <strong>{finding.title}</strong>
-        {finding.body && <p className="c-body-text">{finding.body}</p>}
+        <strong className="c-title">{finding.title}</strong>
+        {finding.body && <div className="c-prose">{renderMarkdown(finding.body)}</div>}
       </div>
       {finding.suggestion && (
-        <div className="card-meta">
-          <span className="dia">◇</span> 附给 author 的 suggestion · 提交时渲染为 GitHub suggestion 块
+        <div className="c-sugg">
+          <div className="c-sugg-lbl">
+            <span className="dia">◇</span> suggestion
+          </div>
+          <div className="c-sugg-diff">
+            {originalLine != null && (
+              <div className="csd-row del">
+                <span className="csd-gut">−</span>
+                <span className="csd-code">{originalLine || ' '}</span>
+              </div>
+            )}
+            {finding.suggestion.split('\n').map((l, i) => (
+              <div className="csd-row add" key={i}>
+                <span className="csd-gut">＋</span>
+                <span className="csd-code">{l || ' '}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {writable ? (
@@ -232,12 +249,9 @@ function CardEdit({
       <div className="fe-field">
         <label className="fe-sugg-tog" onClick={() => setHasSugg((v) => !v)}>
           <span className="sw" />
-          <span className="dia">◇</span> 附给 author 的 suggestion
+          <span className="dia">◇</span> suggestion
         </label>
         <div className="fe-sugg">
-          <div className="fe-cap">
-            <span className="dia">◇</span> suggestion · 提交时渲染为 GitHub suggestion 块
-          </div>
           <textarea
             className="fe-textarea fe-code"
             value={suggestion}
@@ -253,7 +267,6 @@ function CardEdit({
         <button className="cancel" onClick={onCancel}>
           取消 <span className="kbd">Esc</span>
         </button>
-        <span className="fe-note">编辑后随 review 提交给 author</span>
       </div>
     </div>
   );

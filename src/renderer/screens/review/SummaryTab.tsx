@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFile } from '@shared/diff';
 import type { Finding, Review, Severity } from '@shared/domain';
+import { renderMarkdown } from './markdown';
 
 const SEV_RANK: Record<Severity, number> = { high: 3, medium: 2, low: 1 };
 
@@ -186,21 +187,4 @@ function SummaryBody({ body, onEdit }: { body: string | null; onEdit: (v: string
       )}
     </div>
   );
-}
-
-/** 极简 Markdown:空行分段 + 段内 **粗体** / `代码`。 */
-function renderMarkdown(src: string): React.ReactNode[] {
-  return src
-    .split(/\n{2,}/)
-    .filter((p) => p.trim())
-    .map((p, i) => <p key={i}>{renderInline(p.replace(/\n/g, ' '))}</p>);
-}
-
-function renderInline(text: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-  return parts.map((seg, i) => {
-    if (seg.startsWith('**') && seg.endsWith('**')) return <strong key={i}>{seg.slice(2, -2)}</strong>;
-    if (seg.startsWith('`') && seg.endsWith('`')) return <code key={i}>{seg.slice(1, -1)}</code>;
-    return seg;
-  });
 }

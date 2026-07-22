@@ -508,9 +508,6 @@
   opacity: 0.55;
   border-style: dashed;
 }
-.card.dismissed .c-body strong {
-  text-decoration: line-through;
-}
 .card .c-head {
   display: flex;
   align-items: center;
@@ -546,41 +543,129 @@
   color: var(--human);
   border: 1px solid var(--human-line);
 }
+.card .c-head .sev {
+  margin-left: auto;
+}
 .tool-tag {
   font-family: var(--mono);
   font-size: 10.5px;
   color: var(--text-faint);
   margin-left: auto;
 }
-.tool-tag b {
-  color: var(--agent-2);
-  font-weight: 500;
-}
 .c-body {
   padding: 11px 13px;
   font-size: 12.5px;
   color: var(--text-dim);
 }
-.c-body strong {
+.c-title {
   color: var(--text);
   font-weight: 600;
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
-.c-body-text {
-  margin: 0;
+.card.dismissed .c-title {
+  text-decoration: line-through;
+}
+.c-prose {
+  line-height: 1.6;
+}
+.c-prose p {
+  margin: 0 0 7px;
+}
+.c-prose p:last-child {
+  margin-bottom: 0;
+}
+.c-prose strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.c-prose code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--surface-3);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--agent-2);
+}
+.c-prose .md-ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.c-prose .md-ul li {
+  margin: 3px 0;
+}
+.c-prose .md-code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.55;
   white-space: pre-wrap;
+  overflow-x: auto;
+  margin: 8px 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--text);
 }
-.card-meta {
-  padding: 0 13px 10px;
-  font-size: 11px;
-  color: var(--text-faint);
+.c-prose .md-code code {
+  font: inherit;
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+/* suggestion 预览:补丁正文可见,不再仅提示存在 */
+.c-sugg {
+  padding: 0 13px 11px;
+}
+.c-sugg-lbl {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.card-meta .dia {
+  font-size: 11px;
   color: var(--agent-2);
+}
+.c-sugg-lbl .dia {
+  color: var(--agent-2);
+}
+/* GitHub 式 suggestion diff:删原行(红)/ 增 suggestion(绿),配色对齐 diff 行 */
+.c-sugg-diff {
+  margin: 6px 0 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.csd-row {
+  display: flex;
+}
+.csd-gut {
+  flex: none;
+  width: 22px;
+  text-align: center;
+  user-select: none;
+}
+.csd-code {
+  flex: 1;
+  padding-right: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+.csd-row.del {
+  background: var(--del-bg);
+}
+.csd-row.del .csd-gut {
+  background: var(--del-gutter);
+  color: var(--del);
+}
+.csd-row.add {
+  background: var(--add-bg);
+}
+.csd-row.add .csd-gut {
+  background: var(--add-gutter);
+  color: var(--add);
 }
 .card-foot {
   display: flex;
@@ -1394,9 +1479,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.fe-cap .dia {
-  color: var(--agent-2);
 }
 .fe-input,
 .fe-textarea {

@@ -568,12 +568,16 @@ function HunkView({
   composeLine: number | null;
   composeNode: React.ReactNode;
 }) {
+  const textByNewLine = new Map<number, string>();
+  for (const l of hunk.lines) if (l.newLine != null) textByNewLine.set(l.newLine, l.text);
+
   const cards = (line: number | null) =>
     (line != null ? byLine.get(line) ?? [] : []).map((f) => (
       <InlineCard
         key={f.id}
         finding={f}
         focused={f.id === focusFindingId}
+        originalLine={textByNewLine.get(f.line)}
         onTriage={onTriage}
         onUpdate={onUpdate}
       />
