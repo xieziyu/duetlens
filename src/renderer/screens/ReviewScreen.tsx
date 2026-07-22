@@ -583,6 +583,8 @@ const ORIGIN_LABEL: Record<Finding['origin'], string> = {
   promoted: '你 · 提升',
 };
 
+const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
+
 /** 右栏 Findings tab 单行:锚点导航 + triage(保留/剔除/恢复)。 */
 function FindingRow({
   finding: f,
@@ -618,26 +620,28 @@ function FindingRow({
       </div>
       <div className="fr-title">{f.title}</div>
       <div className="fr-foot">
-        <span className="mono anchor">
-          {f.file}:{f.line}
+        <span className="mono anchor" title={`${f.file}:${f.line}`}>
+          {basename(f.file)}:{f.line}
         </span>
         {f.suggestion && <span className="sugg-tag">◇ suggestion</span>}
-        {submitted ? (
-          <span className="subm">✓ 已提交</span>
-        ) : dismissed ? (
-          <button className="fr-restore" onClick={triage('keep')}>
-            ↩ 恢复
-          </button>
-        ) : (
-          <span className="triage">
-            <button className={`t-keep${f.triage === 'keep' ? ' on' : ''}`} onClick={triage('keep')}>
-              保留
+        <div className="fr-actions">
+          {submitted ? (
+            <span className="subm">✓ 已提交</span>
+          ) : dismissed ? (
+            <button className="fr-restore" onClick={triage('keep')}>
+              ↩ 恢复
             </button>
-            <button className="t-drop" onClick={triage('dismiss')}>
-              剔除
-            </button>
-          </span>
-        )}
+          ) : (
+            <span className="triage">
+              <button className={`t-keep${f.triage === 'keep' ? ' on' : ''}`} onClick={triage('keep')}>
+                保留
+              </button>
+              <button className="t-drop" onClick={triage('dismiss')}>
+                剔除
+              </button>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
