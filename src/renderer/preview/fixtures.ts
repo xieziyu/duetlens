@@ -283,6 +283,8 @@ export function installPreviewApi(): void {
   const asScanning = params.has('scan');
   // ?clean 零 finding:自查扫描结束「干净通过」的正向空态
   const asClean = params.has('clean');
+  // ?stream findings 逐条经事件流到达(复现流式插入内联卡时的重绘行为)
+  const asStream = params.has('stream');
   const review: Review = {
     ...REVIEW,
     ...(asGithub ? { source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null } : {}),
@@ -294,8 +296,8 @@ export function installPreviewApi(): void {
     viewedFiles: diff.length > 1 ? [diff[1].path] : diff.slice(0, 1).map((f) => f.path),
     lastActiveTab: null,
   };
-  const findings = asClean ? [] : FINDINGS.map((f) => ({ ...f }));
-  const discussions = asClean ? [] : DISCUSSIONS.map((d) => ({ ...d }));
+  const findings = asClean || asStream ? [] : FINDINGS.map((f) => ({ ...f }));
+  const discussions = asClean || asStream ? [] : DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const listeners = new Set<(e: ReviewEvent) => void>();
   const fire = (e: ReviewEvent) => {
@@ -312,6 +314,21 @@ export function installPreviewApi(): void {
     if (i >= 0) findings[i] = payload;
     fire({ reviewId: 'demo', type: 'finding', payload });
   };
+
+  // ?stream:挂载后逐条把 finding + 承载 discussion 经事件流推入(模拟机审流式上报)
+  if (asStream) {
+    FINDINGS.forEach((f, idx) => {
+      setTimeout(() => {
+        const disc = DISCUSSIONS.find((d) => d.id === f.discussionId);
+        if (disc) {
+          discussions.push(disc);
+          fire({ reviewId: 'demo', type: 'discussion', payload: disc });
+        }
+        findings.push({ ...f });
+        fire({ reviewId: 'demo', type: 'finding', payload: { ...f } });
+      }, 700 + idx * 650);
+    });
+  }
 
   const api: DuetlensApi = {
     getAppInfo: async () => ({
