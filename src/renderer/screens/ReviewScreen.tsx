@@ -26,6 +26,9 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 type RightTab = 'discussion' | 'findings' | 'summary';
 
+const RIGHT_TABS: RightTab[] = ['discussion', 'findings', 'summary'];
+const isRightTab = (t: string | null): t is RightTab => t !== null && RIGHT_TABS.includes(t as RightTab);
+
 const STATUS_LABEL: Record<string, string> = {
   scanning: '扫描中',
   reviewing: '审核中',
@@ -47,10 +50,8 @@ export function ReviewScreen({
 }) {
   const { review, findings, discussions, messages, diff, status, tokenUsage, lastTool, ensureMessages } =
     useReviewStream(reviewId);
-  // 布局 / tab / diff 视图 = 全局持久化偏好(后端 ui_settings);改动去抖写回。
+  // 布局 / diff 视图 = 全局持久化偏好(后端 ui_settings);改动去抖写回。
   const { settings, update } = useSettings();
-  const tab = settings.defaultTab;
-  const setTab = (t: RightTab) => update({ defaultTab: t });
   const [activePath, setActivePath] = useState<string | null>(null);
   const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
   // discussion 协同态:活跃线程 / 待发引用(框选追问带入)/ 正在等 agent 回复
@@ -66,8 +67,12 @@ export function ReviewScreen({
   const rightW = settings.rightWidth;
   const diffView = settings.defaultDiffView;
   const setDiffView = (v: DiffView) => update({ defaultDiffView: v });
-  // per-file 已看/折叠:per-review 持久化态(后端 review_ui_state),挂载拉取 + 去抖写回
-  const { viewed, collapsed, onToggleViewed, onToggleCollapsed } = useReviewUiState(reviewId);
+  // per-file 已看/折叠 + 最近 tab:per-review 持久化态(后端 review_ui_state),挂载拉取 + 去抖写回
+  const { viewed, collapsed, activeTab, onToggleViewed, onToggleCollapsed, setActiveTab } =
+    useReviewUiState(reviewId);
+  // tab 优先用该 review 记住的;无记忆时回落到全局默认偏好。切 tab 只写 per-review。
+  const tab: RightTab = isRightTab(activeTab) ? activeTab : settings.defaultTab;
+  const setTab = (t: RightTab) => setActiveTab(t);
 
   const focusFinding = (f: Finding) => {
     setActivePath(f.file);
@@ -223,13 +228,13 @@ export function ReviewScreen({
       if (helpOpen) return; // 帮助打开时不抢导航键
       if (e.key === '1') {
         e.preventDefault();
-        update({ defaultTab: 'discussion' });
+        setActiveTab('discussion');
       } else if (e.key === '2') {
         e.preventDefault();
-        update({ defaultTab: 'findings' });
+        setActiveTab('findings');
       } else if (e.key === '3') {
         e.preventDefault();
-        update({ defaultTab: 'summary' });
+        setActiveTab('summary');
       } else if (e.key === 'u') {
         e.preventDefault();
         update({ defaultDiffView: diffView === 'unified' ? 'split' : 'unified' });
@@ -237,7 +242,7 @@ export function ReviewScreen({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [helpOpen, diffView, update]);
+  }, [helpOpen, diffView, update, setActiveTab]);
 
   const pct = tokenUsage?.total ? Math.round((tokenUsage.used / tokenUsage.total) * 100) : null;
   // 常驻 CTA:github-pr → 提交 review(徽标=待提交数);其余 → 导出 review(徽标=保留数)
@@ -446,7 +451,7 @@ function RightPanel({
   return (
     <div className="right pane">
       <div className="tabs">
-        {(['discussion', 'findings', 'summary'] as RightTab[]).map((t) => (
+        {RIGHT_TABS.map((t) => (
           <button key={t} className={`tab${t === tab ? ' on' : ''}`} onClick={() => onTab(t)}>
             {t === 'discussion' ? 'Discussion' : t === 'findings' ? 'Findings' : 'Summary'}
             {t === 'discussion' && discussions.length > 0 && (
