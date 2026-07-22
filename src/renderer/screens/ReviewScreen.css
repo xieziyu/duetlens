@@ -4,6 +4,8 @@
   --right-w: 380px;
   display: grid;
   grid-template-rows: auto 1fr;
+  /* 显式约束单列为 minmax(0,1fr):否则隐式列取 max-content,窄窗口下被 rev-main 撑破 */
+  grid-template-columns: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
@@ -201,6 +203,8 @@
   display: grid;
   grid-template-columns: var(--left-w) 5px minmax(0, 1fr) 5px var(--right-w);
   min-height: 0;
+  /* grid item(rev-root 的行):不加会被自身宽内容(长代码行)撑破、把右栏顶出视口 */
+  min-width: 0;
 }
 .resizer {
   position: relative;
@@ -230,6 +234,7 @@
 }
 .pane {
   min-height: 0;
+  min-width: 0; /* 让 minmax(0,1fr) 中列真正可收缩,宽内容在 pane 内滚动而非撑破网格 */
   overflow: auto;
 }
 .pane::-webkit-scrollbar {
@@ -2539,4 +2544,46 @@ kbd {
   border-top: 1px solid var(--border-soft);
   font-size: 11px;
   color: var(--text-faint);
+}
+
+/* ---------- 窄窗口退化(桌面窗口可被拉窄:三栏 → 收窄侧栏 → 收起文件树)---------- */
+/* 中窄:侧栏按持久化宽度上限收窄给中间 diff 让位;顶栏减噪 */
+@media (max-width: 1120px) {
+  .rev-main {
+    grid-template-columns: min(var(--left-w), 208px) 5px minmax(0, 1fr) 5px min(var(--right-w), 340px);
+  }
+  .rev-topbar .tool {
+    display: none;
+  }
+  .rev-topbar .title {
+    max-width: 200px;
+  }
+  .rev-topbar .meta {
+    gap: 10px;
+  }
+}
+/* 窄:收起文件树(diff 已按文件全量堆叠,树仅作跳转),留 diff + 右栏两栏 */
+@media (max-width: 880px) {
+  .rev-main {
+    grid-template-columns: 0 0 minmax(0, 1fr) 5px min(var(--right-w), 300px);
+  }
+  .rev-main > .tree {
+    overflow: hidden;
+    border-right: 0;
+  }
+  .rev-main > :nth-child(2) {
+    pointer-events: none; /* tree|diff 间的 resizer 收起后不接管指针 */
+  }
+  /* 顶栏减噪:非关键 meta 收起,保留状态 / CTA / 主题 / ⌘;来源 ref 收窄省略 */
+  .rev-topbar .effort,
+  .rev-topbar .title,
+  .rev-topbar .model,
+  .rev-topbar .tokens {
+    display: none;
+  }
+  .rev-topbar .ref {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
