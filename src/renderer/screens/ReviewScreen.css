@@ -657,8 +657,9 @@
   user-select: none;
   position: relative;
 }
-/* gutter 锚点圆点:有 finding / 讨论的行(agent 天蓝 · human 琥珀),点击跳转 */
-.anchor {
+/* gutter 锚点圆点:有 finding / 讨论的行(agent 天蓝 · human 琥珀),点击跳转。
+   限定在 .code 内,避免泄漏到同名 class 的文本锚点(如 FindingRow 的 .fr-foot .anchor)。 */
+.code .anchor {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -669,13 +670,13 @@
   border: 2px solid var(--bg);
   cursor: pointer;
 }
-.anchor:hover {
+.code .anchor:hover {
   transform: translate(-50%, -50%) scale(1.25);
 }
-.anchor.agent {
+.code .anchor.agent {
   background: var(--agent);
 }
-.anchor.human {
+.code .anchor.human {
   background: var(--human);
 }
 /* split 视图无 gutter 列,圆点落在新侧行号格 */
