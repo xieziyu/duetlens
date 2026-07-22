@@ -226,6 +226,14 @@ export function ReviewScreen({
     },
     [reviewId],
   );
+  // DiffPane 展开 diff 外上下文时按需拉取文件新侧全文(读不到返回 null)
+  const fetchFileContent = useCallback(
+    (path: string) => {
+      if (!reviewId) return Promise.resolve(null);
+      return window.duetlens.review.fileContent(reviewId, path);
+    },
+    [reviewId],
+  );
 
   // diff 到达后默认选中首个文件
   useEffect(() => {
@@ -366,6 +374,7 @@ export function ReviewScreen({
           onAddFinding={onAddFinding}
           onJumpFinding={focusFinding}
           onJumpDiscussion={focusDiscussion}
+          fetchFileContent={fetchFileContent}
           view={diffView}
           onViewChange={setDiffView}
           viewed={viewed}

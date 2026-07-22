@@ -15,6 +15,15 @@ import type {
   ReviewPromptView,
 } from '@shared/prompt';
 
+/** 预览用 src/pipeline.ts 新侧全文(供展开 diff 外上下文自查);行 14–24 为 hunk 覆盖区。 */
+const PIPELINE_SRC =
+  Array.from({ length: 13 }, (_, i) => `// line ${i + 1} — imports & setup above the change`).join('\n') +
+  '\n' +
+  Array.from({ length: 11 }, (_, i) => `  /* hunk line ${i + 14} (covered by diff) */`).join('\n') +
+  '\n' +
+  Array.from({ length: 32 }, (_, i) => `  // line ${i + 25} — helpers & exports below the change`).join('\n') +
+  '\n';
+
 const RAW_DIFF = `diff --git a/src/pipeline.ts b/src/pipeline.ts
 index 1111111..2222222 100644
 --- a/src/pipeline.ts
@@ -361,6 +370,7 @@ export function installPreviewApi(): void {
       get: async () => review,
       findings: async () => findings,
       diff: async () => diff,
+      fileContent: async (_r, path) => (path === 'src/pipeline.ts' ? PIPELINE_SRC : null),
       discussions: async () => discussions,
       messages: async (discussionId) => msgStore[discussionId] ?? [],
       start: async () => review,

@@ -715,6 +715,40 @@
   color: var(--text-faint);
   margin-left: 14px;
 }
+/* diff 外上下文展开条(→ mockup .expander):整行可点,左侧图标框 + 文案 + 右侧行号范围 */
+.gap-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  background: color-mix(in oklab, var(--agent) 4%, var(--surface));
+  border-bottom: 1px solid var(--border-soft);
+  cursor: pointer;
+}
+.gap-bar:hover {
+  color: var(--agent-2);
+  background: var(--agent-soft);
+}
+.gap-ic {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--agent-2);
+}
+.gap-bar:hover .gap-ic {
+  border-color: var(--agent-line);
+}
+.gap-rng {
+  margin-left: auto;
+  color: var(--text-faint);
+}
 .code {
   font-family: var(--mono);
   font-size: 12.5px;

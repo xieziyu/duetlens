@@ -66,6 +66,8 @@ export class ReviewManager extends EventEmitter {
   private readonly sessions = new Map<string, ReviewSession>();
   /** source 等随会话存活的清理钩子;续问要读文件,故不在扫描结束时释放,延到 dispose。 */
   private readonly cleanups = new Map<string, () => void | Promise<void>>();
+  /** 活跃会话的内容 provider(读 diff / 文件新侧);供 DiffPane 展开上下文按审核时快照读文件。 */
+  private readonly providers = new Map<string, McpContentProviders>();
   private readonly maxLiveSessions: number;
   /** GitHub 提交层;可注入(spike 用假实现,不烧真 PR)。 */
   private readonly submitter: GitHubSubmitter;
@@ -135,6 +137,31 @@ export class ReviewManager extends EventEmitter {
   getDiff(reviewId: string): DiffFile[] {
     const raw = this.store.getRawDiff(reviewId);
     return raw ? parseUnifiedDiff(raw) : [];
+  }
+
+  /**
+   * 读被审文件新侧完整内容(DiffPane 展开 diff 外上下文)。
+   * 活跃会话在场时用其 source(读的是审核时快照);否则按持久化 target 临时重建 source 读一次。
+   */
+  async getFileContent(reviewId: string, filePath: string): Promise<string | null> {
+    const live = this.providers.get(reviewId);
+    if (live) {
+      this.touch(reviewId);
+      return live.getFile(filePath);
+    }
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    const source = createSource({
+      source: review.source,
+      ref: review.sourceRef,
+      repoPath: review.repoPath ?? '',
+    });
+    try {
+      await source.prepare();
+      return await source.getFile(filePath);
+    } finally {
+      await source.dispose();
+    }
   }
 
   /** 新建一条用户发起的、锚定代码位置的 discussion(不落 finding)。 */
@@ -385,6 +412,7 @@ export class ReviewManager extends EventEmitter {
     context?: string,
   ): void {
     const session = this.createSession(review.id, onDone);
+    this.providers.set(review.id, providers);
     // 不 await:扫描后台跑,调用方(IPC)立即返回。source 清理延到 dispose,续问仍能读文件。
     session
       .start({
@@ -412,10 +440,15 @@ export class ReviewManager extends EventEmitter {
     const prepared = await source.prepare();
     const { baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd });
     const session = this.createSession(reviewId, () => source.dispose());
+    const providers: McpContentProviders = {
+      getDiff: () => source.getDiff(),
+      getFile: (p) => source.getFile(p),
+    };
+    this.providers.set(reviewId, providers);
     try {
       await session.resume({
         cwd: prepared.cwd,
-        providers: { getDiff: () => source.getDiff(), getFile: (p) => source.getFile(p) },
+        providers,
         baseInstructions,
         model: review.model,
         reasoningEffort: review.reasoningEffort,
@@ -423,6 +456,7 @@ export class ReviewManager extends EventEmitter {
     } catch (e) {
       this.sessions.delete(reviewId);
       this.cleanups.delete(reviewId);
+      this.providers.delete(reviewId);
       await session.dispose();
       await source.dispose();
       throw e;
@@ -468,6 +502,7 @@ export class ReviewManager extends EventEmitter {
     const session = this.sessions.get(reviewId);
     if (!session) return;
     this.sessions.delete(reviewId);
+    this.providers.delete(reviewId);
     const cleanup = this.cleanups.get(reviewId);
     this.cleanups.delete(reviewId);
     await session.dispose();

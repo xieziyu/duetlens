@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DiffFile, DiffHunk, DiffLine } from '@shared/diff';
 import type { Discussion, Finding, Triage } from '@shared/domain';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
@@ -83,6 +83,8 @@ export interface DiffPaneProps {
   /** 点 gutter 圆点跳转:finding → 聚焦内联卡;user discussion → 切 Discussion 栏 */
   onJumpFinding?: (finding: Finding) => void;
   onJumpDiscussion?: (discussionId: string) => void;
+  /** 按需拉取文件新侧全文,用于展开 diff 外上下文;缺省则不显示展开控件(如预览)。 */
+  fetchFileContent?: (path: string) => Promise<string | null>;
   /** unified / split 视图(全局,file-header segmented 驱动) */
   view: DiffView;
   onViewChange: (v: DiffView) => void;
@@ -249,6 +251,7 @@ export function DiffPane(props: DiffPaneProps) {
           onUpdate={props.onUpdate}
           view={props.view}
           onViewChange={props.onViewChange}
+          fetchFileContent={props.fetchFileContent}
           viewed={props.viewed.has(f.path)}
           collapsed={props.collapsed.has(f.path)}
           onToggleViewed={() => props.onToggleViewed(f.path)}
@@ -330,6 +333,194 @@ function snippetOf(tr: HTMLElement): string {
   return (el?.textContent ?? '').trim().slice(0, 60);
 }
 
+/** 每次点「展开」揭示的行数(diff 外上下文);贴近改动逐块展开,超大间隙不一次性铺满。 */
+const CTX_CHUNK = 40;
+
+/** diff 未覆盖的隐藏区间(hunk 之间 / 首尾),供按需展开新侧上下文。 */
+interface Gap {
+  key: string;
+  side: 'lead' | 'mid' | 'trail';
+  /** 首个隐藏新侧行号 */
+  newFrom: number;
+  /** 末个隐藏新侧行号;trail 未知(取文件行数),先置 MAX 待拉全文后收敛 */
+  newTo: number;
+  /** oldLine = newLine + oldOffset(区间内不变) */
+  oldOffset: number;
+}
+
+/** 由 hunk 头推出各隐藏区间(首部 / hunk 间 / 尾部);行号信息足以定位,不需文件内容。 */
+function buildGaps(hunks: DiffHunk[]): { lead: Gap | null; between: (Gap | null)[]; trail: Gap | null } {
+  if (hunks.length === 0) return { lead: null, between: [], trail: null };
+  const first = hunks[0];
+  const lead: Gap | null =
+    first.newStart > 1
+      ? { key: 'lead', side: 'lead', newFrom: 1, newTo: first.newStart - 1, oldOffset: first.oldStart - first.newStart }
+      : null;
+  const between: (Gap | null)[] = [];
+  for (let i = 0; i < hunks.length - 1; i++) {
+    const a = hunks[i];
+    const b = hunks[i + 1];
+    const newFrom = a.newStart + a.newCount;
+    const newTo = b.newStart - 1;
+    between.push(
+      newFrom <= newTo
+        ? {
+            key: `mid-${i}`,
+            side: 'mid',
+            newFrom,
+            newTo,
+            oldOffset: a.oldStart + a.oldCount - (a.newStart + a.newCount),
+          }
+        : null,
+    );
+  }
+  const last = hunks[hunks.length - 1];
+  const trailFrom = last.newStart + last.newCount;
+  const trail: Gap = {
+    key: 'trail',
+    side: 'trail',
+    newFrom: trailFrom,
+    newTo: Number.MAX_SAFE_INTEGER,
+    oldOffset: last.oldStart + last.oldCount - (last.newStart + last.newCount),
+  };
+  return { lead, between, trail };
+}
+
+/** 由新侧行号构造一条 context 行(用于展开的 diff 外上下文)。 */
+function ctxLine(n: number, lines: string[], oldOffset: number): DiffLine {
+  return { kind: 'context', oldLine: n + oldOffset, newLine: n, text: lines[n - 1] ?? '' };
+}
+
+/** 一段 context 行的 code 表(复用 LineRow/SplitRow,故选区发起 discussion、锚点圆点均沿用)。 */
+function ContextTable({
+  lines,
+  view,
+  lang,
+  onAddThread,
+  anchorByLine,
+  onAnchorClick,
+}: {
+  lines: DiffLine[];
+  view: DiffView;
+  lang: string | null;
+  onAddThread?: (line: number, snippet: string) => void;
+  anchorByLine: Map<number, AnchorMark>;
+  onAnchorClick: (mark: AnchorMark) => void;
+}) {
+  return view === 'split' ? (
+    <table className="code split">
+      <tbody>
+        {lines.map((l, j) => (
+          <SplitRow
+            key={j}
+            row={{ left: l, right: l }}
+            lang={lang}
+            onAddThread={onAddThread}
+            anchorByLine={anchorByLine}
+            onAnchorClick={onAnchorClick}
+          />
+        ))}
+      </tbody>
+    </table>
+  ) : (
+    <table className="code unified">
+      <tbody>
+        {lines.map((l, j) => (
+          <LineRow
+            key={j}
+            line={l}
+            lang={lang}
+            onAddThread={onAddThread}
+            anchorByLine={anchorByLine}
+            onAnchorClick={onAnchorClick}
+          />
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** 展开条文案:按区间位置给方向词;超过一屏块时只说本次揭示的行数,否则说剩余全部。 */
+function gapLabel(side: Gap['side'], remaining: number | null): string {
+  if (remaining == null) return '展开下方未改动 · 至文件末尾'; // 尾部未拉全文,行数未知
+  const many = remaining > CTX_CHUNK;
+  const n = many ? CTX_CHUNK : remaining;
+  if (side === 'lead') return many ? `展开上方 ${n} 行` : `展开上方 ${n} 行未改动`;
+  if (side === 'trail') return many ? `展开下方 ${n} 行` : `展开下方 ${n} 行 · 至文件末尾`;
+  return many ? `展开 ${n} 行` : `展开 ${n} 行未改动`;
+}
+
+/**
+ * 隐藏区间的整行展开条(对齐 mockup .expander):贴近改动逐块揭示未改动上下文——首部向上、
+ * hunk 间与尾部向下。尾部在拉到全文前行数未知,只显方向;拉全文后若无剩余行(末改动即 EOF)则整条隐藏。
+ */
+function GapExpander({
+  gap,
+  view,
+  lang,
+  fileLines,
+  loading,
+  revealed,
+  onExpand,
+  onAddThread,
+  anchorByLine,
+  onAnchorClick,
+}: {
+  gap: Gap;
+  view: DiffView;
+  lang: string | null;
+  fileLines: string[] | null;
+  loading: boolean;
+  revealed: number;
+  onExpand: () => void;
+  onAddThread?: (line: number, snippet: string) => void;
+  anchorByLine: Map<number, AnchorMark>;
+  onAnchorClick: (mark: AnchorMark) => void;
+}) {
+  const bounded = gap.side !== 'trail' || fileLines != null;
+  const newTo = gap.side === 'trail' && fileLines ? fileLines.length : gap.newTo;
+  if (bounded && newTo < gap.newFrom) return null; // 尾部区间实为 EOF,无可展开
+  const total = bounded ? Math.max(0, newTo - gap.newFrom + 1) : null; // null = 尾部未知
+  const remaining = total == null ? null : Math.max(0, total - revealed);
+  const ctxProps = { view, lang, onAddThread, anchorByLine, onAnchorClick };
+
+  // 首部贴着下方 hunk 向上揭示(取区间末段);其余贴着上方 hunk 向下揭示(取区间首段)
+  const revealedLines =
+    fileLines && revealed > 0
+      ? gap.side === 'lead'
+        ? Array.from({ length: revealed }, (_, i) => ctxLine(newTo - revealed + 1 + i, fileLines, gap.oldOffset))
+        : Array.from({ length: revealed }, (_, i) => ctxLine(gap.newFrom + i, fileLines, gap.oldOffset))
+      : [];
+  const revealedTable = revealedLines.length > 0 ? <ContextTable lines={revealedLines} {...ctxProps} /> : null;
+
+  if (remaining === 0) return revealedTable; // 全部展开完,收起条
+
+  const hiddenFrom = gap.side === 'lead' ? gap.newFrom : gap.newFrom + revealed;
+  const hiddenTo = gap.side === 'lead' ? newTo - revealed : newTo;
+  const rng = remaining == null ? '' : hiddenFrom === hiddenTo ? `${hiddenFrom}` : `${hiddenFrom}–${hiddenTo}`;
+
+  const bar = (
+    <div className="gap-bar" title="展开未改动代码" onClick={loading ? undefined : onExpand}>
+      <span className="gap-ic">↕</span>
+      <span className="gap-label">{loading ? '载入中…' : gapLabel(gap.side, remaining)}</span>
+      {rng && <span className="gap-rng">{rng}</span>}
+    </div>
+  );
+
+  // 首部:条在上、揭示的行贴着下方 hunk;其余:揭示的行贴着上方 hunk、条在下
+  return gap.side === 'lead' ? (
+    <>
+      {bar}
+      {revealedTable}
+    </>
+  ) : (
+    <>
+      {revealedTable}
+      {bar}
+    </>
+  );
+}
+
 function DiffFileView({
   file,
   findings,
@@ -340,6 +531,7 @@ function DiffFileView({
   onUpdate,
   view,
   onViewChange,
+  fetchFileContent,
   viewed,
   collapsed,
   onToggleViewed,
@@ -359,6 +551,7 @@ function DiffFileView({
   onUpdate?: (input: FindingEditInput) => void;
   view: DiffView;
   onViewChange: (v: DiffView) => void;
+  fetchFileContent?: (path: string) => Promise<string | null>;
   viewed: boolean;
   collapsed: boolean;
   onToggleViewed: () => void;
@@ -402,6 +595,64 @@ function DiffFileView({
     arr.push(f);
     byLine.set(f.line, arr);
   }
+
+  // ---- diff 外上下文展开:按需拉文件新侧全文并缓存,记录各 gap 已展开的行数 ----
+  // 新增/删除文件整份即在 diff 里(无 diff 外上下文),不给展开控件以免留下点了无效的空条。
+  const canExpand =
+    !!fetchFileContent && !file.binary && file.status !== 'added' && file.status !== 'deleted';
+  const gaps = useMemo(() => buildGaps(file.hunks), [file.hunks]);
+  const [fileLines, setFileLines] = useState<string[] | null>(null);
+  const [loadingCtx, setLoadingCtx] = useState(false);
+  const [reveal, setReveal] = useState<Record<string, number>>({});
+
+  const ensureFile = useCallback(async (): Promise<string[] | null> => {
+    if (fileLines) return fileLines;
+    if (!fetchFileContent) return null;
+    setLoadingCtx(true);
+    try {
+      const raw = await fetchFileContent(file.path);
+      if (raw == null) return null;
+      const lines = raw.split('\n');
+      if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop(); // 去掉末换行 split 残留
+      setFileLines(lines);
+      return lines;
+    } catch {
+      return null;
+    } finally {
+      setLoadingCtx(false);
+    }
+  }, [fileLines, fetchFileContent, file.path]);
+
+  const expand = useCallback(
+    async (gap: Gap) => {
+      const lines = await ensureFile();
+      if (!lines) return;
+      setReveal((r) => {
+        const cur = r[gap.key] ?? 0;
+        const newTo = gap.side === 'trail' ? lines.length : gap.newTo;
+        const remaining = Math.max(0, newTo - gap.newFrom + 1 - cur);
+        if (remaining <= 0) return r;
+        return { ...r, [gap.key]: cur + Math.min(CTX_CHUNK, remaining) };
+      });
+    },
+    [ensureFile],
+  );
+
+  const gapNode = (gap: Gap | null) =>
+    gap && canExpand ? (
+      <GapExpander
+        gap={gap}
+        view={view}
+        lang={lang}
+        fileLines={fileLines}
+        loading={loadingCtx}
+        revealed={reveal[gap.key] ?? 0}
+        onExpand={() => expand(gap)}
+        onAddThread={onAddThread}
+        anchorByLine={anchorByLine}
+        onAnchorClick={onAnchorClick}
+      />
+    ) : null;
 
   const composeNode = compose ? (
     compose.mode === 'finding' ? (
@@ -494,23 +745,29 @@ function DiffFileView({
       ) : file.hunks.length === 0 ? (
         <div className="diff-note">无内容改动(仅重命名/模式变更)。</div>
       ) : (
-        file.hunks.map((h, i) => (
-          <HunkView
-            key={i}
-            hunk={h}
-            lang={lang}
-            byLine={byLine}
-            anchorByLine={anchorByLine}
-            onAnchorClick={onAnchorClick}
-            focusFindingId={focusFindingId}
-            view={view}
-            onTriage={onTriage}
-            onUpdate={onUpdate}
-            onAddThread={onAddThread}
-            composeLine={compose?.pick.placeLine ?? null}
-            composeNode={composeNode}
-          />
-        ))
+        <>
+          {gapNode(gaps.lead)}
+          {file.hunks.map((h, i) => (
+            <Fragment key={i}>
+              <HunkView
+                hunk={h}
+                lang={lang}
+                byLine={byLine}
+                anchorByLine={anchorByLine}
+                onAnchorClick={onAnchorClick}
+                focusFindingId={focusFindingId}
+                view={view}
+                onTriage={onTriage}
+                onUpdate={onUpdate}
+                onAddThread={onAddThread}
+                composeLine={compose?.pick.placeLine ?? null}
+                composeNode={composeNode}
+              />
+              {gapNode(gaps.between[i] ?? null)}
+            </Fragment>
+          ))}
+          {gapNode(gaps.trail)}
+        </>
       )}
     </section>
   );

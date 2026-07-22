@@ -34,6 +34,7 @@ export const IpcChannels = {
   reviewGet: 'review:get',
   reviewFindings: 'review:findings',
   reviewDiff: 'review:diff',
+  reviewFileContent: 'review:file-content',
   reviewStart: 'review:start',
   reviewStartDemo: 'review:start-demo',
   reviewResume: 'review:resume',
@@ -180,6 +181,8 @@ export interface DuetlensApi {
     findings(reviewId: string): Promise<Finding[]>;
     /** 本次改动的结构化 diff(DiffPane 渲染);未缓存返回空数组。 */
     diff(reviewId: string): Promise<DiffFile[]>;
+    /** 读被审文件新侧完整内容(供 DiffPane 展开 diff 外上下文);读不到返回 null。 */
+    fileContent(reviewId: string, path: string): Promise<string | null>;
     discussions(reviewId: string): Promise<Discussion[]>;
     messages(discussionId: string): Promise<Message[]>;
     /** 对真实 target 发起审核;立即返回 review,首轮扫描后台跑、findings 经事件流入。 */
