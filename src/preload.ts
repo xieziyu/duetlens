@@ -11,6 +11,7 @@ import type { UiSettings } from '@shared/domain';
 // 唯一暴露给 renderer 的桥;沿 contextIsolation 边界只透出白名单方法。
 const api: DuetlensApi = {
   getAppInfo: () => ipcRenderer.invoke(IpcChannels.appGetInfo),
+  checkEnvironment: (opts) => ipcRenderer.invoke(IpcChannels.appCheckEnvironment, opts),
   review: {
     list: () => ipcRenderer.invoke(IpcChannels.reviewList),
     listRecent: () => ipcRenderer.invoke(IpcChannels.reviewListRecent),

@@ -4,13 +4,14 @@ import { EntryScreen } from './screens/EntryScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { SubmitExportScreen } from './screens/SubmitExportScreen';
 import { PromptRulesScreen } from './screens/PromptRulesScreen';
+import { OnboardingScreen } from './screens/OnboardingScreen';
 import { Wordmark } from './components/Wordmark';
 import { ThemeControls } from './components/ThemeControls';
 import { CompletionToast } from './components/CompletionToast';
 import './App.css';
 
-// 骨架期极简屏路由;review 屏自带合并顶栏(brand + 源 + CTA + 主题 + ⌘),故此处不再套全局栏。
-type Screen = 'entry' | 'review' | 'submit' | 'prompt';
+// 骨架期极简屏路由;review / onboarding 屏自带顶栏,故此处不再套全局栏。
+type Screen = 'entry' | 'review' | 'submit' | 'prompt' | 'onboarding';
 
 const SCREENS: { id: Screen; label: string }[] = [
   { id: 'entry', label: '入口' },
@@ -56,10 +57,22 @@ export function App({
     };
   }, []);
 
+  // 首启环境门控:非 preview 冷启动时轻量自检,缺 codex 即落到 onboarding(健康态无感)。
+  useEffect(() => {
+    if (initialScreen != null || initialReviewId != null) return;
+    let alive = true;
+    void window.duetlens.checkEnvironment({ deep: false }).then((r) => {
+      if (alive && r.codex.status !== 'ok') setScreen('onboarding');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [initialScreen, initialReviewId]);
+
   return (
     <div className="app">
-      {/* review 屏自渲染合并顶栏;entry/submit 保留骨架期全局栏(含开发用屏切换) */}
-      {screen !== 'review' && (
+      {/* review / onboarding 屏自渲染顶栏;entry/submit 保留骨架期全局栏(含开发用屏切换) */}
+      {screen !== 'review' && screen !== 'onboarding' && (
         <header className="topbar">
           <Wordmark />
           <nav className="screen-nav">
@@ -91,6 +104,9 @@ export function App({
           <SubmitExportScreen reviewId={activeReviewId} onBack={() => setScreen('review')} />
         )}
         {screen === 'prompt' && <PromptRulesScreen onBack={() => setScreen('entry')} />}
+        {screen === 'onboarding' && (
+          <OnboardingScreen onEnter={() => setScreen('entry')} onSkip={() => setScreen('entry')} />
+        )}
       </main>
 
       {toast && (

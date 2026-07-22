@@ -12,6 +12,8 @@ import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
 import { loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
 import { createSource } from '../source/create-source';
+import { checkEnvironment } from '../env/environment-check';
+import type { EnvCheckOptions, EnvironmentReport } from '@shared/environment';
 import type { ReviewTarget } from '../source/source';
 import {
   checkGhAuth,
@@ -90,6 +92,11 @@ export class ReviewManager extends EventEmitter {
   /** 最近审核列表(附 finding/discussion/已提交计数);入口页展示用。 */
   listRecentReviews(): RecentReview[] {
     return this.store.listRecentReviews();
+  }
+
+  /** 首启环境自检(codex / app-server / gh);沿用本 manager 的 codexHome。 */
+  checkEnvironment(opts?: EnvCheckOptions): Promise<EnvironmentReport> {
+    return checkEnvironment({ codexHome: this.codexHome, deep: opts?.deep });
   }
 
   // ---- 入口发起页的来源发现(只读预检/列举,不进入 review 生命周期)----

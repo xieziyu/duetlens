@@ -18,6 +18,7 @@ import type { DiffFile } from './diff';
 import type { AgentEvent } from './agent-events';
 import type { GhReviewEvent } from './github-review';
 import type { PromptSaveInput, ReviewPromptView } from './prompt';
+import type { EnvCheckOptions, EnvironmentReport } from './environment';
 import type {
   GitButlerStatus,
   LocalBranchList,
@@ -29,6 +30,7 @@ import type {
 // ---- 请求/响应(ipcRenderer.invoke ↔ ipcMain.handle)----
 export const IpcChannels = {
   appGetInfo: 'app:get-info',
+  appCheckEnvironment: 'app:check-environment',
   reviewList: 'review:list',
   reviewListRecent: 'review:list-recent',
   reviewGet: 'review:get',
@@ -173,6 +175,8 @@ export type ReviewEvent =
 /** contextBridge 暴露到 renderer 的 API 形状。 */
 export interface DuetlensApi {
   getAppInfo(): Promise<AppInfo>;
+  /** 首启环境自检(codex / app-server / gh);deep=true 才做 app-server 连通深检。 */
+  checkEnvironment(opts?: EnvCheckOptions): Promise<EnvironmentReport>;
   review: {
     list(): Promise<Review[]>;
     /** 入口「最近的审核」:review 附带 finding/discussion/已提交计数。 */

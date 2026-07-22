@@ -13,6 +13,7 @@ import {
   type SubmitReviewInput,
 } from '@shared/ipc';
 import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
+import type { EnvCheckOptions } from '@shared/environment';
 import type { PromptSaveInput } from '@shared/prompt';
 import type { ReviewManager } from '../review/review-manager';
 
@@ -32,6 +33,10 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
     node: process.versions.node,
     platform: process.platform,
   }));
+
+  ipcMain.handle(IpcChannels.appCheckEnvironment, (_e, opts?: EnvCheckOptions) =>
+    manager.checkEnvironment(opts),
+  );
 
   ipcMain.handle(IpcChannels.reviewList, () => manager.listReviews());
   ipcMain.handle(IpcChannels.reviewListRecent, () => manager.listRecentReviews());

@@ -1,0 +1,346 @@
+/* 首启环境自检屏(← mockup/onboarding.html);全部选择器挂在 .onboarding 下,避免与别屏碰撞。 */
+.onboarding {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.ob-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 46px;
+  padding: 0 14px;
+  padding-left: 88px; /* 让开 macOS 交通灯 */
+  border-bottom: 1px solid var(--border-soft);
+  -webkit-app-region: drag;
+}
+.ob-topbar button,
+.ob-topbar select {
+  -webkit-app-region: no-drag;
+}
+.ob-spacer {
+  flex: 1;
+}
+
+.ob-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+}
+.ob-card {
+  width: 560px;
+  max-width: calc(100vw - 40px);
+  margin: auto;
+  padding: 40px 0 48px;
+}
+
+/* hero */
+.ob-hero {
+  text-align: center;
+  margin-bottom: 26px;
+  animation: ob-rise 0.4s both;
+}
+.ob-hero .ob-mk {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -1px;
+}
+.ob-hero .tag {
+  color: var(--text-dim);
+  font-size: 13.5px;
+  margin-top: 10px;
+}
+.ob-hero .sub {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* checklist */
+.ob-checks {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  animation: ob-rise 0.45s 0.05s both;
+}
+.ob-step {
+  border-top: 1px solid var(--border-soft);
+  padding: 15px 18px;
+}
+.ob-step:first-child {
+  border-top: 0;
+}
+.ob-step .srow {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.ob-step .ico {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.ob-step .smeta {
+  flex: 1;
+  min-width: 0;
+}
+.ob-step .smeta .nm {
+  font-weight: 600;
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ob-step .smeta .nm .opt {
+  font-size: 9.5px;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-weight: 400;
+}
+.ob-step .smeta .ds {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.ob-step .smeta .ds.detail {
+  margin-top: 5px;
+  color: var(--text-dim);
+}
+
+/* status chip */
+.onboarding .chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+}
+.onboarding .chip .d {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.onboarding .chip .sp {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--agent-line);
+  border-top-color: var(--agent);
+  border-radius: 50%;
+  animation: ob-spin 0.7s linear infinite;
+}
+.onboarding .chip.ok {
+  color: var(--add);
+  border-color: var(--add-gutter);
+  background: var(--add-bg);
+}
+.onboarding .chip.ok .d {
+  background: var(--add);
+}
+.onboarding .chip.warn {
+  color: var(--human);
+  border-color: var(--human-line);
+  background: var(--human-soft);
+}
+.onboarding .chip.warn .d {
+  background: var(--human);
+}
+.onboarding .chip.fail {
+  color: var(--del);
+  border-color: var(--del-gutter);
+  background: var(--del-bg);
+}
+.onboarding .chip.fail .d {
+  background: var(--del);
+}
+.onboarding .chip.wait {
+  color: var(--text-faint);
+}
+.onboarding .chip.wait .d {
+  background: var(--text-faint);
+}
+.onboarding .chip.checking {
+  color: var(--agent-2);
+  border-color: var(--agent-line);
+  background: var(--agent-soft);
+}
+
+/* fix panel */
+.ob-fix {
+  margin-top: 13px;
+  padding: 13px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.ob-fix.warn {
+  border-color: var(--human-line);
+}
+.ob-fix.fail {
+  border-color: var(--del-gutter);
+}
+.ob-fix .ft {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 9px;
+  line-height: 1.55;
+}
+.ob-fix .cmd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 12px;
+}
+.ob-fix .cmd .p {
+  color: var(--add);
+  font-size: 12px;
+  flex: none;
+}
+.ob-fix .cmd code {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: auto;
+}
+.ob-fix .cmd .copy {
+  flex: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 7px;
+  padding: 4px 11px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ob-fix .cmd .copy:hover {
+  border-color: var(--agent-line);
+  color: var(--text);
+}
+.ob-fix .cmd .copy.done {
+  color: var(--add);
+  border-color: var(--add-gutter);
+}
+.ob-fix .acts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 11px;
+}
+.ob-fix .lbtn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 13px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ob-fix .lbtn:hover:not(:disabled) {
+  border-color: var(--agent-line);
+}
+.ob-fix .lbtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ob-fix .lnk {
+  color: var(--agent-2);
+  font-size: 11.5px;
+  text-decoration: none;
+  margin-left: auto;
+}
+.ob-fix .lnk:hover {
+  text-decoration: underline;
+}
+
+/* footer CTA */
+.ob-foot {
+  margin-top: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: ob-rise 0.5s 0.1s both;
+}
+.ob-cta {
+  width: 100%;
+  background: var(--accent-solid);
+  color: var(--on-solid);
+  font-weight: 600;
+  border: 0;
+  border-radius: 12px;
+  padding: 13px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.ob-cta:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.ob-cta:disabled {
+  background: var(--surface-3);
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+.ob-foot .hint {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-align: center;
+  line-height: 1.6;
+  min-height: 16px;
+}
+.ob-foot .later {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ob-foot .later:hover {
+  color: var(--text);
+}
+
+@keyframes ob-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ob-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,7 +1,7 @@
 // duet(text) + lens(天蓝) + _(琥珀闪烁);样式在 App.css .wordmark(全局加载)。
-export function Wordmark() {
+export function Wordmark({ className }: { className?: string } = {}) {
   return (
-    <span className="wordmark mono">
+    <span className={className ? `wordmark mono ${className}` : 'wordmark mono'}>
       duet<i>lens</i>
       <span className="cur">_</span>
     </span>

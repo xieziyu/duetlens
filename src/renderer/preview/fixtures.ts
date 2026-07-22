@@ -359,11 +359,23 @@ export function installPreviewApi(): void {
     getAppInfo: async () => ({
       name: 'Duetlens (preview)',
       version: '2.0.0-dev',
-      electron: '—',
-      chrome: '—',
-      node: '—',
+      electron: '34.0.0',
+      chrome: '132.0',
+      node: '20.18',
       platform: 'darwin',
     }),
+    // onboarding 自查:?ob=no-codex|gh-out|ready(缺省 ready);略延时以看 checking 态
+    checkEnvironment: async () => {
+      await new Promise((r) => setTimeout(r, 500));
+      const ob = params.get('ob') ?? 'ready';
+      if (ob === 'no-codex') {
+        return { codex: { status: 'missing', version: null }, appServer: { status: 'skipped', error: null }, gh: { status: 'ok', user: 'xieziyu' } };
+      }
+      if (ob === 'gh-out') {
+        return { codex: { status: 'ok', version: '0.144.5' }, appServer: { status: 'ok', error: null }, gh: { status: 'missing', user: null } };
+      }
+      return { codex: { status: 'ok', version: '0.144.5' }, appServer: { status: 'ok', error: null }, gh: { status: 'ok', user: 'xieziyu' } };
+    },
     review: {
       list: async () => [review],
       listRecent: async () => (params.has('empty') ? [] : RECENT_REVIEWS),
