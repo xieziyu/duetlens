@@ -16,6 +16,10 @@ export interface ReviewStreamState {
   lastTool: string | null;
   /** 懒加载一条 discussion 的历史消息(续接的旧 review);实时消息仍走事件流。 */
   ensureMessages: (discussionId: string) => void;
+  /** 乐观插入一条本地 user 消息(立即上屏),权威 message 事件到达时按文本去重替换;返回临时 id。 */
+  addPendingMessage: (discussionId: string, text: string) => string;
+  /** 移除一条消息(发送失败时清理乐观占位)。 */
+  dropMessage: (discussionId: string, id: string) => void;
 }
 
 /**
@@ -51,6 +55,22 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     },
     [reviewId],
   );
+
+  const pendingSeq = useRef(0);
+  const addPendingMessage = useCallback((discussionId: string, text: string): string => {
+    const id = `pending-${pendingSeq.current++}`;
+    const msg: Message = { id, discussionId, role: 'user', text, createdAt: Date.now() };
+    setMessages((prev) => ({ ...prev, [discussionId]: [...(prev[discussionId] ?? []), msg] }));
+    return id;
+  }, []);
+
+  const dropMessage = useCallback((discussionId: string, id: string) => {
+    setMessages((prev) => {
+      const bucket = prev[discussionId];
+      if (!bucket) return prev;
+      return { ...prev, [discussionId]: bucket.filter((m) => m.id !== id) };
+    });
+  }, []);
 
   useEffect(() => {
     if (!reviewId) return;
@@ -94,7 +114,12 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
         setMessages((prev) => {
           const bucket = prev[m.discussionId] ?? [];
           if (bucket.some((x) => x.id === m.id)) return prev;
-          return { ...prev, [m.discussionId]: [...bucket, m] };
+          // 权威 user 消息到达:替换掉同文本的乐观占位(pending-*),避免重复
+          const cleaned =
+            m.role === 'user'
+              ? bucket.filter((x) => !(x.id.startsWith('pending-') && x.text === m.text))
+              : bucket;
+          return { ...prev, [m.discussionId]: [...cleaned, m] };
         });
       } else if (e.type === 'messages-cleared') {
         setMessages((prev) => (prev[e.discussionId] ? { ...prev, [e.discussionId]: [] } : prev));
@@ -116,5 +141,17 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     };
   }, [reviewId]);
 
-  return { review, findings, discussions, diff, messages, status, tokenUsage, lastTool, ensureMessages };
+  return {
+    review,
+    findings,
+    discussions,
+    diff,
+    messages,
+    status,
+    tokenUsage,
+    lastTool,
+    ensureMessages,
+    addPendingMessage,
+    dropMessage,
+  };
 }

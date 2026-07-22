@@ -47,8 +47,19 @@ export function ReviewScreen({
   /** 外部(通知点击)请求定位到某条 discussion;nonce 保证同一线程可重触发 */
   focusRequest?: { id: string; nonce: number } | null;
 }) {
-  const { review, findings, discussions, messages, diff, status, tokenUsage, lastTool, ensureMessages } =
-    useReviewStream(reviewId);
+  const {
+    review,
+    findings,
+    discussions,
+    messages,
+    diff,
+    status,
+    tokenUsage,
+    lastTool,
+    ensureMessages,
+    addPendingMessage,
+    dropMessage,
+  } = useReviewStream(reviewId);
   // 布局 / diff 视图 = 全局持久化偏好(后端 ui_settings);改动去抖写回。
   const { settings, update } = useSettings();
   const [activePath, setActivePath] = useState<string | null>(null);
@@ -90,18 +101,22 @@ export function ReviewScreen({
     if (f) setFocusFindingId(f.id);
   };
 
-  // 向某条 discussion 追问:落库经事件回推消息,期间显示 agent 打字指示。
+  // 向某条 discussion 追问:先乐观上屏 user 气泡再显打字指示(否则 IPC/续接延迟会让「回复中」抢先出现),
+  // 落库后权威 message 事件替换乐观占位;发送失败则清理占位。
   const runSend = useCallback(
     async (discussionId: string, text: string) => {
       if (!reviewId) return;
+      const pendingId = addPendingMessage(discussionId, text);
       setAwaitingReply(discussionId);
       try {
         await window.duetlens.review.sendMessage(reviewId, discussionId, text);
+      } catch {
+        dropMessage(discussionId, pendingId);
       } finally {
         setAwaitingReply((cur) => (cur === discussionId ? null : cur));
       }
     },
-    [reviewId],
+    [reviewId, addPendingMessage, dropMessage],
   );
 
   // 框选 / 行内 ＋ 发起 discussion:先建 user discussion(事件回推),再发出首问。
