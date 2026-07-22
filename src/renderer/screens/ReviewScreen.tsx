@@ -38,9 +38,12 @@ const STATUS_LABEL: Record<string, string> = {
 export function ReviewScreen({
   reviewId,
   onOpenSubmit,
+  focusRequest,
 }: {
   reviewId: string | null;
   onOpenSubmit?: () => void;
+  /** 外部(通知点击)请求定位到某条 discussion;nonce 保证同一线程可重触发 */
+  focusRequest?: { id: string; nonce: number } | null;
 }) {
   const { review, findings, discussions, messages, diff, status, tokenUsage, lastTool, ensureMessages } =
     useReviewStream(reviewId);
@@ -195,6 +198,11 @@ export function ReviewScreen({
   useEffect(() => {
     if (!activePath && diff.length > 0) setActivePath(diff[0].path);
   }, [diff, activePath]);
+
+  // 通知点击带 discussionId 时定位到该线程(切 Discussion 栏);nonce 变化即重触发。
+  useEffect(() => {
+    if (focusRequest) focusDiscussion(focusRequest.id);
+  }, [focusRequest]);
 
   // 全局导航快捷键(→ mockup #kbdHelp):? 帮助 / 1-3 切 tab / u 切 diff / Esc 关闭。
   // 焦点在输入框或按住修饰键时让位;编辑/发送的 ⌘↵·Esc·↵ 由各 composer/编辑器自理。

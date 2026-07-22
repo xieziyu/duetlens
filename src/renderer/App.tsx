@@ -27,11 +27,14 @@ export function App({
   const [screen, setScreen] = useState<Screen>(initialScreen ?? (initialReviewId ? 'review' : 'entry'));
   const [activeReviewId, setActiveReviewId] = useState<string | null>(initialReviewId);
   const [toast, setToast] = useState<CompletionNotice | null>(null);
+  // 通知点击带来的定位目标:每次请求换一个 nonce,使 ReviewScreen 即便同一 discussion 也能重触发聚焦
+  const [focusDiscussion, setFocusDiscussion] = useState<{ id: string; nonce: number } | null>(null);
 
-  const openReview = (id: string) => {
+  const openReview = (id: string, discussionId?: string) => {
     setActiveReviewId(id);
     setScreen('review');
     setToast(null);
+    if (discussionId) setFocusDiscussion({ id: discussionId, nonce: Date.now() });
   };
 
   // 通知点击「聚焦+定位」挂在常驻的 App:onOpenReview 打开 review;onInApp 弹轻提示。
@@ -41,7 +44,7 @@ export function App({
   useEffect(() => {
     const n = window.duetlens.notifications;
     if (!n) return;
-    const offOpen = n.onOpenReview(({ reviewId }) => openReview(reviewId));
+    const offOpen = n.onOpenReview(({ reviewId, discussionId }) => openReview(reviewId, discussionId));
     const offInApp = n.onInApp((notice) => {
       const v = viewing.current;
       if (v.screen === 'review' && v.reviewId === notice.reviewId) return; // 正看着就不打扰
@@ -78,7 +81,11 @@ export function App({
       <main className="screen-host">
         {screen === 'entry' && <EntryScreen onOpenReview={openReview} />}
         {screen === 'review' && (
-          <ReviewScreen reviewId={activeReviewId} onOpenSubmit={() => setScreen('submit')} />
+          <ReviewScreen
+            reviewId={activeReviewId}
+            onOpenSubmit={() => setScreen('submit')}
+            focusRequest={focusDiscussion}
+          />
         )}
         {screen === 'submit' && (
           <SubmitExportScreen reviewId={activeReviewId} onBack={() => setScreen('review')} />
@@ -89,7 +96,7 @@ export function App({
       {toast && (
         <CompletionToast
           notice={toast}
-          onOpen={openReview}
+          onOpen={(id) => openReview(id, toast.discussionId)}
           onDismiss={() => setToast(null)}
         />
       )}

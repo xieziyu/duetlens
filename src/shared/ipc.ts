@@ -119,6 +119,8 @@ export interface CompletionNotice {
   kind: 'scan-done' | 'reply';
   title: string;
   body: string;
+  /** 追问回复所属的 discussion;点击通知时用于定位到具体线程(scan-done 无) */
+  discussionId?: string;
 }
 
 export interface AppInfo {
@@ -184,8 +186,8 @@ export interface DuetlensApi {
     onEvent(handler: (e: ReviewEvent) => void): () => void;
   };
   notifications: {
-    /** 原生完成通知被点击 → 打开对应 review;返回取消订阅函数。 */
-    onOpenReview(handler: (payload: { reviewId: string }) => void): () => void;
+    /** 原生完成通知被点击 → 打开对应 review(reply 通知带 discussionId,可定位线程);返回取消订阅函数。 */
+    onOpenReview(handler: (payload: { reviewId: string; discussionId?: string }) => void): () => void;
     /** 窗口聚焦时的应用内轻提示(扫描完成/追问回复);返回取消订阅函数。 */
     onInApp(handler: (notice: CompletionNotice) => void): () => void;
   };

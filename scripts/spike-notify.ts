@@ -29,10 +29,10 @@ function harness(opts: { focused?: boolean; enabled?: boolean } = {}) {
 
 const statusEvent = (reviewId: string, payload: ReviewEvent['payload'] & string): ReviewEvent =>
   ({ reviewId, type: 'status', payload }) as ReviewEvent;
-const agentMsg = (reviewId: string): ReviewEvent => ({
+const agentMsg = (reviewId: string, discussionId = 'd1'): ReviewEvent => ({
   reviewId,
   type: 'message',
-  payload: { role: 'agent', text: 'reply' } as Message,
+  payload: { role: 'agent', text: 'reply', discussionId } as Message,
 });
 const userMsg = (reviewId: string): ReviewEvent => ({
   reviewId,
@@ -66,18 +66,29 @@ function main() {
     log('扫描完成失焦:原生通知 + 每 review 去重 ok');
   }
 
-  // 3) 追问回复:失焦走原生,聚焦走应用内
+  // 3) 追问回复:失焦走原生,聚焦走应用内;reply 通知带 discussionId 供定位线程
   {
     const h = harness({ focused: false });
-    h.notify(agentMsg('r1'));
+    h.notify(agentMsg('r1', 'disc-7'));
     assert.equal(h.native.length, 1);
     assert.equal(h.native[0].kind, 'reply');
+    assert.equal(h.native[0].discussionId, 'disc-7');
     h.state.focused = true;
-    h.notify(agentMsg('r1'));
+    h.notify(agentMsg('r1', 'disc-7'));
     assert.equal(h.native.length, 1);
     assert.equal(h.inApp.length, 1);
     assert.equal(h.inApp[0].kind, 'reply');
-    log('追问回复:失焦原生 / 聚焦应用内 ok');
+    assert.equal(h.inApp[0].discussionId, 'disc-7');
+    log('追问回复:失焦原生 / 聚焦应用内 · 带 discussionId ok');
+  }
+
+  // 3b) 扫描完成通知不带 discussionId(无所属线程)
+  {
+    const h = harness({ focused: false });
+    h.notify(statusEvent('r1', 'reviewing'));
+    assert.equal(h.native[0].kind, 'scan-done');
+    assert.equal(h.native[0].discussionId, undefined);
+    log('扫描完成:无 discussionId ok');
   }
 
   // 4) 非完成信号不提示:scanning / failed / user 消息

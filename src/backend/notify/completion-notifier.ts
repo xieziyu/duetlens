@@ -42,6 +42,7 @@ export function createCompletionNotifier(deps: CompletionNotifierDeps): (e: Revi
         kind: 'reply',
         title: 'codex 回复',
         body: `${deps.reviewLabel(e.reviewId)} · 追问有新回复`,
+        discussionId: e.payload.discussionId,
       };
     }
     if (!notice) return;

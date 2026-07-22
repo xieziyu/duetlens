@@ -51,7 +51,10 @@ function notifyNative(notice: CompletionNotice): void {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
-    mainWindow.webContents.send(IpcEvents.notifyOpenReview, { reviewId: notice.reviewId });
+    mainWindow.webContents.send(IpcEvents.notifyOpenReview, {
+      reviewId: notice.reviewId,
+      discussionId: notice.discussionId,
+    });
   });
   n.show();
 }

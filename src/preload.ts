@@ -48,8 +48,9 @@ const api: DuetlensApi = {
     },
   },
   notifications: {
-    onOpenReview: (handler: (payload: { reviewId: string }) => void) => {
-      const listener = (_e: IpcRendererEvent, payload: { reviewId: string }) => handler(payload);
+    onOpenReview: (handler: (payload: { reviewId: string; discussionId?: string }) => void) => {
+      const listener = (_e: IpcRendererEvent, payload: { reviewId: string; discussionId?: string }) =>
+        handler(payload);
       ipcRenderer.on(IpcEvents.notifyOpenReview, listener);
       return () => ipcRenderer.off(IpcEvents.notifyOpenReview, listener);
     },
