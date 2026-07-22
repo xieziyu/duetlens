@@ -18,11 +18,19 @@ import type { DiffFile } from './diff';
 import type { AgentEvent } from './agent-events';
 import type { GhReviewEvent } from './github-review';
 import type { PromptSaveInput, ReviewPromptView } from './prompt';
+import type {
+  GitButlerStatus,
+  LocalBranchList,
+  PrPreview,
+  PrSummary,
+  RepoRemoteInfo,
+} from './source-discovery';
 
 // ---- 请求/响应(ipcRenderer.invoke ↔ ipcMain.handle)----
 export const IpcChannels = {
   appGetInfo: 'app:get-info',
   reviewList: 'review:list',
+  reviewListRecent: 'review:list-recent',
   reviewGet: 'review:get',
   reviewFindings: 'review:findings',
   reviewDiff: 'review:diff',
@@ -46,6 +54,12 @@ export const IpcChannels = {
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
   agentListModels: 'agent:list-models',
+  sourceCheckGhAuth: 'source:check-gh-auth',
+  sourcePreviewPr: 'source:preview-pr',
+  sourceListOpenPrs: 'source:list-open-prs',
+  sourceGetRepoRemote: 'source:get-repo-remote',
+  sourceListLocalBranches: 'source:list-local-branches',
+  sourceDetectGitButler: 'source:detect-gitbutler',
   promptGet: 'prompt:get',
   promptSave: 'prompt:save',
   dialogPickDirectory: 'dialog:pick-directory',
@@ -64,6 +78,16 @@ export interface ReviewStartInput {
   model?: string;
   /** reasoning effort(缺省 codex medium) */
   reasoningEffort?: ReasoningEffort;
+  /** 用户给 agent 的附加上下文,随首轮机审注入(可选) */
+  context?: string;
+}
+
+/** 入口「最近的审核」列表项:review 附带 finding/discussion/已提交计数(展示用)。 */
+export interface RecentReview extends Review {
+  findingCount: number;
+  /** 用户发起的 discussion 数(不含 finding 承载的 discussion) */
+  discussionCount: number;
+  submittedCount: number;
 }
 
 /** 用户就地编辑一条 finding 的可编辑字段(缺省字段不改;suggestion 传 null 清空)。 */
@@ -148,6 +172,8 @@ export interface DuetlensApi {
   getAppInfo(): Promise<AppInfo>;
   review: {
     list(): Promise<Review[]>;
+    /** 入口「最近的审核」:review 附带 finding/discussion/已提交计数。 */
+    listRecent(): Promise<RecentReview[]>;
     get(id: string): Promise<Review | null>;
     findings(reviewId: string): Promise<Finding[]>;
     /** 本次改动的结构化 diff(DiffPane 渲染);未缓存返回空数组。 */
@@ -200,6 +226,21 @@ export interface DuetlensApi {
   agent: {
     /** 列举账号可用的 codex 模型(供发起表单下拉);未登录/出错时抛错,前端降级为手填。 */
     listModels(): Promise<CodexModelInfo[]>;
+  };
+  /** 入口发起页的来源发现(三来源的预检/列举);均只读、不进入 review 生命周期。 */
+  source: {
+    /** 检测 gh CLI 是否已登录(github-pr 来源拉 diff/回写 review 依赖它)。 */
+    checkGhAuth(): Promise<boolean>;
+    /** 解析单个 PR 预览;ref 缺 owner/repo 时用 repoPath 推断。失败抛错(前端展示解析失败态)。 */
+    previewPr(ref: string, repoPath?: string): Promise<PrPreview>;
+    /** 列举某仓库最近的 open PR(nwo 或本地仓库路径二选一)。 */
+    listOpenPrs(opts: { nwo?: string; repoPath?: string }): Promise<PrSummary[]>;
+    /** 读某本地目录的 remote 归属(nameWithOwner);用于 PR 本地路径 remote-匹配校验。 */
+    getRepoRemote(repoPath: string): Promise<RepoRemoteInfo>;
+    /** 列举本地分支(相对 base 领先若干 commit)+ base 候选。 */
+    listLocalBranches(repoPath: string, baseRef?: string): Promise<LocalBranchList>;
+    /** 探测目录是否 GitButler workspace 并列举其虚拟分支。 */
+    detectGitButler(repoPath: string): Promise<GitButlerStatus>;
   };
   prompt: {
     /** 读三层审核规则(project 需仓库 cwd,缺省则只有 global+builtin)。 */

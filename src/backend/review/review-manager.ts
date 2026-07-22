@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { CodexModelInfo, Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { AddFindingInput, FindingEditInput, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, FindingEditInput, RecentReview, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, isSubmittable } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
@@ -13,8 +13,30 @@ import { CodexAgent } from '../agent/codex/codex-agent';
 import { loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
 import { createSource } from '../source/create-source';
 import type { ReviewTarget } from '../source/source';
+import {
+  checkGhAuth,
+  detectGitButler,
+  getRepoRemote,
+  listLocalBranches,
+  listOpenPrs,
+  previewPr,
+} from '../source/source-discovery';
+import type {
+  GitButlerStatus,
+  LocalBranchList,
+  PrPreview,
+  PrSummary,
+  RepoRemoteInfo,
+} from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
-import { ReviewSession } from './review-session';
+import { DEFAULT_SCAN_PROMPT, ReviewSession } from './review-session';
+
+/** 首轮扫描指令:有附加上下文时拼在缺省指令之后一并注入,否则用缺省。 */
+function buildScanPrompt(context?: string): string | undefined {
+  const ctx = context?.trim();
+  if (!ctx) return undefined;
+  return `${DEFAULT_SCAN_PROMPT}\n\n用户附加上下文(审核时一并考虑):\n${ctx}`;
+}
 
 // 演示用内置 fixture(source 层接好前,让 app 能端到端跑一遍真实审核)。
 const DEMO_FILE = 'src/login.js';
@@ -61,6 +83,36 @@ export class ReviewManager extends EventEmitter {
 
   listReviews(): Review[] {
     return this.store.listReviews();
+  }
+
+  /** 最近审核列表(附 finding/discussion/已提交计数);入口页展示用。 */
+  listRecentReviews(): RecentReview[] {
+    return this.store.listRecentReviews();
+  }
+
+  // ---- 入口发起页的来源发现(只读预检/列举,不进入 review 生命周期)----
+  checkGhAuth(): Promise<boolean> {
+    return checkGhAuth();
+  }
+
+  previewPr(ref: string, repoPath?: string): Promise<PrPreview> {
+    return previewPr(ref, repoPath);
+  }
+
+  listOpenPrs(opts: { nwo?: string; repoPath?: string }): Promise<PrSummary[]> {
+    return listOpenPrs(opts);
+  }
+
+  getRepoRemote(repoPath: string): Promise<RepoRemoteInfo> {
+    return getRepoRemote(repoPath);
+  }
+
+  listLocalBranches(repoPath: string, baseRef?: string): Promise<LocalBranchList> {
+    return listLocalBranches(repoPath, baseRef);
+  }
+
+  detectGitButler(repoPath: string): Promise<GitButlerStatus> {
+    return detectGitButler(repoPath);
   }
 
   getReview(id: string): Review | null {
@@ -295,7 +347,7 @@ export class ReviewManager extends EventEmitter {
     this.launch(review, prepared.cwd, {
       getDiff: () => rawDiff,
       getFile: (p) => source.getFile(p),
-    }, () => source.dispose(), baseInstructions);
+    }, () => source.dispose(), baseInstructions, target.context);
     return review;
   }
 
@@ -324,6 +376,7 @@ export class ReviewManager extends EventEmitter {
     providers: McpContentProviders,
     onDone?: () => void | Promise<void>,
     baseInstructions?: string,
+    context?: string,
   ): void {
     const session = this.createSession(review.id, onDone);
     // 不 await:扫描后台跑,调用方(IPC)立即返回。source 清理延到 dispose,续问仍能读文件。
@@ -332,6 +385,7 @@ export class ReviewManager extends EventEmitter {
         cwd,
         providers,
         baseInstructions,
+        scanPrompt: buildScanPrompt(context),
         model: review.model,
         reasoningEffort: review.reasoningEffort,
       })

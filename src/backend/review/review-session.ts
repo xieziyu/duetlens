@@ -16,6 +16,9 @@ import type { AgentEvent, ConversationalAgent } from '../agent/conversational-ag
 import type { ReviewStore } from '../db/review-store';
 import { BUILTIN_BASE_INSTRUCTIONS } from '../prompt/review-prompt';
 
+/** 首轮机审的缺省指令(未附加用户上下文时使用)。 */
+export const DEFAULT_SCAN_PROMPT = '请审核本次改动,对每个问题调用 report_finding 上报。';
+
 export interface StartReviewOptions {
   cwd: string;
   providers: McpContentProviders;
@@ -68,9 +71,7 @@ export class ReviewSession extends EventEmitter {
     this.store.setCodexThreadId(this.reviewId, handle.conversationId);
     this.setStatus('scanning');
 
-    const outcome = await this.runTurn(
-      opts.scanPrompt ?? '请审核本次改动,对每个问题调用 report_finding 上报。',
-    );
+    const outcome = await this.runTurn(opts.scanPrompt ?? DEFAULT_SCAN_PROMPT);
     if (!outcome.ok) {
       this.setStatus('failed');
       throw new Error(`首轮扫描失败: ${outcome.error}`);

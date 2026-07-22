@@ -34,6 +34,7 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   }));
 
   ipcMain.handle(IpcChannels.reviewList, () => manager.listReviews());
+  ipcMain.handle(IpcChannels.reviewListRecent, () => manager.listRecentReviews());
   ipcMain.handle(IpcChannels.reviewGet, (_e, id: string) => manager.getReview(id));
   ipcMain.handle(IpcChannels.reviewFindings, (_e, reviewId: string) => manager.getFindings(reviewId));
   ipcMain.handle(IpcChannels.reviewDiff, (_e, reviewId: string) => manager.getDiff(reviewId));
@@ -47,6 +48,7 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
       baseRef: input.baseRef,
       model: input.model,
       reasoningEffort: input.reasoningEffort,
+      context: input.context,
     }),
   );
   ipcMain.handle(IpcChannels.reviewStartDemo, () => manager.startDemoReview());
@@ -90,6 +92,23 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.uiSaveSettings, (_e, settings: UiSettings) => manager.saveUiSettings(settings));
 
   ipcMain.handle(IpcChannels.agentListModels, () => manager.listModels());
+
+  ipcMain.handle(IpcChannels.sourceCheckGhAuth, () => manager.checkGhAuth());
+  ipcMain.handle(IpcChannels.sourcePreviewPr, (_e, ref: string, repoPath?: string) =>
+    manager.previewPr(ref, repoPath),
+  );
+  ipcMain.handle(IpcChannels.sourceListOpenPrs, (_e, opts: { nwo?: string; repoPath?: string }) =>
+    manager.listOpenPrs(opts),
+  );
+  ipcMain.handle(IpcChannels.sourceGetRepoRemote, (_e, repoPath: string) =>
+    manager.getRepoRemote(repoPath),
+  );
+  ipcMain.handle(IpcChannels.sourceListLocalBranches, (_e, repoPath: string, baseRef?: string) =>
+    manager.listLocalBranches(repoPath, baseRef),
+  );
+  ipcMain.handle(IpcChannels.sourceDetectGitButler, (_e, repoPath: string) =>
+    manager.detectGitButler(repoPath),
+  );
 
   ipcMain.handle(IpcChannels.promptGet, (_e, cwd?: string) => manager.getReviewPrompt(cwd));
   ipcMain.handle(IpcChannels.promptSave, (_e, input: PromptSaveInput) => manager.saveReviewPrompt(input));

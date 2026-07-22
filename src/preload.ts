@@ -13,6 +13,7 @@ const api: DuetlensApi = {
   getAppInfo: () => ipcRenderer.invoke(IpcChannels.appGetInfo),
   review: {
     list: () => ipcRenderer.invoke(IpcChannels.reviewList),
+    listRecent: () => ipcRenderer.invoke(IpcChannels.reviewListRecent),
     get: (id) => ipcRenderer.invoke(IpcChannels.reviewGet, id),
     findings: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewFindings, reviewId),
     diff: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewDiff, reviewId),
@@ -66,6 +67,15 @@ const api: DuetlensApi = {
   },
   agent: {
     listModels: () => ipcRenderer.invoke(IpcChannels.agentListModels),
+  },
+  source: {
+    checkGhAuth: () => ipcRenderer.invoke(IpcChannels.sourceCheckGhAuth),
+    previewPr: (ref, repoPath) => ipcRenderer.invoke(IpcChannels.sourcePreviewPr, ref, repoPath),
+    listOpenPrs: (opts) => ipcRenderer.invoke(IpcChannels.sourceListOpenPrs, opts),
+    getRepoRemote: (repoPath) => ipcRenderer.invoke(IpcChannels.sourceGetRepoRemote, repoPath),
+    listLocalBranches: (repoPath, baseRef) =>
+      ipcRenderer.invoke(IpcChannels.sourceListLocalBranches, repoPath, baseRef),
+    detectGitButler: (repoPath) => ipcRenderer.invoke(IpcChannels.sourceDetectGitButler, repoPath),
   },
   prompt: {
     get: (cwd) => ipcRenderer.invoke(IpcChannels.promptGet, cwd),

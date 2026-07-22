@@ -4,7 +4,8 @@
  * 仅 preview 入口引用,不进 app 打包路径。
  */
 import { parseUnifiedDiff } from '@shared/diff';
-import type { CompletionNotice, DuetlensApi, ReviewEvent } from '@shared/ipc';
+import type { CompletionNotice, DuetlensApi, RecentReview, ReviewEvent } from '@shared/ipc';
+import type { PrSummary } from '@shared/source-discovery';
 import type { Discussion, Finding, Message, Review, ReviewUiState, UiSettings } from '@shared/domain';
 import type {
   EditablePromptLayer,
@@ -92,6 +93,21 @@ const REVIEW: Review = {
   createdAt: now,
   updatedAt: now,
 };
+
+// 入口「最近的审核」列表 fixture(覆盖三来源 × 审核中/已提交/已完成态)
+const RECENT_REVIEWS: RecentReview[] = [
+  { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: 'feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0 },
+  { ...REVIEW, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', title: 'fix: episode duration off-by-one on live cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4 },
+  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding', title: 'fix/feed-encoding', status: 'exported', findingCount: 0, discussionCount: 0, submittedCount: 0 },
+  { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'virtual/api-cleanup', status: 'exported', findingCount: 2, discussionCount: 1, submittedCount: 0 },
+];
+
+// GitHub「从最近 open PR 选择」列表 fixture
+const OPEN_PRS: PrSummary[] = [
+  { number: 482, title: 'feat: streaming transcode', author: 'ryan', additions: 188, deletions: 41, updatedAt: new Date(now - 2 * 3600_000).toISOString() },
+  { number: 479, title: 'fix: episode duration off-by-one on live cutover', author: 'mia', additions: 24, deletions: 9, updatedAt: new Date(now - 5 * 3600_000).toISOString() },
+  { number: 475, title: 'refactor: extract feed builder into module', author: 'ryan', additions: 310, deletions: 212, updatedAt: new Date(now - 26 * 3600_000).toISOString() },
+];
 
 function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'title' | 'file' | 'line'>): Finding {
   return {
@@ -341,6 +357,7 @@ export function installPreviewApi(): void {
     }),
     review: {
       list: async () => [review],
+      listRecent: async () => (params.has('empty') ? [] : RECENT_REVIEWS),
       get: async () => review,
       findings: async () => findings,
       diff: async () => diff,
@@ -535,6 +552,46 @@ export function installPreviewApi(): void {
         { model: 'gpt-5.6-terra', id: 'gpt-5.6-terra', displayName: 'GPT-5.6-Terra', description: '更快的日常模型', isDefault: false },
       ],
     },
+    source: {
+      // 预览态经 ?entry-state 切换:gh-auth(未登录)/ pr-error(解析失败)/ path-mismatch(remote 不匹配)
+      checkGhAuth: async () => params.get('entry-state') !== 'gh-auth',
+      previewPr: async (ref) => {
+        if (params.get('entry-state') === 'pr-error') throw new Error('该 PR 不存在,或你没有访问权限。');
+        const num = Number(ref.match(/(\d+)/)?.[1] ?? 482);
+        const hit = OPEN_PRS.find((p) => p.number === num);
+        return {
+          nwo: 'xieziyu/podcast-go',
+          number: num,
+          title: hit?.title ?? 'feat: streaming transcode',
+          author: hit?.author ?? 'ryan',
+          additions: hit?.additions ?? 188,
+          deletions: hit?.deletions ?? 41,
+          changedFiles: 6,
+          url: `https://github.com/xieziyu/podcast-go/pull/${num}`,
+          baseRef: 'main',
+        };
+      },
+      listOpenPrs: async () => OPEN_PRS,
+      getRepoRemote: async () => ({
+        nwo: params.get('entry-state') === 'path-mismatch' ? 'xieziyu/other-service' : 'xieziyu/podcast-go',
+      }),
+      listLocalBranches: async () => ({
+        base: 'main',
+        baseCandidates: ['main', 'develop', 'release/2.0'],
+        branches: [
+          { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
+          { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
+        ],
+      }),
+      detectGitButler: async () => ({
+        isWorkspace: params.get('entry-state') !== 'no-gb',
+        repoName: 'podcast-go',
+        branches: [
+          { name: 'virtual/streaming', fileCount: 7, commitCount: 2, hasUncommitted: true },
+          { name: 'virtual/api-cleanup', fileCount: 3, commitCount: 0, hasUncommitted: true },
+        ],
+      }),
+    },
     prompt: {
       get: async (cwd) => buildPromptView(cwd),
       save: async (input) => {
@@ -543,7 +600,8 @@ export function installPreviewApi(): void {
       },
     },
     dialog: {
-      pickDirectory: async () => null,
+      // 预览无原生目录选择器:回一个假路径,让入口的本地/vbranch 选择流程能继续跑
+      pickDirectory: async () => '~/Projects/podcast-go',
       // 浏览器里无原生保存对话框:用 <a download> 下载作预览替身,回一个假路径证明闭环
       saveTextFile: async (defaultName, content) => {
         const blob = new Blob([content], { type: 'text/markdown' });

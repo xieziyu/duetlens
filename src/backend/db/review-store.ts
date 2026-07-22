@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { RecentReview } from '@shared/ipc';
 import type { DB } from './database';
 import {
   DEFAULT_UI_SETTINGS,
@@ -184,6 +185,26 @@ export class ReviewStore {
       .prepare('SELECT * FROM reviews ORDER BY updated_at DESC')
       .all() as ReviewRow[];
     return rows.map(toReview);
+  }
+
+  /** 最近审核列表:每条 review 附带 finding / 用户 discussion / 已提交计数(入口展示用)。 */
+  listRecentReviews(): RecentReview[] {
+    const rows = this.db
+      .prepare(
+        `SELECT r.*,
+            (SELECT COUNT(*) FROM findings f WHERE f.review_id = r.id) AS finding_count,
+            (SELECT COUNT(*) FROM discussions d WHERE d.review_id = r.id AND d.kind = 'user') AS discussion_count,
+            (SELECT COUNT(*) FROM findings f WHERE f.review_id = r.id AND f.submission = 'submitted') AS submitted_count
+         FROM reviews r
+         ORDER BY r.updated_at DESC`,
+      )
+      .all() as (ReviewRow & { finding_count: number; discussion_count: number; submitted_count: number })[];
+    return rows.map((r) => ({
+      ...toReview(r),
+      findingCount: r.finding_count,
+      discussionCount: r.discussion_count,
+      submittedCount: r.submitted_count,
+    }));
   }
 
   setCodexThreadId(reviewId: string, threadId: string): void {

@@ -13,6 +13,8 @@ export interface ReviewTarget {
   model?: string | null;
   /** reasoning effort(缺省 codex medium) */
   reasoningEffort?: string | null;
+  /** 用户给 agent 的附加上下文,随首轮机审注入(可选);仅审核配置,不影响 source 定位 */
+  context?: string;
 }
 
 export interface PreparedSource {
