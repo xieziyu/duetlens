@@ -61,7 +61,7 @@ export function SummaryTab({ review, findings, discussionCount, diff, onEditSumm
       <div className="sum-scroll">
         <div className={`sum-verdict ${verdict.kind}`}>
           <div className="sv-head">
-            <span className="sv-ic">{verdict.ic}</span> codex 建议 <b>{verdict.label}</b>
+            <span className="sv-ic">{verdict.ic}</span> agent 建议 <b>{verdict.label}</b>
           </div>
           <div className="sv-meta">◇ 仅建议 · 最终 event 在提交时确认</div>
         </div>
@@ -146,7 +146,7 @@ function SummaryBody({ body, onEdit }: { body: string | null; onEdit: (v: string
         </span>
         <span className="sb-by">
           <span className="gl" />
-          {body ? 'codex 生成 · 你可编辑' : '尚未生成'}
+          {body ? 'agent 生成 · 你可编辑' : '尚未生成'}
         </span>
       </div>
       {editing ? (
@@ -182,7 +182,7 @@ function SummaryBody({ body, onEdit }: { body: string | null; onEdit: (v: string
         <div className="sb-prose">{renderMarkdown(body)}</div>
       ) : (
         <div className="sb-prose empty" onClick={() => setEditing(true)}>
-          还没有总结。点此撰写,或让 codex 在对话中生成后回填。
+          还没有总结。点此撰写,或让 agent 在对话中生成后回填。
         </div>
       )}
     </div>

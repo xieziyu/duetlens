@@ -96,6 +96,8 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
           if (bucket.some((x) => x.id === m.id)) return prev;
           return { ...prev, [m.discussionId]: [...bucket, m] };
         });
+      } else if (e.type === 'messages-cleared') {
+        setMessages((prev) => (prev[e.discussionId] ? { ...prev, [e.discussionId]: [] } : prev));
       } else if (e.type === 'review') {
         setReview(e.payload);
         setStatus(e.payload.status);

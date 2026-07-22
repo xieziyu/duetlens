@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Discussion, Finding, Message } from '@shared/domain';
 import { Composer } from './Composer';
 
@@ -30,6 +30,8 @@ export interface DiscussionTabProps {
   ensureMessages: (id: string) => void;
   /** 把当前用户 discussion 提升为 finding */
   onPromote: (discussionId: string) => void;
+  /** 清空当前 discussion 的往来消息(finding 卡保留),重开讨论 */
+  onClearMessages: (discussionId: string) => void;
 }
 
 /** 一条 discussion 的展示标题:finding 用其标题,user 用首条消息 / 兜底文案 */
@@ -136,6 +138,12 @@ export function DiscussionTab(props: DiscussionTabProps) {
             </div>
           )}
 
+          {activeMsgs.length > 0 && (
+            <div className="thread-tools">
+              <ClearButton key={active.id} onConfirm={() => props.onClearMessages(active.id)} />
+            </div>
+          )}
+
           <div className="thread" ref={threadRef}>
             {rootFinding && (
               <MessageBubble
@@ -185,16 +193,39 @@ export function DiscussionTab(props: DiscussionTabProps) {
         onRemoveRef={props.onClearRef}
         disabled={!active && !props.pendingRef}
         placeholder="追问 agent…"
-        scope={
-          active?.file
-            ? `◆ 全局会话 · 已锚定 ${basename(active.file)}:${active.line} · read-only sandbox`
-            : props.pendingRef
-              ? `◆ 全局会话 · 引用 ${props.pendingRef.label} · read-only sandbox`
-              : '◆ 全局会话 · read-only sandbox'
-        }
+        scope="◆ read-only sandbox · agent 仅阅读代码,不会改动"
         onSend={props.onSend}
       />
     </div>
+  );
+}
+
+/** 清空讨论:两步确认,避免误清;3s 未确认自动复位。挂 key={discussionId} 切换即重置。 */
+function ClearButton({ onConfirm }: { onConfirm: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (!confirming) return;
+    const t = setTimeout(() => setConfirming(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirming]);
+  return confirming ? (
+    <button
+      className="thr-clear on"
+      onClick={() => {
+        setConfirming(false);
+        onConfirm();
+      }}
+    >
+      确认清空?
+    </button>
+  ) : (
+    <button
+      className="thr-clear"
+      title="清空本讨论的往来消息,重新开始(finding 保留)"
+      onClick={() => setConfirming(true)}
+    >
+      ↻ 清空讨论
+    </button>
   );
 }
 

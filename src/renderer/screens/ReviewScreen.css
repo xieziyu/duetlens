@@ -1374,6 +1374,31 @@
   align-self: center;
 }
 
+/* 活跃线程「清空讨论」工具条:右对齐、克制,悬停/确认才醒目 */
+.thread-tools {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 14px 0;
+}
+.thr-clear {
+  font-size: 11px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.thr-clear:hover {
+  color: var(--del);
+  border-color: var(--del-gutter);
+}
+.thr-clear.on {
+  color: var(--del);
+  border-color: var(--del-gutter);
+  background: color-mix(in srgb, var(--del) 12%, transparent);
+}
+
 .c-dismissed {
   display: flex;
   align-items: center;

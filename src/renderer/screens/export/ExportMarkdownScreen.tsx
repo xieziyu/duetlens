@@ -108,7 +108,7 @@ export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep }:
             <div className="sec-lbl">包含内容</div>
             <label className={'opt' + (opts.summary ? ' on' : '')} onClick={() => toggleOpt('summary')}>
               <span className="sw" />
-              审核摘要（codex 总结）
+              审核摘要（agent 总结）
             </label>
             <label className={'opt' + (opts.suggestion ? ' on' : '')} onClick={() => toggleOpt('suggestion')}>
               <span className="sw" />

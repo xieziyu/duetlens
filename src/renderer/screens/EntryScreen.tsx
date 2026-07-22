@@ -140,7 +140,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
         <div className="card-top">
           <div>
             <h2>发起一次审核</h2>
-            <div className="sub">选择来源 · Duetlens 会拉取 diff 并启动 codex 会话做首轮机审</div>
+            <div className="sub">选择来源 · Duetlens 会拉取 diff 并启动 agent 会话做首轮机审</div>
           </div>
           <div className="srcseg">
             {SOURCE_TABS.map((t) => (
@@ -206,7 +206,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
                 placeholder={
-                  '首轮机审前一并发给 codex,可留空。例如:\n· 重点关注并发安全与错误处理\n· 忽略 generated/ 下的文件'
+                  '首轮机审前一并发给 agent,可留空。例如:\n· 重点关注并发安全与错误处理\n· 忽略 generated/ 下的文件'
                 }
               />
               <div className="ctxhint mono">随首轮机审注入,agent 全程可见 · 不改变 read-only sandbox</div>
@@ -234,7 +234,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
                   className="mono"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  placeholder={models === null ? '加载模型…' : 'codex 模型(留空=账号默认)'}
+                  placeholder={models === null ? '加载模型…' : '模型(留空=账号默认)'}
                 />
               )}
             </label>

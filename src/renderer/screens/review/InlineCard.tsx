@@ -96,7 +96,7 @@ function CardView({
       <div className="c-head">
         <span className="who">
           <span className={`av ${isAgent ? 'agent' : 'human'}`}>{isAgent ? '◆' : '●'}</span>
-          {isAgent ? 'codex' : finding.origin === 'promoted' ? '你 · 提升' : '你'}
+          {isAgent ? 'agent' : finding.origin === 'promoted' ? '你 · 提升' : '你'}
         </span>
         <span className={`sev sev-${finding.severity}`}>
           {SEV_LABEL[finding.severity]}

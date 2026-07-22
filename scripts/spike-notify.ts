@@ -27,7 +27,7 @@ function harness(opts: { focused?: boolean; enabled?: boolean } = {}) {
   return { native, inApp, state, notify };
 }
 
-const statusEvent = (reviewId: string, payload: ReviewEvent['payload'] & string): ReviewEvent =>
+const statusEvent = (reviewId: string, payload: string): ReviewEvent =>
   ({ reviewId, type: 'status', payload }) as ReviewEvent;
 const agentMsg = (reviewId: string, discussionId = 'd1'): ReviewEvent => ({
   reviewId,

@@ -42,6 +42,7 @@ export const IpcChannels = {
   reviewMessages: 'review:messages',
   reviewAddDiscussion: 'review:add-discussion',
   reviewSendMessage: 'review:send-message',
+  reviewClearDiscussion: 'review:clear-discussion',
   reviewSetTriage: 'review:set-triage',
   reviewSetFindingAnchor: 'review:set-finding-anchor',
   reviewAddFinding: 'review:add-finding',
@@ -162,6 +163,7 @@ export interface AppInfo {
 export type ReviewEvent =
   | { reviewId: string; type: 'finding'; payload: Finding }
   | { reviewId: string; type: 'message'; payload: Message }
+  | { reviewId: string; type: 'messages-cleared'; discussionId: string }
   | { reviewId: string; type: 'discussion'; payload: Discussion }
   | { reviewId: string; type: 'review'; payload: Review }
   | { reviewId: string; type: 'status'; payload: Review['status'] }
@@ -192,6 +194,8 @@ export interface DuetlensApi {
     addDiscussion(reviewId: string, anchor: DiscussionAnchor): Promise<Discussion>;
     /** 就某条 discussion 向 agent 追问;返回 agent 回复(无文本时返回用户消息)。 */
     sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message>;
+    /** 清空一条 discussion 的往来消息(finding 卡保留);经 `messages-cleared` 事件回推。 */
+    clearDiscussion(reviewId: string, discussionId: string): Promise<void>;
     /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推更新。 */
     setTriage(reviewId: string, findingId: string, triage: Triage): Promise<Finding>;
     /** 改一条 finding 的行锚点(提交屏修 422 失效锚点):line>0 改锚,line=0 脱锚(降级为摘要)。 */

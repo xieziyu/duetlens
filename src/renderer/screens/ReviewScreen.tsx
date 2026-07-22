@@ -83,6 +83,11 @@ export function ReviewScreen({
   const focusDiscussion = (id: string) => {
     setActiveDiscussionId(id);
     setTab('discussion');
+    // 选中不同 discussion 时同步把 diff 跳到其锚点代码(点 finding 卡走 focusFinding,此处覆盖列表选择)
+    const d = discussions.find((x) => x.id === id);
+    if (d?.file) setActivePath(d.file);
+    const f = findings.find((x) => x.discussionId === id);
+    if (f) setFocusFindingId(f.id);
   };
 
   // 向某条 discussion 追问:落库经事件回推消息,期间显示 agent 打字指示。
@@ -156,6 +161,15 @@ export function ReviewScreen({
     (body: string) => {
       if (!reviewId) return;
       void window.duetlens.review.updateSummary(reviewId, body);
+    },
+    [reviewId],
+  );
+
+  // 清空某条 discussion 的往来消息(finding 卡保留),重开讨论;落库后经事件流回推清空。
+  const onClearMessages = useCallback(
+    (discussionId: string) => {
+      if (!reviewId) return;
+      void window.duetlens.review.clearDiscussion(reviewId, discussionId);
     },
     [reviewId],
   );
@@ -268,7 +282,7 @@ export function ReviewScreen({
         <span className="spacer" />
         <div className="meta">
           <span className="model" title="审阅 agent">
-            <span className="glyph" /> codex{review?.model ? ` · ${review.model}` : ''}
+            <span className="glyph" /> agent{review?.model ? ` · ${review.model}` : ''}
           </span>
           {review?.reasoningEffort && (
             <span className="mono effort" title="reasoning effort">{review.reasoningEffort}</span>
@@ -374,6 +388,7 @@ export function ReviewScreen({
           onJumpToCode={jumpToCode}
           ensureMessages={ensureMessages}
           onPromote={onPromote}
+          onClearMessages={onClearMessages}
           categoryFilter={categoryFilter}
           onClearCategory={() => setCategoryFilter(null)}
           onEditSummary={onEditSummary}
@@ -409,6 +424,7 @@ function RightPanel({
   onJumpToCode,
   ensureMessages,
   onPromote,
+  onClearMessages,
   categoryFilter,
   onClearCategory,
   onEditSummary,
@@ -435,6 +451,7 @@ function RightPanel({
   onJumpToCode: (d: Discussion) => void;
   ensureMessages: (id: string) => void;
   onPromote: (discussionId: string) => void;
+  onClearMessages: (discussionId: string) => void;
   categoryFilter: string | null;
   onClearCategory: () => void;
   onEditSummary: (body: string) => void;
@@ -502,14 +519,14 @@ function RightPanel({
                   <div className="findings-clean">
                     <span className="fc-badge">✓</span>
                     <div className="fc-title">未发现需要修复的问题</div>
-                    <div className="fc-sub">codex 已通读本次改动,没有报告 finding。</div>
+                    <div className="fc-sub">agent 已通读本次改动,没有报告 finding。</div>
                     {coverage.files > 0 && (
                       <div className="fc-cover">
                         已覆盖 {coverage.files} 文件 · +{coverage.additions} −{coverage.deletions} · read-only sandbox
                       </div>
                     )}
                     <div className="fc-hint">
-                      仍可框选左侧代码「＋ 记为 finding」手动新增,或在 Discussion 追问 codex。
+                      仍可框选左侧代码「＋ 记为 finding」手动新增,或在 Discussion 追问 agent。
                     </div>
                   </div>
                 ))}
@@ -554,6 +571,7 @@ function RightPanel({
           onJumpToCode={onJumpToCode}
           ensureMessages={ensureMessages}
           onPromote={onPromote}
+          onClearMessages={onClearMessages}
         />
       )}
       {tab === 'summary' &&
@@ -578,7 +596,7 @@ function RightPanel({
 }
 
 const ORIGIN_LABEL: Record<Finding['origin'], string> = {
-  agent: 'codex',
+  agent: 'agent',
   manual: '你',
   promoted: '你 · 提升',
 };

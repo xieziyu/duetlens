@@ -43,7 +43,7 @@ export function ScanTimeline({ findings, diffReady, sessionReady, onPickFinding 
         <span className="sglyph" />
         <div className="sh-t">
           <b>首轮机审</b>
-          <span className="sh-s">codex 正在通读改动</span>
+          <span className="sh-s">agent 正在通读改动</span>
         </div>
       </div>
 
@@ -67,7 +67,7 @@ export function ScanTimeline({ findings, diffReady, sessionReady, onPickFinding 
           </span>
         </div>
         {findings.length === 0 ? (
-          <p className="ss-empty">还没有 findings —— codex 通读中,发现即刻出现。</p>
+          <p className="ss-empty">还没有 findings —— agent 通读中,发现即刻出现。</p>
         ) : (
           findings.map((f) => (
             <div key={f.id} className="sfind" onClick={() => onPickFinding(f)}>
@@ -88,7 +88,7 @@ export function ScanTimeline({ findings, diffReady, sessionReady, onPickFinding 
       </div>
 
       <div className="scan-foot">
-        <span className="ic">◆</span> 扫描会跑一会儿 —— 期间可点开任一 finding,或在左侧框选代码直接向 codex
+        <span className="ic">◆</span> 扫描会跑一会儿 —— 期间可点开任一 finding,或在左侧框选代码直接向 agent
         提问,无需等待机审结束。
       </div>
     </div>

@@ -269,6 +269,12 @@ export class ReviewManager extends EventEmitter {
     return result;
   }
 
+  /** 清空一条 discussion 的往来消息(finding 卡与锚点保留),便于重新讨论。 */
+  clearDiscussion(reviewId: string, discussionId: string): void {
+    this.store.clearMessages(discussionId);
+    this.forward({ reviewId, type: 'messages-cleared', discussionId });
+  }
+
   /** 向某条 discussion 追问;会话不在内存时先按 codexThreadId 续接。 */
   async sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message> {
     const session = this.sessions.get(reviewId) ?? (await this.resumeSession(reviewId));

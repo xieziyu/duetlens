@@ -226,7 +226,7 @@ const SEED_MESSAGES: Record<string, Message[]> = {
       id: 'm-user-seed-1',
       discussionId: 'd-user-seed',
       role: 'user',
-      text: '这里 done += 1 在并发下会不会丢更新?想听听 codex 的意见。',
+      text: '这里 done += 1 在并发下会不会丢更新?想听听 agent 的意见。',
       createdAt: now + 500,
     },
   ],
@@ -404,6 +404,10 @@ export function installPreviewApi(): void {
         msgStore[discussionId].push(agentMsg);
         fire({ reviewId: 'demo', type: 'message', payload: agentMsg });
         return agentMsg;
+      },
+      clearDiscussion: async (_r, discussionId) => {
+        msgStore[discussionId] = [];
+        fire({ reviewId: 'demo', type: 'messages-cleared', discussionId });
       },
       setTriage: async (_r, findingId, triage) => {
         const f = findings.find((x) => x.id === findingId)!;

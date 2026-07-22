@@ -445,6 +445,11 @@ export class ReviewStore {
     return rows.map(toMessage);
   }
 
+  /** 清空一条 discussion 的往来消息(discussion / finding 锚点保留),用于重开讨论。 */
+  clearMessages(discussionId: string): void {
+    this.db.prepare('DELETE FROM messages WHERE discussion_id = ?').run(discussionId);
+  }
+
   // ---- UI 状态 ----
   getUiSettings(): UiSettings {
     const r = this.db.prepare('SELECT * FROM ui_settings WHERE id = 1').get() as

@@ -155,7 +155,7 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                     </span>
                     <span className={'origin' + (f.origin === 'agent' ? ' agent' : ' human')}>
                       <span className="d" />
-                      {f.origin === 'agent' ? 'codex · report_finding' : '你 · ' + (f.origin === 'promoted' ? '由 discussion 提升' : '手动新增')}
+                      {f.origin === 'agent' ? 'agent · report_finding' : '你 · ' + (f.origin === 'promoted' ? '由 discussion 提升' : '手动新增')}
                     </span>
                   </div>
                   {!isDismissed && f.body.trim() && <div className="f-body">{f.body}</div>}

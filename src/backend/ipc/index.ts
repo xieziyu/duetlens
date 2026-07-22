@@ -60,6 +60,9 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewSendMessage, (_e, reviewId: string, discussionId: string, text: string) =>
     manager.sendMessage(reviewId, discussionId, text),
   );
+  ipcMain.handle(IpcChannels.reviewClearDiscussion, (_e, reviewId: string, discussionId: string) =>
+    manager.clearDiscussion(reviewId, discussionId),
+  );
   ipcMain.handle(IpcChannels.reviewSetTriage, (_e, reviewId: string, findingId: string, triage: Triage) =>
     manager.setTriage(reviewId, findingId, triage),
   );
