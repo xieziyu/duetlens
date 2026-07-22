@@ -55,7 +55,7 @@ export function InlineCard({ finding, focused, offDiff, originalLine, onTriage, 
             <span className="dm-x">✕</span>
             <span className="dm-t">已剔除 · {finding.title}</span>
             {onTriage && (
-              <button className="f-restore" onClick={() => onTriage(finding, 'keep')}>
+              <button className="f-restore" onClick={() => onTriage(finding, 'open')}>
                 ↩ 恢复
               </button>
             )}

@@ -511,7 +511,7 @@ function RightPanel({
       findings: bySev[sev],
     }));
   }, [shown, grouping]);
-  const kept = shown.filter((f) => f.triage === 'keep').length;
+  const kept = shown.filter((f) => f.triage !== 'dismiss').length;
   const dropped = shown.filter((f) => f.triage === 'dismiss').length;
   const coverage = useMemo(() => {
     let a = 0;
@@ -646,7 +646,7 @@ const ORIGIN_LABEL: Record<Finding['origin'], string> = {
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
-/** 右栏 Findings tab 单行:锚点导航 + triage(保留/剔除/恢复)。 */
+/** 右栏 Findings tab 单行:锚点导航 + triage(剔除/恢复)。 */
 function FindingRow({
   finding: f,
   onPick,
@@ -658,10 +658,7 @@ function FindingRow({
 }) {
   const submitted = f.submission === 'submitted';
   const dismissed = f.triage === 'dismiss';
-  const rowClass =
-    'frow' +
-    (submitted ? ' submitted' : f.triage === 'keep' ? ' kept' : '') +
-    (dismissed ? ' dismissed' : '');
+  const rowClass = 'frow' + (submitted ? ' submitted' : dismissed ? ' dismissed' : ' kept');
   const triage = (t: Triage) => (e: React.MouseEvent) => {
     e.stopPropagation();
     onTriage(f, t);
@@ -689,14 +686,11 @@ function FindingRow({
           {submitted ? (
             <span className="subm">✓ 已提交</span>
           ) : dismissed ? (
-            <button className="fr-restore" onClick={triage('keep')}>
+            <button className="fr-restore" onClick={triage('open')}>
               ↩ 恢复
             </button>
           ) : (
             <span className="triage">
-              <button className={`t-keep${f.triage === 'keep' ? ' on' : ''}`} onClick={triage('keep')}>
-                保留
-              </button>
               <button className="t-drop" onClick={triage('dismiss')}>
                 剔除
               </button>

@@ -33,13 +33,13 @@ function main() {
   const events: ReviewEvent[] = [];
   manager.on('review-event', (e: ReviewEvent) => events.push(e));
 
-  // triage: 剔除 → 恢复(keep)
+  // triage: 剔除 → 恢复(open)
   const dropped = manager.setTriage(review.id, f.id, 'dismiss');
   assert.equal(dropped.triage, 'dismiss');
   assert.equal(store.getFinding(f.id)!.triage, 'dismiss');
-  const kept = manager.setTriage(review.id, f.id, 'keep');
-  assert.equal(kept.triage, 'keep');
-  log('setTriage dismiss→keep 落库 + 返回一致');
+  const kept = manager.setTriage(review.id, f.id, 'open');
+  assert.equal(kept.triage, 'open');
+  log('setTriage dismiss→open 落库 + 返回一致');
 
   // 就地编辑:改 severity/title/body,开 suggestion
   const edited = manager.updateFinding(review.id, {
@@ -52,7 +52,7 @@ function main() {
   assert.equal(edited.severity, 'high');
   assert.match(edited.title, /completedCount/);
   assert.equal(edited.suggestion, 'const completedCount = 0;');
-  assert.equal(edited.triage, 'keep', '编辑不应重置 triage');
+  assert.equal(edited.triage, 'open', '编辑不应重置 triage');
   log('updateFinding 改字段 + 保留 triage');
 
   // 清空 suggestion(null)
@@ -65,7 +65,7 @@ function main() {
   log(`review-event 外发 ${findingEvents.length} 条 finding`);
 
   // 不存在的 finding 应抛错
-  assert.throws(() => manager.setTriage(review.id, 'nope', 'keep'));
+  assert.throws(() => manager.setTriage(review.id, 'nope', 'open'));
   log('未知 findingId 抛错');
 
   log('────────────────────────');

@@ -104,7 +104,7 @@ function toFinding(r: FindingRow): Finding {
     file: r.file,
     line: r.line,
     suggestion: r.suggestion,
-    triage: r.triage as Triage,
+    triage: (r.triage === 'keep' ? 'open' : r.triage) as Triage,
     submission: r.submission as Submission,
     submittedUrl: r.submitted_url,
     createdAt: r.created_at,

@@ -22,7 +22,7 @@ export function SubmitExportScreen({
     (f: Finding) => {
       if (!reviewId) return;
       // 保留 → dismiss;已剔除 → keep(复位到明确保留态,不回 open)
-      const next = f.triage === 'dismiss' ? 'keep' : 'dismiss';
+      const next = f.triage === 'dismiss' ? 'open' : 'dismiss';
       void window.duetlens.review.setTriage(reviewId, f.id, next);
     },
     [reviewId],

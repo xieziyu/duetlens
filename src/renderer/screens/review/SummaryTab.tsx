@@ -29,7 +29,7 @@ export function SummaryTab({ review, findings, discussionCount, diff, onEditSumm
     const c = { high: 0, medium: 0, low: 0, kept: 0, submitted: 0 };
     for (const f of findings) {
       c[f.severity]++;
-      if (f.triage === 'keep') c.kept++;
+      if (f.triage !== 'dismiss') c.kept++;
       if (f.submission === 'submitted') c.submitted++;
     }
     return c;

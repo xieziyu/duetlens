@@ -72,7 +72,7 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
 
   const toggleKeep = (f: Finding) => {
     if (f.submission === 'submitted') return; // 已提交锁定
-    void window.duetlens.review.setTriage(reviewId, f.id, f.triage === 'dismiss' ? 'keep' : 'dismiss');
+    void window.duetlens.review.setTriage(reviewId, f.id, f.triage === 'dismiss' ? 'open' : 'dismiss');
   };
 
   const saveSummary = () => {

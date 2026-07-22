@@ -1320,11 +1320,6 @@
   color: var(--text);
   border-color: var(--agent-line);
 }
-.triage .t-keep.on {
-  background: var(--agent-soft);
-  border-color: var(--agent-line);
-  color: var(--agent-2);
-}
 .fr-restore {
   margin-left: auto;
   font-size: 10.5px;

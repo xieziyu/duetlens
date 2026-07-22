@@ -68,11 +68,11 @@ function main() {
   log(`两条 finding 落库 (${f1.severity}/${f2.severity})`);
 
   // triage + 就地编辑(update_finding 同路径)
-  store.setTriage(f1.id, 'keep');
+  store.setTriage(f1.id, 'open');
   store.setTriage(f2.id, 'dismiss');
   const edited = store.updateFinding({ findingId: f1.id, severity: 'high', title: 'SQL 注入(可绕过认证)' });
   assert.equal(edited!.title, 'SQL 注入(可绕过认证)');
-  assert.equal(store.getFinding(f1.id)!.triage, 'keep');
+  assert.equal(store.getFinding(f1.id)!.triage, 'open');
   log('triage + updateFinding 生效');
 
   // finding 的 discussion 上追问
@@ -91,8 +91,8 @@ function main() {
   // 列表与计数
   const all = store.listFindings(review.id);
   assert.equal(all.length, 2);
-  const kept = all.filter((f) => f.triage === 'keep').length;
-  log(`listFindings=${all.length}, keep=${kept}`);
+  const kept = all.filter((f) => f.triage !== 'dismiss').length;
+  log(`listFindings=${all.length}, kept=${kept}`);
 
   // UI 设置默认值 + 持久化往返
   assert.equal(store.getUiSettings().dataMode, 'dark');

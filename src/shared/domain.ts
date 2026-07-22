@@ -33,8 +33,8 @@ export type FindingCategory = (typeof FINDING_CATEGORIES)[number];
 export const FINDING_ORIGINS = ['agent', 'manual', 'promoted'] as const;
 export type FindingOrigin = (typeof FINDING_ORIGINS)[number];
 
-/** 用户裁决 */
-export const TRIAGES = ['open', 'keep', 'dismiss'] as const;
+/** 用户裁决:open 保留纳入提交/导出,dismiss 剔除 */
+export const TRIAGES = ['open', 'dismiss'] as const;
 export type Triage = (typeof TRIAGES)[number];
 
 /** 提交状态 */
