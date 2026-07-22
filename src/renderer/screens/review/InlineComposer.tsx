@@ -39,11 +39,11 @@ export function InlineComposer({ label, snippet, onSend, onCancel }: InlineCompo
           <textarea
             ref={ref}
             className="fe-textarea"
-            placeholder="描述你的疑问,codex 会在此讨论里回应…"
+            placeholder="描述你的疑问,agent 会在此讨论里回应…"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
                 submit();
               } else if (e.key === 'Escape') {
@@ -55,7 +55,7 @@ export function InlineComposer({ label, snippet, onSend, onCancel }: InlineCompo
         </div>
         <div className="nd-foot">
           <button className="send" onClick={submit} disabled={!text.trim()}>
-            发送 ↵
+            发送 ⌘↵
           </button>
           <button className="cancel" onClick={onCancel}>
             取消

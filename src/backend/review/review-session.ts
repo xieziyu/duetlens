@@ -162,7 +162,8 @@ export class ReviewSession extends EventEmitter {
       if (finding) {
         return (
           `关于你上报的 finding「${finding.title}」(${finding.file}:${finding.line}):\n${text}\n` +
-          `如需修改该 finding,调用 update_finding(finding_id="${finding.id}", ...)。`
+          `请在对话中直接回答,默认不要改动这条 finding。` +
+          `只有当我明确要求「更新 / 回写 finding」时,才调用 update_finding(finding_id="${finding.id}", ...)。`
         );
       }
     }

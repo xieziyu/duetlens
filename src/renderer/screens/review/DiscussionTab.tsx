@@ -4,6 +4,15 @@ import { Composer } from './Composer';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
 
+/** reviewer(用户)侧头像图标,替代原先的「你」字形 */
+function UserGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden>
+      <path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-5 0-9 2.7-9 6v1h18v-1c0-3.3-4-6-9-6z" />
+    </svg>
+  );
+}
+
 export interface DiscussionTabProps {
   discussions: Discussion[];
   findings: Finding[];
@@ -28,7 +37,7 @@ function titleOf(d: Discussion, findingByDisc: Map<string, Finding>, msgs: Messa
   const f = findingByDisc.get(d.id);
   if (f) return f.title;
   const firstUser = msgs.find((m) => m.role === 'user');
-  return firstUser ? firstUser.text.slice(0, 40) : '你发起的讨论';
+  return firstUser ? firstUser.text.slice(0, 40) : 'reviewer 发起的讨论';
 }
 
 export function DiscussionTab(props: DiscussionTabProps) {
@@ -59,8 +68,8 @@ export function DiscussionTab(props: DiscussionTabProps) {
       <div className="tab-body">
         <p className="empty-note">
           {scanning
-            ? '扫描进行中,codex 会实时上报 findings。你也可以框选左侧代码直接向 codex 提问,无需等待。'
-            : '还没有讨论。框选左侧代码或点一条 finding,开始与 codex 讨论。'}
+            ? '扫描进行中,agent 会实时上报 findings。你也可以框选左侧代码直接向 agent 提问,无需等待。'
+            : '还没有讨论。框选左侧代码或点一条 finding,开始与 agent 讨论。'}
         </p>
       </div>
     );
@@ -85,7 +94,7 @@ export function DiscussionTab(props: DiscussionTabProps) {
                 onClick={() => props.onSelect(d.id)}
               >
                 <span className={`di-glyph ${d.kind === 'finding' ? 'agent' : 'human'}`}>
-                  {d.kind === 'finding' ? '◆' : '你'}
+                  {d.kind === 'finding' ? '◆' : <UserGlyph />}
                 </span>
                 <span className="di-title">{titleOf(d, findingByDisc, messages[d.id] ?? [])}</span>
                 {f && <span className={`di-sev sev-${f.severity}`} />}
@@ -131,7 +140,7 @@ export function DiscussionTab(props: DiscussionTabProps) {
             {rootFinding && (
               <MessageBubble
                 role="agent"
-                name="codex"
+                name="agent"
                 meta="report_finding"
                 text={rootFinding.body || rootFinding.title}
               />
@@ -140,7 +149,7 @@ export function DiscussionTab(props: DiscussionTabProps) {
               <MessageBubble
                 key={m.id}
                 role={m.role}
-                name={m.role === 'agent' ? 'codex' : '你'}
+                name={m.role === 'agent' ? 'agent' : 'reviewer'}
                 text={m.text}
               />
             ))}
@@ -149,7 +158,7 @@ export function DiscussionTab(props: DiscussionTabProps) {
                 <span className="av agent">◆</span>
                 <div className="body">
                   <div className="nm">
-                    <b className="agent-name">codex</b> <span className="t">正在回复</span>
+                    <b className="agent-name">agent</b> <span className="t">正在回复</span>
                   </div>
                   <div className="bubble agent">
                     <span className="typing">
@@ -165,7 +174,7 @@ export function DiscussionTab(props: DiscussionTabProps) {
         <div className="thread thread-empty">
           <p className="empty-note">
             {props.pendingRef
-              ? '已引用选区,输入你的问题向 codex 发起讨论。'
+              ? '已引用选区,输入你的问题向 agent 发起讨论。'
               : '从上方选择一条讨论查看对话。'}
           </p>
         </div>
@@ -175,7 +184,7 @@ export function DiscussionTab(props: DiscussionTabProps) {
         refLabel={props.pendingRef?.label ?? null}
         onRemoveRef={props.onClearRef}
         disabled={!active && !props.pendingRef}
-        placeholder="追问 codex…"
+        placeholder="追问 agent…"
         scope={
           active?.file
             ? `◆ 全局会话 · 已锚定 ${basename(active.file)}:${active.line} · read-only sandbox`
@@ -202,7 +211,7 @@ function MessageBubble({
 }) {
   return (
     <div className="msg">
-      <span className={`av ${role}`}>{role === 'agent' ? '◆' : '你'}</span>
+      <span className={`av ${role}`}>{role === 'agent' ? '◆' : <UserGlyph />}</span>
       <div className="body">
         <div className="nm">
           <b className={role === 'agent' ? 'agent-name' : 'human-name'}>{name}</b>

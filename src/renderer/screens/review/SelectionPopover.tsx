@@ -36,7 +36,7 @@ export function SelectionPopover({
         ⬆ 发起 discussion
       </button>
       <button className="sp-ask" onClick={onAsk}>
-        ◆ 追问 codex
+        ◆ 追问 agent
       </button>
       <button className="sp-finding" onClick={onFinding}>
         ＋ 记为 finding

@@ -44,7 +44,8 @@ export function Composer({ refLabel, onRemoveRef, disabled, placeholder, scope, 
           disabled={disabled}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            // Cmd/Ctrl+Enter 发送,裸 Enter 换行,避免多行追问时误发
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
               submit();
             }
@@ -52,7 +53,7 @@ export function Composer({ refLabel, onRemoveRef, disabled, placeholder, scope, 
         />
         <div className="bar">
           <button className="send" onClick={submit} disabled={disabled || !text.trim()}>
-            发送 ↵
+            发送 ⌘↵
           </button>
         </div>
       </div>

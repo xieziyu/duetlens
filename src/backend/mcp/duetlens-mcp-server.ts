@@ -65,7 +65,7 @@ const TOOLS = [
   {
     name: 'update_finding',
     description:
-      '更新一条已上报 finding 的可编辑字段(对话打磨后回写)。finding_id 用 report_finding 的返回值。',
+      '更新一条已上报 finding 的可编辑字段。仅在用户明确要求回写 finding 时调用;普通追问只需在对话中回答。finding_id 用 report_finding 的返回值。',
     inputSchema: {
       type: 'object',
       properties: {
