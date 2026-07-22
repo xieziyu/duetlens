@@ -321,6 +321,12 @@ export class ReviewManager extends EventEmitter {
     await this.teardown(reviewId);
   }
 
+  /** 删除一次审核:先释放活跃会话(子进程/MCP),再连同 findings/discussions 级联删库。 */
+  async deleteReview(reviewId: string): Promise<void> {
+    await this.teardown(reviewId);
+    this.store.deleteReview(reviewId);
+  }
+
   /** 显式续接一个非活跃 review 的会话(app 重启后);已活跃则原样返回。 */
   async resumeReview(reviewId: string): Promise<Review> {
     if (!this.sessions.has(reviewId)) await this.resumeSession(reviewId);

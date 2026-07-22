@@ -22,6 +22,7 @@ const initialScreen = new URLSearchParams(window.location.search).get('screen') 
   | 'submit'
   | 'prompt'
   | 'onboarding'
+  | 'history'
   | null;
 
 createRoot(container).render(

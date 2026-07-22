@@ -41,6 +41,7 @@ export const IpcChannels = {
   reviewStartDemo: 'review:start-demo',
   reviewResume: 'review:resume',
   reviewRelease: 'review:release',
+  reviewDelete: 'review:delete',
   reviewDiscussions: 'review:discussions',
   reviewMessages: 'review:messages',
   reviewAddDiscussion: 'review:add-discussion',
@@ -197,6 +198,8 @@ export interface DuetlensApi {
     resume(reviewId: string): Promise<Review>;
     /** 释放某 review 的活跃会话(codex 子进程 + MCP);下次追问自动续接。 */
     release(reviewId: string): Promise<void>;
+    /** 删除一次审核(级联清理 findings/discussions/messages 等);历史屏用。 */
+    delete(reviewId: string): Promise<void>;
     /** 新建用户发起、锚定代码位置的 discussion。 */
     addDiscussion(reviewId: string, anchor: DiscussionAnchor): Promise<Discussion>;
     /** 就某条 discussion 向 agent 追问;返回 agent 回复(无文本时返回用户消息)。 */

@@ -207,6 +207,11 @@ export class ReviewStore {
     }));
   }
 
+  /** 删除一次审核;discussions / findings / messages / ui_state / diffs 经 FK 级联清理。 */
+  deleteReview(id: string): void {
+    this.db.prepare('DELETE FROM reviews WHERE id = ?').run(id);
+  }
+
   setCodexThreadId(reviewId: string, threadId: string): void {
     this.db
       .prepare('UPDATE reviews SET codex_thread_id = ?, updated_at = ? WHERE id = ?')

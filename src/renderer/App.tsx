@@ -5,19 +5,21 @@ import { ReviewScreen } from './screens/ReviewScreen';
 import { SubmitExportScreen } from './screens/SubmitExportScreen';
 import { PromptRulesScreen } from './screens/PromptRulesScreen';
 import { OnboardingScreen } from './screens/OnboardingScreen';
+import { HistoryScreen } from './screens/HistoryScreen';
 import { Wordmark } from './components/Wordmark';
 import { ThemeControls } from './components/ThemeControls';
 import { CompletionToast } from './components/CompletionToast';
 import './App.css';
 
 // 骨架期极简屏路由;review / onboarding 屏自带顶栏,故此处不再套全局栏。
-type Screen = 'entry' | 'review' | 'submit' | 'prompt' | 'onboarding';
+type Screen = 'entry' | 'review' | 'submit' | 'prompt' | 'onboarding' | 'history';
 
 const SCREENS: { id: Screen; label: string }[] = [
   { id: 'entry', label: '入口' },
   { id: 'review', label: '审核' },
   { id: 'submit', label: '提交/导出' },
   { id: 'prompt', label: '审核规则' },
+  { id: 'history', label: '历史' },
 ];
 
 // initialReviewId / initialScreen 仅 preview 入口用于直达某屏;production main.tsx 不传。
@@ -107,6 +109,7 @@ export function App({
         {screen === 'onboarding' && (
           <OnboardingScreen onEnter={() => setScreen('entry')} onSkip={() => setScreen('entry')} />
         )}
+        {screen === 'history' && <HistoryScreen onOpen={openReview} />}
       </main>
 
       {toast && (

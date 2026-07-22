@@ -103,12 +103,14 @@ const REVIEW: Review = {
   updatedAt: now,
 };
 
-// 入口「最近的审核」列表 fixture(覆盖三来源 × 审核中/已提交/已完成态)
+// 入口「最近的审核」/ 历史屏列表 fixture(覆盖三来源 × 状态 × 时间分桶)
 const RECENT_REVIEWS: RecentReview[] = [
-  { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: 'feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0 },
-  { ...REVIEW, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', title: 'fix: episode duration off-by-one on live cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4 },
-  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding', title: 'fix/feed-encoding', status: 'exported', findingCount: 0, discussionCount: 0, submittedCount: 0 },
-  { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'virtual/api-cleanup', status: 'exported', findingCount: 2, discussionCount: 1, submittedCount: 0 },
+  { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: 'feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, updatedAt: now - 23 * 60_000 },
+  { ...REVIEW, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', title: 'fix: episode duration off-by-one on live cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
+  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding', title: 'fix/feed-encoding', repoPath: '/Users/dev/podcast-go', status: 'exported', findingCount: 0, discussionCount: 0, submittedCount: 0, updatedAt: now - 26 * 3600_000 },
+  { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'exported', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
+  { ...REVIEW, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: 'refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, updatedAt: now - 10 * 86_400_000 },
+  { ...REVIEW, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
 ];
 
 // GitHub「从最近 open PR 选择」列表 fixture
@@ -389,6 +391,7 @@ export function installPreviewApi(): void {
       startDemo: async () => review,
       resume: async () => review,
       release: async () => {},
+      delete: async () => {},
       addDiscussion: async (_r, anchor) => {
         const d: Discussion = {
           id: `d-user-${Date.now()}`,
