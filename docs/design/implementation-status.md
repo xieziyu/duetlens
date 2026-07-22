@@ -18,10 +18,11 @@
 - **ABI 坑**:同一 `better-sqlite3` 服务两运行时——app 需 Electron ABI(`rebuild:electron`)、spike/tsx 需 Node ABI(`rebuild:node`),切换后对方失效。
 
 ### 尚缺(不阻断核心,影响"零配置首用"顺滑;均有 mockup 未接 React)
-1. **onboarding 环境自检屏**(`mockup/onboarding.html`):首启不检测 codex/gh,缺失时抛原始错误。
-2. **独立设置屏**(`mockup/settings.html`):设置只能就地改(入口的模型/effort/通知、顶栏主题);codex 路径/`CODEX_HOME`、gh 路径无 UI,走 PATH 默认。
-3. **历史屏**(`mockup/history.html`):只有入口「最近的审核」列表,无搜索/筛选/软删除。
-4. 顶部 dev 屏切换导航为开发态临时物,非成品导航。
+1. **入口页仅简化表单,未接 mockup 丰富流程**(`mockup/entry.html`):当前 `EntryScreen` 是「source 下拉 + 通用文本框」骨架,缺三来源分段选择器、GitHub PR 粘贴+实时预览卡+解析/remote 校验、「从最近 open PR 选择」列表、gh 未登录引导、本地分支的分支选择器(commits ahead)、GitButler workspace 检测+虚拟分支列表、「给 agent 附加上下文」。补齐需**前后端同做**:后端缺 list-open-prs / list-branches / detect-gitbutler-vbranch / pr-preview 等 IPC。
+2. **onboarding 环境自检屏**(`mockup/onboarding.html`):首启不检测 codex/gh,缺失时抛原始错误。
+3. **独立设置屏**(`mockup/settings.html`):设置只能就地改(入口的模型/effort/通知、顶栏主题);codex 路径/`CODEX_HOME`、gh 路径无 UI,走 PATH 默认。
+4. **历史屏**(`mockup/history.html`):只有入口「最近的审核」列表,无搜索/筛选/软删除。
+5. 顶部 dev 屏切换导航为开发态临时物,非成品导航。
 
 ## 分层落地情况
 
@@ -78,4 +79,4 @@
 
 ## 后续可选项
 
-前端核心 backlog 已全部收口。唯一非核心 nice-to-have:三块整屏(settings / history / onboarding)从 mockup 接入 React——不阻断核心 dogfood,按需再做。
+diff-review 主流程(三栏 / triage / discussion / summary / 提交导出)已收口。未收口的整屏:入口页丰富流程(见「尚缺 1」,前后端同做),以及 settings / history / onboarding 三块从 mockup 接入 React——均不阻断核心 dogfood,按需再做。
