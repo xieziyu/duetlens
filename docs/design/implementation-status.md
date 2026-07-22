@@ -2,9 +2,9 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:后端垂直打通 + 前端 diff-review 主流程基本完成 · 最后更新 2026-07-22 —— backlog #1–#6 + #7 前端三栏 diff-review 全套 + 审核规则三层编辑器 + 提交屏 422 定位 + 第三层空态/diff 边界打磨 + 模型选择·reasoning effort + 长任务完成通知 + 通知点击定位到具体 discussion + 第三层打磨(a11y 焦点管理 · 窄窗口退化)均已合入 main(origin/main HEAD=ad83b98)。#7 涵盖:三栏 shell + 语法高亮 + 拖拽栏宽 + **finding 写路径(triage + 就地编辑)** + **diff 视图交互(unified/split + per-file viewed/折叠)** + **框选/行内 ＋ 发起 discussion + Discussion 栏协同对话** + **Summary tab(结论/统计/可编辑总结/关注主题筛选)** + **全局 UI 偏好持久化 + per-review viewed 持久化** + **键盘快捷键 + 帮助浮层** + **promote(discussion→finding)** + **导出 Markdown 屏** + **GitHub PR review 提交屏** + **顶栏合并(review 单栏 + 常驻 CTA)** + **手动新增 finding(origin=manual)** + **gutter 锚点圆点** + **首轮扫描 timeline**(右栏三 tab 全齐 + 终点提交/导出屏齐备)。另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查,支持 `?source=github` / `?submit=` / `?scan` 切态)(见下)。
+> 状态:后端垂直打通 + 前端 diff-review 主流程基本完成 · 最后更新 2026-07-22 —— backlog #1–#6 + #7 前端三栏 diff-review 全套 + 审核规则三层编辑器 + 提交屏 422 定位 + 第三层空态/diff 边界打磨 + 模型选择·reasoning effort + 长任务完成通知 + 通知点击定位到具体 discussion + 第三层打磨(a11y 焦点管理 · 窄窗口退化)+ 模型下拉动态拉取 + per-review last_active_tab 持久化均已合入 main(origin/main HEAD=f5b6ee2)。#7 涵盖:三栏 shell + 语法高亮 + 拖拽栏宽 + **finding 写路径(triage + 就地编辑)** + **diff 视图交互(unified/split + per-file viewed/折叠)** + **框选/行内 ＋ 发起 discussion + Discussion 栏协同对话** + **Summary tab(结论/统计/可编辑总结/关注主题筛选)** + **全局 UI 偏好持久化 + per-review viewed 持久化** + **键盘快捷键 + 帮助浮层** + **promote(discussion→finding)** + **导出 Markdown 屏** + **GitHub PR review 提交屏** + **顶栏合并(review 单栏 + 常驻 CTA)** + **手动新增 finding(origin=manual)** + **gutter 锚点圆点** + **首轮扫描 timeline**(右栏三 tab 全齐 + 终点提交/导出屏齐备)。另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查,支持 `?source=github` / `?submit=` / `?scan` 切态)(见下)。
 >
-> **剩余 backlog(前端)**:核心项已全部收口(文末「后续可选项」仅剩 1 项设计未定的 nice-to-have)。已落地:第三层打磨(**a11y 焦点管理** + **窄窗口退化**)、审核规则三层编辑器(`PromptRulesScreen` + `prompt:get/save`)、提交屏 per-finding 422 定位 + fix-action(本地锚点预判 + `review:set-finding-anchor`)、第三层空态与 diff 边界打磨(Findings 干净空态 + diff 文件状态 pill)、**模型选择 + reasoning effort**(EntryScreen 选择器 + 落库 + 注入 codex thread/start)、**模型下拉动态拉取**(codex `model/list` + 降级手填)、**per-review last_active_tab 持久化**、**长任务完成通知**(扫描完成/追问回复:失焦弹原生系统通知·点击聚焦打开 review,聚焦弹应用内 toast + 偏好开关)。
+> **剩余 backlog(前端)**:核心项已全部收口,无待办可选项(文末「后续可选项」中 prompt 节内追加已拍板不做)。已落地:第三层打磨(**a11y 焦点管理** + **窄窗口退化**)、审核规则三层编辑器(`PromptRulesScreen` + `prompt:get/save`)、提交屏 per-finding 422 定位 + fix-action(本地锚点预判 + `review:set-finding-anchor`)、第三层空态与 diff 边界打磨(Findings 干净空态 + diff 文件状态 pill)、**模型选择 + reasoning effort**(EntryScreen 选择器 + 落库 + 注入 codex thread/start)、**模型下拉动态拉取**(codex `model/list` + 降级手填)、**per-review last_active_tab 持久化**、**长任务完成通知**(扫描完成/追问回复:失焦弹原生系统通知·点击聚焦打开 review,聚焦弹应用内 toast + 偏好开关)。
 
 设计文档描述目标结构;本页记录**已落地到代码**的部分、验证方式与剩余 backlog。实现细节以代码为准,本页只做导航与状态。
 
@@ -98,10 +98,10 @@
    - ✅ 第三层打磨 · a11y 焦点管理(已合入 main):`KbdHelp` 收敛为规范模态——`aria-modal`、打开时焦点移入关闭按钮并记住来处、关闭(Esc/✕/点遮罩)后把焦点归还开启者、Tab 在弹层内循环(首尾环绕);Esc 在弹层内 `stopPropagation` 自闭,不再依赖 ReviewScreen 全局 keydown。Composer 的「移除引用」由只可点击的 `<span>` 改为可聚焦、带 `aria-label` 的 `<button>`(`.x` 加按钮重置样式保持视觉不变)。纯 UI 无 spike;preview `?screen=review` 实测:? / ⌘ 开弹层焦点入关闭键、Esc 关并回焦开启者(`focusBackOnOpener` 校验通过),双主题。
    - ✅ 第三层打磨 · 窄窗口退化(已合入 main):三栏 shell 现随窗口宽度分级退化。**先修一处潜在撑破**——`.rev-root` 原为隐式 `auto` 单列(取 max-content),窄窗口下被 `.rev-main` 的宽代码行撑到 900px 把右栏顶出视口;显式约束 `grid-template-columns: minmax(0,1fr)` + `.rev-main`/`.pane` 补 `min-width:0`,中列 `minmax(0,1fr)` 才真正可收缩、宽内容在 pane 内横滚。断点:`≤1120px` 侧栏按持久化宽度 `min(...)` 上限收窄(左 208 / 右 340)+ 顶栏隐 lastTool、收窄标题;`≤880px` 收起文件树(diff 已全量堆叠、树仅跳转,置 0 列 + 隐边框 + resizer 免指针)、顶栏进一步隐 model/tokens/effort/title、ref chip 省略。纯 CSS 无 spike;preview 在 1280/1000/820/640 实测:1280 三栏不变(树 300 / 右 420)、1000 侧栏收窄、820 树收起两栏、640 无横向溢出(`screen-host` 溢出=0、无 overflower),回宽无回归。
 
-## 后续可选项(非核心 backlog · 需拍板)
+## 后续可选项(非核心 backlog)
 
-前端核心 backlog 已收口;下列 nice-to-have 因「设计未定」暂缓,做前先确认:
+前端核心 backlog 已全部收口,无待办可选项。
 
-1. **prompt 节内追加(非整节替换)**:当前分层为「每节整节替换」winner-takes-all;改为节内可追加涉及规则合并语义取舍,design 层「待议」。
-
-**已于 feat/dev(2026-07-22)落地**:模型下拉动态拉取 codex `model/list`(降级手填兜底)、per-review `last_active_tab` 持久化(全局 `defaultTab` 退为无记忆时的初始默认)。
+- ✅ 模型下拉动态拉取 codex `model/list`(降级手填兜底)—— feat/dev 2026-07-22 合入 main。
+- ✅ per-review `last_active_tab` 持久化(全局 `defaultTab` 退为无记忆时的初始默认)—— feat/dev 2026-07-22 合入 main。
+- ❌ **prompt 节内追加(非整节替换)**:2026-07-22 拍板**不做**。分层保持「每节整节替换」winner-takes-all;节内追加涉及的规则合并语义不引入。
