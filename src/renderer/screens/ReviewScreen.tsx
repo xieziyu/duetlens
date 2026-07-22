@@ -22,7 +22,6 @@ const LEFT_MIN = 180;
 const LEFT_MAX = 460;
 const RIGHT_MIN = 300;
 const RIGHT_MAX = 620;
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 type RightTab = 'discussion' | 'findings' | 'summary';
 
@@ -317,7 +316,14 @@ export function ReviewScreen({
           viewed={viewed}
           onToggleViewed={onToggleViewed}
         />
-        <Resizer onDrag={(dx) => update({ leftWidth: clamp(leftW + dx, LEFT_MIN, LEFT_MAX) })} />
+        <Resizer
+          cssVar="--left-w"
+          width={leftW}
+          min={LEFT_MIN}
+          max={LEFT_MAX}
+          sign={1}
+          onCommit={(w) => update({ leftWidth: w })}
+        />
         <DiffPane
           files={diff}
           findings={findings}
@@ -338,7 +344,14 @@ export function ReviewScreen({
           onToggleViewed={onToggleViewed}
           onToggleCollapsed={onToggleCollapsed}
         />
-        <Resizer onDrag={(dx) => update({ rightWidth: clamp(rightW - dx, RIGHT_MIN, RIGHT_MAX) })} />
+        <Resizer
+          cssVar="--right-w"
+          width={rightW}
+          min={RIGHT_MIN}
+          max={RIGHT_MAX}
+          sign={-1}
+          onCommit={(w) => update({ rightWidth: w })}
+        />
         <RightPanel
           tab={tab}
           onTab={setTab}

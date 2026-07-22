@@ -1,41 +1,67 @@
 import { useCallback, useRef, useState } from 'react';
 
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
 export interface ResizerProps {
-  /** 拖拽时回调:相对本次拖拽起点的水平位移(px,右为正) */
-  onDrag: (deltaX: number) => void;
+  /** 拖拽实时驱动的栏宽 CSS 变量(挂在 .rev-root) */
+  cssVar: string;
+  /** 当前已提交栏宽(px);拖拽以此为起点 */
+  width: number;
+  min: number;
+  max: number;
+  /** 位移方向:左栏 +dx 变宽 = 1;右栏 -dx 变宽 = -1 */
+  sign: 1 | -1;
+  /** 松手时提交最终栏宽(去抖持久化由父层负责) */
+  onCommit: (width: number) => void;
 }
 
 /**
- * 列间可拖拽分隔条(对齐 mockup .resizer)。用 pointer capture 跟踪拖拽,
- * 把位移交给父组件换算成栏宽;宽度约束/持久化由父层负责。
+ * 列间可拖拽分隔条(对齐 mockup .resizer)。拖拽期间只命令式改 .rev-root 的栏宽 CSS 变量,
+ * 不走 React state,避免每次 pointermove 重渲染整棵 DiffPane 导致卡顿;松手才提交一次落库。
  */
-export function Resizer({ onDrag }: ResizerProps) {
-  const startX = useRef(0);
+export function Resizer({ cssVar, width, min, max, sign, onCommit }: ResizerProps) {
+  const elRef = useRef<HTMLDivElement>(null);
+  // 拖拽起点与实时宽度;非 state,避免触发渲染
+  const drag = useRef<{ startX: number; startW: number; latest: number } | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    startX.current = e.clientX;
-    setDragging(true);
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
+  const host = () => elRef.current?.closest('.rev-root') as HTMLElement | null;
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      drag.current = { startX: e.clientX, startW: width, latest: width };
+      setDragging(true);
+      elRef.current?.setPointerCapture(e.pointerId);
+    },
+    [width],
+  );
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (!dragging) return;
-      onDrag(e.clientX - startX.current);
-      startX.current = e.clientX;
+      const d = drag.current;
+      if (!d) return;
+      const next = clamp(d.startW + sign * (e.clientX - d.startX), min, max);
+      d.latest = next;
+      host()?.style.setProperty(cssVar, `${next}px`);
     },
-    [dragging, onDrag],
+    [cssVar, min, max, sign],
   );
 
-  const stop = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    setDragging(false);
-    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-  }, []);
+  const stop = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const d = drag.current;
+      drag.current = null;
+      setDragging(false);
+      elRef.current?.releasePointerCapture?.(e.pointerId);
+      if (d && d.latest !== width) onCommit(d.latest);
+    },
+    [width, onCommit],
+  );
 
   return (
     <div
+      ref={elRef}
       className={`resizer${dragging ? ' drag' : ''}`}
       role="separator"
       onPointerDown={onPointerDown}
