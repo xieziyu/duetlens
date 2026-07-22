@@ -2127,6 +2127,10 @@
 .bubble strong {
   color: var(--text);
 }
+/* 气泡内 markdown:块级排版接管,关掉气泡的 pre-wrap 以免段间多余空白(md-code 自带 pre-wrap) */
+.bubble .c-prose {
+  white-space: normal;
+}
 .typing {
   display: inline-flex;
   gap: 3px;

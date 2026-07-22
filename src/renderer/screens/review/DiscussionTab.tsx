@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Discussion, Finding, Message } from '@shared/domain';
 import { Composer } from './Composer';
+import { renderMarkdown } from './markdown';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
 
@@ -248,7 +249,9 @@ function MessageBubble({
           <b className={role === 'agent' ? 'agent-name' : 'human-name'}>{name}</b>
           {meta && <span className="t mono">{meta}</span>}
         </div>
-        <div className={`bubble${role === 'agent' ? ' agent' : ''}`}>{text}</div>
+        <div className={`bubble${role === 'agent' ? ' agent' : ''}`}>
+          <div className="c-prose">{renderMarkdown(text)}</div>
+        </div>
       </div>
     </div>
   );
