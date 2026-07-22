@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:方向已定 + 主入口/review 三 tab/扫描态/栏宽/空态错误态/finding 就地编辑器/Summary 正文编辑态/框选发起 discussion/per-file Viewed/off-diff findings 区/split vs unified 均已落地(见「屏与状态」)。核心屏功能基本齐;tokens 与组件清单见 [design-system](design-system.md)。
+> 状态:方向与各屏设计已定(见「屏与状态」);tokens 与组件清单见 [design-system](design-system.md)。落地进度见 [implementation-status](implementation-status.md)。
 
 - 整体重新设计。
 - **diff review 是主场**——用户交互最多的界面。
@@ -162,26 +162,7 @@
 - **CTA 门控**:仅必需项(codex + app-server)全就绪才启用「进入 Duetlens →」;可选项(gh)未配只影响 GitHub 来源。底部「跳过,稍后在设置中配置」次要入口。
 - 顶栏「预览态」下拉演示 checking / codex 未安装 / gh 未登录 / 全部就绪四态;checking 态模拟探测完成自动落到就绪。状态胶囊与 severity/add/del 语义色一致,同 settings 环境区。
 
-## 待设计 backlog
-
-主干(entry → review → 提交/导出)+ 设计系统 + 状态机/组件层已覆盖。以下为盘点出的**主干之外整块缺口**与**运行时/异常态**,按推进顺序排;逐块补齐后移入上面的「屏与状态」并在此划掉。
-
-**第二层 · 运行时与异常态**——主干只画了 happy path,这几项直接对应 [open-questions](open-questions.md) 的未决技术点:
-
-- [x] **5 reviewing 期错误态**:codex app-server 崩溃/重连、turn 出错、network 断、MCP 注入失败的呈现与重试。→ `mockup/review-runtime.html`,见上「运行时 / 异常态」。
-- [x] **6 中断正在跑的 turn**:`ConversationalAgent.interrupt` 的 UI 入口(停止)。→ 同上。
-- [x] **7 审批 / elicitation 呈现**:自建工具自动 accept 已定,但 `execCommandApproval`/`applyPatchApproval` 等反向请求若冒出需审批 UI(见 open-questions「审批面收敛」)。→ 同上。
-- [x] **8 上下文压缩可见性**:ctx 接近上限预警 + 压缩发生时反馈 + 压缩后锚点提示(见 open-questions「上下文/token 膨胀」)。→ 同上。
-- [x] **9 提交失败 / 部分成功**:submit 中断、失败、一次 review 二次增量提交语义。→ `mockup/submit-to-github.html`「提交态」切换器 + [findings-submit](findings-submit.md#提交结果与异常态原子提交--增量)。**关键结论:PR review 是原子提交,无"部分成功";"部分失败"的真实形态是 422 行锚点失效 → 降级/改锚点/剔除后整份重提。**
-
-**第一层 · 整块缺失的功能屏(次批,各自独立 mockup)** —— 已全部完成:
-
-- [x] **设置 / 偏好面板**:管理 `ui_settings`(主题两轴 / 栏宽 / 默认 tab / 默认 diff 视图)+ codex / gh 环境配置。→ `mockup/settings.html`,见上「设置 / 偏好面板」。
-- [x] **审核规则提示词编辑**:查看/编辑 project → global → builtin 三层与合并结果(分节覆盖模型)。→ `mockup/prompt-rules.html`,见上「审核规则提示词 · 三层编辑器」。
-- [x] **全部会话历史页**:全量列表 + 搜索 + source/状态筛选 + 时间分桶 + 软删除/撤销。→ `mockup/history.html`,见上「全部会话历史页」。
-- [x] **首次启动 / onboarding**:codex CLI / app-server / gh 环境检查清单 + 修复命令 + CTA 门控。→ `mockup/onboarding.html`,见上「首次启动 / codex onboarding」。
-
-**第三层(打磨)**:✅ 各 tab 空态(Findings 干净通过正向空态 + 覆盖度)、✅ diff 边界文件状态 pill(新增/删除/重命名/二进制;渲染层早已分派 binary/空 hunk/rename 提示)。**余**:窄窗口退化、模型选择/reasoning effort、a11y 焦点管理、长任务完成通知、大文件/大 diff 截断。
+> 所有屏(主干 entry → review → 提交/导出、运行时/异常态、设置/审核规则/历史/onboarding)均已有 mockup 设计;落地进度见 [implementation-status](implementation-status.md)。
 
 ## 已有 mockup
 

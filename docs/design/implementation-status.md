@@ -1,12 +1,27 @@
 # 实现进度
 
-> 返回 [文档索引](../README.md)
+> 返回 [文档索引](../README.md) · 最后更新 2026-07-22 · origin/main HEAD=f5b6ee2
 >
-> 状态:后端垂直打通 + 前端 diff-review 主流程基本完成 · 最后更新 2026-07-22 —— backlog #1–#6 + #7 前端三栏 diff-review 全套 + 审核规则三层编辑器 + 提交屏 422 定位 + 第三层空态/diff 边界打磨 + 模型选择·reasoning effort + 长任务完成通知 + 通知点击定位到具体 discussion + 第三层打磨(a11y 焦点管理 · 窄窗口退化)+ 模型下拉动态拉取 + per-review last_active_tab 持久化均已合入 main(origin/main HEAD=f5b6ee2)。#7 涵盖:三栏 shell + 语法高亮 + 拖拽栏宽 + **finding 写路径(triage + 就地编辑)** + **diff 视图交互(unified/split + per-file viewed/折叠)** + **框选/行内 ＋ 发起 discussion + Discussion 栏协同对话** + **Summary tab(结论/统计/可编辑总结/关注主题筛选)** + **全局 UI 偏好持久化 + per-review viewed 持久化** + **键盘快捷键 + 帮助浮层** + **promote(discussion→finding)** + **导出 Markdown 屏** + **GitHub PR review 提交屏** + **顶栏合并(review 单栏 + 常驻 CTA)** + **手动新增 finding(origin=manual)** + **gutter 锚点圆点** + **首轮扫描 timeline**(右栏三 tab 全齐 + 终点提交/导出屏齐备)。另有 UI preview harness(`npm run preview:ui`,脱 Electron 视觉自查,支持 `?source=github` / `?submit=` / `?scan` 切态)(见下)。
->
-> **剩余 backlog(前端)**:核心项已全部收口,无待办可选项(文末「后续可选项」中 prompt 节内追加已拍板不做)。已落地:第三层打磨(**a11y 焦点管理** + **窄窗口退化**)、审核规则三层编辑器(`PromptRulesScreen` + `prompt:get/save`)、提交屏 per-finding 422 定位 + fix-action(本地锚点预判 + `review:set-finding-anchor`)、第三层空态与 diff 边界打磨(Findings 干净空态 + diff 文件状态 pill)、**模型选择 + reasoning effort**(EntryScreen 选择器 + 落库 + 注入 codex thread/start)、**模型下拉动态拉取**(codex `model/list` + 降级手填)、**per-review last_active_tab 持久化**、**长任务完成通知**(扫描完成/追问回复:失焦弹原生系统通知·点击聚焦打开 review,聚焦弹应用内 toast + 偏好开关)。
+> 本页只做**导航与当前状态**:各层落地情况、如何运行、尚缺的整屏、spike 验证、与设计的偏差。实现细节以代码为准。逐切片的开发流水不在此保留(见 git history)。
 
-设计文档描述目标结构;本页记录**已落地到代码**的部分、验证方式与剩余 backlog。实现细节以代码为准,本页只做导航与状态。
+## 当前状态:核心 review 闭环已可实机使用
+
+真实链路(非 demo)已端到端打通并合入 main:
+
+> 入口发起(本地分支 / GitHub PR / GitButler 三 source)→ **真实 codex 首轮扫描** → findings 经 MCP 流入 → 三栏 diff review(unified/split · 语法高亮 · viewed/折叠 · 拖栏宽)→ triage(保留/剔除/就地编辑)→ 框选/行内发起 discussion + **追问 codex**(多轮 · 重启后 `thread/resume` 续接)→ Summary(结论/统计/可编辑总结)→ 终点:**GitHub PR review 原子提交**(真实 `gh api`,含 422 锚点定位/修锚)或 **导出 Markdown**。
+
+外加:模型/effort 选择(动态下拉 + 手填兜底)、完成通知(失焦原生 / 聚焦应用内)、审核规则三层编辑、键盘快捷键、持久化(全局偏好 + per-review viewed/tab)。
+
+### 如何运行
+- **实机**:`npm run rebuild:electron` → `npm start`。前提:`codex login`(扫描/追问烧 token);github-pr source 需 `gh auth login`。
+- **前端视觉自查(不需 Electron)**:`npm run preview:ui` → 浏览器开 `/preview.html`。`src/renderer/preview/` 用 fixture stub `window.duetlens`,顶栏切明暗×配色两轴;支持 `?screen=entry|review|submit|prompt`、`?source=github`、`?submit=invalid|failed`、`?scan`、`?clean`。
+- **ABI 坑**:同一 `better-sqlite3` 服务两运行时——app 需 Electron ABI(`rebuild:electron`)、spike/tsx 需 Node ABI(`rebuild:node`),切换后对方失效。
+
+### 尚缺(不阻断核心,影响"零配置首用"顺滑;均有 mockup 未接 React)
+1. **onboarding 环境自检屏**(`mockup/onboarding.html`):首启不检测 codex/gh,缺失时抛原始错误。
+2. **独立设置屏**(`mockup/settings.html`):设置只能就地改(入口的模型/effort/通知、顶栏主题);codex 路径/`CODEX_HOME`、gh 路径无 UI,走 PATH 默认。
+3. **历史屏**(`mockup/history.html`):只有入口「最近的审核」列表,无搜索/筛选/软删除。
+4. 顶部 dev 屏切换导航为开发态临时物,非成品导航。
 
 ## 分层落地情况
 
@@ -15,93 +30,52 @@
 | 桌面外壳 | electron-forge(vite-typescript)+ React SPA | ✅ 骨架、安全基线(contextIsolation/sandbox)、主题两轴 |
 | 主进程后端 | `src/main.ts` + `src/backend/**` | ✅ |
 | ConversationalAgent 抽象 | `src/backend/agent/conversational-agent.ts` | ✅ 接口;codex 唯一实现 |
-| codex app-server 封装 | `src/backend/agent/codex/`(jsonrpc / codex-app-server / codex-agent / protocol) | ✅ 薄封装、事件归一、elicitation 自动 accept |
+| codex app-server 封装 | `src/backend/agent/codex/`(jsonrpc / codex-app-server / codex-agent / protocol) | ✅ 薄封装、事件归一、elicitation 自动 accept、`model/list` |
 | in-process HTTP MCP | `src/backend/mcp/duetlens-mcp-server.ts` | ✅ report_finding / update_finding / get_diff / get_file |
-| review 编排 | `src/backend/review/`(review-session / review-manager) | ✅ 首轮扫描 + 多轮追问(discussion 回路)→ findings/messages 落库 → 领域事件 |
-| source 层 | `src/backend/source/`(source / local-git-source / github-pr-source / gitbutler-source / create-source) | ✅ git / gh / but(三种 source 齐备) |
-| 持久化 | `src/backend/db/`(schema / database / review-store) | ✅ better-sqlite3、迁移、六表 |
+| review 编排 | `src/backend/review/`(review-session / review-manager / github-submitter) | ✅ 首轮扫描 + 多轮追问 + GitHub 提交 → 落库 → 领域事件 |
+| source 层 | `src/backend/source/`(local-git / github-pr / gitbutler / create-source) | ✅ git / gh / but 三种齐备 |
+| 持久化 | `src/backend/db/`(schema / database / review-store) | ✅ better-sqlite3、迁移(V4)、六表 |
 | 领域模型 | `src/shared/domain.ts` | ✅ 类型 + zod ingress schema |
-| IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令(start/resume/send-message)/事件推送 + dialog 目录选择 + `review:diff` |
-| 结构化 diff | `src/shared/diff.ts`(parseUnifiedDiff)+ `review_diffs` 表(schema V2) | ✅ 后端预取落库、MCP 与 renderer 共用;add/del/modify/rename/binary |
-| 前端屏 | `src/renderer/`(EntryScreen 真实发起表单 / ReviewScreen 三栏 + FileTree/DiffPane/InlineCard/Resizer + SelectionPopover/InlineComposer/DiscussionTab/Composer/SummaryTab + settings/SettingsProvider) | 🚧 三栏 shell + unified/split diff + 语法高亮(highlight.js)+ 拖拽栏宽 + 锚定内联 finding 卡 + off-diff + **finding 写路径(triage + 就地编辑)** + **per-file viewed/折叠** + **框选/行内 ＋ 发起 discussion + Discussion 栏对话** + **Summary tab(结论/统计/可编辑总结/关注主题筛选)** + **全局 UI 偏好持久化(主题/栏宽/tab/diff 视图)** + **per-review 进度持久化(viewed → `review_ui_state`)**已落;提交屏 待做 |
+| IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令/事件推送 + dialog + `review:diff` + `agent:list-models` |
+| 结构化 diff | `src/shared/diff.ts` + `review_diffs` 表 | ✅ 后端预取落库、MCP 与 renderer 共用;add/del/modify/rename/binary |
+| 前端屏 | `src/renderer/screens/`(EntryScreen / ReviewScreen 三栏 / SubmitExportScreen / PromptRulesScreen) | ✅ 主流程四屏齐;缺 settings/history/onboarding 三屏(见上「尚缺」) |
 
 ## 端到端验证(headless spike)
 
-`npm run spike:<name>`。前四个真跑 codex(需 `codex login`、耗 token);`mcp`/`diff`/`prompt`/`gitbutler` 确定性、不烧 token。**原生模块 ABI 切换**:同一个 `better-sqlite3` 服务两个运行时——跑 app(`npm start`)需 Electron ABI(`npm run rebuild:electron`),跑 spike(tsx/Node)需 Node ABI(`npm run rebuild:node`);两者切换后对方即失效,按当前要跑的目标先执行对应 rebuild。
+`npm run spike:<name>`。`codex`/`review`/`source`/`discussion`/`resume` 真跑 codex(需 `codex login`、耗 token);其余确定性、不烧 token。
 
 | spike | 验证 |
 | --- | --- |
 | `codex` | app-server 常驻会话 + MCP 注入 + report_finding 双向可见 + elicitation |
-| `db` | 持久化读写 / 迁移(含 V3 model/effort 列)/ triage / update / 级联删 / model·effort 往返 |
+| `db` | 持久化读写 / 迁移(V3 model/effort · V4 notify)/ triage / update / 级联删 |
 | `review` | ReviewSession 垂直:codex 扫描 → MCP → sqlite 落库 |
 | `source` | LocalGitSource 取真实 git diff/文件 → codex → 落库;parsePrRef |
-| `discussion` | 扫描后就 finding/user-discussion 多轮追问 → user/agent 消息成对落库(同一 thread) |
-| `resume` | session dispose 后按落库 threadId `thread/resume` 续接 → 复用会话记忆追问 |
-| `gitbutler` | `but diff --format json` 重建标准 unified + 路径穿越防护 + 实仓 smoke;不烧 token |
-| `mcp` | MCP client 驱动 report_finding/update_finding 回写 store + bearer 令牌鉴权(无/错令牌 401);不烧 token |
-| `prompt` | 审核规则提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ 空节忽略 + 两层读盘 + baseInstructions 组装;不烧 token |
-| `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store setDiff/getRawDiff 回环;不烧 token |
-| `write` | finding 写路径:ReviewManager.setTriage/updateFinding 落库 + 外发 `finding` 事件(dismiss→keep 往返、编辑不重置 triage、suggestion 清空、未知 id 抛错);不烧 token |
-| `ui-state` | per-review UI 进度态:ReviewStore.get/saveReviewUiState 往返 + 默认空态 + upsert 单行 + 损坏 JSON 降级 + 级联删除;不烧 token |
-| `promote` | discussion→finding 提升:锚点沿用 + 会话历史保留 + kind 翻转为 finding + 重复/无锚点/未知 id 守卫;不烧 token |
-| `export` | 导出 Markdown 生成:文件名 slug + 结构(标题/来源 blockquote/摘要/Findings)+ 开关(summary/suggestion/dismissed)+ 分组(按严重度/按文件)+ 全部剔除空态;纯函数、不烧 token |
-| `submit` | GitHub 提交:payload 组装(inline RIGHT 锚点 + suggestion 块 + summary body)+ ReviewManager.submitReview 的 success(锁定 submitted/status/事件)/ 增量(已提交不重发)/ invalid / failed / 非 github 守卫;注入假 submitter、不烧真 PR |
-| `add-finding` | 手动新增 finding:ReviewManager.addManualFinding 落库(origin=manual)+ 建承载 discussion + 外发 finding/discussion 事件 + 同 triage 管线 + body/suggestion/category 缺省;不烧 token |
-| `notify` | 长任务完成通知决策:偏好门控 + 扫描完成(status→reviewing)每 review 只提示一次 + 追问回复(message role=agent)+ 失焦走原生/聚焦走应用内 + 非完成信号(scanning/failed/user 消息)不提示;纯函数、不依赖 Electron/DB、不烧 token |
+| `discussion` | 扫描后多轮追问 → user/agent 消息成对落库(同一 thread) |
+| `resume` | session dispose 后按 threadId `thread/resume` 续接 → 复用会话记忆追问 |
+| `gitbutler` | `but diff --format json` 重建 unified + 路径穿越防护 + 实仓 smoke |
+| `mcp` | report_finding/update_finding 回写 store + bearer 令牌鉴权(无/错令牌 401) |
+| `prompt` | 提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ baseInstructions 组装 |
+| `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store 回环 |
+| `write` | finding 写路径:setTriage/updateFinding 落库 + 外发 `finding` 事件 |
+| `ui-state` | per-review UI 态:get/saveReviewUiState 往返(viewed + last_active_tab)+ 默认/upsert/降级/级联 |
+| `promote` | discussion→finding 提升:锚点沿用 + 会话历史保留 + kind 翻转 + 守卫 |
+| `export` | 导出 Markdown 生成:结构 + 开关 + 分组 + 全部剔除空态;纯函数 |
+| `submit` | GitHub 提交:payload 组装 + submitReview 的 success/增量/invalid/failed/非 github 守卫 + 锚点预判 |
+| `add-finding` | 手动新增 finding(origin=manual)+ 建承载 discussion + 同 triage 管线 |
+| `notify` | 完成通知决策:偏好门控 + 扫描完成去重 + 追问回复 + 失焦/聚焦分派;纯函数 |
 
-`npm start` 实机验证过:Electron 启动、`better-sqlite3` 在 Electron ABI 下加载、六表迁移到位、IPC 注册无崩溃。
-
-**前端视觉自查(不需 Electron)**:`npm run preview:ui` 起纯 Vite dev server,`src/renderer/preview/` 用 fixture stub `window.duetlens`(一个 review + 多文件 diff + findings 含 off-diff),浏览器开 `/preview.html` 即渲染真实 diff-review 组件 + CSS,顶栏可切明暗×配色两轴。dev-only,forge 生产只打 `index.html`。做 UI 切片时先扩 `preview/fixtures.ts` 再看效果。
+`npm start` 实机验证过:Electron 启动、`better-sqlite3` Electron ABI 加载、六表迁移、IPC 注册无崩溃。
 
 ## 与设计的偏差 / 决策记录
 
 - **前端重写不移植 1.0**;source 层重新实现(未整体搬 1.0 SourceFlow)。
 - **首轮机审自建**,不复用 codex 内置 `review/start`。
 - **MCP SDK 用低阶 `Server` + 手写 JSON Schema**,规避 zod4 与高阶 tool API 的兼容不确定性。
-- **finding id 回环**:report_finding 由 MCP 生成 id 回传,使 codex 侧 id 与存储 id 一致,update_finding 据此定位。
-- codex 版本以 **0.144.1** 实测为准,**0.144.6 经 `generate-ts` 全量 diff 确认协议逐字节无变化**(详见 [codex-integration](codex-integration.md));协议子集手写在 `protocol.ts`,`npm run codex:gen-types` 可全量重导比对。
+- **finding id 回环**:report_finding 由 MCP 生成 id 回传,codex 侧 id 与存储 id 一致,update_finding 据此定位。
+- **提示词分节覆盖**:project→global→builtin 每节独立取最高优先层,整节替换(**节内追加已拍板不做**,winner-takes-all)。
+- **右栏 tab 持久化**:全局 `ui_settings.default_tab` 为「无记忆时的初始默认」,per-review `review_ui_state.last_active_tab` 覆盖。
+- codex 版本以 **0.144.1** 实测为准,**0.144.6 经 `generate-ts` 全量 diff 确认协议逐字节无变化**(详见 [codex-integration](codex-integration.md));协议子集手写在 `protocol.ts`。
 
-## 剩余 backlog(非 UI 框架优先)
+## 后续可选项
 
-1. ✅ 多轮 / discussion 回路(sendMessage 续问、user-discussion + message 落库、追问经 IPC)—— source 生命周期改为随 session dispose(续问需读文件)
-2. ✅ `thread/resume` 续接(会话不在内存时按 codexThreadId 重建 source + 恢复 codex thread;sendMessage 自动续接,另有显式 `review:resume`)—— demo review 因临时 workdir 重启即失效,续接面向真实 source
-3. ✅ IPC `review:start` 真实命令通道(EntryScreen 真实发起表单:source 选择 / ref / 仓库目录选择器 / 基线;演示入口降级为次要链接)—— startReview 核心路径由 spike:source 覆盖
-4. ✅ GitButler source(`but diff <branch> --format json` 重建 unified;文件读 worktree 磁盘;EntryScreen 选项已启用)
-5. 生命周期健壮性:✅ MCP bearer 令牌隔离(codex 经 `bearer_token_env_var` 携带,无/错令牌 401)· ✅ `get_file` 路径穿越防护 · ✅ dispose 对齐(`disposeReview`/`review:release` + LRU 会话上限逐出闲置子进程)· ✅ 审批面收敛(反向审批归一成 `approval` 领域事件:受信 elicitation 自动 accept 为 expected,`execCommandApproval`/`applyPatchApproval` 等一律 denied 且上报)· ✅ 长会话 compaction 观测(依赖 codex 内置 auto-compact——按模型 `effective_context_window_percent` 默认开启、可 turn 内触发,优于我们只能插在 turn 间的手动 `thread/compact/start`;经 `contextCompaction` item 归一成 `compaction` 领域事件,压缩只摘要 codex 历史,不碰 DB 锚点/finding)
-6. ✅ 多层级提示词(project→global→builtin **分节覆盖**注入 baseInstructions):resolver 在 `src/backend/prompt/review-prompt.ts`(5 固定节 focus/severity/ignore/tone/context + builtin 默认;层文件 `<cwd>/.duetlens/review.md` 与 `~/.duetlens/review.md`,H2 分节、空节不算覆盖、缺失/读错降级为不覆盖不阻断);每节独立取最高优先层,合并 + 操作性前言 = baseInstructions,经 ReviewManager 注入 start/demo/resume。spike:prompt 覆盖。builtin `focus` 用 better-review 1.0 builtin-rules 的 8 大类规范(非 mockup 占位);severity 保持 high/med/low;`category` 软规范集见 `FINDING_CATEGORIES`(自由串 + 建议取值,MCP 工具描述与 tone 节引用)。分节覆盖比 1.0 整档 winner-takes-all 更细,但仍是整节替换(节内追加待议)。**三层编辑器 UI + 读写 IPC 归入 #7**(与前端一起做)。
-7. 前端:diff-review 三栏真实屏(进行中,已合入 main = 3b2f704)
-   - ✅ 后端 diff 暴露:`parseUnifiedDiff` + `review_diffs` 预取落库 + `review:diff` IPC(见上表)
-   - ✅ 三栏 shell(FileTree | DiffPane | RightPanel)+ 只读 unified diff + 右栏 findings/扫描态
-   - ✅ 语法高亮(`screens/review/highlight.ts` highlight.js core + 精选语言,按扩展名逐行高亮;token→`review-syntax.css` 映射主题 --k/--fn/...)
-   - ✅ 可拖拽栏宽(`screens/review/Resizer.tsx`,左右 pane 间 5px handle;**本地态,未持久化**)
-   - ✅ 锚定内联 finding 卡(read-only view 态,table→card→table 切段)+ off-diff banner + 右栏点选定位高亮
-   - ✅ wordmark 多色 + 闪烁光标(App.tsx/App.css);删 DevBridgeProbe 骨架件
-   - ✅ finding 写路径 · triage + 就地编辑:`review:set-triage` / `review:update-finding` IPC(ReviewManager.setTriage/updateFinding 落库后外发 `finding` 事件,useReviewStream upsert)+ InlineCard view/edit/dismissed 三态(severity/category/title/body/suggestion 编辑,⌘↵ 保存 / Esc 取消,✕ 剔除 / ↩ 恢复;submitted 只读)+ 右栏 Findings tab triage 保留/剔除/恢复 + 保留·剔除 tally。preview fixtures 写路径改内存态并回推事件,双主题实测闭环。**promote(discussion→finding)/ 手动新增 finding / submission 落 submit 屏归后续切片**
-   - ✅ diff 视图交互:unified/split 切换(file-header segmented,全局态;`toSplitRows` 把连续 del/add 两两配成并排双列,pure-add/pure-del 一侧留 blank,内联卡与 unified 共用 InlineCard、锚点一律新侧行号,split 亦逐行语法高亮)+ per-file viewed✓/折叠(file-header ✓=标记已看并折叠、⌄=仅折叠,折叠显 file-collapsed-bar;FileTree viewed tick + 划线灰显 + 树头「N 改动 · M 已看」进度)。**均为本地态,持久化统一留 ④**
-   - ✅ 框选发起 discussion + Discussion 栏协同对话(已合入 main):DiffPane 框选选区解析新侧锚点 → SelectionPopover(`发起 discussion` / `追问 codex`);行内 hover ＋(每新侧行)→ InlineComposer 就地新建;发送即 `addDiscussion` + `sendMessage`,消息经事件流回推。右栏 Discussion tab = 线程切换器 + 活跃线程(anchor-ref + finding 根气泡 + user/agent 气泡 + agent 打字指示 + 自动滚底)+ Composer(引用 chip + 发送);点 finding 亦选中其讨论线程。useReviewStream 加 `ensureMessages` 懒加载续接旧 review 的历史消息。preview fixtures stub `addDiscussion`/`sendMessage`(延迟回推 agent 回复),双主题实测:框选 popover/行内 composer/线程/追问引用/发送闭环全通。**追问烧 token 的真实回路由 spike:discussion 覆盖。**
-   - ✅ Summary tab(已合入 main):结论卡(按未剔除 findings 最高严重度推导 review event:high→Request changes / 有→Comment / 无→Approve,标「仅建议·提交时确认」)+ 统计条(high/med/low + 保留/已提交/讨论)+ **可编辑总结正文**(轻量 markdown 视图 `**粗**`/`` `代码` ``/空行分段 ↔ textarea,⌘↵ 保存·Esc 取消,经 `review:update-summary` 落库、`review` 事件回推)+ 关注主题(按 category 聚合,点击→切 Findings tab 并按分类筛选,Findings 顶部出「筛选·X ✕」可清)+ 覆盖度行 + 提交 CTA(禁用,提交屏后续)。后端补 `ReviewManager.updateSummary`(store.setReviewSummary 已存在)+ `review` ReviewEvent 变体 + useReviewStream setReview。preview fixtures stub updateSummary。双主题实测:verdict/stats/markdown 编辑保存/分类筛选全通。
-   - ✅ 全局 UI 偏好持久化(已合入 main):`SettingsProvider`(`src/renderer/settings/`)启动拉 `ui.getSettings`、改动去抖(400ms)写回 `ui.saveSettings`、主题两轴挂 documentElement,取代原来只存组件 state 的 ThemeProvider(已删)。App 主题控件 + ReviewScreen 的栏宽/默认 tab/默认 diff 视图全部改由 settings 驱动、拖拽/切换即写回。**后端 `ui_settings` 表 + IPC 早已就绪,本切片纯前端接线。** per-file viewed/collapsed 仍为 per-review 本地态(`review_ui_state` 持久化留后续)。preview fixtures 用非默认栏宽(300/420)+ 可变 saveSettings 存储,实测:启动即应用 300/420、明暗切换与 split 切换经去抖落库回读一致。
-   - ✅ per-review UI 态持久化(viewed + last_active_tab → `review_ui_state`):`review:get-ui-state`/`review:save-ui-state` IPC(ReviewManager.get/saveReviewUiState → ReviewStore JSON/列)+ `useReviewUiState` hook(挂载按 reviewId 拉取、改动去抖 400ms 写回、恢复时把已看文件默认折叠)。collapsed 是「标记已看即折叠」派生的临时态、不持久化。**per-review `last_active_tab` 已接线**:右栏 tab 改为每 review 记忆——`useReviewUiState` 同持 `activeTab`(viewed 与 tab 同占一行,写回始终整体快照 upsert 避免互抹),`ReviewScreen` 用 `activeTab ?? settings.defaultTab`(全局 `defaultTab` 退为「无记忆时的初始默认」),切 tab / 键盘 1·2·3 只写 per-review。`npm run spike:ui-state` 确定性 PASS(含 last_active_tab 往返);preview 预置 viewed 文件证明启动即恢复。
-   - ✅ 键盘快捷键 + 帮助浮层(→ mockup #kbdHelp,已合入 main):`useEffect` 全局 keydown —— `?`/⌘ 开关帮助、`Esc` 关、`1/2/3` 切右栏 tab、`u` 切 unified/split(经 `update()` 一并去抖持久化到 `ui_settings`);焦点在输入框或按住修饰键时让位。`KbdHelp.tsx` 双列分组浮层(仅列已实现快捷键;编辑/发送的 ⌘↵·Esc·↵ 由各 InlineCard/Composer/SummaryTab 自理)。rev-topbar 加 `⌘` 触发按钮。preview 实测:帮助开关、Esc、1/2/3 切 tab、u 切 diff 全通
-   - ✅ promote(discussion→finding,已合入 main):Discussion 栏活跃 user 线程顶部「⬆ 转为 finding」按钮 → `review:promote-discussion` IPC(ReviewManager 派生默认标题/正文取首条 user 消息、severity 默认 medium → ReviewStore.promoteDiscussion 翻转 discussion.kind=finding/origin=promoted + 建 finding、事务保证、锚点沿用 discussion、保留会话历史)→ 外发 `finding` + `discussion` 事件(useReviewStream discussion 改为 upsert 使 kind 变更传播)→ 前端聚焦新 finding 内联卡就地编辑。`npm run spike:promote` 确定性 PASS;preview 实测:user 线程 promote → Findings 4→5、glyph 你→◆、内联卡「你·提升」、按钮消失。**手动新增 finding(需锚点选择 UX)留后续切片**
-   - ✅ 提交屏 · 导出 Markdown(非 GitHub source 终点,已合入 main):`SubmitExportScreen` 按 `review.source` 分派——`local-branch`/`gitbutler-vbranch` → `ExportMarkdownScreen`(左预览 hero + 右配置)。纯生成器 `src/shared/export-markdown.ts`(`buildReviewMarkdown`/`exportFileName`/`isKept`,triage!=dismiss 即保留、按严重度/文件分组、summary/suggestion/dismissed 开关),轻量 md 渲染 `screens/export/markdown.ts`(渲染/源码切),右栏保留 checklist 走同一 triage 管线(`setTriage`→事件回推→预览实时刷新)。保存经新 IPC `dialog:save-text-file`(main `showSaveDialog`+`writeFile`);复制走 `navigator.clipboard`。`npm run spike:export` 确定性 PASS;preview 双主题实测全通。
-   - ✅ 提交屏 · GitHub PR review(github-pr source 终点,已合入 main):`SubmitExportScreen` github-pr 分支 → `SubmitGitHubScreen`(左 findings 筛选 + 右 Finish your review)。纯组装 `src/shared/github-review.ts`(`buildPrReviewPayload`:有锚点→inline RIGHT 行评论 + suggestion 块,无锚点→并入 review body;`isSubmittable`=保留且未提交)。提交层 `backend/review/github-submitter.ts`(`GhReviewSubmitter` 经 `gh api …/reviews --input -` 原子提交,实时 head sha 作 commit_id,422/行锚点→invalid、其余→failed;`GitHubSubmitter` 接口可注入)。`ReviewManager.submitReview`:summaryBody 先落库 → 组装待提交集 → 提交;success 时逐条 `setSubmission('submitted', url)` + `setReviewStatus('submitted')` + 事件回推,invalid/failed 不改任何态。已提交项锁定 → 二次提交只发新 delta(增量天然)。新 IPC `review:submit`;`exec.ts` 加 stdin 支持。前端状态机 ready/submitting/success(锁定+GitHub 链接)/invalid(422 banner)/failed(重试);summary textarea 复用 `updateSummary`,event 三选(Comment/Request changes/Approve)。`npm run spike:submit` 确定性 PASS;preview `?source=github`(+`?submit=invalid|failed`)双主题实测:success 锁定+增量 bar、422 banner、failed 重试全通。**per-finding 422 定位 + 修锚点/降级 fix-action、inline 编辑(diff 屏已有)留后续。**
-   - ✅ 顶栏合并(review 单顶栏,已合入 main):抽出 `components/Wordmark` + `components/ThemeControls` 复用;review 屏自渲染合并单栏(brand + 源 chip/title + spacer + meta:model glyph·codex / lastTool / tokens 环 / status / **常驻 CTA** / 主题两轴 / ⌘),`App` 在 `screen==='review'` 时不再套全局栏(entry/submit 仍保留骨架期全局栏 + 开发用屏切换)。CTA 按 `review.source` 分派——github-pr「提交 review」(徽标=待提交 `isSubmittable` 数)/ 本地·vbranch「↓ 导出 review」(徽标=保留数),点击 `onOpenSubmit` 切提交/导出屏。`rev-topbar` 领 `-webkit-app-region: drag` + 88px 交通灯内缩(合并后即窗口顶栏)。preview 双主题 × 双 source 实测:单栏渲染、CTA 变体、CTA→提交/导出→返回闭环全通。**submit/export 屏的次级 bar(exp/sg-topbar)本次不并——其为返回 diff 的子导航,非同一层。**
-   - ✅ 手动新增 finding(origin=manual,已合入 main):diff 框选 → SelectionPopover 加第三动作「＋ 记为 finding」→ 锚点处内联 `NewFindingComposer`(空白起编,复用 InlineCard 编辑态 `.c-edit/.fe-*` 样式:severity/category/title/body/suggestion,标题必填,⌘↵ 新增·Esc 取消)。保存即 `review:add-finding` IPC → `ReviewManager.addManualFinding`(store.addFinding origin=manual + 建承载 discussion + 外发 finding/discussion 事件)→ 前端 upsert 并聚焦新 finding 内联卡,切 Findings tab。**创建即完整、不留空草稿、无需删除路径**;与 agent finding 同 schema/同 triage·提交管线。DiffPane 内联 composer 改为多态(discussion/finding 共用锚点插槽)。`exec` 无关;`npm run spike:add-finding` 确定性 PASS;preview 实测:框选→记为 finding→填写→新增,Findings 4→5、新卡「● 你 · HIGH·Correctness」锚 pipeline.ts:16、CTA 徽标随之 +1。
-   - ✅ gutter 锚点圆点(已合入 main):DiffPane 现收 `discussions`,按新侧行号算 `anchorByLine`——有 finding(agent 天蓝 / manual·promoted 琥珀,agent 优先)或 user discussion(琥珀)的行,在 gutter(unified)/ 新侧行号格(split,`.ln.new`)渲染 `AnchorDot` 替代 ＋/−。点击跳转:finding → `focusFinding`(聚焦内联卡 + 选中其讨论线程);user discussion → `focusDiscussion`(切 Discussion 栏)。off-diff finding 不打点。纯前端(无 store 改动),preview 实测:pipeline.ts 行 16/20 蓝点(agent)、行 19 琥珀点(user discussion),unified/split 双视图皆现,点蓝点聚焦 finding·点琥珀点开 user 线程,双主题无误。
-   - ✅ 扫描 timeline(已合入 main):`ScanTimeline`(→ mockup `.scanview`)在 `scanning` 态接管 Findings tab —— scan-head(脉冲 glyph + 「首轮机审 · codex 正在通读改动」)+ 阶段 timeline(拉取 diff / 建会话注入 MCP / 通读上报 findings·带实时计数 / 就绪)+ 实时 findings 流(可点,→ `focusFinding` 滚动定位内联卡)+ scan-foot 提示可边扫边问。阶段态由现有信号派生、不臆造后端粒度:`diffReady`=diff 已预取、`sessionReady`=有 lastTool/tokenUsage/findings(turn 已起)。RightPanel 增收 `lastTool`/`tokenUsage`。纯前端;preview `?scan` 双主题实测:四步态正确(2 done ✓ / 1 active 脉冲 / 1 pending)、实时流 4 条点击聚焦、topbar 转「扫描中」。
-   - ✅ 审核规则三层编辑器(`mockup/prompt-rules.html`,已合入 main):`PromptRulesScreen`(优先级 ribbon + 层选 rail + 分节编辑 + 常驻合并预览)。读走 `prompt:get`(→ `loadReviewPrompt`,project 需仓库 cwd,缺省只有 global+builtin),写走 `prompt:save`(整层重写 → `saveReviewLayer` 落 `<cwd>/.duetlens/review.md` 或 `~/.duetlens/review.md`,回读合并视图)。后端补 `serializeLayer`/`saveReviewLayer`/`projectPromptPath` + `ReviewPromptView` 增 project/global 路径;每节 ＋覆盖/编辑(⌘↵ 保存·Esc 取消)/重置回落下层,winner 徽标与合并预览 provenance 实时刷新。project 层未选仓库时出选目录卡门控。`npm run spike:prompt` 扩序列化/save 落盘/清空回落/无 cwd 守卫,确定性 PASS;preview `?screen=prompt` 双主题实测:覆盖→保存→合并刷新、rail 计数 3→4、生效层翻转全通。
-   - ✅ 第三层打磨 · 空态与 diff 边界(已合入 main):**① Findings tab 干净通过正向空态** —— 扫描结束且零 finding(非筛选)不再是「暂无 findings」一行,改为 `.findings-clean` 块(绿 ✓ 徽标 + 「未发现需要修复的问题」+ 覆盖度「已覆盖 N 文件 · +add −del · read-only sandbox」+ 手动新增/追问引导);筛选到 0 仍走原 empty-note。**② diff 文件状态 pill** —— `DiffPane` file-header 增 `.fstat`(added 新增 / deleted 删除 / renamed 重命名 / binary 二进制;modified 默认不标以免噪音),与既有 FileTree 的 M/A/D/R/bin 标记呼应。纯 UI 无 spike;preview 扩 `?clean`(零 finding)+ `RAW_DIFF` 追加 deleted/renamed/binary 三边界文件,双主题实测:干净空态 + 5 枚 fstat(新增/删除/重命名/新增+二进制)+ 重命名走「无内容改动」、二进制走「不显示逐行 diff」全通。
-   - ✅ 模型选择 + reasoning effort:EntryScreen 新增「模型」文本框(留空=账号默认,不硬编码可能失效的模型名)+「effort」下拉(`REASONING_EFFORTS`=minimal/low/medium/high/xhigh,medium 缺省),取 `settings.defaultModel/defaultEffort` 预填并回写记住。数据流 `ReviewStartInput.{model,reasoningEffort}` → IPC `review:start` → `ReviewManager.startReview` 落 `reviews.model/reasoning_effort`(schema V3)→ `launch`/`resumeSession` 从 review 行读回 → `ReviewSession.start/resume` → `CodexAgent.threadStart/threadResume`:model 走顶层 `model` 参数,effort 并入 `config.model_reasoning_effort`(config.toml 透传;续接同样复用)。`UiSettings` 加 `defaultModel/defaultEffort`(ui_settings V3 列)。review 顶栏 model chip 显示实际模型 + effort 药丸。`npm run spike:db` 扩 model/effort 往返 + V3 迁移,确定性 PASS;preview `?screen=entry`(选择器)/`?screen=review`(顶栏 chip)双主题实测。**模型下拉动态拉取已落**:codex `model/list` RPC(`initialize` 后即可调、复用本机登录、不起 thread 不注入 MCP 故不烧 token)经 `CodexAppServer.listModels` + `CodexAgent.listModels`(分页取全 + 过滤 hidden)→ `ReviewManager.listModels` → IPC `agent:list-models` → EntryScreen 挂载拉取:有模型渲染 `<select>`(账号默认 + displayName·默认标记,并保留旧记住的自定义模型名),未登录/出错/空则降级回手填输入框(不阻断发起)。live 实测真 codex 返 7 个模型字段正确;preview stub 两个假模型验证下拉渲染。
-   - ✅ 长任务完成通知:扫描/追问是烧 token 的长任务,用户常切走窗口。**决策逻辑放主进程**(`src/backend/notify/completion-notifier.ts`,依赖全注入的纯函数):从 `review-event` 流挑完成信号——`status→reviewing`(首轮扫描结束,每 review 去重)、`message` role=agent(追问回复);按偏好门控 + `mainWindow.isFocused()` 分派:失焦 → 原生 `Notification`(点击 `focus()` + `webContents.send('notify:open-review')`),聚焦 → 广播 `notify:in-app`。main 把窗口引用提升到模块作用域 + 挂第二个 `review-event` 消费者驱动通知(不动 ipc 转发)。渲染层 `App` 常驻订阅:`onOpenReview` → `openReview`;`onInApp` → `CompletionToast`(右下轻提示,6s 自消,点击打开 review;正看着该 review 则抑制,用 ref 记当前所看避免重挂订阅)。偏好 `UiSettings.notifyOnComplete`(默认开,ui_settings V4 列;SQLite 无 bool 存 INTEGER),EntryScreen 加「完成时通知」勾选。`npm run spike:notify` 决策逻辑确定性 PASS;`spike:db` 扩 V4 往返;preview 用测试钩子 `window.__fireInApp` 实测:toast 渲染(scan-done 蓝/reply 琥珀)+ 点击跳 review + 同 review 抑制/异 review 显示,双主题。**点击定位到具体 discussion 已落**:reply 通知从 `message.discussionId` 带上所属线程,`CompletionNotice.discussionId` 经 `notify:open-review`/`notify:in-app` 透传到 `App`,`ReviewScreen` 收 `focusRequest`(带 nonce 使同线程可重触发)→ `focusDiscussion` 切 Discussion 栏定位;scan-done 无 discussionId。spike:notify 扩「reply 带 discussionId / scan-done 不带」断言。**原生通知是 main-only,preview 跑不到。**
-   - ✅ 提交屏 per-finding 422 定位 + fix-action(已合入 main):GitHub 422 不告知是哪条锚点失效 → **本地据最新 diff 预判**。纯函数 `src/shared/github-review.ts` 新增 `isAnchorLive`(某 file:line 是否是 diff 新侧 add/context 行,diff 空则放行不误报)/ `isStaleAnchor`(待提交+有锚点+不在新侧)/ `nearestLiveLine`(同文件最近可锚行)。`SubmitGitHubScreen` 挂载拉 `review.diff` → 逐条标红(`.risky` 左条 + `.f-invalid` 块:失效原因 + 三 fix chip),proactive 在 ready 态即出琥珀预警(foot-note「N 条锚点已失效」),提交被 422 后升级为红(`.escalated`)且 banner 报「已定位 N 条」。三 fix-action 走新 IPC `review:set-finding-anchor`(→ `ReviewManager.setFindingAnchor` → `store.setFindingAnchor`,line=0 脱锚=降级为摘要、line>0=改锚):降级为摘要评论(line 0,`buildPrReviewPayload` 自动改并入 body)/ 改锚点到最近改动行 / 剔除此条(复用 `setTriage`)。`npm run spike:submit` 扩锚点预判 + 降级/改锚路由,确定性 PASS;preview `?source=github&submit=invalid` 双主题实测:f4(worker.rs:99 off-diff)标红出 fix 块、改锚点算得 :7、降级后 line→0 且按钮 4→3 行评论、banner 定位 1 条,双模式无误。**唯一副产:off-diff/架构类 finding(line>0 但不在 diff)此前会被当 inline 提交而 422,现被预判并引导降级为摘要,顺带修正。**
-   - ✅ 第三层打磨 · a11y 焦点管理(已合入 main):`KbdHelp` 收敛为规范模态——`aria-modal`、打开时焦点移入关闭按钮并记住来处、关闭(Esc/✕/点遮罩)后把焦点归还开启者、Tab 在弹层内循环(首尾环绕);Esc 在弹层内 `stopPropagation` 自闭,不再依赖 ReviewScreen 全局 keydown。Composer 的「移除引用」由只可点击的 `<span>` 改为可聚焦、带 `aria-label` 的 `<button>`(`.x` 加按钮重置样式保持视觉不变)。纯 UI 无 spike;preview `?screen=review` 实测:? / ⌘ 开弹层焦点入关闭键、Esc 关并回焦开启者(`focusBackOnOpener` 校验通过),双主题。
-   - ✅ 第三层打磨 · 窄窗口退化(已合入 main):三栏 shell 现随窗口宽度分级退化。**先修一处潜在撑破**——`.rev-root` 原为隐式 `auto` 单列(取 max-content),窄窗口下被 `.rev-main` 的宽代码行撑到 900px 把右栏顶出视口;显式约束 `grid-template-columns: minmax(0,1fr)` + `.rev-main`/`.pane` 补 `min-width:0`,中列 `minmax(0,1fr)` 才真正可收缩、宽内容在 pane 内横滚。断点:`≤1120px` 侧栏按持久化宽度 `min(...)` 上限收窄(左 208 / 右 340)+ 顶栏隐 lastTool、收窄标题;`≤880px` 收起文件树(diff 已全量堆叠、树仅跳转,置 0 列 + 隐边框 + resizer 免指针)、顶栏进一步隐 model/tokens/effort/title、ref chip 省略。纯 CSS 无 spike;preview 在 1280/1000/820/640 实测:1280 三栏不变(树 300 / 右 420)、1000 侧栏收窄、820 树收起两栏、640 无横向溢出(`screen-host` 溢出=0、无 overflower),回宽无回归。
-
-## 后续可选项(非核心 backlog)
-
-前端核心 backlog 已全部收口,无待办可选项。
-
-- ✅ 模型下拉动态拉取 codex `model/list`(降级手填兜底)—— feat/dev 2026-07-22 合入 main。
-- ✅ per-review `last_active_tab` 持久化(全局 `defaultTab` 退为无记忆时的初始默认)—— feat/dev 2026-07-22 合入 main。
-- ❌ **prompt 节内追加(非整节替换)**:2026-07-22 拍板**不做**。分层保持「每节整节替换」winner-takes-all;节内追加涉及的规则合并语义不引入。
+前端核心 backlog 已全部收口。唯一非核心 nice-to-have:三块整屏(settings / history / onboarding)从 mockup 接入 React——不阻断核心 dogfood,按需再做。

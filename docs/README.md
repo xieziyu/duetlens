@@ -2,9 +2,9 @@
 
 > Duetlens 是 [better-review](https://github.com/xieziyu/better-review) 的 **2.0 全重写**:把 code review 从"人消费 agent 一次吐出的 findings"变成"**人与 agent 协同对话式** review"。
 >
-> 状态:设计定稿 · 关键技术假设已验证 · **后端 backlog #1–#6 全部落地并合入 main**(codex 扫描 → MCP → sqlite,含 source 层、update_finding 回环、生命周期健壮性、多层级提示词)· 仅剩 #7 前端三栏真实屏 · 最后更新 2026-07-20
+> 状态:设计定稿 · 关键技术假设已验证 · **后端 + 前端 diff-review 主流程全部落地并合入 main**;核心 review 闭环(发起 → codex 扫描 → 协同讨论 → 提交/导出)可实机使用。仅剩 settings/history/onboarding 三块整屏未接 React。最后更新 2026-07-22
 >
-> 实现进度见 [design/implementation-status.md](design/implementation-status.md)。设计文档描述目标,实现细节以代码为准。
+> 实现进度、如何运行、尚缺项见 [design/implementation-status.md](design/implementation-status.md)。设计文档描述目标,实现细节以代码为准。
 
 本索引是所有设计文档的**统一入口**。单篇文档只聚焦一个关注点,便于按需 recall。新增设计(如 UI 细化、持久化 schema、提示词系统)时新建分册并在下方"文档地图"登记一行。
 
