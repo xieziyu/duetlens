@@ -234,7 +234,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
                   className="mono"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  placeholder={models === null ? '加载模型…' : '模型(留空=账号默认)'}
+                  placeholder={models === null ? '加载模型…' : 'codex 模型(留空=账号默认)'}
                 />
               )}
             </label>

@@ -297,7 +297,7 @@ export function ReviewScreen({
         <span className="spacer" />
         <div className="meta">
           <span className="model" title="审阅 agent">
-            <span className="glyph" /> agent{review?.model ? ` · ${review.model}` : ''}
+            <span className="glyph" /> codex{review?.model ? ` · ${review.model}` : ''}
           </span>
           {review?.reasoningEffort && (
             <span className="mono effort" title="reasoning effort">{review.reasoningEffort}</span>
