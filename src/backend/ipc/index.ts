@@ -61,7 +61,6 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
       context: input.context,
     }),
   );
-  ipcMain.handle(IpcChannels.reviewStartDemo, () => manager.startDemoReview());
   ipcMain.handle(IpcChannels.reviewResume, (_e, reviewId: string) => manager.resumeReview(reviewId));
   ipcMain.handle(IpcChannels.reviewRelease, (_e, reviewId: string) => manager.disposeReview(reviewId));
   ipcMain.handle(IpcChannels.reviewDelete, (_e, reviewId: string) => manager.deleteReview(reviewId));

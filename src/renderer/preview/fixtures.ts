@@ -393,7 +393,6 @@ export function installPreviewApi(): void {
       discussions: async () => discussions,
       messages: async (discussionId) => msgStore[discussionId] ?? [],
       start: async () => review,
-      startDemo: async () => review,
       resume: async () => review,
       release: async () => {},
       delete: async () => {},

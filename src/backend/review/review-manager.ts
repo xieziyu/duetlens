@@ -1,7 +1,4 @@
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import type { CodexModelInfo, Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, FindingEditInput, RecentReview, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
@@ -56,24 +53,6 @@ const SESSION_FORWARDERS: {
   status: (reviewId, payload) => ({ reviewId, type: 'status', payload }),
   'agent-event': (reviewId, payload) => ({ reviewId, type: 'agent', payload }),
 };
-
-const DEMO_FILE = 'src/login.js';
-const DEMO_SRC = `const db = require('./db');
-
-async function login(username, password) {
-  const query = "SELECT * FROM users WHERE name = '" + username +
-    "' AND pass = '" + password + "'";
-  return (await db.query(query))[0];
-}
-
-module.exports = { login };
-`;
-const DEMO_DIFF = `diff --git a/${DEMO_FILE} b/${DEMO_FILE}
-new file mode 100644
---- /dev/null
-+++ b/${DEMO_FILE}
-@@ -0,0 +1,10 @@
-${DEMO_SRC.split('\n').map((l) => '+' + l).join('\n')}`;
 
 /**
  * main 侧 review 编排入口:持久化 + 活跃 ReviewSession,把领域事件归一成 IPC ReviewEvent 外发。
@@ -418,24 +397,6 @@ export class ReviewManager extends EventEmitter {
       getDiff: () => rawDiff,
       getFile: (p) => source.getFile(p),
     }, () => source.dispose(), baseInstructions, target.context);
-    return review;
-  }
-
-  /** 起演示审核:内置 fixture provider(source 层接好前保留,给无仓库环境跑通用)。 */
-  async startDemoReview(): Promise<Review> {
-    const workdir = mkdtempSync(path.join(tmpdir(), 'duetlens-demo-'));
-    mkdirSync(path.join(workdir, 'src'), { recursive: true });
-    writeFileSync(path.join(workdir, DEMO_FILE), DEMO_SRC);
-
-    const review = this.store.createReview({
-      source: 'local-branch',
-      sourceRef: 'demo/login',
-      repoPath: workdir,
-      title: 'Demo · login.js 审核',
-    });
-    this.store.setDiff(review.id, DEMO_DIFF);
-    const { baseInstructions } = await loadReviewPrompt({ cwd: workdir });
-    this.launch(review, workdir, { getDiff: () => DEMO_DIFF, getFile: () => DEMO_SRC }, undefined, baseInstructions);
     return review;
   }
 

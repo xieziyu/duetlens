@@ -22,7 +22,6 @@ const api: DuetlensApi = {
     discussions: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewDiscussions, reviewId),
     messages: (discussionId) => ipcRenderer.invoke(IpcChannels.reviewMessages, discussionId),
     start: (input) => ipcRenderer.invoke(IpcChannels.reviewStart, input),
-    startDemo: () => ipcRenderer.invoke(IpcChannels.reviewStartDemo),
     resume: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewResume, reviewId),
     release: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewRelease, reviewId),
     delete: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewDelete, reviewId),

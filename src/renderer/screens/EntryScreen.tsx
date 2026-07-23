@@ -114,17 +114,6 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     }
   };
 
-  const startDemo = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const review = await window.duetlens.review.startDemo();
-      onOpenReview(review.id);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="entry-wrap">
       <div className="entry-hero">
@@ -274,9 +263,6 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
               ) : (
                 <span className="target-empty">选择上方的来源目标</span>
               )}
-              <button type="button" className="demo-link" onClick={startDemo} disabled={busy}>
-                或跑内置演示
-              </button>
             </span>
             <button type="button" className="gobtn" onClick={start} disabled={!canStart}>
               {busy ? '启动中…' : '开始审核'}

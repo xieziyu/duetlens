@@ -38,7 +38,6 @@ export const IpcChannels = {
   reviewDiff: 'review:diff',
   reviewFileContent: 'review:file-content',
   reviewStart: 'review:start',
-  reviewStartDemo: 'review:start-demo',
   reviewResume: 'review:resume',
   reviewRelease: 'review:release',
   reviewDelete: 'review:delete',
@@ -201,8 +200,6 @@ export interface DuetlensApi {
     messages(discussionId: string): Promise<Message[]>;
     /** 对真实 target 发起审核;立即返回 review,首轮扫描后台跑、findings 经事件流入。 */
     start(input: ReviewStartInput): Promise<Review>;
-    /** 起一个内置 fixture 的演示审核;立即返回 review,findings 经事件流入。 */
-    startDemo(): Promise<Review>;
     /** 续接一个非活跃 review(app 重启后按 codexThreadId 恢复会话),之后可追问。 */
     resume(reviewId: string): Promise<Review>;
     /** 释放某 review 的活跃会话(codex 子进程 + MCP);下次追问自动续接。 */
