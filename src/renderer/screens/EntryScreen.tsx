@@ -315,6 +315,8 @@ function GitHubPanel({
   const [previewing, setPreviewing] = useState(false);
   const [remoteNwo, setRemoteNwo] = useState<string | null>(null);
   const [openPrs, setOpenPrs] = useState<PrSummary[] | null>(null);
+  // open PR 列表默认折叠:已贴 PR 链接时目标已确定,展开会把开始按钮挤出视野
+  const [browseOpen, setBrowseOpen] = useState(false);
 
   const recheckAuth = () => {
     setGhAuth(null);
@@ -353,31 +355,37 @@ function GitHubPanel({
     return () => clearTimeout(t);
   }, [prRef, repoPath]);
 
-  // 指定本地仓库后:取 remote 归属(用于匹配校验 + 列该仓库 open PR)
+  // 指定本地仓库后:取 remote 归属(用于匹配校验 + 作为 open PR 列表的来源)
   useEffect(() => {
     const p = repoPath.trim();
+    setOpenPrs(null);
+    setBrowseOpen(false);
     if (!p) {
       setRemoteNwo(null);
-      setOpenPrs(null);
       return;
     }
     let alive = true;
     window.duetlens.source.getRepoRemote(p).then((info) => {
-      if (!alive) return;
-      setRemoteNwo(info.nwo);
-      if (info.nwo) {
-        window.duetlens.source
-          .listOpenPrs({ repoPath: p })
-          .then((prs) => alive && setOpenPrs(prs))
-          .catch(() => alive && setOpenPrs([]));
-      } else {
-        setOpenPrs(null);
-      }
+      if (alive) setRemoteNwo(info.nwo);
     });
     return () => {
       alive = false;
     };
   }, [repoPath]);
+
+  // 展开时才拉列表:折叠状态不该为看不见的内容打 gh
+  useEffect(() => {
+    const p = repoPath.trim();
+    if (!browseOpen || !remoteNwo || openPrs !== null) return;
+    let alive = true;
+    window.duetlens.source
+      .listOpenPrs({ repoPath: p })
+      .then((prs) => alive && setOpenPrs(prs))
+      .catch(() => alive && setOpenPrs([]));
+    return () => {
+      alive = false;
+    };
+  }, [browseOpen, remoteNwo, openPrs, repoPath]);
 
   if (ghAuth === false) {
     return (
@@ -472,31 +480,55 @@ function GitHubPanel({
         </div>
       )}
 
-      {remoteNwo && openPrs && openPrs.length > 0 && (
-        <>
-          <div className="orline mono">{remoteNwo} 的最近 open PR</div>
-          <div className="prlist">
-            {openPrs.map((p) => (
-              <div
-                key={p.number}
-                className={prRef.trim().includes(`#${p.number}`) ? 'pritem sel' : 'pritem'}
-                onClick={() => setPrRef(`${remoteNwo}#${p.number}`)}
-              >
-                <span className="num mono">#{p.number}</span>
-                <div className="m">
-                  <div className="t">{p.title}</div>
-                  <div className="s mono">
-                    <span>@{p.author}</span>
-                    <span>
-                      <span className="a">+{p.additions}</span> <span className="d">−{p.deletions}</span>
-                    </span>
-                  </div>
+      {remoteNwo && (
+        <div className="prbrowse">
+          <button
+            type="button"
+            className={browseOpen ? 'prtoggle open' : 'prtoggle'}
+            onClick={() => setBrowseOpen((o) => !o)}
+          >
+            <span className="pi">
+              <GhIcon />
+            </span>
+            <span className="pl">
+              从 <code className="mono">{remoteNwo}</code> 的 open PR 中选择
+              {openPrs && openPrs.length > 0 ? <span className="prcount mono">{openPrs.length}</span> : null}
+            </span>
+            <span className="chev">▸</span>
+          </button>
+          {browseOpen && (
+            <div className="prbox">
+              {openPrs === null && <div className="list-loading mono">列举 open PR…</div>}
+              {openPrs?.length === 0 && <div className="list-empty">该仓库没有 open PR。</div>}
+              {openPrs && openPrs.length > 0 && (
+                <div className="prlist">
+                  {openPrs.map((p) => (
+                    <div
+                      key={p.number}
+                      className={preview?.number === p.number ? 'pritem sel' : 'pritem'}
+                      onClick={() => {
+                        setPrRef(`${remoteNwo}#${p.number}`);
+                        setBrowseOpen(false);
+                      }}
+                    >
+                      <span className="num mono">#{p.number}</span>
+                      <div className="m">
+                        <div className="t">{p.title}</div>
+                        <div className="s mono">
+                          <span>@{p.author}</span>
+                          <span>
+                            <span className="a">+{p.additions}</span> <span className="d">−{p.deletions}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <span className="go">→</span>
+                    </div>
+                  ))}
                 </div>
-                <span className="go">→</span>
-              </div>
-            ))}
-          </div>
-        </>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -20,7 +20,7 @@
 │  ├─ <StartReviewCard>                    发起卡片
 │  │  ├─ <SourceSegmented>                 GitHub PR / 本地分支 / GitButler
 │  │  ├─ <PrInput> / <RepoPathField>       粘贴即解析 · 可选本地仓库路径
-│  │  ├─ <RecentOpenPrList>                或从最近 open PR 选择
+│  │  ├─ <RecentOpenPrList>                从 open PR 选择 · 默认折叠,展开才拉
 │  │  ├─ <ExtraContext>                    可折叠附加上下文 textarea
 │  │  └─ <StartButton>                     单一「开始审核」CTA
 │  └─ <RecentReviews>                      最近的审核 (点击=恢复会话)

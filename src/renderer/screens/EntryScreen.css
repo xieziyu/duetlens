@@ -270,19 +270,68 @@
 }
 .ga-alt { margin-top: 13px; font-size: 11.5px; color: var(--text-faint); }
 
-/* open PR list */
-.orline {
+/* open PR list — 折叠式,按需展开 */
+.prbrowse { margin-top: 12px; }
+.prtoggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 9px 12px;
+  font-family: inherit;
+}
+.prtoggle:hover { border-color: var(--agent-line); color: var(--text); }
+.prtoggle.open {
+  border-color: var(--agent-line);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  color: var(--text);
+}
+.prtoggle .pi {
+  width: 22px;
+  height: 22px;
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 18px 2px 10px;
-  color: var(--text-faint);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  border: 1px solid var(--agent-line);
 }
-.orline::before, .orline::after { content: ''; flex: 1; height: 1px; background: var(--border-soft); }
-.prlist { border: 1px solid var(--border); border-radius: 11px; overflow: hidden; }
+.prtoggle .pl { flex: 1; text-align: left; }
+.prtoggle .pl code { color: var(--text); font-size: 11.5px; }
+.prtoggle .prcount {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  margin-left: 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+.prtoggle .chev { font-size: 10px; color: var(--text-faint); transition: transform 0.18s; }
+.prtoggle.open .chev { transform: rotate(90deg); color: var(--agent-2); }
+.prbox {
+  margin-top: -1px;
+  border: 1px solid var(--agent-line);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  padding: 10px;
+  background: var(--surface-2);
+}
+.prlist {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden auto;
+  max-height: 234px;
+  background: var(--bg);
+}
 .pritem {
   display: flex;
   align-items: center;
