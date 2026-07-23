@@ -1,6 +1,6 @@
 # 实现进度
 
-> 返回 [文档索引](../README.md) · 最后更新 2026-07-23 · origin/main HEAD=fb2122b
+> 返回 [文档索引](../README.md) · 最后更新 2026-07-23 · origin/main HEAD=8c1a2eb
 >
 > 本页只做**导航与当前状态**:各层落地情况、如何运行、尚缺的整屏、spike 验证、与设计的偏差。实现细节以代码为准。逐切片的开发流水不在此保留(见 git history)。
 
@@ -10,7 +10,7 @@
 
 > 入口发起(本地分支 / GitHub PR / GitButler 三 source)→ **真实 codex 首轮扫描** → findings 经 MCP 流入 → 三栏 diff review(unified/split · 语法高亮 · viewed/折叠 · 拖栏宽)→ triage(保留/剔除+可选理由/就地编辑)→ 框选/行内发起 discussion + **追问 codex**(多轮 · 重启后 `thread/resume` 续接)→ **↻ 重跑复审**(每轮新 thread · 重拉 diff · agent 对旧 findings 表态 · 剔除项抑制 · 同步 PR 评论)→ Summary(结论/统计/可编辑总结)→ 终点:**GitHub PR review 原子提交**(真实 `gh api`,含 422 锚点定位/修锚)或 **导出 Markdown**。
 
-外加:模型/effort 选择(动态下拉 + 手填兜底)、完成通知(失焦原生 / 聚焦应用内)、审核规则三层编辑、键盘快捷键、持久化(全局偏好 + per-review viewed/tab)。
+外加:模型/effort 选择(动态下拉 + 手填兜底)、完成通知(失焦原生 / 聚焦应用内)、审核规则三层编辑(可配置口径与锁定契约分离,见下「关键决策」)、键盘快捷键、持久化(全局偏好 + per-review viewed/tab)。
 
 ### 如何运行
 - **实机**:`npm run rebuild:electron` → `npm start`。前提:`codex login`(扫描/追问烧 token);github-pr source 需 `gh auth login`。
@@ -79,7 +79,7 @@
 - **首轮机审自建**,不复用 codex 内置 `review/start`。
 - **MCP SDK 用低阶 `Server` + 手写 JSON Schema**,规避 zod4 与高阶 tool API 的兼容不确定性。
 - **finding id 回环**:report_finding 由 MCP 生成 id 回传,codex 侧 id 与存储 id 一致,update_finding 据此定位。
-- **提示词分节覆盖**:project→global→builtin 每节独立取最高优先层,整节替换(**节内追加已拍板不做**,winner-takes-all)。
+- **提示词分节覆盖**:project→global→builtin 每节独立取最高优先层;free 节整节替换(**节内追加已拍板不做**,winner-takes-all),structured 节(严重度)逐字段替换。
 - **可配置口径 vs 锁定契约**:baseInstructions 里描述 MCP 工具契约的段落(角色与工具流程、`report_finding` 字段协议)**不进分层模型、不下发 renderer、设置页不可见** —— severity 枚举、category 规范集、`line` 锚新侧、`suggestion` 逐字套用都是被机械消费的,用户改写它们不是调口径而是让 finding 被 ingress 拒收或提交时补丁错位。锁定段首尾夹住用户内容(角色在前、协议在末),用户节里的冲突口径压不过末尾的协议。
 - **严重度改为 structured 节**:`high/medium/low` 档位名锁死(= `z.enum(SEVERITIES)`),只开放每档的判定标准,逐档独立继承/覆盖。自造分级(P0/P1)解析不出档位即视为未覆盖,builtin 判定标准保留 —— 否则整节被替换掉,agent 会照着上报无效 severity 而 finding 静默丢失。旧的 `high = …;` / `med` 写法在解析层兼容迁移。
 - **内置节定义与合并逻辑住在 `shared/prompt.ts`**:backend 与 preview fixture 复用同一份,不再各抄一份(此前 fixture 里的 builtin 文案已与后端漂移)。backend 只留 IO 与锁定段。

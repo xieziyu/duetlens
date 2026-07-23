@@ -43,3 +43,4 @@ codex app-server 把"一次常驻会话"本身称作 `thread`。为避免冲突,
 8. MCP server 采用 **in-process HTTP transport**,经 `thread/start` 的 **per-thread config 注入**,不写全局 `~/.codex/config.toml`。→ [codex-integration](design/codex-integration.md)
 9. **Elicitation 处理器为架构必需件**:对自建受信工具自动 accept,避免协同流程卡在审批。→ [codex-integration](design/codex-integration.md)
 10. **多轮重跑**:每轮新 thread + 全量重扫;agent 必须对上一轮 findings 三态表态(`fixed` / `wont_fix` / `still_present`),被剔除项经 prompt + 去重双层抑制;github-pr 同步 PR 评论作为**外部参考材料**注入(带隔离围栏)。→ [rerun](design/rerun.md)
+11. **提示词分「可配置口径」与「锁定契约」**:描述 MCP 工具契约的段落(角色与工具流程、`report_finding` 字段协议)不进分层模型、不下发 renderer、设置页不可见,并首尾夹住用户内容;严重度是 structured 节,`high/medium/low` 档位名锁死、只开放每档判定标准。→ [ui](design/ui.md#审核规则提示词--三层编辑器mockupprompt-ruleshtml)
