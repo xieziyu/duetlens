@@ -71,4 +71,4 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA「提�
 - **GitHub 提交屏** `mockup/submit-to-github.html`:左侧 findings 筛选列表(勾选/剔除/编辑,dismissed 项灰显可恢复,`file=null` 单独归入摘要),右侧 "Finish your review"(摘要 body + event 选择 + 提交按钮)。
 - **本地导出屏** `mockup/export-markdown.html`:左侧实时 Markdown 预览(渲染/源码切换),右侧导出配置(包含项开关 + 分组 + findings 勾选保留 + 复制/保存)。Markdown 由 findings 数据模型实时生成,保证预览与复制/保存内容一致。
 
-两屏设计语言与 [ui.md](ui.md) 一致(duet 双声道、两轴配色、`mockup/tokens.css` 单一来源)。
+两屏设计语言与 [ui.md](ui.md) 一致(duet 双声道、两轴配色,tokens 单一来源 `src/renderer/theme/tokens.css`)。

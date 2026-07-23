@@ -38,9 +38,9 @@
 - **duet 双声道 accent(agent 靛蓝 / human 琥珀)属于 chrome、跨配色主题恒定**,是品牌标识;仅随明暗取不同深浅(浅色下加深以保证对比度)。
 - mockup `mockup/diff-review.html` 已实装四组合(dark/light × Duetlens/GitHub):明暗在 rail 底部切,配色由状态栏尾部的 demo 开关切(产品里配色归设置屏)。可作实现基线。
 
-## 屏与状态(2026-07-19 落地,以 mockup 为准)
+## 屏与状态
 
-除核心 diff review 外,本轮定下主入口与 review 内的运行时视图。每屏的锚点决策如下,实现时以 mockup 细节为准。
+除核心 diff review 外,这里定下主入口与 review 内的运行时视图。下列是每屏的**锚点决策**(为什么这么排、哪些约束不能破);**具体视觉与交互以 `src/renderer/` 的实现为准** —— `mockup/` 已冻结,见下「mockup(历史存档)」。
 
 ### 主入口 / launcher(`mockup/entry.html`)
 
@@ -188,16 +188,26 @@ review 屏原先把品牌、来源、模型、用量、状态、CTA、主题、�
 - **CTA 门控**:仅必需项(codex + app-server)全就绪才启用「进入 Duetlens →」;可选项(gh)未配只影响 GitHub 来源。底部「跳过,稍后在设置中配置」次要入口。
 - 顶栏「预览态」下拉演示 checking / codex 未安装 / gh 未登录 / 全部就绪四态;checking 态模拟探测完成自动落到就绪。状态胶囊与 severity/add/del 语义色一致,同 settings 环境区。
 
-> 所有屏(主干 entry → review → 提交/导出、运行时/异常态、设置/审核规则/历史/onboarding)均已有 mockup 设计;落地进度见 [implementation-status](implementation-status.md)。
+> 所有屏(主干 entry → review → 提交/导出、运行时/异常态、设置/审核规则/历史/onboarding)都已落地;进度见 [implementation-status](implementation-status.md)。
 
-## 已有 mockup
+## mockup(历史存档,已冻结)
+
+`mockup/` 是设计语言尚未收敛时用来对齐视觉的 HTML 稿。**七屏全部落地后它已完成使命,现予冻结**:
+
+- **不再同步更新**。改 UI 只改 `src/renderer/`;出现分歧一律**以实现为准**,不要回头去"修 mockup"(那是本末倒置 —— 先实现再补稿,补的稿也没人看)。
+- **`mockup/tokens.css` 不是配色单一来源**,它只是 `src/renderer/theme/tokens.css` 的一份历史副本;改配色改后者。
+- 仍可作为**设计意图的历史记录**翻阅(尤其 `review-runtime.html` 覆盖的运行时/异常态尚未落地,那份稿仍是该功能唯一的设计参照)。
+- 各屏源码里的 `→ mockup/xxx.html` 注释是**出处标注**,不是"去那儿看当前设计"的指引。
+- 打开方式:静态服务(如 `python3 -m http.server`),**不能走 `preview:ui`** —— vite 会把 mockup 当入口做 HTML transform,代码示例里的 `Result<()>` 之类被当标签解析而报错。
+
+存档清单:
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
 - `mockup/diff-review.html` —— 核心屏:应用外壳(全局导航 rail + 上下文顶栏 + 底部状态栏)+ 三栏(可调宽)+ 两行 file-header + 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换(状态栏)+ 键盘快捷键帮助层(`?`)+ 两轴配色切换。
 - `mockup/review-runtime.html` —— review **运行时 / 异常态**(外壳与 `diff-review.html` 同构:rail + 上下文顶栏 + 底部状态栏 + 两行 file-header):状态栏「demo · 运行态」下拉切 9 态(空闲 / turn 运行中+中断 / 反向审批 / turn 失败 / agent 断开重连 / 离线 / MCP 通道故障 / ctx 接近上限 / 压缩中);演示 status 胶囊、全局横幅、右栏底部运行区、ctx 用量表。见上「运行时 / 异常态」。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md));顶栏「提交态」切换器演示提交结果/异常态(submitting / success / **invalid 行锚点失效** / failed / **incremental 增量**)。
 - `mockup/export-markdown.html` —— 非 GitHub source(本地分支 / GitButler)的**本地 Markdown 导出屏**:左侧实时报告预览(渲染/源码)、右侧导出配置(包含项 + 分组 + 勾选保留 + 复制/保存 .md)。见 [findings-submit](findings-submit.md#非-github-source--导出为-markdown)。
-- `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。
+- `mockup/tokens.css` —— 两轴配色 tokens,供各 mockup 引用;**真正的单一来源是 `src/renderer/theme/tokens.css`**,此处只是历史副本。
 - `mockup/design-system.html` —— 可视化 style guide:色板 + 字阶 + 组件清单(见 [design-system](design-system.md))。
 - `mockup/settings.html` —— **设置 / 偏好面板**:左栏分组导航 + 右栏分节表单;外观两轴实时驱动主题、审核默认(source/diff视图/tab/分组)、codex/gh 环境配置、快捷键摘录、关于。对齐 `ui_settings`。
 - `mockup/prompt-rules.html` —— **审核规则提示词三层编辑器**:优先级 ribbon + 左栏层选择 + 中栏分节编辑(继承/覆盖/重置)+ 右栏生效结果(provenance 配色)。分节覆盖模型(free 节整节覆盖 + 严重度 structured 逐档覆盖),合并注入 `baseInstructions`;锁定段不在其中呈现。

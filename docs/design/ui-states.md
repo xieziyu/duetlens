@@ -4,7 +4,7 @@
 >
 > 状态:从稳定的 mockup 反抽屏级流转与组件状态机,为实现期的组件层([frontend-components](frontend-components.md))与状态持久化铺路。
 
-[`ui.md`](ui.md) 描述每个屏和状态的**视觉与交互**,mockup(`mockup/*.html`)是像素级线框来源。本篇只做一件事:把散在 mockup / ui.md 里的**状态与流转**收敛成一组状态机,让实现期能一眼看清「有哪些状态、由什么事件驱动、迁移到哪」。视觉细节仍以 mockup 为准,不在此重复。
+[`ui.md`](ui.md) 描述每个屏和状态的**视觉与交互**。本篇只做一件事:把**状态与流转**收敛成一组状态机,让实现期能一眼看清「有哪些状态、由什么事件驱动、迁移到哪」。视觉细节不在此重复 —— **已落地的屏以 `src/renderer/` 为准**;`mockup/` 已冻结为历史存档(见 [ui.md](ui.md#mockup历史存档已冻结)),仅尚未落地的运行时/异常态还需参照 `mockup/review-runtime.html`。
 
 约定:状态机用 mermaid `stateDiagram-v2`;`◆` = agent 侧事件,`●` = 用户操作,`⚙` = 后端/codex 事件。
 

@@ -2,18 +2,18 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:从稳定的 mockup 抽出 tokens 与组件清单;canonical tokens 已落地 `mockup/tokens.css`,可视化清单在 `mockup/design-system.html`。
+> 状态:tokens 与组件清单当初从稳定的 mockup 抽出,现已落地为 `src/renderer/theme/tokens.css`。可视化清单 `mockup/design-system.html` 属**已冻结的历史存档**(见 [ui.md](ui.md#mockup历史存档已冻结))。
 
-从 [`ui.md`](ui.md) 的屏与状态稳定后,把配色 tokens 抽成**单一来源**,并把重复出现的组件登记成清单,为后续 Electron 实现铺路。
+配色 tokens 收成**单一来源**,重复出现的组件登记成清单。
 
-## Tokens 单一来源:`mockup/tokens.css`
+## Tokens 单一来源:`src/renderer/theme/tokens.css`
 
-所有配色变量集中在 `mockup/tokens.css`,由**两个正交轴**驱动(勿在各页内联复制):
+所有配色变量集中在 `src/renderer/theme/tokens.css`(经 `src/renderer/index.css` 引入),由**两个正交轴**驱动(勿在各处内联复制)。`mockup/tokens.css` 是冻结时的一份历史副本,**不要改那个**:
 
 - `data-mode` = `light | dark` —— 明暗**品牌外壳**(chrome:bg / surface / border / text / brand / 阴影 / 辉光)。
 - `data-theme` = `duetlens | github` —— **配色主题**,成套:语法 token(`--k/--fn/--s/--n/--c/--ty/--mac`)+ diff(`--add/--del` 及 bg/gutter)+ severity(`--sev-high/med/low`)+ 代码高亮。主题跟随 `data-mode` 自动切子模式(GitHub → Dark/Light),四种组合。
 
-CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME 变量**(如 One Dark)。共享 primitives(`--mono` / `--sans` / `--r`)也在 tokens.css;屏幕特有的布局变量(如 `--left-w` / `--right-w`)留在各页。
+CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME 变量**(如 One Dark)。共享 primitives(`--mono` / `--sans` / `--r`)也在 tokens.css;屏幕特有的布局变量(如 `--left-w` / `--right-w`)留在各屏自己的 CSS。
 
 ### Token 分组
 

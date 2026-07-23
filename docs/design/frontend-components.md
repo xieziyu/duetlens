@@ -2,9 +2,9 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:**已落地**(2026-07-23)。组件树、状态分层与持久化均已实现于 `src/renderer/`;本篇是结构索引,细节以代码为准,视觉以 `mockup/` 为准。
+> 状态:**已落地**。组件树、状态分层与持久化均已实现于 `src/renderer/`;本篇是结构索引,**细节与视觉均以代码为准**。
 
-前端为 **React SPA**,承载于 Electron renderer(见 [architecture](architecture.md))。本篇定三件事:组件如何拆、状态放哪层、哪些状态要持久化。视觉 tokens 直接复用 `mockup/tokens.css`;组件承载的状态机见 [ui-states](ui-states.md)。
+前端为 **React SPA**,承载于 Electron renderer(见 [architecture](architecture.md))。本篇定三件事:组件如何拆、状态放哪层、哪些状态要持久化。视觉 tokens 的单一来源是 `src/renderer/theme/tokens.css`;组件承载的状态机见 [ui-states](ui-states.md)。
 
 ## 组件树
 
@@ -128,9 +128,9 @@ review_ui_state (per-review, 挂 review_id)
 
 `viewed_files` 是否升为独立关联表,取决于是否要按文件记时间戳 / 顺序;初版可先 json 集合。
 
-## 实现顺序建议
+## 实现顺序(已按此走完,存档)
 
-1. 落 `mockup/tokens.css` 为 React 主题层(两轴挂根节点),先跑通 `<App>` 骨架 + 主题切换。
+1. 落 tokens 为 React 主题层(两轴挂根节点,现为 `src/renderer/theme/tokens.css`),先跑通 `<App>` 骨架 + 主题切换。
 2. 抽三块高复用组件:`<InlineCard>`(四态)、`<SelectionPopover>`、`<Composer>`,配状态机([ui-states](ui-states.md))与单测。
 3. 接 server-state store + Electron IPC,先渲染只读 diff + findings。
 4. 补写路径命令(triage / edit / discussion)与 UI 持久化两张表。

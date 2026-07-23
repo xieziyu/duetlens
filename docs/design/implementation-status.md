@@ -1,8 +1,10 @@
 # 实现进度
 
-> 返回 [文档索引](../README.md) · 最后更新 2026-07-23 · origin/main HEAD=8c1a2eb
+> 返回 [文档索引](../README.md)
 >
 > 本页只做**导航与当前状态**:各层落地情况、如何运行、尚缺的整屏、spike 验证、与设计的偏差。实现细节以代码为准。逐切片的开发流水不在此保留(见 git history)。
+>
+> 不写 HEAD / 最后更新日期 —— 那种快照值每次合并都得人肉改,漏改一次就开始骗人。要时间线就查 `git log`。
 
 ## 当前状态:核心 review 闭环已可实机使用
 
@@ -24,7 +26,7 @@
 
 ### 尚缺
 1. 键位表不可配置(帮助层为只读 cheatsheet)。
-2. 运行时/异常态(turn 中断 / 反向审批 / turn 失败 / 连接断 / 压缩)只有设计,未落地 —— 设计见 `mockup/review-runtime.html`(已按新外壳同步)。
+2. 运行时/异常态(turn 中断 / 反向审批 / turn 失败 / 连接断 / 压缩)只有设计,未落地 —— 设计见 `mockup/review-runtime.html`。`mockup/` 整体已冻结,但这一份是该功能目前**唯一**的设计参照,落地前别丢。
 
 > 入口页丰富流程已接 mockup(见「前端屏」):三来源分段选择器、GitHub PR 粘贴+实时预览卡+remote 校验、默认折叠的 open PR 列表(展开才拉)、gh 未登录引导、本地分支选择器(commits ahead + base)、GitButler workspace 检测+虚拟分支列表、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / detect-gitbutler）+ `review:list-recent`（附计数）。
 

@@ -2,9 +2,11 @@
 
 > Duetlens 是 [better-review](https://github.com/xieziyu/better-review) 的 **2.0 全重写**:把 code review 从"人消费 agent 一次吐出的 findings"变成"**人与 agent 协同对话式** review"。
 >
-> 状态:设计定稿 · 关键技术假设已验证 · **后端 + 前端七屏全部落地并合入 main**;核心 review 闭环(发起 → codex 扫描 → 协同讨论 → **多轮重跑复审** → 提交/导出)可实机使用。最后更新 2026-07-23
+> 状态:设计定稿 · 关键技术假设已验证 · **后端 + 前端七屏全部落地并合入 main**;核心 review 闭环(发起 → codex 扫描 → 协同讨论 → **多轮重跑复审** → 提交/导出)可实机使用。
 >
-> 实现进度、如何运行、尚缺项见 [design/implementation-status.md](design/implementation-status.md)。设计文档描述目标,实现细节以代码为准。
+> 实现进度、如何运行、尚缺项见 [design/implementation-status.md](design/implementation-status.md)。设计文档描述目标,**实现细节与视觉均以代码为准**。
+>
+> 本目录不记录「最后更新时间」「当前 HEAD」这类需要人肉同步的快照值 —— 时间线查 `git log`。
 
 本索引是所有设计文档的**统一入口**。单篇文档只聚焦一个关注点,便于按需 recall。新增设计(如 UI 细化、持久化 schema、提示词系统)时新建分册并在下方"文档地图"登记一行。
 
@@ -20,7 +22,7 @@
 | [design/codex-integration.md](design/codex-integration.md) | app-server 协议验证结论、MCP HTTP 注入、elicitation/sandbox/审批 | 碰 codex 集成 / MCP / 审批前 |
 | [design/ui.md](design/ui.md) | UI 方向 + 主题两轴 + 主入口/review 三 tab/扫描态/栏宽等屏与状态 | 做界面前 |
 | [design/ui-states.md](design/ui-states.md) | 屏级流转 + 各组件状态机(scan / tab / card 四态 / finding 两轴 / diff / viewed / 空态) | 理状态迁移 / 接事件前 |
-| [design/design-system.md](design/design-system.md) | tokens 单一来源(`tokens.css`)+ 两轴分组 + 组件清单;可视化在 `mockup/design-system.html` | 抽组件 / 定 tokens 前 |
+| [design/design-system.md](design/design-system.md) | tokens 单一来源(`src/renderer/theme/tokens.css`)+ 两轴分组 + 组件清单 | 抽组件 / 定 tokens 前 |
 | [design/frontend-components.md](design/frontend-components.md) | React 组件树 + 状态分层 + UI 状态持久化(粒度 / 存储 / schema) | 搭前端 / 定持久化前 |
 | [design/implementation-status.md](design/implementation-status.md) | 各层落地情况 + headless spike 验证 + 与设计的偏差 + 剩余 backlog | 想知道「写到哪了」/ 接着开发前 |
 | [design/open-questions.md](design/open-questions.md) | 待解决 / 风险点(开发中复审) | 遇到坑 / 排优先级时 |
