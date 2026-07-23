@@ -60,7 +60,7 @@
 | `resume` | session dispose 后按 threadId `thread/resume` 续接 → 复用会话记忆追问 |
 | `gitbutler` | `but diff --format json` 重建 unified + 路径穿越防护 + 实仓 smoke |
 | `mcp` | report_finding/update_finding 回写 store + bearer 令牌鉴权(无/错令牌 401) |
-| `prompt` | 提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ baseInstructions 组装 |
+| `prompt` | 提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ 锁定段首尾夹住 + severity 逐档覆盖/旧格式迁移/自造分级不生效 + baseInstructions 组装 |
 | `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store 回环 |
 | `write` | finding 写路径:setTriage/updateFinding 落库 + 外发 `finding` 事件 |
 | `ui-state` | per-review UI 态:get/saveReviewUiState 往返(viewed + last_active_tab)+ 默认/upsert/降级/级联 |
@@ -80,6 +80,9 @@
 - **MCP SDK 用低阶 `Server` + 手写 JSON Schema**,规避 zod4 与高阶 tool API 的兼容不确定性。
 - **finding id 回环**:report_finding 由 MCP 生成 id 回传,codex 侧 id 与存储 id 一致,update_finding 据此定位。
 - **提示词分节覆盖**:project→global→builtin 每节独立取最高优先层,整节替换(**节内追加已拍板不做**,winner-takes-all)。
+- **可配置口径 vs 锁定契约**:baseInstructions 里描述 MCP 工具契约的段落(角色与工具流程、`report_finding` 字段协议)**不进分层模型、不下发 renderer、设置页不可见** —— severity 枚举、category 规范集、`line` 锚新侧、`suggestion` 逐字套用都是被机械消费的,用户改写它们不是调口径而是让 finding 被 ingress 拒收或提交时补丁错位。锁定段首尾夹住用户内容(角色在前、协议在末),用户节里的冲突口径压不过末尾的协议。
+- **严重度改为 structured 节**:`high/medium/low` 档位名锁死(= `z.enum(SEVERITIES)`),只开放每档的判定标准,逐档独立继承/覆盖。自造分级(P0/P1)解析不出档位即视为未覆盖,builtin 判定标准保留 —— 否则整节被替换掉,agent 会照着上报无效 severity 而 finding 静默丢失。旧的 `high = …;` / `med` 写法在解析层兼容迁移。
+- **内置节定义与合并逻辑住在 `shared/prompt.ts`**:backend 与 preview fixture 复用同一份,不再各抄一份(此前 fixture 里的 builtin 文案已与后端漂移)。backend 只留 IO 与锁定段。
 - **复审换新 thread**:一次 review 不再恒等于一个 codex thread —— 每轮机审各起一个,上一轮结论靠结构化 prompt 注入。原因是新旧 diff 的行号在同一上下文里会串位;副作用是追问不能再依赖会话记忆,故 `buildFollowupPrompt` 一并重述该线程近几条往来(顺带修好 compact 之后追问的老问题)。详见 [rerun](rerun.md)。
 - **finding 去重从软约束升级为软+硬**:prompt 要求不重报之外,`shared/finding-dedupe.ts` 兜底吸收(同文件 + 邻近行 + 标题 bigram 相似度)。阈值取保守值 —— 宁可多出一条也不吞掉真问题。该兜底对首轮同样生效(agent 偶尔会重复上报同一处)。
 - **复审表态是三态而非两态**:`resolve_finding` 除 `fixed` / `still_present` 外必须有 `wont_fix`(作者已回应说明不改)。实机踩过:作者在 PR 上回「纯联调,手动调试脚本,可忽略」后代码原样未变,只有两格时 agent 只能答 `still_present`,同一条每轮重报 —— 它没答错,是**我们问错了问题**。thread 回复一直都注入到了 prompt,缺的是**表达结论的词**与**要求它先读作者回复的指令**。判定顺序因此把「作者怎么说」排在「代码变没变」之前。`wont_fix` **不自动剔除**:作者一句"可忽略"不该自动关掉一条真实的安全问题,采纳与否是 reviewer 的决定(卡上给一键采纳,把作者原话存为剔除理由)。

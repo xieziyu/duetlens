@@ -157,11 +157,17 @@ review 屏原先把品牌、来源、模型、用量、状态、CTA、主题、�
 ### 审核规则提示词 · 三层编辑器(`mockup/prompt-rules.html`)
 
 - **优先级 project ▸ global ▸ builtin,上层按节覆盖下层**;合并结果注入 codex `thread/start · baseInstructions`(见 [codex-integration](codex-integration.md))。
-- **合并模型 = 分节覆盖**:审核规则拆成固定几节(审核重点 / 严重度判定 / 忽略范围 / 输出与语气 / 项目上下文);每节独立取**最高优先且有定义的层**作为生效值。比整块替换更细,能明确「哪一节被谁覆盖」。
+- **可配置面 vs 锁定段**:baseInstructions 分两类内容,**只有前一类进设置页**。
+  - **可配置节**(审核重点 / 严重度判定 / 忽略范围 / 输出与语气 / 项目上下文)= 审核**口径**,用户随便改。
+  - **锁定段**(角色与 MCP 工具流程、`report_finding` 字段协议)= 工具**契约**:severity 枚举、category 规范集、`line` 锚新侧、`suggestion` 是会被逐字套用的字面补丁。这些字段由 Duetlens 机械消费,改写不是口径变化而是**功能失常**(finding 被 ingress 拒收 / 提交到 GitHub 时补丁错位)。锁定段既不可编辑,也不下发 renderer —— 设置页里根本不存在,连「有这么一段」都不暴露。
+  - 锁定段**首尾夹住**用户内容:角色段在最前(身份),协议段在最末(硬契约),用户节里写了冲突口径也压不过后面的协议。
+- **合并模型 = 分节覆盖**:每节独立取**最高优先且有定义的层**作为生效值。比整块替换更细,能明确「哪一节被谁覆盖」。节分两种:
+  - **free**:整节一块自由文本(审核重点 / 忽略范围 / 输出与语气 / 项目上下文)。
+  - **structured**:字段集固定、字段名锁死,只有每个字段的正文可改,且**逐字段独立继承/覆盖**。目前只有**严重度判定** —— `high / medium / low` 是 MCP ingress 的 `z.enum(SEVERITIES)`,被改名即导致上报被拒,故只开放「每档收什么问题」。逐档落盘为 `- high: …`;解析不出任何档位的正文(如用户自造 P0/P1 分级)视为**未覆盖**,builtin 判定标准保留。
 - **三栏**:
   - **左 rail** = 编辑层选择(project 随仓库 `.duetlens/review.md` / global 个人 `~/.duetlens/review.md` / builtin 只读内置),每层标「覆盖 N 节」;底部「生效预览」入口。
-  - **中 = 选中层的分节编辑器**:每节卡片头标 `生效层 X`(反映实际 winner,与正在编辑的层解耦);已覆盖节可 `✎ 编辑` / `重置(改回继承)`,未覆盖节 dim 显示「继承自下层」+ `＋ 覆盖此节`。builtin 层整体只读。
-  - **右 = 生效结果(常驻)**:按节合并后的最终文本,每节标来源(project 覆盖 / global 覆盖 / 默认)并用 provenance 左条配色(project=天蓝 / global=琥珀 / builtin=灰),底部图例。
+  - **中 = 选中层的分节编辑器**:每节卡片头标 `生效层 X`(反映实际 winner,与正在编辑的层解耦)+ 一行 hint 说明这节控制什么;已覆盖节可 `✎ 编辑` / `重置(改回继承)`,未覆盖节 dim 显示「继承自下层」+ `＋ 覆盖此节`。structured 节改为逐档行:左侧档位名做成钉死的 severity 色标签(非输入位),右侧才是可编辑的判定标准。builtin 层整体只读。
+  - **右 = 生效结果(常驻)**:按节合并后的文本(**可配置部分**,不含锁定段),每节标来源(project 覆盖 / global 覆盖 / 默认)并用 provenance 左条配色(project=天蓝 / global=琥珀 / builtin=灰),底部图例。structured 节整节徽标取最具体的一档,故逐档再补一个 provenance 圆点 —— 否则「只改了 high」在整节徽标上看不出来。
 - provenance 三色沿用品牌语义:project(最具体)= 天蓝 accent、global(个人)= 琥珀、builtin(基线)= 灰。
 
 ### 全部会话历史页(`mockup/history.html`)
@@ -194,7 +200,7 @@ review 屏原先把品牌、来源、模型、用量、状态、CTA、主题、�
 - `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。
 - `mockup/design-system.html` —— 可视化 style guide:色板 + 字阶 + 组件清单(见 [design-system](design-system.md))。
 - `mockup/settings.html` —— **设置 / 偏好面板**:左栏分组导航 + 右栏分节表单;外观两轴实时驱动主题、审核默认(source/diff视图/tab/分组)、codex/gh 环境配置、快捷键摘录、关于。对齐 `ui_settings`。
-- `mockup/prompt-rules.html` —— **审核规则提示词三层编辑器**:优先级 ribbon + 左栏层选择 + 中栏分节编辑(继承/覆盖/重置)+ 右栏生效结果(provenance 配色)。分节覆盖模型,合并注入 `baseInstructions`。
+- `mockup/prompt-rules.html` —— **审核规则提示词三层编辑器**:优先级 ribbon + 左栏层选择 + 中栏分节编辑(继承/覆盖/重置)+ 右栏生效结果(provenance 配色)。分节覆盖模型,合并注入 `baseInstructions`。**该 mockup 早于「锁定段 / structured 节」拆分**,严重度仍画成自由文本、category 契约仍留在「输出与语气」里;以 `PromptRulesScreen` 的实现为准。
 - `mockup/history.html` —— **全部会话历史页**:搜索 + source/状态筛选 + 时间分桶列表(复用 entry `.rev` 卡)+ 软删除/撤销;`entry.html` 的「全部历史 →」入口指向本页。
 - `mockup/onboarding.html` —— **首次启动 / codex onboarding**:环境检查清单(codex CLI / app-server / gh)+ 修复命令面板 + CTA 门控;顶栏「预览态」切 checking / 未安装 / gh 未登录 / 就绪。
 
