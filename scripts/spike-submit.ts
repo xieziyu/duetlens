@@ -94,11 +94,35 @@ async function main() {
     assert.ok(events.some((e) => e.type === 'status' && e.payload === 'submitted'), 'status 事件');
     log('success 锁定 + 状态 + 事件 ok');
 
-    // 增量:已提交项不再进待提交集 → 二次提交无可提交
+    // 增量:已提交项不再进待提交集 → 二次提交只发 review body,不重发任何 inline 评论。
+    // (review body 本身就是一次合法的 GitHub review,故这里是 success 而非 failed)
     const again = await manager.submitReview(review.id, { event: 'comment' });
-    assert.equal(again.status, 'failed');
-    assert.match(again.message, /没有.*可提交/);
-    log('增量:已提交锁定不重发 ok');
+    assert.equal(again.status, 'success');
+    assert.equal(fake.last!.payload.comments.length, 0, '已提交项不得重发为 inline 评论');
+    assert.equal(fake.last!.payload.body, '改后的摘要', 'body 仍取落库的 summary');
+    assert.equal(store.getFinding(f1.id)!.submittedUrl, 'https://gh/x#r1', '首次提交的链接不被覆盖');
+    log('增量:已提交锁定不重发,body 单独成立 ok');
+  }
+
+  // ---- blocked:Comment 既无 body 也无 finding → 前置校验拦下,不走 submitter ----
+  {
+    const db = openDatabase(':memory:');
+    const store = new ReviewStore(db);
+    const review = store.createReview({ source: 'github-pr', sourceRef: 'acme/repo#8', title: 't' });
+    const fake = new FakeSubmitter({ status: 'success', url: 'https://gh/x#r9', submittedCount: 0 });
+    const manager = new ReviewManager(store, undefined, { submitter: fake });
+
+    const res = await manager.submitReview(review.id, { event: 'comment' });
+    assert.equal(res.status, 'failed');
+    assert.match(res.message, /需要填写 Review 意见/);
+    assert.equal(fake.last, undefined, '被前置校验拦下时不该调用 submitter');
+
+    // 同样空手,APPROVE 却是合法表态(干净通过)
+    const approved = await manager.submitReview(review.id, { event: 'approve' });
+    assert.equal(approved.status, 'success');
+    assert.equal(fake.last!.payload.event, 'APPROVE');
+    assert.equal(fake.last!.payload.comments.length, 0);
+    log('blocked:空 Comment 被拦 / 空 Approve 放行 ok');
   }
 
   // ---- invalid / failed:不改任何状态 ----
