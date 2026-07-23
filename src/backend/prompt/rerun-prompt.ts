@@ -2,8 +2,11 @@
  * 复审(重跑)指令的组装。纯函数,不碰 IO —— 便于 spike 断言"注入了什么"而不必真跑 codex。
  *
  * 一轮复审要让 agent 做两件事,顺序不能反:
- *   1. 对上一轮**保留中**的每条 finding 调 `resolve_finding` 表态(已修复 / 仍存在);
+ *   1. 对上一轮**保留中**的每条 finding 调 `resolve_finding` 表态(已修复 / 仍存在 / 作者已回应不改);
  *   2. 再审最新改动,只对**新**问题调 `report_finding`。
+ *
+ * 表态的判定顺序刻意把「作者在 thread 里怎么说」排在「代码变没变」之前 —— 否则作者回一句
+ * 「这是调试脚本,可忽略」时代码确实没变,agent 只能答"仍存在",同一条意见每轮重报。
  * 同时把 reviewer 的处置(尤其剔除及其理由)和 PR 上的协作上下文交代清楚,
  * 让被剔除的问题不再被重复报出来。
  *
@@ -55,6 +58,10 @@ const sha8 = (s: string | null | undefined): string => (s ? s.slice(0, 8) : '(�
 /**
  * 把我方提交过的 finding 与它在 PR 上形成的 review thread 对上。
  * 判据:同文件、行号相近、且该 thread 的**首条**评论由当前 gh 身份发出(即我们提交的那条)。
+ *
+ * 窗口内有多条候选时按「首条评论正文是否含该 finding 的标题」取最像的一条 —— 我们提交的
+ * 评论正文形如 `**sev · category** — 标题`,故标题命中即是同一条。只按行号距离取第一个的话,
+ * 同文件相邻十几行内的两条 finding 会把作者的回复挂到错的那条上。
  */
 export function matchThreadsToFindings(
   findings: readonly Finding[],
@@ -64,11 +71,18 @@ export function matchThreadsToFindings(
   if (!pr || !pr.viewer) return out;
   for (const t of pr.threads) {
     if (!t.path || t.line == null) continue;
-    if (t.comments[0]?.author !== pr.viewer) continue;
-    const hit = findings.find(
-      (f) => f.file === t.path && Math.abs(f.line - (t.line as number)) <= ANCHOR_WINDOW,
+    const head = t.comments[0];
+    if (head?.author !== pr.viewer) continue;
+    const line = t.line;
+    const candidates = findings.filter(
+      (f) => f.file === t.path && Math.abs(f.line - line) <= ANCHOR_WINDOW,
     );
-    if (!hit) continue;
+    if (candidates.length === 0) continue;
+    const hit =
+      candidates.find((f) => head.body.includes(f.title)) ??
+      candidates.reduce((best, f) =>
+        Math.abs(f.line - line) < Math.abs(best.line - line) ? f : best,
+      );
     const bucket = out.get(hit.id);
     if (bucket) bucket.push(t);
     else out.set(hit.id, [t]);
@@ -76,14 +90,17 @@ export function matchThreadsToFindings(
   return out;
 }
 
-/** 一条 thread 的后续往来(去掉我们自己发的首条,那是 finding 本身)。 */
-function threadReplies(t: PrReviewThread): string[] {
+/**
+ * 一条 thread 的后续往来(去掉我们自己发的首条,那是 finding 本身)。
+ * 显式标出哪条来自 PR 作者 —— 判定 wont_fix 只认作者本人的说明,别人的附和不算数。
+ */
+function threadReplies(t: PrReviewThread, prAuthor: string): string[] {
   const flags = [t.isResolved ? '已 resolve' : null, t.isOutdated ? '锚点已过时' : null].filter(Boolean);
   const head = flags.length ? `  [GitHub thread · ${flags.join(' · ')}]` : '  [GitHub thread]';
   const replies = t.comments
     .slice(1)
     .slice(-THREAD_TAIL)
-    .map((c) => `  · @${c.author}: ${trunc(c.body)}`);
+    .map((c) => `  · @${c.author}${c.author === prAuthor ? '(PR 作者)' : ''}: ${trunc(c.body)}`);
   return replies.length ? [head, ...replies] : [`${head} 作者尚未回复`];
 }
 
@@ -101,6 +118,7 @@ function openFindingBlock(
   f: Finding,
   messages: Readonly<Record<string, Message[]>>,
   threads: Map<string, PrReviewThread[]>,
+  prAuthor: string,
 ): string {
   const cat = f.category ? ` · ${f.category}` : '';
   const lines = [
@@ -110,7 +128,7 @@ function openFindingBlock(
   if (f.body.trim()) lines.push(`  正文:${trunc(f.body)}`);
   if (f.submission === 'submitted') lines.push('  [已提交到 GitHub,作者应当看到过]');
   lines.push(...discussionExcerpt(f, messages));
-  for (const t of threads.get(f.id) ?? []) lines.push(...threadReplies(t));
+  for (const t of threads.get(f.id) ?? []) lines.push(...threadReplies(t, prAuthor));
   return lines.join('\n');
 }
 
@@ -239,12 +257,28 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
   if (openFindings.length) {
     out.push('## 一、待你表态的 findings(reviewer 保留中)');
     out.push(
-      '对下面**每一条**,先到最新代码里核实,再调用 ' +
-        '`resolve_finding(finding_id, status, note)` 给出结论:' +
-        'status=`fixed` 表示已在最新代码中修复,`still_present` 表示问题依旧。',
+      '对下面**每一条**调用 `resolve_finding(finding_id, status, note)` 给出结论。' +
+        '**按以下顺序判定,不要只看代码变没变**:',
     );
     out.push('');
-    out.push(openFindings.map((f) => openFindingBlock(f, messagesByDiscussion, threads)).join('\n'));
+    out.push(
+      '1. **先看作者有没有在 GitHub thread 里回应。** 作者若说明了为何不改' +
+        '(如「这是调试脚本,可忽略」「这里是有意为之」),即使代码原样未变也选 `wont_fix`,' +
+        '并把作者的原话摘进 note。这不是漏判 —— 是这条意见已经有了结论,不必再提。',
+    );
+    out.push(
+      '2. **thread 标了「已 resolve」但作者没留文字**:这是「作者认为已处理」的强信号,但仍要回代码核实。' +
+        '真改了 → `fixed`;没改也没说明 → `still_present`,并在 note 里点明 thread 已 resolve 而代码未变。',
+    );
+    out.push(
+      '3. **其余情况**按最新代码判定:已修复 → `fixed`;问题依旧且作者未给出不改的理由 → `still_present`。',
+    );
+    out.push('');
+    out.push(
+      openFindings
+        .map((f) => openFindingBlock(f, messagesByDiscussion, threads, pr?.author ?? ''))
+        .join('\n'),
+    );
     out.push('');
   }
 

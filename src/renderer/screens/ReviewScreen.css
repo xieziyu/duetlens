@@ -3015,9 +3015,14 @@ kbd {
   font-size: 10px;
   width: 9px;
 }
-.fg-toggle .fg-fixed {
+.fg-toggle .fg-folded {
   font-size: 11.5px;
+}
+.fg-toggle .fg-folded.fixed {
   color: var(--add);
+}
+.fg-toggle .fg-folded.wontfix {
+  color: var(--agent-2);
 }
 
 .card.finding.resolved {
@@ -3273,4 +3278,33 @@ kbd {
 .rp-go:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* 作者已回应(wont_fix):代码未改,但这条意见已有结论 —— 与「仍存在」区分开,
+   用 agent 轴的颜色而非 del 轴,避免读成"还没解决的问题" */
+.round-tag.wontfix {
+  color: var(--agent-2);
+  border-color: var(--agent-line);
+  background: var(--agent-soft);
+}
+.c-resnote.wontfix {
+  border-left-color: var(--agent);
+}
+.c-resnote.wontfix .crn-lbl {
+  color: var(--agent-2);
+}
+.fr-actions .t-accept,
+.c-actions .f-accept {
+  font-size: 10.5px;
+  color: var(--agent-2);
+  border: 1px solid var(--agent-line);
+  background: var(--agent-soft);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fr-actions .t-accept:hover,
+.c-actions .f-accept:hover {
+  filter: brightness(1.12);
 }

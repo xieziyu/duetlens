@@ -191,6 +191,20 @@ const FINDINGS: Finding[] = [
     round: 2,
     lastSeenRound: 2,
   }),
+  mkFinding({
+    id: 'f5',
+    severity: 'medium',
+    category: 'Type Safety',
+    title: '调试脚本用 cast 伪造外部 JSON 的运行时形状',
+    body: '`--file` 内容来自外部文件,却用类型断言直接宣称 JSON 一定含两个 string 字段。',
+    file: 'src/scripts/decrypt.ts',
+    line: 20,
+    submission: 'submitted',
+    submittedUrl: 'https://github.com/acme/repo/pull/1#pullrequestreview-1',
+    lastSeenRound: 2,
+    resolution: 'wont_fix',
+    resolutionNote: '作者:纯联调,手动调试脚本,可忽略。',
+  }),
 ];
 
 const ROUNDS: ReviewRound[] = [

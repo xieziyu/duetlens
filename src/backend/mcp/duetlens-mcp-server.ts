@@ -37,10 +37,10 @@ export interface ReportedFindingUpdate {
   suggestion?: string | null;
 }
 
-/** resolve_finding 的表态(复审轮次里对上一轮 finding 判定「已修复 / 仍存在」)。 */
+/** resolve_finding 的表态(复审轮次里对上一轮 finding 的判定)。 */
 export interface ReportedFindingResolution {
   findingId: string;
-  status: 'fixed' | 'still_present';
+  status: 'fixed' | 'still_present' | 'wont_fix';
   note?: string;
 }
 
@@ -97,10 +97,16 @@ const TOOLS = [
         finding_id: { type: 'string', description: '复审指令里给出的 finding id' },
         status: {
           type: 'string',
-          enum: ['fixed', 'still_present'],
-          description: 'fixed=已在最新代码中修复;still_present=问题依旧',
+          enum: ['fixed', 'still_present', 'wont_fix'],
+          description:
+            'fixed=已在最新代码中修复;' +
+            'wont_fix=作者已在 PR 上回应说明不改(即使代码原样未变,也选这个,不要选 still_present);' +
+            'still_present=代码未修复且作者没有给出不改的理由',
         },
-        note: { type: 'string', description: '可选:判定依据(如「已在 x.ts:42 增加空值保护」)' },
+        note: {
+          type: 'string',
+          description: '判定依据。wont_fix 必填,摘录作者的原话;其余写清改在哪 / 为何仍存在',
+        },
       },
       required: ['finding_id', 'status'],
     },

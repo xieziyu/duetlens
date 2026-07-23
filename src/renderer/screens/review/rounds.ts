@@ -16,6 +16,20 @@ export function isFixedThisRound(f: Finding, currentRound: number): boolean {
   return currentResolution(f, currentRound) === 'fixed';
 }
 
+/** 本轮判定「作者已回应、不打算改」。 */
+export function isWontFixThisRound(f: Finding, currentRound: number): boolean {
+  return currentResolution(f, currentRound) === 'wont_fix';
+}
+
+/**
+ * 本轮已有结论、不需要 reviewer 再逐条过一遍的条目(已修复 / 作者已回应)。
+ * 它们移出主列表收进折叠区 —— 留在原位只会淹没真正待处理的意见。
+ */
+export function isSettledThisRound(f: Finding, currentRound: number): boolean {
+  const r = currentResolution(f, currentRound);
+  return r === 'fixed' || r === 'wont_fix';
+}
+
 /** 本轮才出现的新条目。 */
 export function isNewThisRound(f: Finding, currentRound: number): boolean {
   return currentRound > 1 && f.round === currentRound;

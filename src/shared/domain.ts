@@ -44,8 +44,11 @@ export type Submission = (typeof SUBMISSIONS)[number];
 /**
  * 复审轮次里 agent 对上一轮 finding 的判定。
  * 只在「表态轮次 === review 当前轮次」时代表本轮结论(见 Finding.lastSeenRound)。
+ *
+ * `wont_fix` 不可省:作者在 PR 上回一句「这是调试脚本,可忽略」时,代码确实原样未变 ——
+ * 只有 fixed/still_present 两格的话,agent 只能答 still_present,于是同一条意见每轮都重报一遍。
  */
-export const FINDING_RESOLUTIONS = ['fixed', 'still_present'] as const;
+export const FINDING_RESOLUTIONS = ['fixed', 'still_present', 'wont_fix'] as const;
 export type FindingResolution = (typeof FINDING_RESOLUTIONS)[number];
 
 /** 一轮机审的生命周期;失败轮次保留在历史里,不回滚轮次号。 */

@@ -14,7 +14,14 @@ import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
 import { RerunPanel } from './review/RerunPanel';
-import { currentResolution, isFixedThisRound, isNewThisRound, roundSummary } from './review/rounds';
+import {
+  currentResolution,
+  isFixedThisRound,
+  isNewThisRound,
+  isSettledThisRound,
+  isWontFixThisRound,
+  roundSummary,
+} from './review/rounds';
 import { isSubmittable } from '@shared/github-review';
 import './ReviewScreen.css';
 import './review/review-syntax.css';
@@ -564,16 +571,20 @@ function RightPanel({
     () => (categoryFilter ? findings.filter((f) => (f.category ?? '未分类') === categoryFilter) : findings),
     [findings, categoryFilter],
   );
-  // 本轮判定已修复的条目移出主列表 —— 它们不再是待处理的意见,留在原位只会淹没真正要看的东西
+  // 本轮已有结论的条目移出主列表 —— 它们不再是待处理的意见,留在原位只会淹没真正要看的东西。
+  // 「已修复」与「作者已回应」分开两组:后者还需 reviewer 决定接不接受作者的说法。
   const fixed = useMemo(
     () => filtered.filter((f) => isFixedThisRound(f, currentRound)),
     [filtered, currentRound],
   );
-  const shown = useMemo(
-    () => filtered.filter((f) => !isFixedThisRound(f, currentRound)),
+  const wontFix = useMemo(
+    () => filtered.filter((f) => isWontFixThisRound(f, currentRound)),
     [filtered, currentRound],
   );
-  const [fixedOpen, setFixedOpen] = useState(false);
+  const shown = useMemo(
+    () => filtered.filter((f) => !isSettledThisRound(f, currentRound)),
+    [filtered, currentRound],
+  );
   // findings 分组:按严重度(high▸low)或按文件;渲染统一走 groups 列表。
   const groups = useMemo(() => {
     if (grouping === 'file') {
@@ -642,7 +653,7 @@ function RightPanel({
                   </button>
                 </div>
               )}
-              {shown.length === 0 && fixed.length === 0 &&
+              {shown.length === 0 && fixed.length === 0 && wontFix.length === 0 &&
                 (categoryFilter ? (
                   <p className="empty-note">无 {categoryFilter} 分类的 findings。</p>
                 ) : (
@@ -686,30 +697,34 @@ function RightPanel({
                   ))}
                 </div>
               ))}
-              {fixed.length > 0 && (
-                <div className="fgroup fixed-group">
-                  <button
-                    className="fg-head fg-toggle"
-                    onClick={() => setFixedOpen((v) => !v)}
-                    aria-expanded={fixedOpen}
-                  >
-                    <span className="fg-caret">{fixedOpen ? '▾' : '▸'}</span>
-                    <span className="fg-fixed">✓ 本轮判定已修复</span>
-                    <span className="fg-n">{fixed.length}</span>
-                    <span className="fg-line" />
-                  </button>
-                  {fixedOpen &&
-                    fixed.map((f) => (
-                      <FindingRow
-                        key={f.id}
-                        finding={f}
-                        currentRound={currentRound}
-                        onPick={onPickFinding}
-                        onTriage={onTriage}
-                      />
-                    ))}
-                </div>
-              )}
+              <FoldedGroup label="✓ 本轮判定已修复" tone="fixed" findings={fixed}>
+                {(f) => (
+                  <FindingRow
+                    key={f.id}
+                    finding={f}
+                    currentRound={currentRound}
+                    onPick={onPickFinding}
+                    onTriage={onTriage}
+                  />
+                )}
+              </FoldedGroup>
+              {/* 作者已回应的默认展开:这组还等着 reviewer 决定接不接受作者的说法 */}
+              <FoldedGroup
+                label="◇ 作者已回应,未改动"
+                tone="wontfix"
+                findings={wontFix}
+                defaultOpen
+              >
+                {(f) => (
+                  <FindingRow
+                    key={f.id}
+                    finding={f}
+                    currentRound={currentRound}
+                    onPick={onPickFinding}
+                    onTriage={onTriage}
+                  />
+                )}
+              </FoldedGroup>
             </>
           )}
         </div>
@@ -750,6 +765,35 @@ function RightPanel({
             onPickCategory={onPickCategory}
           />
         ))}
+    </div>
+  );
+}
+
+/** 本轮已有结论的一组 finding:折叠起来不占主列表,标题上带条数。空组不渲染。 */
+function FoldedGroup({
+  label,
+  tone,
+  findings,
+  defaultOpen = false,
+  children,
+}: {
+  label: string;
+  tone: 'fixed' | 'wontfix';
+  findings: Finding[];
+  defaultOpen?: boolean;
+  children: (f: Finding) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (findings.length === 0) return null;
+  return (
+    <div className={`fgroup folded-group ${tone}`}>
+      <button className="fg-head fg-toggle" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="fg-caret">{open ? '▾' : '▸'}</span>
+        <span className={`fg-folded ${tone}`}>{label}</span>
+        <span className="fg-n">{findings.length}</span>
+        <span className="fg-line" />
+      </button>
+      {open && findings.map(children)}
     </div>
   );
 }
@@ -797,6 +841,7 @@ function FindingRow({
         {isNew && <span className="round-tag new">本轮新增</span>}
         {resolution === 'fixed' && <span className="round-tag fixed">✓ 已修复</span>}
         {resolution === 'still_present' && <span className="round-tag still">仍存在</span>}
+        {resolution === 'wont_fix' && <span className="round-tag wontfix">◇ 作者已回应</span>}
         <span className={`origin ${f.origin === 'agent' ? 'agent' : 'human'}`}>
           <span className="d" />
           {ORIGIN_LABEL[f.origin]}
@@ -811,17 +856,32 @@ function FindingRow({
         </span>
         {f.suggestion && <span className="sugg-tag">◇ suggestion</span>}
         <div className="fr-actions">
-          {submitted ? (
-            <span className="subm">✓ 已提交</span>
-          ) : dismissed ? (
+          {dismissed ? (
             <button className="fr-restore" onClick={triage('open')}>
               ↩ 恢复
             </button>
           ) : (
             <span className="triage">
-              <button className="t-drop" onClick={triage('dismiss')}>
-                剔除
-              </button>
+              {/* 已提交的 finding 内容锁定,但「作者已回应」仍需一个出口:剔除并留下作者的说法 */}
+              {resolution === 'wont_fix' && (
+                <button
+                  className="t-accept"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTriage(f, 'dismiss', f.resolutionNote ?? null);
+                  }}
+                  title="剔除此条,并把作者的说明记为剔除理由"
+                >
+                  ✓ 采纳
+                </button>
+              )}
+              {submitted ? (
+                <span className="subm">✓ 已提交</span>
+              ) : (
+                <button className="t-drop" onClick={triage('dismiss')}>
+                  剔除
+                </button>
+              )}
             </span>
           )}
         </div>

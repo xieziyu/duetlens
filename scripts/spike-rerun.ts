@@ -144,10 +144,15 @@ function main() {
     fetchedAt: Date.now(),
   };
 
-  // 我方提交的 thread 应按 path+行邻近+首条评论作者匹配回具体 finding
+  // 我方提交的 thread 应按 path+行邻近+首条评论作者匹配回具体 finding。
+  // race 与 naming 同文件同在 16 行 —— 靠首条评论正文里的标题区分,不能只按行距取第一个。
   const matched = matchThreadsToFindings(open, pr);
-  assert.equal(matched.get(race.id)?.length, 1, '我方 thread 应挂到并发那条 finding');
-  assert.equal(matched.has(naming.id), false, '同文件同行但已被更像的那条领走,不重复挂');
+  assert.equal(matched.get(race.id)?.length, 1, '我方 thread 应挂到标题对得上的那条 finding');
+  assert.equal(matched.has(naming.id), false, '不得挂到同文件同行的另一条 finding 上');
+  // 反向验证:把 naming 排在数组更前面,匹配结果不应因顺序而改变
+  const reordered = matchThreadsToFindings([naming, race], pr);
+  assert.equal(reordered.has(race.id), true, '匹配结果不该依赖 findings 的数组顺序');
+  assert.equal(reordered.has(naming.id), false);
   assert.equal(
     matchThreadsToFindings(open, { ...pr, viewer: '' }).size,
     0,
@@ -175,6 +180,16 @@ function main() {
   assert.match(prompt, /resolve_finding/);
   assert.match(prompt, /已提交到 GitHub|已 resolve|作者尚未回复/, '应带上 GitHub thread 状态');
   assert.match(prompt, /已改成 AtomicCounter 了/, '作者对我方 finding 的回复应注入');
+  assert.match(prompt, /@ryan\(PR 作者\)/, '要标出哪条回复来自 PR 作者本人');
+  // 表态词汇必须含 wont_fix,且判定顺序把「作者怎么说」排在「代码变没变」之前 ——
+  // 否则作者回「这是调试脚本,可忽略」时 agent 只能答 still_present,同一条每轮重报。
+  assert.match(prompt, /wont_fix/, '表态选项必须包含 wont_fix');
+  assert.match(prompt, /先看作者有没有在 GitHub thread 里回应/);
+  assert.ok(
+    prompt.indexOf('先看作者有没有在 GitHub thread 里回应') < prompt.indexOf('其余情况'),
+    '「先看作者回应」必须排在「按代码判定」之前',
+  );
+  assert.match(prompt, /已 resolve.*但作者没留文字|thread 标了「已 resolve」/, '空 resolve 的判定规则要交代');
   assert.match(prompt, /这个真的会有竞态吗/, 'reviewer 与 agent 的讨论应注入');
   assert.match(prompt, /第二版已推/, 'PR 级评论应注入');
   assert.match(prompt, /这里要不要加个测试/, '其他 reviewer 的 inline 讨论应注入');
@@ -235,6 +250,19 @@ function main() {
   // ---- 6. 第 2 轮的表态与抑制回写 ----
   store.setFindingResolution(race.id, 2, 'still_present', 'AtomicCounter 用对了,但 get→set 之间仍有窗口。');
   store.setFindingResolution(naming.id, 2, 'fixed', '已改名为 completedCount。');
+  // 作者回应「不改」:代码原样未变,但结论已经有了 —— 必须能表达成 wont_fix 而非 still_present
+  const debug = store.addFinding(review.id, {
+    severity: 'medium', category: 'Type Safety', title: '调试脚本用 cast 伪造外部 JSON 的运行时形状',
+    body: '缺字段会绕过类型检查。', file: 'src/scripts/decrypt.ts', line: 20,
+  });
+  store.setFindingResolution(debug.id, 2, 'wont_fix', '作者:纯联调,手动调试脚本,可忽略。');
+  const debugAfter = store.getFinding(debug.id)!;
+  assert.equal(debugAfter.resolution, 'wont_fix');
+  assert.equal(debugAfter.triage, 'open', 'wont_fix 不自动剔除 —— 采纳与否是 reviewer 的决定');
+  // reviewer 一键采纳:剔除并把作者的说法留作剔除理由,下一轮据此抑制同类
+  store.setTriage(debug.id, 'dismiss', debugAfter.resolutionNote);
+  assert.equal(store.getFinding(debug.id)!.triage, 'dismiss');
+  assert.match(store.getFinding(debug.id)!.dismissReason!, /纯联调/);
   const racedAfter = store.getFinding(race.id)!;
   const namedAfter = store.getFinding(naming.id)!;
   assert.equal(racedAfter.resolution, 'still_present');
@@ -269,7 +297,7 @@ function main() {
   assert.equal(done.fixedCount, 1);
   assert.equal(done.suppressedCount, 2, 'finishRound 不该覆盖已累加的抑制数');
   assert.ok(done.endedAt! >= done.startedAt);
-  log('第 2 轮:表态回写 / 抑制计数 / 新 finding 归属 round=2 / 收轮统计');
+  log('第 2 轮:三态回写(含 wont_fix 不自动剔除)/ 一键采纳 / 抑制计数 / 收轮统计');
 
   // ---- 7. 轮次履历与级联删除 ----
   const rounds = store.listRounds(review.id);

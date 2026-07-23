@@ -26,9 +26,29 @@
 
 ### agent 必须对上一轮的 findings 表态
 
-MCP 新增 `resolve_finding(finding_id, status, note)`。复审 prompt 会列出所有**保留中**的 finding 并要求逐条调用它,给出 `fixed`(已在最新代码中修复)或 `still_present`(问题依旧)。
+MCP 新增 `resolve_finding(finding_id, status, note)`。复审 prompt 列出所有**保留中**的 finding,要求逐条调用它。
 
-这是重跑最大的价值点:reviewer 最想知道的是"我上轮提的问题改了没",而不是再拿到一份重复列表。`report_finding` 的语义收窄为**只报新问题**。
+这是重跑最大的价值点:reviewer 最想知道的是"我上轮提的问题改了没",而不是再拿到一份重复列表。`report_finding` 的语义随之收窄为**只报新问题**。
+
+状态有三个,`wont_fix` 不可省:
+
+| status | 含义 |
+| --- | --- |
+| `fixed` | 已在最新代码中修复 |
+| `wont_fix` | **作者已在 PR 上回应说明不改**(即使代码原样未变) |
+| `still_present` | 代码未修复,且作者没有给出不改的理由 |
+
+判定顺序刻意把"作者在 thread 里怎么说"排在"代码变没变"之前:
+
+1. 作者若说明了为何不改(「这是调试脚本,可忽略」),选 `wont_fix` 并摘录原话进 note;
+2. thread 标了「已 resolve」但作者没留文字 —— 强信号,但仍要回代码核实,真改了才是 `fixed`;
+3. 其余按最新代码判定。
+
+> **这一条是踩过坑补的。** 早期版本只有 `fixed` / `still_present` 两格,指令也只说"先到最新代码里核实"。
+> 于是作者在 PR 上回了「纯联调,手动调试脚本,可忽略」之后,代码确实原样未变,agent 只能答
+> `still_present` —— 它没答错,是**我们问错了问题**:词汇表里没有"作者已回应"这一格,指令也从没
+> 要求它读作者的回复。同一条意见因此每轮重报。thread 回复其实一直都注入到了 prompt 里,
+> 缺的是**表达结论的词**和**使用它的指令**。
 
 ### 被剔除的不再出现
 
@@ -43,7 +63,7 @@ MCP 新增 `resolve_finding(finding_id, status, note)`。复审 prompt 会列出
 
 `github-pr` source 的重跑会用**一条 GraphQL** 取回:
 
-- **我方 finding 所在 thread 的后续回复** —— 按 `path` + 行号邻近 + thread 首条评论作者是当前 gh 身份匹配回具体 finding,连同 `isResolved` / `isOutdated` 一并挂在该 finding 下。这是"作者对我的意见怎么答的"。
+- **我方 finding 所在 thread 的后续回复** —— 按 `path` + 行号邻近 + thread 首条评论作者是当前 gh 身份匹配回具体 finding,连同 `isResolved` / `isOutdated` 一并挂在该 finding 下,并标出哪条来自 PR 作者本人(判定 `wont_fix` 只认作者的说明,旁人附和不算)。这是"作者对我的意见怎么答的"。窗口内有多条候选 finding 时,按我方评论正文里的标题取最像的一条 —— 只按行距取第一个的话,同文件相邻十几行的两条 finding 会把作者的回复挂错。
 - **PR 作者的 PR 级评论**、**其他 reviewer 的 review 表态与 inline 讨论**、**PR 描述的最新版本**(用于 Scope 类审查:body 承诺了但 diff 没实现)。
 
 除我方 thread(始终给完整往来)外,其余按时间窗过滤:**首次复审全取**整个 PR 的历史 —— 首轮扫描不注入任何 PR 内容,此时还没有任何东西被展示过;**第三轮起**才按"上一轮开始之后"增量,避免每轮重复注入同样的旧评论。
@@ -64,7 +84,7 @@ Review
 Finding
   ├─ round            ← 首次被报出的轮次
   ├─ lastSeenRound    ← agent 最近一次对它表态或重报的轮次
-  ├─ resolution       ← fixed | still_present | null
+  ├─ resolution       ← fixed | wont_fix | still_present | null
   ├─ resolutionNote
   └─ dismissReason    ← reviewer 剔除时可选填;恢复为 open 时清空
 ```
@@ -93,9 +113,10 @@ schema 见 `src/backend/db/schema.ts` 的 V6;存量数据一律视作第 1 轮(�
 
 - **入口**:review 顶栏「↻ 重跑」(扫描中禁用)→ `RerunPanel` 摊开"这一轮会带上什么"(保留 N 条待表态 / 剔除 M 条不再报 / 最新 diff / PR 评论),可填本轮说明,`⌘↵` 开跑。面板只统计本地已有数据 —— 最新 diff 与 PR 评论是开跑那一刻才拉的,提前拉一次既慢又会与真正开跑时的结果不一致,所以文案只说"将拉取",不给假数字。
 - **状态栏**:`↻ 第 N 轮 · 修复 x · 新增 y · 过滤 z`(单轮时不显示)。
-- **finding 标记**:`本轮新增` / `✓ 已修复` / `仍存在`,以及 agent 的复核说明与 reviewer 的剔除理由。
-- **已修复折叠区**:本轮判定 fixed 的条目移出主列表收进折叠区 —— 它们不再是待处理的意见,留在原位只会淹没真正要看的东西。
+- **finding 标记**:`本轮新增` / `✓ 已修复` / `仍存在` / `◇ 作者已回应`,以及 agent 的复核说明与 reviewer 的剔除理由。
+- **两个折叠区**:本轮已有结论的条目移出主列表 —— 留在原位只会淹没真正待处理的意见。`✓ 本轮判定已修复` 默认收起;`◇ 作者已回应,未改动` **默认展开**,因为它还等着 reviewer 决定接不接受作者的说法。
+- **一键采纳**:`wont_fix` 的条目上给「✓ 采纳」——剔除该条,并把 agent 摘录的作者原话存为 `dismissReason`,下一轮据此抑制同类。**不自动剔除**:作者一句"可忽略"不该自动关掉一条真实的安全问题,采纳与否始终是 reviewer 点了才算。
 
 ## 验证
 
-`npm run spike:rerun`(确定性、不烧 token):轮次落库与级联删除、`changedFilesBetween`、复审 prompt 的六类内容与外部数据围栏顺序、thread↔finding 匹配、去重的命中/不误吞/跨文件、表态回写与抑制计数、`lastSeenRound` 不回退。
+`npm run spike:rerun`(确定性、不烧 token):轮次落库与级联删除、`changedFilesBetween`、复审 prompt 的六类内容与外部数据围栏顺序、表态词汇含 `wont_fix` 且判定顺序把作者回应排在代码之前、thread↔finding 匹配**不依赖数组顺序**、去重的命中/不误吞/跨文件、三态回写(`wont_fix` 不自动剔除)与一键采纳、抑制计数、`lastSeenRound` 不回退。

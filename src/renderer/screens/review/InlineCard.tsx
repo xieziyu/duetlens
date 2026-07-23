@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Finding, Severity, Triage } from '@shared/domain';
+import type { Finding, FindingResolution, Severity, Triage } from '@shared/domain';
 import type { FindingEditInput } from '@shared/ipc';
 import { renderMarkdown } from './markdown';
 import { currentResolution, isNewThisRound } from './rounds';
@@ -51,7 +51,7 @@ export function InlineCard({
     (focused ? ' focused' : '') +
     (submitted ? ' submitted' : '') +
     (dismissed && !editing ? ' dismissed' : '') +
-    (resolution === 'fixed' && !editing ? ' resolved' : '') +
+    ((resolution === 'fixed' || resolution === 'wont_fix') && !editing ? ' resolved' : '') +
     (editing ? ' editing' : '');
 
   return (
@@ -80,6 +80,11 @@ export function InlineCard({
             isNew={isNewThisRound(finding, currentRound)}
             onEdit={onUpdate ? () => setEditing(true) : undefined}
             onDismiss={onTriage ? () => onTriage(finding, 'dismiss') : undefined}
+            onAccept={
+              onTriage
+                ? () => onTriage(finding, 'dismiss', finding.resolutionNote ?? null)
+                : undefined
+            }
             onDiscuss={onDiscuss ? () => onDiscuss(finding) : undefined}
           />
         )}
@@ -164,6 +169,7 @@ function CardView({
   isNew,
   onEdit,
   onDismiss,
+  onAccept,
   onDiscuss,
 }: {
   finding: Finding;
@@ -172,10 +178,11 @@ function CardView({
   writable: boolean;
   offDiff?: boolean;
   originalLine?: string;
-  resolution: 'fixed' | 'still_present' | null;
+  resolution: FindingResolution | null;
   isNew: boolean;
   onEdit?: () => void;
   onDismiss?: () => void;
+  onAccept?: () => void;
   onDiscuss?: () => void;
 }) {
   return (
@@ -192,13 +199,14 @@ function CardView({
         {isNew && <span className="round-tag new">本轮新增</span>}
         {resolution === 'fixed' && <span className="round-tag fixed">✓ 本轮已修复</span>}
         {resolution === 'still_present' && <span className="round-tag still">本轮复核 · 仍存在</span>}
+        {resolution === 'wont_fix' && <span className="round-tag wontfix">◇ 作者已回应</span>}
       </div>
       <div className="c-body">
         <strong className="c-title">{finding.title}</strong>
         {finding.body && <div className="c-prose">{renderMarkdown(finding.body)}</div>}
         {resolution && finding.resolutionNote && (
-          <div className="c-resnote">
-            <span className="crn-lbl">复核</span>
+          <div className={`c-resnote${resolution === 'wont_fix' ? ' wontfix' : ''}`}>
+            <span className="crn-lbl">{resolution === 'wont_fix' ? '作者' : '复核'}</span>
             {finding.resolutionNote}
           </div>
         )}
@@ -235,6 +243,13 @@ function CardView({
           {writable && onEdit && (
             <button className="btn f-edit" onClick={onEdit}>
               ✎ 编辑
+            </button>
+          )}
+          {/* 作者已回应时给一键出口:剔除并把 agent 摘录的作者原话存为剔除理由,
+              下一轮据此不再报同类。是否采纳仍是 reviewer 点了才算。 */}
+          {writable && onAccept && resolution === 'wont_fix' && (
+            <button className="btn f-accept" onClick={onAccept} title="剔除此条,并把作者的说明记为剔除理由">
+              ✓ 采纳作者说明
             </button>
           )}
           {writable && onDismiss && (
