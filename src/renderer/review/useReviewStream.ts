@@ -23,6 +23,14 @@ export interface ReviewStreamState {
 }
 
 /**
+ * 穷尽性哨兵:ReviewEvent 的分支被全部消费时,参数才是 never —— 新增一支而漏处理即编译失败。
+ * 运行时只告警不抛:main 比 renderer 新时(热更/回滚)收到未知事件应静默跳过,而非崩掉整条事件流。
+ */
+function assertExhaustive(e: never): void {
+  console.warn('[review-stream] 未处理的 review 事件', e);
+}
+
+/**
  * 订阅一次 review 的 server-state:先拉初值,再随 IPC review:event 增量更新。
  * 前端不臆造权威数据,只反映后端推来的领域事件(见 frontend-components.md 状态分层)。
  */
@@ -89,51 +97,73 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     void window.duetlens.review.discussions(reviewId).then((d) => alive && setDiscussions(d));
     void window.duetlens.review.diff(reviewId).then((d) => alive && setDiff(d));
 
+    // switch + 兜底哨兵:ReviewEvent 新增一支而这里漏处理,编译期即报错(见 assertExhaustive)
     const off = window.duetlens.review.onEvent((e) => {
       if (e.reviewId !== reviewId) return;
-      if (e.type === 'finding') {
-        // upsert:新 finding 追加,已存在的(update_finding 回写)就地替换
-        setFindings((prev) => {
-          const i = prev.findIndex((x) => x.id === e.payload.id);
-          if (i < 0) return [...prev, e.payload];
-          const next = prev.slice();
-          next[i] = e.payload;
-          return next;
-        });
-      } else if (e.type === 'discussion') {
-        // upsert:新 discussion 追加,已存在的(如 promote 后 kind 变更)就地替换
-        setDiscussions((prev) => {
-          const i = prev.findIndex((d) => d.id === e.payload.id);
-          if (i < 0) return [...prev, e.payload];
-          const next = prev.slice();
-          next[i] = e.payload;
-          return next;
-        });
-      } else if (e.type === 'message') {
-        const m = e.payload;
-        setMessages((prev) => {
-          const bucket = prev[m.discussionId] ?? [];
-          if (bucket.some((x) => x.id === m.id)) return prev;
-          // 权威 user 消息到达:替换掉同文本的乐观占位(pending-*),避免重复
-          const cleaned =
-            m.role === 'user'
-              ? bucket.filter((x) => !(x.id.startsWith('pending-') && x.text === m.text))
-              : bucket;
-          return { ...prev, [m.discussionId]: [...cleaned, m] };
-        });
-      } else if (e.type === 'messages-cleared') {
-        setMessages((prev) => (prev[e.discussionId] ? { ...prev, [e.discussionId]: [] } : prev));
-      } else if (e.type === 'review') {
-        setReview(e.payload);
-        setStatus(e.payload.status);
-      } else if (e.type === 'status') {
-        setStatus(e.payload);
-      } else if (e.type === 'agent') {
-        const ev = e.payload as AgentEvent;
-        if (ev.kind === 'token-usage') setTokenUsage({ used: ev.used, total: ev.total });
-        if (ev.kind === 'tool-call') setLastTool(`${ev.server}/${ev.tool} · ${ev.status}`);
+      switch (e.type) {
+        case 'finding': {
+          // upsert:新 finding 追加,已存在的(update_finding 回写)就地替换
+          const f = e.payload;
+          setFindings((prev) => {
+            const i = prev.findIndex((x) => x.id === f.id);
+            if (i < 0) return [...prev, f];
+            const next = prev.slice();
+            next[i] = f;
+            return next;
+          });
+          return;
+        }
+        case 'discussion': {
+          // upsert:新 discussion 追加,已存在的(如 promote 后 kind 变更)就地替换
+          const d = e.payload;
+          setDiscussions((prev) => {
+            const i = prev.findIndex((x) => x.id === d.id);
+            if (i < 0) return [...prev, d];
+            const next = prev.slice();
+            next[i] = d;
+            return next;
+          });
+          return;
+        }
+        case 'message': {
+          const m = e.payload;
+          setMessages((prev) => {
+            const bucket = prev[m.discussionId] ?? [];
+            if (bucket.some((x) => x.id === m.id)) return prev;
+            // 权威 user 消息到达:替换掉同文本的乐观占位(pending-*),避免重复
+            const cleaned =
+              m.role === 'user'
+                ? bucket.filter((x) => !(x.id.startsWith('pending-') && x.text === m.text))
+                : bucket;
+            return { ...prev, [m.discussionId]: [...cleaned, m] };
+          });
+          return;
+        }
+        case 'messages-cleared': {
+          const { discussionId } = e;
+          setMessages((prev) => (prev[discussionId] ? { ...prev, [discussionId]: [] } : prev));
+          return;
+        }
+        case 'review':
+          setReview(e.payload);
+          setStatus(e.payload.status);
+          return;
+        case 'status':
+          setStatus(e.payload);
+          return;
+        case 'agent':
+          // agent 流是 firehose,只挑要上屏的两支;其余 kind 有意不处理
+          applyAgentEvent(e.payload);
+          return;
+        default:
+          assertExhaustive(e);
       }
     });
+
+    function applyAgentEvent(ev: AgentEvent): void {
+      if (ev.kind === 'token-usage') setTokenUsage({ used: ev.used, total: ev.total });
+      if (ev.kind === 'tool-call') setLastTool(`${ev.server}/${ev.tool} · ${ev.status}`);
+    }
 
     return () => {
       alive = false;
