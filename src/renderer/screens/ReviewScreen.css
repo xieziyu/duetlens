@@ -1533,6 +1533,21 @@
   color: var(--agent-2);
   border-color: var(--agent-line);
 }
+/* 追问是这张卡的主动作(→ mockup .c-actions 的 ↳ 追问),按 agent 声道着色 */
+.btn.f-ask {
+  background: var(--agent-soft);
+  border-color: var(--agent-line);
+  color: var(--agent-2);
+}
+.btn.f-ask:hover {
+  filter: brightness(1.08);
+  color: var(--agent-2);
+  border-color: var(--agent-line);
+}
+/* 已提交卡只剩追问,徽标推到行尾 */
+.c-actions .sub-tag {
+  margin-left: auto;
+}
 .btn.danger:hover {
   color: var(--del);
   border-color: var(--del-gutter);

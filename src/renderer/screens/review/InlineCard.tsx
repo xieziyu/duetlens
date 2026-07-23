@@ -18,13 +18,23 @@ export interface InlineCardProps {
   onTriage?: (finding: Finding, triage: Triage) => void;
   /** 就地编辑保存 */
   onUpdate?: (input: FindingEditInput) => void;
+  /** 就这条 finding 追问 agent:切到 Discussion 栏并选中其承载线程 */
+  onDiscuss?: (finding: Finding) => void;
 }
 
 /**
  * 锚定在 diff 行处的内联 finding 卡(对齐 mockup .card):view / edit / dismissed 三态。
  * submitted 为只读锁定;编辑经 IPC 落库,回推事件再刷新视图(前端不臆造权威数据)。
  */
-export function InlineCard({ finding, focused, offDiff, originalLine, onTriage, onUpdate }: InlineCardProps) {
+export function InlineCard({
+  finding,
+  focused,
+  offDiff,
+  originalLine,
+  onTriage,
+  onUpdate,
+  onDiscuss,
+}: InlineCardProps) {
   const isAgent = finding.origin === 'agent';
   const submitted = finding.submission === 'submitted';
   const dismissed = finding.triage === 'dismiss';
@@ -70,6 +80,7 @@ export function InlineCard({ finding, focused, offDiff, originalLine, onTriage, 
             originalLine={originalLine}
             onEdit={onUpdate ? () => setEditing(true) : undefined}
             onDismiss={onTriage ? () => onTriage(finding, 'dismiss') : undefined}
+            onDiscuss={onDiscuss ? () => onDiscuss(finding) : undefined}
           />
         )}
       </div>
@@ -86,6 +97,7 @@ function CardView({
   originalLine,
   onEdit,
   onDismiss,
+  onDiscuss,
 }: {
   finding: Finding;
   isAgent: boolean;
@@ -95,6 +107,7 @@ function CardView({
   originalLine?: string;
   onEdit?: () => void;
   onDismiss?: () => void;
+  onDiscuss?: () => void;
 }) {
   return (
     <div className="c-view">
@@ -133,19 +146,26 @@ function CardView({
           </div>
         </div>
       )}
-      {writable ? (
+      {/* 追问不受 writable 约束:已提交的 finding 内容锁定,但仍该能接着聊 */}
+      {writable || onDiscuss ? (
         <div className="c-actions">
-          {onEdit && (
+          {onDiscuss && (
+            <button className="btn f-ask" onClick={onDiscuss} title="切到 Discussion 栏就这条 finding 追问">
+              ↳ 追问
+            </button>
+          )}
+          {writable && onEdit && (
             <button className="btn f-edit" onClick={onEdit}>
               ✎ 编辑
             </button>
           )}
-          {onDismiss && (
+          {writable && onDismiss && (
             <button className="btn danger f-dismiss" onClick={onDismiss}>
               ✕ 剔除
             </button>
           )}
           {offDiff && <span className="reply-hint mono anchor-tag">L{finding.line}</span>}
+          {submitted && <span className="sub-tag">✓ 已提交</span>}
         </div>
       ) : (
         (offDiff || submitted) && (

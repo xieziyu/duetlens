@@ -82,6 +82,8 @@ export interface DiffPaneProps {
   onAskCodex?: (anchor: DiscussionAnchor, label: string) => void;
   /** 框选「记为 finding」:在锚点处填写后新增一条 manual finding */
   onAddFinding?: (anchor: DiscussionAnchor, draft: NewFindingDraft) => void;
+  /** 内联 finding 卡「追问」:切 Discussion 栏并选中该 finding 的承载线程 */
+  onDiscussFinding?: (finding: Finding) => void;
   /** 点 gutter 圆点跳转:finding → 聚焦内联卡;user discussion → 切 Discussion 栏 */
   onJumpFinding?: (finding: Finding) => void;
   onJumpDiscussion?: (discussionId: string) => void;
@@ -250,6 +252,7 @@ export function DiffPane(props: DiffPaneProps) {
           focusFindingId={focusFindingId}
           onTriage={props.onTriage}
           onUpdate={props.onUpdate}
+          onDiscussFinding={props.onDiscussFinding}
           view={props.view}
           fetchFileContent={props.fetchFileContent}
           viewed={props.viewed.has(f.path)}
@@ -529,6 +532,7 @@ function DiffFileView({
   focusFindingId,
   onTriage,
   onUpdate,
+  onDiscussFinding,
   view,
   fetchFileContent,
   viewed,
@@ -548,6 +552,7 @@ function DiffFileView({
   focusFindingId: string | null;
   onTriage?: (finding: Finding, triage: Triage) => void;
   onUpdate?: (input: FindingEditInput) => void;
+  onDiscussFinding?: (finding: Finding) => void;
   view: DiffView;
   fetchFileContent?: (path: string) => Promise<string | null>;
   viewed: boolean;
@@ -726,6 +731,7 @@ function DiffFileView({
               offDiff
               onTriage={onTriage}
               onUpdate={onUpdate}
+              onDiscuss={onDiscussFinding}
             />
           ))}
         </div>
@@ -756,6 +762,7 @@ function DiffFileView({
                 view={view}
                 onTriage={onTriage}
                 onUpdate={onUpdate}
+                onDiscussFinding={onDiscussFinding}
                 onAddThread={onAddThread}
                 composeLine={compose?.pick.placeLine ?? null}
                 composeNode={composeNode}
@@ -805,6 +812,7 @@ function HunkView({
   view,
   onTriage,
   onUpdate,
+  onDiscussFinding,
   onAddThread,
   composeLine,
   composeNode,
@@ -818,6 +826,7 @@ function HunkView({
   view: DiffView;
   onTriage?: (finding: Finding, triage: Triage) => void;
   onUpdate?: (input: FindingEditInput) => void;
+  onDiscussFinding?: (finding: Finding) => void;
   onAddThread?: (line: number, snippet: string) => void;
   composeLine: number | null;
   composeNode: React.ReactNode;
@@ -834,6 +843,7 @@ function HunkView({
         originalLine={textByNewLine.get(f.line)}
         onTriage={onTriage}
         onUpdate={onUpdate}
+        onDiscuss={onDiscussFinding}
       />
     ));
 

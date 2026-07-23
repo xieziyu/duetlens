@@ -82,6 +82,15 @@ export function ReviewScreen({
     setActiveDiscussionId(f.discussionId);
   };
 
+  // 内联卡「追问」:选中该 finding 的承载线程并切到 Discussion 栏,composer 即刻可用。
+  // 与 focusFinding 的区别只在强制换 tab —— 后者是定位,这里是明确要开聊。
+  const discussFinding = (f: Finding) => {
+    setFocusFindingId(f.id);
+    setActiveDiscussionId(f.discussionId);
+    setPendingRef(null);
+    setTab('discussion');
+  };
+
   const focusDiscussion = (id: string) => {
     setActiveDiscussionId(id);
     setTab('discussion');
@@ -349,6 +358,7 @@ export function ReviewScreen({
           onStartDiscussion={onStartDiscussion}
           onAskCodex={onAskCodex}
           onAddFinding={onAddFinding}
+          onDiscussFinding={discussFinding}
           onJumpFinding={focusFinding}
           onJumpDiscussion={focusDiscussion}
           fetchFileContent={fetchFileContent}
