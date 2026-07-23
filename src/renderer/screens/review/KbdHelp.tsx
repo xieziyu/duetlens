@@ -24,8 +24,8 @@ const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
   {
     title: 'Discussion',
     rows: [
-      { label: '发送回复 / 追问', keys: ['↵'] },
-      { label: '输入框内换行', keys: ['⇧', '↵'] },
+      { label: '发送回复 / 追问', keys: ['⌘', '↵'] },
+      { label: '输入框内换行', keys: ['↵'] },
     ],
   },
 ];
