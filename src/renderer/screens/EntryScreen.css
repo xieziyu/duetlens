@@ -118,7 +118,7 @@
 .ghfield input::placeholder { color: var(--text-faint); font-family: var(--sans); }
 .fld-spin { font-size: 10.5px; color: var(--text-faint); }
 
-.resolved {
+.pr-resolved {
   margin-top: 12px;
   border: 1px solid var(--agent-line);
   border-radius: 12px;
@@ -128,7 +128,7 @@
   gap: 12px;
   align-items: flex-start;
 }
-.resolved .ok {
+.pr-resolved .ok {
   width: 20px;
   height: 20px;
   border-radius: 6px;
@@ -142,11 +142,11 @@
   flex: none;
   margin-top: 1px;
 }
-.resolved .info { flex: 1; min-width: 0; }
-.resolved .l1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.resolved .num { font-weight: 600; color: var(--agent-2); }
-.resolved .ttl { font-weight: 600; color: var(--text); }
-.resolved .l2 {
+.pr-resolved .info { flex: 1; min-width: 0; }
+.pr-resolved .l1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pr-resolved .num { font-weight: 600; color: var(--agent-2); }
+.pr-resolved .ttl { font-weight: 600; color: var(--text); }
+.pr-resolved .l2 {
   margin-top: 5px;
   display: flex;
   align-items: center;
@@ -155,13 +155,13 @@
   color: var(--text-faint);
   flex-wrap: wrap;
 }
-.resolved .l2 .a { color: var(--add); }
-.resolved .l2 .d { color: var(--del); }
-.resolved .l2 .base { color: var(--text-dim); }
-.resolved.err { border-color: var(--del-gutter); background: color-mix(in oklab, var(--del) 6%, var(--surface-2)); }
-.resolved .ok.err { background: var(--del-bg); color: var(--sev-high); border-color: var(--del-gutter); }
-.resolved.err .emsg { color: var(--sev-high); }
-.resolved.err code { font-size: 11px; background: var(--surface-3); padding: 1px 5px; border-radius: 4px; color: var(--text-dim); }
+.pr-resolved .l2 .a { color: var(--add); }
+.pr-resolved .l2 .d { color: var(--del); }
+.pr-resolved .l2 .base { color: var(--text-dim); }
+.pr-resolved.err { border-color: var(--del-gutter); background: color-mix(in oklab, var(--del) 6%, var(--surface-2)); }
+.pr-resolved .ok.err { background: var(--del-bg); color: var(--sev-high); border-color: var(--del-gutter); }
+.pr-resolved.err .emsg { color: var(--sev-high); }
+.pr-resolved.err code { font-size: 11px; background: var(--surface-3); padding: 1px 5px; border-radius: 4px; color: var(--text-dim); }
 
 /* optional local repo path (github) */
 .pathfield {

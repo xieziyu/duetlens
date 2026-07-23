@@ -2986,9 +2986,16 @@ kbd {
   background: color-mix(in srgb, var(--del) 10%, transparent);
 }
 
+/* 已有结论的行是「归档态」:压低底色而不是整体调透明,状态 chip 仍需保持可读 */
 .frow.resolved {
+  border-color: var(--border-soft);
   border-left-color: var(--add);
-  opacity: 0.72;
+  background: var(--surface-2);
+  padding: 9px 11px 8px;
+}
+.frow.resolved .fr-title {
+  font-weight: 500;
+  color: var(--text-dim);
 }
 .fr-note {
   margin-top: 5px;
@@ -3000,6 +3007,47 @@ kbd {
 }
 .fr-note.reason {
   border-left-color: var(--del-gutter);
+}
+/* 复核结论:与 InlineCard 的 c-resnote 同构,带来源标签 */
+.fr-note.res {
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  border-left: 2px solid var(--add);
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.fr-note.res.wontfix {
+  border-left-color: var(--agent);
+}
+.fr-note.res .frn-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--add);
+  margin-right: 6px;
+}
+.fr-note.res.wontfix .frn-lbl {
+  color: var(--agent-2);
+}
+/* 结论已定的行内容短,锚点与操作并排即可,不必各占一行 */
+.frow.resolved .fr-foot {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 7px;
+}
+.frow.resolved .fr-foot .anchor {
+  flex: 1;
+  min-width: 0;
+}
+.frow.resolved .fr-foot .sugg-tag {
+  align-self: center;
+}
+.frow.resolved .fr-actions {
+  margin-top: 0;
+  margin-left: auto;
 }
 
 .fg-toggle {

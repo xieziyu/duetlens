@@ -848,7 +848,12 @@ function FindingRow({
         </span>
       </div>
       <div className="fr-title">{f.title}</div>
-      {f.resolutionNote && resolution && <div className="fr-note">{f.resolutionNote}</div>}
+      {f.resolutionNote && resolution && (
+        <div className={`fr-note res${resolution === 'wont_fix' ? ' wontfix' : ''}`}>
+          <span className="frn-lbl">{resolution === 'wont_fix' ? '作者' : '复核'}</span>
+          {f.resolutionNote}
+        </div>
+      )}
       {dismissed && f.dismissReason && <div className="fr-note reason">理由:{f.dismissReason}</div>}
       <div className="fr-foot">
         <span className="mono anchor" title={`${f.file}:${f.line}`}>

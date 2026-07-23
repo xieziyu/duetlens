@@ -203,7 +203,7 @@ const FINDINGS: Finding[] = [
     submittedUrl: 'https://github.com/acme/repo/pull/1#pullrequestreview-1',
     lastSeenRound: 2,
     resolution: 'wont_fix',
-    resolutionNote: '作者:纯联调,手动调试脚本,可忽略。',
+    resolutionNote: '纯联调,手动调试脚本,可忽略。',
   }),
 ];
 

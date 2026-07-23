@@ -413,7 +413,7 @@ function GitHubPanel({
       </div>
 
       {preview && (
-        <div className="resolved ok">
+        <div className="pr-resolved ok">
           <span className="ok">✓</span>
           <div className="info">
             <div className="l1">
@@ -431,7 +431,7 @@ function GitHubPanel({
         </div>
       )}
       {previewErr && (
-        <div className="resolved err">
+        <div className="pr-resolved err">
           <span className="ok err">!</span>
           <div className="info">
             <div className="l1">
