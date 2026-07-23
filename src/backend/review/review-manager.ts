@@ -17,7 +17,7 @@ import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/gith
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
-import { loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
+import { loadBaseInstructions, loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
 import { buildRerunPrompt } from '../prompt/rerun-prompt';
 import { createSource } from '../source/create-source';
 import { fetchPrContextForReview } from '../source/github-pr-context';
@@ -409,7 +409,7 @@ export class ReviewManager extends EventEmitter {
     this.store.setDiff(review.id, rawDiff);
     // 首轮也建轮次记录:轮次表是完整履历,复审只是往后追加,不是另一套东西。
     this.store.startRound(review.id, 1, { headSha: prepared.headSha, note: target.context });
-    const { baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd });
+    const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd });
     this.launch(review, prepared.cwd, {
       getDiff: () => rawDiff,
       getFile: (p) => source.getFile(p),
@@ -484,7 +484,7 @@ export class ReviewManager extends EventEmitter {
         pr: pr && pr.fetchedAt ? pr : null,
         note: input.note,
       });
-      ({ baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd }));
+      baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd });
     } catch (e) {
       await source.dispose();
       throw e;
@@ -557,7 +557,7 @@ export class ReviewManager extends EventEmitter {
       repoPath: review.repoPath ?? '',
     });
     const prepared = await source.prepare();
-    const { baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd });
+    const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd });
     const session = this.createSession(reviewId, () => source.dispose());
     const providers: McpContentProviders = {
       getDiff: () => source.getDiff(),

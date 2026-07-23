@@ -1,70 +1,51 @@
 /**
  * 审核规则提示词的分层解析与合并(见 [[docs/design/ui.md]] 三层编辑器)。
- * 固定几节,每节独立取「project ▸ global ▸ builtin」里最高优先且有定义的层;
- * 合并结果 + 操作性前言 = 注入 codex `baseInstructions` 的文本。
+ *
+ * prompt 分两类段落,只有前一类进入分层覆盖模型:
+ *   - **可配置节**(审核重点 / 严重度判定 / 忽略范围 / 输出与语气 / 项目上下文):
+ *     每节独立取「project ▸ global ▸ builtin」里最高优先且有定义的层。
+ *   - **锁定段**(角色与工具流程、上报字段协议):不可覆盖、不下发 renderer、不出现在设置页。
+ *     这些文字描述的是 MCP 工具契约本身 —— severity 枚举、category 规范集、行锚定的是新侧、
+ *     suggestion 会被逐字套用 —— 被改写不是口径变化,而是 finding 直接被 ingress 拒收
+ *     (`reportFindingSchema` 的 `z.enum(SEVERITIES)`)或提交到 GitHub 时补丁错位。
+ *
+ * 锁定段拆成首尾两块:角色在最前(身份),字段协议在最末(硬契约),
+ * 让用户节里万一写了冲突的话也压不过后面的协议。
+ *
  * 层文件:project = `<cwd>/.duetlens/review.md`,global = `~/.duetlens/review.md`。
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { FINDING_CATEGORIES } from '@shared/domain';
+import { FINDING_CATEGORIES, SEVERITIES } from '@shared/domain';
 import {
+  BUILTIN_SECTIONS,
+  mergeLayers,
+  normalizeSeverityText,
   type EditablePromptLayer,
-  type PromptLayer,
-  type PromptLayerSection,
   type PromptSectionKey,
   type ResolvedPromptSection,
   type ReviewPromptView,
 } from '@shared/prompt';
 
-/** 操作性前言(builtin,不进分节覆盖):角色 + MCP 用法 + 只读约束。 */
-export const BUILTIN_PREAMBLE = `你是 Duetlens 的代码审核 agent。审核本次改动,把发现的每个问题通过 duetlens MCP 的 report_finding 上报。
+/** 锁定段之一:角色 + MCP 用法 + 只读约束。注入在最前。 */
+export const BUILTIN_ROLE = `你是 Duetlens 的代码审核 agent。审核本次改动,把发现的每个问题通过 duetlens MCP 的 report_finding 上报。
 - 先调用 get_diff 查看改动,需要上下文时用 get_file 读取。
-- 每个问题调用一次 report_finding,锚定 file 与新侧 line,给出 severity(high/medium/low)、category、title、body。
+- 每个问题调用一次 report_finding,一条 finding 只讲一个问题。
 - 只审核、不修改代码。审完给一句话总结。`;
 
-interface SectionDef {
-  key: PromptSectionKey;
-  title: string;
-  builtin: string;
-}
-
-/** 分节覆盖的固定几节 + builtin 默认;context 无内置默认,由 project 补充仓库背景。 */
-export const BUILTIN_SECTIONS: readonly SectionDef[] = [
-  {
-    key: 'focus',
-    title: '审核重点',
-    builtin: `按以下类别审查改动,只报告需要修复的真实问题;把偏离分为有理由的改进 / 可接受的差异 / 有问题的偏离,只标最后一种。
-- Scope 范围对齐:PR 描述之外夹带的无关改动;body 承诺但 diff 未实现的缺失部分。
-- Correctness 正确性:绕过类型检查的逃生口(as any / @ts-ignore / 无依据的非空断言 / 骗过运行时形状的 cast);null / undefined 缺保护;资源泄漏(未关的 stream / 连接 / 句柄、未移除的监听、未清的 timer);竞态(共享状态并发无同步、请求路径未 await 的 promise);逻辑错误(off-by-one、比较写反、参数顺序、漏掉某分支)。
-- Security 安全:注入(SQL / NoSQL / XSS / command / 路径穿越,源于未净化输入);新 endpoint 缺 authn / authz / 租户隔离;secret / token / PII 落日志或 response;新增或升级依赖的已知漏洞与可疑来源。
-- Architecture 架构:分层边界(route / application / domain / infra 不互相渗透);新类经构造器 / DI 接依赖,避免业务代码里 new 或隐藏全局;重复逻辑(先查仓库是否已有同类实现);契约一致性(input 类型对齐 entity 存储字段,标 dead field)。
-- Performance 性能:N+1 与循环内可批量的 DB / RPC;热路径不必要的分配;真实数据规模下的算法低效;可增长数据集上无 limit 的读取。
-- Naming / Complexity / Error handling:命名自描述且与相邻文件一致(单复数、词序);深嵌套 / 超长函数 / 上帝类,建议抽 helper 或 early return,魔法值挪常量;被吞的错误(空 catch、\`.catch(() => {})\` 不 rethrow 不 log),错误带定位上下文,API 边界用领域错误类型、不外泄堆栈 / 内部路径。
-- 超出 diff 的架构隐患以 off-diff finding 提出,并说明为何 off-diff。`,
-  },
-  {
-    key: 'severity',
-    title: '严重度判定',
-    builtin:
-      'high = 崩溃 / 数据损坏 / 安全问题;\nmed = 边界 / 健壮性 / 可维护性隐患;\nlow = 风格 / 命名 / 可读性。',
-  },
-  {
-    key: 'ignore',
-    title: '忽略范围',
-    builtin: '忽略纯格式化、生成文件、lockfile、无语义的行重排。',
-  },
-  {
-    key: 'tone',
-    title: '输出与语气',
-    builtin:
-      'finding 正文用简体中文,代码标识符 / 路径 / category 用英文;\n' +
-      `category 取以下之一:${FINDING_CATEGORIES.join(' / ')};\n` +
-      '每条给出 file:line 锚点与可选 suggestion 块;\n' +
-      'suggestion 是可直接套用的字面补丁(会逐字替换锚定行),不是示意片段。',
-  },
-  { key: 'context', title: '项目上下文', builtin: '' },
-];
+/**
+ * 锁定段之二:report_finding 的字段契约。注入在最末 —— 用户节若写了冲突口径,以本段为准。
+ * 这里的每一条都对应一处机械消费:severity 走 zod enum、category 决定 Findings 栏分组、
+ * line 锚新侧决定提交到 GitHub 的位置、suggestion 会被逐字替换进代码。
+ */
+export const BUILTIN_PROTOCOL = `## 上报协议(固定,不随以上偏好改变)
+以上各节是审核口径;本节是 report_finding 的字段契约,Duetlens 会机械消费这些字段,必须严格遵守。
+- severity 只能取 ${SEVERITIES.join(' / ')} 三者之一,小写原词;每档的判定标准见「严重度判定」。
+- category 只能取:${FINDING_CATEGORIES.join(' / ')};用英文原词,不要自造、缩写或翻译。
+- file 用相对仓库根的路径;line 锚**新侧**行号。
+- suggestion 可选;给出时必须是能直接套用的字面补丁(会逐字替换锚定行),不是示意片段 —— 拿不准就不要给。
+- 超出 diff 范围的隐患照常 report_finding,并在正文里说明为何 off-diff。`;
 
 /** review.md 里 H2 标题(节标题或英文 key 皆可)→ 节 key,便于人手写与编辑器输出两种写法。 */
 const HEADING_TO_KEY: ReadonlyMap<string, PromptSectionKey> = new Map(
@@ -118,44 +99,35 @@ export function parseReviewMarkdown(md: string): Partial<Record<PromptSectionKey
   return out;
 }
 
-/** 按节合并三层:每节独立取 project ▸ global ▸ builtin。返回编辑器视图 + 解析后的生效值。 */
-export function mergeLayers(
-  project: Partial<Record<PromptSectionKey, string>>,
-  global: Partial<Record<PromptSectionKey, string>>,
-): { sections: PromptLayerSection[]; resolved: ResolvedPromptSection[] } {
-  const sections: PromptLayerSection[] = [];
-  const resolved: ResolvedPromptSection[] = [];
-  for (const s of BUILTIN_SECTIONS) {
-    const p = project[s.key] ?? null;
-    const g = global[s.key] ?? null;
-    const source: PromptLayer = p != null ? 'project' : g != null ? 'global' : 'builtin';
-    sections.push({ key: s.key, title: s.title, builtin: s.builtin, global: g, project: p, winner: source });
-    resolved.push({ key: s.key, title: s.title, text: p ?? g ?? s.builtin, source });
-  }
-  return { sections, resolved };
-}
-
-/** 前言 + 各节(空节略去)拼成 baseInstructions;节以 `## 标题` 分隔。 */
-export function composeBaseInstructions(resolved: readonly ResolvedPromptSection[]): string {
-  const body = resolved
+/** 各节(空节略去)拼成可配置部分的文本;节以 `## 标题` 分隔。不含锁定段。 */
+function composeMergedRules(resolved: readonly ResolvedPromptSection[]): string {
+  return resolved
     .filter((s) => s.text.trim())
     .map((s) => `## ${s.title}\n${s.text.trim()}`)
     .join('\n\n');
-  return body ? `${BUILTIN_PREAMBLE}\n\n${body}` : BUILTIN_PREAMBLE;
 }
 
-/** 无任何层文件时的 baseInstructions(前言 + builtin 各节);直调 session 的兜底。 */
+/** 锁定角色段 + 可配置各节 + 锁定协议段 = 注入 codex 的 baseInstructions。 */
+export function composeBaseInstructions(resolved: readonly ResolvedPromptSection[]): string {
+  const rules = composeMergedRules(resolved);
+  return [BUILTIN_ROLE, rules, BUILTIN_PROTOCOL].filter((b) => b.trim()).join('\n\n');
+}
+
+/** 无任何层文件时的 baseInstructions(锁定段 + builtin 各节);直调 session 的兜底。 */
 export const BUILTIN_BASE_INSTRUCTIONS = composeBaseInstructions(mergeLayers({}, {}).resolved);
 
 /**
  * 把一层的覆盖节序列化为 review.md:按 BUILTIN_SECTIONS 固定顺序、H2 用节标题,
- * 只写有正文的节(空/缺=不覆盖)。可被 parseReviewMarkdown 无损回读。
+ * 只写有正文的节(空/缺=不覆盖)。structured 节先规范化,防止手写脏文本落盘。
+ * 可被 parseReviewMarkdown 无损回读。
  */
 export function serializeLayer(sections: Partial<Record<PromptSectionKey, string>>): string {
   const blocks: string[] = [];
-  for (const s of BUILTIN_SECTIONS) {
-    const text = sections[s.key]?.trim();
-    if (text) blocks.push(`## ${s.title}\n${text}`);
+  for (const def of BUILTIN_SECTIONS) {
+    const raw = sections[def.key];
+    const text =
+      def.kind === 'structured' ? normalizeSeverityText(raw) : (raw?.trim() ?? null);
+    if (text) blocks.push(`## ${def.title}\n${text}`);
   }
   return blocks.length ? `${blocks.join('\n\n')}\n` : '';
 }
@@ -195,8 +167,9 @@ export interface LoadReviewPromptOptions {
   homeDir?: string;
 }
 
-/** 读 project + global 两层文件,与 builtin 合并,返回编辑器视图 + 注入用 baseInstructions。 */
-export async function loadReviewPrompt(opts: LoadReviewPromptOptions = {}): Promise<ReviewPromptView> {
+async function resolvePrompt(
+  opts: LoadReviewPromptOptions,
+): Promise<{ view: ReviewPromptView; baseInstructions: string }> {
   const projectPath = projectPromptPath(opts.cwd);
   const globalPath = globalPromptPath(opts.homeDir);
   const projectMd = projectPath ? await readLayerFile(projectPath) : null;
@@ -205,5 +178,18 @@ export async function loadReviewPrompt(opts: LoadReviewPromptOptions = {}): Prom
     projectMd ? parseReviewMarkdown(projectMd) : {},
     globalMd ? parseReviewMarkdown(globalMd) : {},
   );
-  return { sections, baseInstructions: composeBaseInstructions(resolved), projectPath, globalPath };
+  return {
+    view: { sections, projectPath, globalPath },
+    baseInstructions: composeBaseInstructions(resolved),
+  };
+}
+
+/** 读 project + global 两层文件与 builtin 合并,返回**编辑器视图**(不含锁定段)。 */
+export async function loadReviewPrompt(opts: LoadReviewPromptOptions = {}): Promise<ReviewPromptView> {
+  return (await resolvePrompt(opts)).view;
+}
+
+/** 注入 codex 的完整 baseInstructions(锁定段 + 合并后的可配置节)。 */
+export async function loadBaseInstructions(opts: LoadReviewPromptOptions = {}): Promise<string> {
+  return (await resolvePrompt(opts)).baseInstructions;
 }
