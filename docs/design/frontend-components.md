@@ -12,6 +12,9 @@
 
 ```
 <App>                                      主题两轴 data-mode × data-theme 挂根节点
+│                                          外壳网格 top / rail+host / foot;屏根用 display:contents 落进网格
+├─ <AppRail>                               全局导航 rail(除 onboarding 外各屏共用)
+│                                          入口 · 当前审核 · 历史 · 审核规则 ▸ 明暗 · 设置
 ├─ <EntryScreen>                           mockup/entry.html
 │  ├─ <Hero>
 │  ├─ <StartReviewCard>                    发起卡片
@@ -23,17 +26,15 @@
 │  └─ <RecentReviews>                      最近的审核 (点击=恢复会话)
 │
 ├─ <ReviewScreen>                          mockup/diff-review.html
-│  ├─ <TopBar>                             .topbar
-│  │  ├─ <SourceMeta> <ModelMeta> <CtxMeta>
-│  │  ├─ <SubmitCta>                       提交 review / 导出报告 (随 source)
-│  │  ├─ <ThemeToggle>                     data-mode × data-theme
-│  │  └─ <KbdHelpButton>                   ⌘ → <KbdHelpOverlay>
+│  ├─ <TopBar>                             .rev-topbar 只留上下文
+│  │  ├─ <SourceChip>                      来源图标 + #PR/分支 + ⧉ 打开 PR 网页
+│  │  └─ <SubmitCta>                       提交 review / 导出报告 (随 source)
 │  ├─ <FileTree>                           .tree
 │  │  └─ <FileRow>                         .file (.badge finding 徽标 · .vtick viewed)
 │  ├─ <DiffPane>                           左侧主场
 │  │  ├─ <OffDiffBanner>                   .offdiff 非改动行锚点 finding 集合
 │  │  ├─ <DiffFile>                        .diff (per-file, 可折叠)
-│  │  │  ├─ <DiffHeader>                   viewed ✓ · <ViewSegmented> unified/split
+│  │  │  ├─ <DiffHeader>                   两行:文件名+状态 / 目录路径;右侧 ⚑ +− ✓ ⌄
 │  │  │  ├─ <CodeTable variant>            .code.unified | .code.split
 │  │  │  ├─ <Expander>                     展开未改动代码
 │  │  │  ├─ <InlineCard>                   .card.agent | .card.human (view/edit/submitted/dismissed)
@@ -41,11 +42,14 @@
 │  │  │  │  └─ <DiscussionComposer>        追问 + @file + 引用选区
 │  │  │  └─ <SelectionPopover>             .sel-pop 框选发起 discussion / 追问
 │  │  └─ …
-│  └─ <RightPanel>                         .tabs 三 tab 互斥
-│     ├─ <ScanTimeline>                    .scanview 首轮机审 (scan 期占据右栏)
-│     ├─ <DiscussionTab>                   讨论线程 + <Composer>
-│     ├─ <FindingsTab>                     运行时 triage 列表 (.frow 分组 + tally)
-│     └─ <SummaryTab>                      结论卡 + 统计 + <SummaryEditor> 可编辑正文
+│  ├─ <RightPanel>                         .tabs 三 tab 互斥
+│  │  ├─ <ScanTimeline>                    .scanview 首轮机审 (scan 期占据右栏)
+│  │  ├─ <DiscussionTab>                   讨论线程 + <Composer>
+│  │  ├─ <FindingsTab>                     运行时 triage 列表 (.frow 分组 + tally)
+│  │  └─ <SummaryTab>                      结论卡 + 统计 + <SummaryEditor> 可编辑正文
+│  └─ <ReviewStatusBar>                    .rev-statusbar 底部整幅
+│     ├─ 状态胶囊 · codex/模型 · effort · ctx 环+token · 最近工具调用
+│     └─ 通读进度 · <ViewSegmented> unified/split · ⌘ → <KbdHelpOverlay>
 │
 ├─ <SubmitGitHubScreen>                    mockup/submit-to-github.html (source=github-pr)
 └─ <ExportMarkdownScreen>                  mockup/export-markdown.html (source=local/vbranch)

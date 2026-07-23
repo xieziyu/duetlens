@@ -36,7 +36,7 @@
 - 全走 CSS 变量,`:root[data-mode][data-theme]` 组合覆盖;**CHROME 变量与 THEME 变量分离、互不耦合**。新增配色主题只需补一组 THEME 变量,不动外壳。
 - **配色主题跟随明暗自动切子模式**:选 `github` 时,深色壳→GitHub Dark、浅色壳→GitHub Light,由 `[data-mode][data-theme]` 组合选择器实现(用户不单独锁定 Dark/Light 子模式)。
 - **duet 双声道 accent(agent 靛蓝 / human 琥珀)属于 chrome、跨配色主题恒定**,是品牌标识;仅随明暗取不同深浅(浅色下加深以保证对比度)。
-- mockup `mockup/diff-review.html` 已实装四组合(dark/light × Duetlens/GitHub),顶栏可实时切换,可作实现基线。
+- mockup `mockup/diff-review.html` 已实装四组合(dark/light × Duetlens/GitHub):明暗在 rail 底部切,配色由状态栏尾部的 demo 开关切(产品里配色归设置屏)。可作实现基线。
 
 ## 屏与状态(2026-07-19 落地,以 mockup 为准)
 
@@ -61,7 +61,7 @@
 
 主干只画了 happy path;这些态叠加在 review 屏之上,由后端事件驱动。mockup 顶栏「运行态」下拉切换演示,状态机见 [ui-states](ui-states.md#运行时--异常态)。呈现分三处**互不打断阅读**的位置:
 
-- **顶栏 status 胶囊**:随态换文案/配色 —— Reviewing(天蓝)/ 运行中 / 待审批(琥珀)/ turn 失败 · agent 已断开 · 回传通道故障(红)/ 离线(琥珀)/ 压缩中(天蓝转圈)。
+- **状态栏 status 胶囊**(底部状态栏最左):随态换文案/配色 —— Reviewing(天蓝)/ 运行中 / 待审批(琥珀)/ turn 失败 · agent 已断开 · 回传通道故障(红)/ 离线(琥珀)/ 压缩中(天蓝转圈)。
 - **全局横幅**(仅连接级异常,置于顶栏下方,分级):**阻断级(红)** = agent app-server 断开(自动重连 N/5 + 查看日志)、MCP 回传通道故障(诊断 + 重启通道);**警告级(琥珀)** = 网络离线(重试)。阻断态下主体轻微降饱和,强调需先恢复连接;会话与已上报 findings 已本地保存,重连从断点续接。
 - **右栏底部运行区**(随态切内容):
   - **6 中断**:turn 运行中显示流式指示(已读 N 文件 · 用时)+ 红色 **`停止 ⌘.`**(对应 `ConversationalAgent.interrupt`)。
@@ -69,7 +69,7 @@
   - **5 turn 失败**:错误卡(简述 + 可展开 stream error 详情)+ **重试这一轮 / 编辑后重发**;保留追问与既有对话。
   - **8 压缩**:轻量进度条「正在压缩上下文,保留代码锚点与未决 discussion」;不弹窗。
   - **连接断**(agent-down / mcp-fail / offline):底部禁用追问,提示「连接恢复前追问暂不可用 —— 仍可阅读 diff、triage 已有 findings」。
-- **8 上下文可见性**:顶栏 `ctx` **用量环**(环形指示器,参考 Claude Desktop;`--ctx` = 已用比例)接近上限时变琥珀(百分比同步),hover 提示「继续追问将触发自动压缩,压缩后早期讨论原文被摘要替代,**代码锚点保留**」。对应 [open-questions](open-questions.md)「上下文 / token 膨胀」。
+- **8 上下文可见性**:状态栏 `ctx` **用量环**(环形指示器,参考 Claude Desktop;`--ctx` = 已用比例)接近上限时变琥珀(百分比同步),hover 提示「继续追问将触发自动压缩,压缩后早期讨论原文被摘要替代,**代码锚点保留**」。对应 [open-questions](open-questions.md)「上下文 / token 膨胀」。
 
 ### review 右栏三 tab
 
@@ -100,18 +100,37 @@
 
 - **per-file Viewed ✓**:文件树每行右侧有 viewed tick(悬停显影),标记已看后该行删除线 + 变灰 + 绿 ✓;文件树头显示「N 改动 · M 已看」进度。diff 主区 file-header 的 ✓ 按钮 = 标记当前文件已看**并折叠**内容为一条「已折叠 · 点击展开」bar;`⌄` 只折叠不改 viewed。(实现项:viewed 状态按用户/PR 持久化。)
 - **off-diff findings 区**:锚点不在当前 diff 新侧的 finding(被删除行 / 无行锚点的 PR 级 / 未展开文件),集中在 diff 顶部一条可折叠的琥珀 banner(`⚑ N 条 finding 不在当前 diff 视图内`),每条显示 sev·category / 标题 / 「为何 off-diff」原因 + origin,点击打开对应 discussion。避免这类 finding 因无处内联而被忽略。
-- **split vs unified**:file-header 的 `Unified | Split` segmented 切换。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
+- **split vs unified**:底部状态栏右端的 `Unified | Split` segmented 切换(全局偏好,不再逐文件重复)。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
 
 ### 键盘快捷键(`mockup/diff-review.html`)
 
-- **统一快捷键体系 + 帮助层**:散落在各交互里的键位(编辑 `e`、保存 `⌘↵`、取消 `Esc`、发送 `↵`)收敛为一套,并有一个随时可唤起的 cheatsheet 浮层。顶栏放一个 `⌘` 触发按钮,快捷键 `?` 唤起 / 关闭;`Esc` 关闭。浮层双列分组(通用 / Diff 视图 / Finding / Discussion),键位用 `<kbd>` 呈现,底部注明「⌘ 在 Windows/Linux 为 Ctrl · 焦点在输入框时快捷键自动让位」。浮层跟随两轴配色(tokens 驱动),明暗自洽。
+- **统一快捷键体系 + 帮助层**:散落在各交互里的键位(编辑 `e`、保存 `⌘↵`、取消 `Esc`、发送 `↵`)收敛为一套,并有一个随时可唤起的 cheatsheet 浮层。底部状态栏右端放一个 `⌘ 快捷键` 触发按钮,快捷键 `?` 唤起 / 关闭;`Esc` 关闭。浮层双列分组(通用 / Diff 视图 / Finding / Discussion),键位用 `<kbd>` 呈现,底部注明「⌘ 在 Windows/Linux 为 Ctrl · 焦点在输入框时快捷键自动让位」。浮层跟随两轴配色(tokens 驱动),明暗自洽。
 - **键位约定**:通用 —— `?` 帮助、`Esc` 关闭弹层/取消编辑、`1`/`2`/`3` 切右栏 Discussion/Findings/Summary。Diff —— `u` 切 Unified/Split(拖选发起 discussion、悬停行 ＋ 追加讨论为鼠标手势,列在浮层作参照)。Finding —— `e` 编辑悬停卡、`⌘↵` 保存、`Esc` 取消。Discussion —— `↵` 发送、`⇧↵` 换行、`@` 唤起引用文件菜单。
 - **让位原则**:焦点在 `INPUT/TEXTAREA/SELECT` 或 contenteditable 时,全局导航键(`?`/数字/`u`)不拦截,只保留输入框自身的 `⌘↵`/`Esc`/`↵`;帮助层打开时也不再抢导航键。(实现项:键位表按用户可配置。)
+
+### 应用外壳:导航 rail + 顶栏 + 底部状态栏(2026-07-23 重设计)
+
+review 屏原先把品牌、来源、模型、用量、状态、CTA、主题、快捷键全塞进一条顶栏,既拥挤又**没有任何回到入口 / 进设置的出口**。拆成三处:
+
+- **全局导航 rail**(左侧 52px,常驻于顶栏之下):`入口 · 当前审核 · 历史 · 审核规则` ▸ 底部 `明暗切换 · 设置`。**除 onboarding 外所有屏共用**,替换掉开发态的顶栏屏切换。选中项左缘一条 accent 指示条;无活跃 review 时「当前审核」禁用。rail 在顶栏下方而非贯通全高 —— 让 macOS 交通灯始终落在顶栏的 `padding-left:88px` 里,不与 rail 抢位。
+- **顶栏只留上下文**:来源 chip(来源图标 + `#PR 号` / 分支名 + **⧉ 用系统默认浏览器打开 PR**)、PR 标题、仓库 `owner/repo` 尾注,右端常驻 CTA(提交 review / 导出 review)。整条是窗口拖拽区。
+- **底部状态栏**(28px,仅 review 屏,参照 IDE / Claude Desktop):左起 **状态胶囊**(扫描中/审核中/失败,运行时带 pulse)· `codex · 模型` · `effort` · **ctx 环 + token 用量** · 最近工具调用(最弱、限宽、窄窗口先隐);右端 **通读进度**(`N 文件 · M 已看`)· **Unified / Split** · `⌘ 快捷键`。
+- **Unified / Split 从 per-file header 迁到状态栏**:它本就是全局偏好,过去在每个文件头重复渲染一份,还与 per-file 的「已看 / 折叠」混在一起。
+- 配色主题(`data-theme`)只在设置屏改;明暗(`data-mode`)在 rail 一键切 —— 高频的留在外壳,低频的收进设置。
+
+### file-header:文件名 / 路径分两行
+
+长路径会把右侧状态挤扁,单行排不下。改为左侧两行、右侧分组:
+
+- **第一行**:文件名(mono 13.5px/600,主体)+ 非常规状态 pill(新增 / 删除 / 重命名 / 二进制;modified 不标)。
+- **第二行**:目录路径(10.5px faint),重命名时追加 `← 旧路径`(琥珀)。**超长路径用 `direction:rtl` 从头部省略**,保留更有辨识度的尾部目录;完整路径挂 `title`。
+- **右侧**依次:`⚑ N`(该文件 finding 数)· `+N −N` 增删统计 · 一条分隔线后是 per-file 操作 `✓ 已看` / `⌄ 折叠`。
 
 ### 布局与栏宽
 
 - 三栏:文件树 / diff(主区,`minmax(0,1fr)` 自适应)/ 会话栏。
 - **左右栏可拖动调宽**:两条分隔线拖拽,带 min/max 约束(文件树 180–420 / 会话栏 300–560),双击复位;由 CSS var `--left-w` / `--right-w` 驱动。**栏宽应按用户持久化**(实现项)。
+- **窄窗口退化**断点已计入 rail 的 52px:≤1180px 收窄侧栏、隐最近工具调用;≤940px 收起文件树、隐标题与 effort。
 
 ### 空态 / 错误态(entry,`mockup/entry.html` 顶栏「预览态」可切)
 
@@ -167,8 +186,8 @@
 ## 已有 mockup
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
-- `mockup/diff-review.html` —— 核心屏:三栏(可调宽)+ 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换 + 键盘快捷键帮助层(`?`)+ 两轴配色切换。
-- `mockup/review-runtime.html` —— review **运行时 / 异常态**:顶栏「运行态」下拉切 9 态(空闲 / turn 运行中+中断 / 反向审批 / turn 失败 / agent 断开重连 / 离线 / MCP 通道故障 / ctx 接近上限 / 压缩中);演示 status 胶囊、全局横幅、右栏底部运行区、ctx 用量表。见上「运行时 / 异常态」。
+- `mockup/diff-review.html` —— 核心屏:应用外壳(全局导航 rail + 上下文顶栏 + 底部状态栏)+ 三栏(可调宽)+ 两行 file-header + 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换(状态栏)+ 键盘快捷键帮助层(`?`)+ 两轴配色切换。
+- `mockup/review-runtime.html` —— review **运行时 / 异常态**(外壳仍是重设计前的单顶栏,待同步;状态呈现位置以本页「应用外壳」为准):顶栏「运行态」下拉切 9 态(空闲 / turn 运行中+中断 / 反向审批 / turn 失败 / agent 断开重连 / 离线 / MCP 通道故障 / ctx 接近上限 / 压缩中);演示 status 胶囊、全局横幅、右栏底部运行区、ctx 用量表。见上「运行时 / 异常态」。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md));顶栏「提交态」切换器演示提交结果/异常态(submitting / success / **invalid 行锚点失效** / failed / **incremental 增量**)。
 - `mockup/export-markdown.html` —— 非 GitHub source(本地分支 / GitButler)的**本地 Markdown 导出屏**:左侧实时报告预览(渲染/源码)、右侧导出配置(包含项 + 分组 + 勾选保留 + 复制/保存 .md)。见 [findings-submit](findings-submit.md#非-github-source--导出为-markdown)。
 - `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。

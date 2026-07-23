@@ -1,6 +1,6 @@
 # 实现进度
 
-> 返回 [文档索引](../README.md) · 最后更新 2026-07-22 · origin/main HEAD=da4bdd6
+> 返回 [文档索引](../README.md) · 最后更新 2026-07-23
 >
 > 本页只做**导航与当前状态**:各层落地情况、如何运行、尚缺的整屏、spike 验证、与设计的偏差。实现细节以代码为准。逐切片的开发流水不在此保留(见 git history)。
 
@@ -17,11 +17,13 @@
 - **前端视觉自查(不需 Electron)**:`npm run preview:ui` → 浏览器开 `/preview.html`。`src/renderer/preview/` 用 fixture stub `window.duetlens`,顶栏切明暗×配色两轴;支持 `?screen=entry|review|submit|prompt`、`?source=github`、`?submit=invalid|failed`、`?scan`、`?clean`。
 - **ABI 坑**:同一 `better-sqlite3` 服务两运行时——app 需 Electron ABI(`rebuild:electron`)、spike/tsx 需 Node ABI(`rebuild:node`),切换后对方失效。
 
-### 尚缺(不阻断核心,影响"零配置首用"顺滑;均有 mockup 未接 React)
-1. **onboarding 环境自检屏**(`mockup/onboarding.html`):首启不检测 codex/gh,缺失时抛原始错误。
-2. **独立设置屏**(`mockup/settings.html`):设置只能就地改(入口的模型/effort/通知、顶栏主题);codex 路径/`CODEX_HOME`、gh 路径无 UI,走 PATH 默认。
-3. **历史屏**(`mockup/history.html`):只有入口「最近的审核」列表,无搜索/筛选/软删除。
-4. 顶部 dev 屏切换导航为开发态临时物,非成品导航。
+### 应用外壳(2026-07-23 重设计,方案见 [ui](ui.md#应用外壳导航-rail--顶栏--底部状态栏2026-07-23-重设计))
+
+开发态的顶栏屏切换已由**全局导航 rail** 取代(`src/renderer/components/AppRail.tsx`,除 onboarding 外各屏共用);review 屏顶栏瘦身为纯上下文 + CTA,agent 运行态与 diff 视图切换下沉到**底部状态栏**(`screens/review/StatusBar.tsx`);file-header 改为文件名 / 路径两行。App 外壳是一张 `top / rail+host / foot` 网格,屏根用 `display:contents` 直接落进去。github-pr review 顶栏新增 **⧉ 用系统默认浏览器打开 PR**(IPC `review:open-in-browser`,URL 在 main 侧解析后 `shell.openExternal`)。
+
+### 尚缺
+1. `mockup/review-runtime.html` 仍是重设计前的单顶栏,运行时/异常态的呈现位置待同步。
+2. 键位表不可配置(帮助层为只读 cheatsheet)。
 
 > 入口页丰富流程已接 mockup(见「前端屏」):三来源分段选择器、GitHub PR 粘贴+实时预览卡+remote 校验、最近 open PR 列表、gh 未登录引导、本地分支选择器(commits ahead + base)、GitButler workspace 检测+虚拟分支列表、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / detect-gitbutler）+ `review:list-recent`（附计数）。
 
@@ -38,9 +40,9 @@
 | source 层 | `src/backend/source/`(local-git / github-pr / gitbutler / create-source) | ✅ git / gh / but 三种齐备 |
 | 持久化 | `src/backend/db/`(schema / database / review-store) | ✅ better-sqlite3、迁移(V4)、六表 |
 | 领域模型 | `src/shared/domain.ts` | ✅ 类型 + zod ingress schema |
-| IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令/事件推送 + dialog + `review:diff` + `agent:list-models` |
+| IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令/事件推送 + dialog + `review:diff` + `review:open-in-browser` + `agent:list-models` |
 | 结构化 diff | `src/shared/diff.ts` + `review_diffs` 表 | ✅ 后端预取落库、MCP 与 renderer 共用;add/del/modify/rename/binary |
-| 前端屏 | `src/renderer/screens/`(EntryScreen + entry/ · ReviewScreen 三栏 · SubmitExportScreen · PromptRulesScreen) | ✅ 主流程四屏齐,入口页已接 mockup 丰富流程;缺 settings/history/onboarding 三屏(见上「尚缺」) |
+| 前端屏 | `src/renderer/screens/`(EntryScreen + entry/ · ReviewScreen 三栏 · SubmitExportScreen · PromptRulesScreen · SettingsScreen · HistoryScreen · OnboardingScreen) | ✅ 七屏齐;全局 rail 导航 + review 底部状态栏已落地 |
 
 ## 端到端验证(headless spike)
 
