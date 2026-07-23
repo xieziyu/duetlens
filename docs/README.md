@@ -16,6 +16,7 @@
 | [design/architecture.md](design/architecture.md) | 技术栈、架构分层与 `ConversationalAgent` 抽象、保留能力、暂不做的抽象 | 动结构 / 加模块前 |
 | [design/data-model.md](design/data-model.md) | Review / codex thread / discussion / findings 的数据结构与状态 | 改 schema / 数据流前 |
 | [design/findings-submit.md](design/findings-submit.md) | findings 筛选(保留/剔除)与提交到 GitHub PR review 的流程 | 碰提交流程 / finding 状态前 |
+| [design/rerun.md](design/rerun.md) | 多轮重跑:轮次模型、每轮新 thread、resolve_finding 表态、剔除抑制、GitHub 评论同步 | 碰复审 / 轮次 / 去重前 |
 | [design/codex-integration.md](design/codex-integration.md) | app-server 协议验证结论、MCP HTTP 注入、elicitation/sandbox/审批 | 碰 codex 集成 / MCP / 审批前 |
 | [design/ui.md](design/ui.md) | UI 方向 + 主题两轴 + 主入口/review 三 tab/扫描态/栏宽等屏与状态 | 做界面前 |
 | [design/ui-states.md](design/ui-states.md) | 屏级流转 + 各组件状态机(scan / tab / card 四态 / finding 两轴 / diff / viewed / 空态) | 理状态迁移 / 接事件前 |
@@ -35,7 +36,7 @@ codex app-server 把"一次常驻会话"本身称作 `thread`。为避免冲突,
 1. **全重写**(方案 A),另起新仓库,代号 **Duetlens**。→ [overview](design/overview.md)
 2. 技术栈:**Electron + Node/TS 主进程后端 + codex app-server + 外部 gh CLI**,先做 macOS(选 Electron 图渲染与 Chrome 一致,规避 Tauri 的 WKWebView 差异)。→ [architecture](design/architecture.md)
 3. findings 回传走 **MCP 工具**,不再 watch 文件(**已验证**)。→ [data-model](design/data-model.md) · [codex-integration](design/codex-integration.md)
-4. 会话粒度:**一个 review 一个 codex thread**,全局视野;`thread/fork` 仅作备选。→ [data-model](design/data-model.md)
+4. 会话粒度:**一轮机审一个 codex thread**,轮内全局视野;`thread/fork` 仅作备选。复审另起干净会话,上一轮上下文靠结构化注入而非会话记忆。→ [data-model](design/data-model.md) · [rerun](design/rerun.md)
 5. 保留:会话历史、三种 source、多层级提示词(经 `baseInstructions`)、审核总结、**findings 筛选+提交到 GitHub**。→ [architecture](design/architecture.md) · [findings-submit](design/findings-submit.md)
 6. 多 agent 暂不做,只在 **`ConversationalAgent` 接口层** 留抽象。→ [architecture](design/architecture.md)
 7. UI 整体重设计,**diff review 为核心界面**;讨论线程统一命名 **discussion**。→ [ui](design/ui.md)

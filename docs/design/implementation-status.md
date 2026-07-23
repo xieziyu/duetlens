@@ -8,7 +8,7 @@
 
 真实链路(非 demo)已端到端打通并合入 main:
 
-> 入口发起(本地分支 / GitHub PR / GitButler 三 source)→ **真实 codex 首轮扫描** → findings 经 MCP 流入 → 三栏 diff review(unified/split · 语法高亮 · viewed/折叠 · 拖栏宽)→ triage(保留/剔除/就地编辑)→ 框选/行内发起 discussion + **追问 codex**(多轮 · 重启后 `thread/resume` 续接)→ Summary(结论/统计/可编辑总结)→ 终点:**GitHub PR review 原子提交**(真实 `gh api`,含 422 锚点定位/修锚)或 **导出 Markdown**。
+> 入口发起(本地分支 / GitHub PR / GitButler 三 source)→ **真实 codex 首轮扫描** → findings 经 MCP 流入 → 三栏 diff review(unified/split · 语法高亮 · viewed/折叠 · 拖栏宽)→ triage(保留/剔除+可选理由/就地编辑)→ 框选/行内发起 discussion + **追问 codex**(多轮 · 重启后 `thread/resume` 续接)→ **↻ 重跑复审**(每轮新 thread · 重拉 diff · agent 对旧 findings 表态 · 剔除项抑制 · 同步 PR 评论)→ Summary(结论/统计/可编辑总结)→ 终点:**GitHub PR review 原子提交**(真实 `gh api`,含 422 锚点定位/修锚)或 **导出 Markdown**。
 
 外加:模型/effort 选择(动态下拉 + 手填兜底)、完成通知(失焦原生 / 聚焦应用内)、审核规则三层编辑、键盘快捷键、持久化(全局偏好 + per-review viewed/tab)。
 
@@ -36,10 +36,10 @@
 | 主进程后端 | `src/main.ts` + `src/backend/**` | ✅ |
 | ConversationalAgent 抽象 | `src/backend/agent/conversational-agent.ts` | ✅ 接口;codex 唯一实现 |
 | codex app-server 封装 | `src/backend/agent/codex/`(jsonrpc / codex-app-server / codex-agent / protocol) | ✅ 薄封装、事件归一、elicitation 自动 accept、`model/list` |
-| in-process HTTP MCP | `src/backend/mcp/duetlens-mcp-server.ts` | ✅ report_finding / update_finding / get_diff / get_file |
-| review 编排 | `src/backend/review/`(review-session / review-manager / github-submitter) | ✅ 首轮扫描 + 多轮追问 + GitHub 提交 → 落库 → 领域事件 |
-| source 层 | `src/backend/source/`(local-git / github-pr / gitbutler / create-source) | ✅ git / gh / but 三种齐备 |
-| 持久化 | `src/backend/db/`(schema / database / review-store) | ✅ better-sqlite3、迁移(V4)、六表 |
+| in-process HTTP MCP | `src/backend/mcp/duetlens-mcp-server.ts` | ✅ report_finding / update_finding / **resolve_finding** / get_diff / get_file |
+| review 编排 | `src/backend/review/`(review-session / review-manager / github-submitter) | ✅ 首轮扫描 + 多轮追问 + **多轮重跑复审** + GitHub 提交 → 落库 → 领域事件 |
+| source 层 | `src/backend/source/`(local-git / github-pr / **github-pr-context** / gitbutler / create-source) | ✅ git / gh / but 三种齐备;PR 协作上下文一条 GraphQL 取回 |
+| 持久化 | `src/backend/db/`(schema / database / review-store) | ✅ better-sqlite3、迁移(V6)、七表 |
 | 领域模型 | `src/shared/domain.ts` | ✅ 类型 + zod ingress schema |
 | IPC 契约 | `src/shared/ipc.ts` + `src/preload.ts` + `src/backend/ipc/` | ✅ 查询/命令/事件推送 + dialog + `review:diff` + `review:open-in-browser` + `agent:list-models` |
 | 结构化 diff | `src/shared/diff.ts` + `review_diffs` 表 | ✅ 后端预取落库、MCP 与 renderer 共用;add/del/modify/rename/binary |
@@ -69,6 +69,7 @@
 | `submit` | GitHub 提交:payload 组装 + submitReview 的 success/增量/invalid/failed/非 github 守卫 + 锚点预判 |
 | `add-finding` | 手动新增 finding(origin=manual)+ 建承载 discussion + 同 triage 管线 |
 | `notify` | 完成通知决策:偏好门控 + 扫描完成去重 + 追问回复 + 失焦/聚焦分派;纯函数 |
+| `rerun` | 多轮复审:轮次落库/级联删 + 变更文件比对 + 复审 prompt 六类内容与外部数据围栏 + thread↔finding 匹配 + 去重命中/不误吞 + 表态回写与抑制计数 |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` Electron ABI 加载、六表迁移、IPC 注册无崩溃。
 
@@ -79,6 +80,8 @@
 - **MCP SDK 用低阶 `Server` + 手写 JSON Schema**,规避 zod4 与高阶 tool API 的兼容不确定性。
 - **finding id 回环**:report_finding 由 MCP 生成 id 回传,codex 侧 id 与存储 id 一致,update_finding 据此定位。
 - **提示词分节覆盖**:project→global→builtin 每节独立取最高优先层,整节替换(**节内追加已拍板不做**,winner-takes-all)。
+- **复审换新 thread**:一次 review 不再恒等于一个 codex thread —— 每轮机审各起一个,上一轮结论靠结构化 prompt 注入。原因是新旧 diff 的行号在同一上下文里会串位;副作用是追问不能再依赖会话记忆,故 `buildFollowupPrompt` 一并重述该线程近几条往来(顺带修好 compact 之后追问的老问题)。详见 [rerun](rerun.md)。
+- **finding 去重从软约束升级为软+硬**:prompt 要求不重报之外,`shared/finding-dedupe.ts` 兜底吸收(同文件 + 邻近行 + 标题 bigram 相似度)。阈值取保守值 —— 宁可多出一条也不吞掉真问题。该兜底对首轮同样生效(agent 偶尔会重复上报同一处)。
 - **右栏 tab 持久化**:全局 `ui_settings.default_tab` 为「无记忆时的初始默认」,per-review `review_ui_state.last_active_tab` 覆盖。
 - **领域事件面全程编译期收敛**:`ReviewSessionEvents` 是事件名→载荷的单一来源;ReviewSession **组合**(非继承)EventEmitter,`on/off` 收窄、`emit` 私有;ReviewManager 用 `keyof` 映射的转发表;renderer `useReviewStream` 用 `switch` + never 哨兵(运行时只告警不抛,容忍 main 比 renderer 新)。三处任一漏接新事件都编译失败 —— 起因是 agent finding 的承载 discussion 曾只落库未外发,整个 Discussion 栏为空却无人报错。
 - codex 版本以 **0.144.1** 实测为准,**0.144.6 经 `generate-ts` 全量 diff 确认协议逐字节无变化**(详见 [codex-integration](codex-integration.md));协议子集手写在 `protocol.ts`。
