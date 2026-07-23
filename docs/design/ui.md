@@ -200,7 +200,7 @@ review 屏原先把品牌、来源、模型、用量、状态、CTA、主题、�
 - `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。
 - `mockup/design-system.html` —— 可视化 style guide:色板 + 字阶 + 组件清单(见 [design-system](design-system.md))。
 - `mockup/settings.html` —— **设置 / 偏好面板**:左栏分组导航 + 右栏分节表单;外观两轴实时驱动主题、审核默认(source/diff视图/tab/分组)、codex/gh 环境配置、快捷键摘录、关于。对齐 `ui_settings`。
-- `mockup/prompt-rules.html` —— **审核规则提示词三层编辑器**:优先级 ribbon + 左栏层选择 + 中栏分节编辑(继承/覆盖/重置)+ 右栏生效结果(provenance 配色)。分节覆盖模型,合并注入 `baseInstructions`。**该 mockup 早于「锁定段 / structured 节」拆分**,严重度仍画成自由文本、category 契约仍留在「输出与语气」里;以 `PromptRulesScreen` 的实现为准。
+- `mockup/prompt-rules.html` —— **审核规则提示词三层编辑器**:优先级 ribbon + 左栏层选择 + 中栏分节编辑(继承/覆盖/重置)+ 右栏生效结果(provenance 配色)。分节覆盖模型(free 节整节覆盖 + 严重度 structured 逐档覆盖),合并注入 `baseInstructions`;锁定段不在其中呈现。
 - `mockup/history.html` —— **全部会话历史页**:搜索 + source/状态筛选 + 时间分桶列表(复用 entry `.rev` 卡)+ 软删除/撤销;`entry.html` 的「全部历史 →」入口指向本页。
 - `mockup/onboarding.html` —— **首次启动 / codex onboarding**:环境检查清单(codex CLI / app-server / gh)+ 修复命令面板 + CTA 门控;顶栏「预览态」切 checking / 未安装 / gh 未登录 / 就绪。
 

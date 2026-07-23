@@ -74,7 +74,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13
 
 .scard{border:1px solid var(--border);border-radius:12px;background:var(--surface);margin-bottom:14px;overflow:hidden}
 .scard .sh{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--border-soft)}
-.scard .sh .st{font-weight:600;font-size:13px}
+.scard .sh .stwrap{min-width:0}
+.scard .sh .st{font-weight:600;font-size:13px;display:block}
+.scard .sh .shint{display:block;color:var(--text-faint);font-size:10.5px;margin-top:3px}
 .scard .sh .win{margin-left:auto;font-family:var(--mono);font-size:10px;padding:2px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
 .win.project{color:var(--agent-2);background:var(--agent-soft);box-shadow:0 0 0 1px var(--agent-line) inset}
 .win.global{color:var(--human);background:var(--human-soft);box-shadow:0 0 0 1px var(--human-line) inset}
@@ -93,6 +95,21 @@ textarea.ta:focus{outline:0;border-color:var(--agent-line);box-shadow:0 0 0 3px 
 .scard.overridden{border-color:var(--agent-line)}
 .scard.builtinlock .sb .txt{color:var(--text-dim)}
 
+/* structured 节(严重度):档位名锁死的字段行 —— 左固定标签 / 中正文 / 右动作 */
+.scard .sb.structured{padding:6px 14px 10px}
+.frow{display:grid;grid-template-columns:96px minmax(0,1fr) auto;align-items:start;gap:12px;padding:9px 0;border-bottom:1px dashed var(--border-soft)}
+.frow:last-child{border-bottom:0}
+/* 档位名与来源徽标竖排:横排时 96px 列放不下,徽标会折到卡片外 */
+.frow .fk{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding-top:2px}
+.frow .fk .win{font-family:var(--mono);font-size:9.5px}
+.frow .fa{display:flex;align-items:center;gap:6px}
+.frow textarea.ta{min-height:52px}
+/* 档位名不可编辑,视觉上做成"钉死的标签"而非输入位 */
+.lvl{font-family:var(--mono);font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;border:1px solid var(--border)}
+.lvl.high{color:var(--sev-high);border-color:var(--sev-high)}
+.lvl.medium{color:var(--sev-med);border-color:var(--sev-med)}
+.lvl.low{color:var(--sev-low);border-color:var(--sev-low)}
+
 /* merged preview pane */
 .merged{background:var(--surface);border-left:1px solid var(--border);overflow:auto;padding:0}
 .mg-head{position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding:13px 16px;z-index:1}
@@ -106,6 +123,13 @@ textarea.ta:focus{outline:0;border-color:var(--agent-line);box-shadow:0 0 0 3px 
 .mblock .mt .src{font-family:var(--mono);font-size:9.5px;color:var(--text-faint);margin-left:auto}
 .mblock .mt .src.project{color:var(--agent-2)} .mblock .mt .src.global{color:var(--human)}
 .mblock .mtx{font-family:var(--mono);font-size:11px;line-height:1.65;color:var(--text-dim);white-space:pre-wrap}
+.mblock .mtx.empty{color:var(--text-faint);font-style:italic}
+.mblock .mlvl{display:flex;align-items:baseline;gap:7px;padding:2px 0}
+.mblock .mlvl .lv{flex:1;min-width:0}
+/* 逐档 provenance:整节徽标看不出「只改了 high」,故每档再标一个点 */
+.mblock .mlvl .dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--text-faint)}
+.mblock .mlvl .dot.project{background:var(--agent)}
+.mblock .mlvl .dot.global{background:var(--human)}
 .mg-legend{display:flex;gap:14px;padding:10px 16px;border-top:1px solid var(--border-soft);font-size:10.5px;color:var(--text-faint);flex-wrap:wrap}
 .mg-legend span{display:inline-flex;align-items:center;gap:5px}
 .mg-legend .d{width:8px;height:8px;border-radius:50%}
@@ -129,7 +153,7 @@ textarea.ta:focus{outline:0;border-color:var(--agent-line);box-shadow:0 0 0 3px 
       <span class="lz builtin"><span class="d"></span>builtin</span>
     </div>
     <span style="color:var(--text-faint);font-size:11px">上层按节覆盖下层</span>
-    <span class="note">合并结果注入 codex <code>thread/start · baseInstructions</code></span>
+    <span class="note">这些规则决定 agent 的审核口径;上报字段的格式由 Duetlens 固定</span>
   </div>
 
   <div class="main">
@@ -162,7 +186,7 @@ textarea.ta:focus{outline:0;border-color:var(--agent-line);box-shadow:0 0 0 3px 
     <div class="merged">
       <div class="mg-head">
         <div class="t">◈ 生效结果</div>
-        <div class="s">按节取最高优先层;这是最终注入 <code>baseInstructions</code> 的文本。</div>
+        <div class="s">按节取最高优先层,合并后交给审核 agent。</div>
       </div>
       <div class="mg-body" id="mgBody"></div>
       <div class="mg-legend">
@@ -175,38 +199,61 @@ textarea.ta:focus{outline:0;border-color:var(--agent-line);box-shadow:0 0 0 3px 
 </div>
 
 <script>
-// ===== 数据模型:每节含 builtin 默认 + global/project 可选覆盖 =====
+// ===== 数据模型 =====
+// 这里只有**可配置节**。角色与工具流程、report_finding 字段协议(severity 枚举 / category
+// 规范集 / line 锚新侧 / suggestion 逐字套用)是锁定段:不可覆盖、不下发编辑器,设置页里
+// 根本不存在 —— 见 src/backend/prompt/review-prompt.ts 的 BUILTIN_ROLE / BUILTIN_PROTOCOL。
+//
+// 节分两种:free = 整节一块自由文本;structured = 字段集固定、字段名锁死,只有每个字段的
+// 正文可改且逐字段独立继承/覆盖(目前只有严重度,档位名即 MCP ingress 的 severity 枚举)。
 const LAYERS={project:'project',global:'global',builtin:'builtin'};
 const sections=[
-  {key:'focus',title:'审核重点',
-   builtin:'聚焦正确性、并发安全、错误处理、资源泄漏与安全漏洞。\n超出 diff 的架构隐患以 off-diff finding 提出,并说明为何 off-diff。',
+  {key:'focus',title:'审核重点',kind:'free',
+   hint:'优先看什么、按哪些维度过一遍改动。',
+   builtin:'按以下类别审查改动,只报告需要修复的真实问题:\n- Scope / Correctness / Security / Architecture\n- Performance / Naming / Complexity / Error handling',
    global:null,
    project:'除通用重点外,特别关注:\n- Electron IPC 边界的输入校验\n- 直接拼接的 SQL / shell,警惕注入\n- codex thread 只读沙箱假设是否被打破'},
-  {key:'severity',title:'严重度判定',
-   builtin:'high = 崩溃 / 数据损坏 / 安全问题;\nmed = 边界 / 健壮性 / 可维护性隐患;\nlow = 风格 / 命名 / 可读性。',
-   global:null, project:null},
-  {key:'ignore',title:'忽略范围',
+  {key:'severity',title:'严重度判定',kind:'structured',
+   hint:'每一档收什么问题。档位名由 Duetlens 固定,只能改判定标准。',
+   fields:[
+     // 预置只覆盖 high 一档 —— 用来演示右栏「逐档 provenance」在混合来源下的显示
+     {id:'high',label:'high',builtin:'崩溃 / 数据损坏 / 安全问题',
+      global:null,project:'仅安全问题与数据损坏;性能退化不算 high'},
+     {id:'medium',label:'medium',builtin:'边界 / 健壮性 / 可维护性隐患',global:null,project:null},
+     {id:'low',label:'low',builtin:'风格 / 命名 / 可读性',global:null,project:null}
+   ]},
+  {key:'ignore',title:'忽略范围',kind:'free',
+   hint:'哪些改动不必上报,用来压掉噪声。',
    builtin:'忽略纯格式化、生成文件、lockfile、无语义的行重排。',
    global:null,
    project:'额外忽略:mockup/*.html 的内联样式与演示 JS(设计稿,不进产物)。'},
-  {key:'tone',title:'输出与语气',
-   builtin:'finding 正文用简体中文,代码标识符 / 路径 / category 用英文;\n每条给出 file:line 锚点与可选 suggestion 块。',
+  {key:'tone',title:'输出与语气',kind:'free',
+   hint:'finding 正文的语言与措辞;不影响字段结构。',
+   builtin:'finding 正文用简体中文,代码标识符 / 路径 / category 名保留英文原词;\n先说问题与影响,再说怎么改;不要写「建议优化」这类没有落点的结论。',
    global:'追问回复保持简洁,不复述已在 diff 中的代码;\n先给结论,再给依据。',
    project:null},
-  {key:'context',title:'项目上下文',
-   builtin:'(无内置默认;由 project 层补充仓库背景)',
+  {key:'context',title:'项目上下文',kind:'free',
+   hint:'本仓库的技术栈、约定与历史包袱。无内置默认,由你补充。',
+   builtin:'',
    global:null,
    project:'本仓库:Electron + Node/TS 主进程后端 + codex app-server;\n前端为 React SPA;审核 agent 只读代码,不改动。'}
 ];
-const winnerOf=s=>s.project!=null?'project':s.global!=null?'global':'builtin';
-const textOf=s=>{const w=winnerOf(s);return s[w];};
+const NO_BUILTIN='(无内置默认;由 project 层补充仓库背景)';
+// project ▸ global ▸ builtin;free 节与 structured 的单个字段共用
+const winnerOf=x=>x.project!=null?'project':x.global!=null?'global':'builtin';
+const textOf=x=>{const w=winnerOf(x);return x[w];};
+// structured 节整节取字段里最具体的一层:任一档被 project 改过,整节就算 project 覆盖
+const sectionWinner=s=>s.kind!=='structured'?winnerOf(s)
+  :s.fields.some(f=>winnerOf(f)==='project')?'project'
+  :s.fields.some(f=>winnerOf(f)==='global')?'global':'builtin';
+const hasOverride=(s,L)=>s.kind==='structured'?s.fields.some(f=>f[L]!=null):s[L]!=null;
 
 let curLayer='project', showMerged=false, editing={};
 
 // ===== 渲染左栏徽标 =====
 function refreshBadges(){
   ['project','global'].forEach(L=>{
-    const n=sections.filter(s=>s[L]!=null).length;
+    const n=sections.filter(s=>hasOverride(s,L)).length;
     document.getElementById('bd-'+L).textContent='覆盖 '+n+' 节';
   });
 }
@@ -217,77 +264,129 @@ const LDESC={
   global:'你的个人审核偏好,跨所有仓库生效;覆盖 builtin,被 project 覆盖。文件 <code>~/.duetlens/review.md</code>。',
   builtin:'Duetlens 内置基线,提供每一节的默认值;<code>只读</code>,通过上层覆盖来调整。'
 };
+const sectionHead=s=>`<div class="sh"><div class="stwrap"><span class="st">${s.title}</span>`+
+  `<span class="shint">${esc(s.hint)}</span></div>`+
+  `<span class="win ${sectionWinner(s)}">生效层 ${sectionWinner(s)}</span></div>`;
+const editId=(L,s,f)=>L+':'+s.key+(f?':'+f.id:'');
+const dataAttrs=(s,f)=>`data-k="${s.key}"${f?` data-f="${f.id}"`:''}`;
+
+/** structured 节的一行:左侧钉死的档位标签,右侧才是可编辑的判定标准。 */
+function fieldRow(s,f,L){
+  const overridden=f[L]!=null, isEditing=editing[editId(L,s,f)], w=winnerOf(f);
+  let h=`<div class="frow"><div class="fk"><span class="lvl ${f.id}">${f.label}</span>`;
+  // 未覆盖时右侧已写明「继承自 X」,再挂徽标是重复
+  if(overridden) h+=`<span class="win ${w}">${SRC_LABEL[w]}</span>`;
+  h+=`</div><div class="fv">`;
+  if(isEditing){
+    h+=`<textarea class="ta" ${dataAttrs(s,f)}>${esc(f[L]!=null?f[L]:'')}</textarea>`;
+  }else if(overridden){
+    h+=`<div class="txt">${esc(f[L])}</div>`;
+  }else{
+    const from=below(f,L);
+    h+=`<div class="txt inherit">继承自 <span class="from">${from.layer}</span>:${esc(from.text)}</div>`;
+  }
+  h+=`</div><div class="fa">`;
+  if(isEditing){
+    h+=`<button class="lbtn" data-act="cancel" ${dataAttrs(s,f)}>取消</button>`+
+       `<button class="save" data-act="commit" ${dataAttrs(s,f)}>保存覆盖</button>`;
+  }else if(overridden){
+    h+=`<button class="lbtn" data-act="edit" ${dataAttrs(s,f)}>✎</button>`+
+       `<button class="lbtn danger" data-act="reset" ${dataAttrs(s,f)} title="重置为继承">↺</button>`;
+  }else{
+    h+=`<button class="lbtn" data-act="add" ${dataAttrs(s,f)}>＋ 覆盖</button>`;
+  }
+  return h+`</div></div>`;
+}
+
 function renderEditor(){
   const ed=document.getElementById('editor');
   const L=curLayer;
   let h=`<div class="ed-head"><div class="t"><span class="tag ${L}"></span>${L} 层</div>`+
         `<div class="s">${LDESC[L]}</div></div>`;
-  sections.forEach((s,i)=>{
-    const overridden=s[L]!=null;
-    const win=winnerOf(s);
-    const isEditing=editing[L+':'+s.key];
+  sections.forEach(s=>{
     if(L==='builtin'){
-      h+=`<div class="scard builtinlock"><div class="sh"><span class="st">${s.title}</span>`+
-         `<span class="win ${win}">生效层 ${win}</span></div>`+
-         `<div class="sb"><div class="txt">${esc(s.builtin)}</div></div></div>`;
+      h+=`<div class="scard builtinlock">${sectionHead(s)}<div class="sb${s.kind==='structured'?' structured':''}">`;
+      h+=s.kind==='structured'
+        ? s.fields.map(f=>`<div class="frow"><div class="fk"><span class="lvl ${f.id}">${f.label}</span></div>`+
+            `<div class="fv"><div class="txt">${esc(f.builtin)}</div></div></div>`).join('')
+        : `<div class="txt">${esc(s.builtin||NO_BUILTIN)}</div>`;
+      h+=`</div></div>`;
       return;
     }
-    h+=`<div class="scard${overridden?' overridden':''}"><div class="sh"><span class="st">${s.title}</span>`+
-       `<span class="win ${win}">生效层 ${win}</span></div><div class="sb">`;
+    const overridden=hasOverride(s,L);
+    h+=`<div class="scard${overridden?' overridden':''}">${sectionHead(s)}`;
+    if(s.kind==='structured'){
+      h+=`<div class="sb structured">${s.fields.map(f=>fieldRow(s,f,L)).join('')}</div></div>`;
+      return;
+    }
+    const isEditing=editing[editId(L,s)];
+    h+=`<div class="sb">`;
     if(isEditing){
-      h+=`<textarea class="ta" data-k="${s.key}">${esc(s[L]!=null?s[L]:'')}</textarea>`;
+      h+=`<textarea class="ta" ${dataAttrs(s)}>${esc(s[L]!=null?s[L]:'')}</textarea>`;
     }else if(overridden){
       h+=`<div class="txt">${esc(s[L])}</div>`;
     }else{
-      const from=belowText(s,L);
-      h+=`<div class="txt inherit">继承自 <span class="from">${from.layer}</span>:\n${esc(from.text)}</div>`;
+      const from=below(s,L);
+      h+=`<div class="txt inherit">继承自 <span class="from">${from.layer}</span>:\n${esc(from.text||'(空)')}</div>`;
     }
     h+=`</div><div class="sf">`;
     if(isEditing){
-      h+=`<button class="lbtn" data-act="cancel" data-k="${s.key}">取消</button>`+
-         `<button class="save" data-act="commit" data-k="${s.key}">保存覆盖</button>`;
+      h+=`<button class="lbtn" data-act="cancel" ${dataAttrs(s)}>取消</button>`+
+         `<button class="save" data-act="commit" ${dataAttrs(s)}>保存覆盖</button>`;
     }else if(overridden){
-      h+=`<button class="lbtn" data-act="edit" data-k="${s.key}">✎ 编辑</button>`+
-         `<button class="lbtn danger" data-act="reset" data-k="${s.key}">重置(改回继承)</button>`;
+      h+=`<button class="lbtn" data-act="edit" ${dataAttrs(s)}>✎ 编辑</button>`+
+         `<button class="lbtn danger" data-act="reset" ${dataAttrs(s)}>重置(改回继承)</button>`;
     }else{
-      h+=`<button class="lbtn" data-act="add" data-k="${s.key}">＋ 覆盖此节</button>`;
+      h+=`<button class="lbtn" data-act="add" ${dataAttrs(s)}>＋ 覆盖此节</button>`;
     }
     h+=`</div></div>`;
   });
   ed.innerHTML=h;
-  ed.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.k));
+  ed.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>act(b.dataset.act,b.dataset.k,b.dataset.f));
 }
-function belowText(s,L){
-  if(L==='project'){ if(s.global!=null)return{layer:'global',text:s.global}; return{layer:'builtin',text:s.builtin}; }
-  return{layer:'builtin',text:s.builtin};
+/** 某节/某字段在指定层之下最近一层的继承文本。 */
+function below(x,L){
+  if(L==='project'&&x.global!=null)return{layer:'global',text:x.global};
+  return{layer:'builtin',text:x.builtin};
 }
 
-// ===== 编辑动作 =====
-function act(a,key){
-  const s=sections.find(x=>x.key===key), L=curLayer, id=L+':'+key;
-  if(a==='add'){ s[L]=belowText(s,L).text; editing[id]=true; }
+// ===== 编辑动作(free 节整节写、structured 节按档写)=====
+function act(a,key,fieldId){
+  const s=sections.find(x=>x.key===key);
+  const target=fieldId?s.fields.find(f=>f.id===fieldId):s;
+  const L=curLayer, id=editId(L,s,fieldId?target:null);
+  if(a==='add'){ target[L]=below(target,L).text; editing[id]=true; }
   if(a==='edit'){ editing[id]=true; }
-  if(a==='cancel'){ if(s[L]!==null&&s[L].trim()===''&&false){} delete editing[id]; }
+  if(a==='cancel'){ delete editing[id]; }
   if(a==='commit'){
-    const ta=document.querySelector(`textarea[data-k="${key}"]`);
-    const v=ta.value.trim(); s[L]=v===''?null:ta.value; delete editing[id];
+    const sel=`textarea[data-k="${key}"]`+(fieldId?`[data-f="${fieldId}"]`:'');
+    const ta=document.querySelector(sel);
+    target[L]=ta.value.trim()===''?null:ta.value; delete editing[id];
   }
-  if(a==='reset'){ s[L]=null; delete editing[id]; }
+  if(a==='reset'){ target[L]=null; delete editing[id]; }
   refreshBadges(); renderEditor(); renderMerged();
 }
 
-// ===== 合并预览 =====
+// ===== 合并预览(可配置部分;锁定段不在此呈现)=====
 function renderMerged(){
   const box=document.getElementById('mgBody');
   box.innerHTML=sections.map(s=>{
-    const w=winnerOf(s), t=textOf(s);
-    const srcLabel=w==='builtin'?'默认':(w==='project'?'project 覆盖':'global 覆盖');
-    return `<div class="mblock ${w}"><div class="mt">${s.title}<span class="src ${w}">${srcLabel}</span></div>`+
-           `<div class="mtx">${esc(t)}</div></div>`;
+    const w=sectionWinner(s);
+    const head=`<div class="mt">${s.title}<span class="src ${w}">${SRC_LABEL[w]}</span></div>`;
+    if(s.kind==='structured'){
+      // 整节徽标取最具体的一档,故逐档再标一个 provenance 点
+      const rows=s.fields.map(f=>`<div class="mlvl"><span class="lvl ${f.id}">${f.label}</span>`+
+        `<span class="lv">${esc(textOf(f))}</span><span class="dot ${winnerOf(f)}" title="${SRC_LABEL[winnerOf(f)]}"></span></div>`).join('');
+      return `<div class="mblock ${w}">${head}<div class="mtx">${rows}</div></div>`;
+    }
+    const t=(textOf(s)||'').trim();
+    return `<div class="mblock ${w}">${head}`+
+           `<div class="mtx${t?'':' empty'}">${esc(t||'(此节为空,不注入)')}</div></div>`;
   }).join('');
 }
 
 // ===== 交互接线 =====
+const SRC_LABEL={project:'project 覆盖',global:'global 覆盖',builtin:'默认'};
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 document.querySelectorAll('.layer').forEach(l=>l.onclick=()=>{
   curLayer=l.dataset.layer; showMerged=false;
