@@ -197,7 +197,7 @@ review 屏原先把品牌、来源、模型、用量、状态、CTA、主题、�
 - **不再同步更新**。改 UI 只改 `src/renderer/`;出现分歧一律**以实现为准**,不要回头去"修 mockup"(那是本末倒置 —— 先实现再补稿,补的稿也没人看)。
 - **`mockup/tokens.css` 不是配色单一来源**,它只是 `src/renderer/theme/tokens.css` 的一份历史副本;改配色改后者。
 - 仍可作为**设计意图的历史记录**翻阅(尤其 `review-runtime.html` 覆盖的运行时/异常态尚未落地,那份稿仍是该功能唯一的设计参照)。
-- 各屏源码里的 `→ mockup/xxx.html` 注释是**出处标注**,不是"去那儿看当前设计"的指引。
+- **源码里已不留任何指向这里的注释**(原先各屏头部的 `→ mockup/xxx.html` 已清理干净)。想追某屏的设计出处查 `git log`。
 - 打开方式:静态服务(如 `python3 -m http.server`),**不能走 `preview:ui`** —— vite 会把 mockup 当入口做 HTML transform,代码示例里的 `Result<()>` 之类被当标签解析而报错。
 
 存档清单:
