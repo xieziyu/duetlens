@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification } from 'electron';
+import { app, BrowserWindow, Notification, shell } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers } from '@backend/ipc';
 import { openDatabase } from '@backend/db/database';
@@ -28,6 +28,17 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+
+  // 应用内外链交系统默认浏览器,不开 Electron 子窗口;应用本身是 SPA,不做整页跳转。
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://')) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    if (url === mainWindow?.webContents.getURL()) return;
+    e.preventDefault();
+    if (url.startsWith('https://')) void shell.openExternal(url);
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
