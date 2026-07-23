@@ -31,17 +31,30 @@ export interface StartReviewOptions {
 }
 
 /**
+ * ReviewSession 对外事件面的单一来源:事件名 → 载荷。
+ * emit/on 都按此收敛,且 ReviewManager 的转发表是 `keyof` 映射 ——
+ * 在这里加一条事件而忘了转发给 renderer,编译期就会报错(见 review-manager 的 SESSION_FORWARDERS)。
+ */
+export interface ReviewSessionEvents {
+  /** 已落库的 finding */
+  finding: Finding;
+  /** finding 的承载 discussion(与 finding 同事务建出,须成对外发) */
+  discussion: Discussion;
+  /** 已落库的对话消息(user/agent) */
+  message: Message;
+  /** 归一后的 agent 流事件(原样转发) */
+  'agent-event': AgentEvent;
+  status: 'scanning' | 'reviewing' | 'failed';
+}
+
+/**
  * 一次 review 的编排层:把 ConversationalAgent + 自建 MCP + 持久化串起来。
  * findings 经 MCP report_finding 落库(权威),并归一成领域事件外发给 IPC/UI。
- *
- * 事件:
- *   'finding'     (Finding)         — 已落库的 finding
- *   'discussion'  (Discussion)      — finding 的承载 discussion(随 finding 一起建出)
- *   'message'     (Message)         — 已落库的对话消息(user/agent)
- *   'agent-event' (AgentEvent)      — 归一后的 agent 流事件(转发)
- *   'status'      ('scanning'|'reviewing'|'failed')
+ * 事件面见 {@link ReviewSessionEvents}。
  */
-export class ReviewSession extends EventEmitter {
+export class ReviewSession {
+  /** 组合而非继承 EventEmitter:对外只暴露收窄过的 on/off,emit 留在类内。 */
+  private readonly events = new EventEmitter();
   private mcp?: DuetlensMcpServer;
   private unsubscribe?: () => void;
   private conversationId?: string;
@@ -52,8 +65,31 @@ export class ReviewSession extends EventEmitter {
     private readonly reviewId: string,
     private readonly store: ReviewStore,
     private readonly agent: ConversationalAgent,
-  ) {
-    super();
+  ) {}
+
+  /** 订阅会话事件(事件面见 {@link ReviewSessionEvents});事件名与载荷由事件表收敛。 */
+  on<K extends keyof ReviewSessionEvents>(
+    event: K,
+    listener: (payload: ReviewSessionEvents[K]) => void,
+  ): this {
+    this.events.on(event, listener);
+    return this;
+  }
+
+  off<K extends keyof ReviewSessionEvents>(
+    event: K,
+    listener: (payload: ReviewSessionEvents[K]) => void,
+  ): this {
+    this.events.off(event, listener);
+    return this;
+  }
+
+  /** 只有会话自身发事件;外部只能订阅。 */
+  private emit<K extends keyof ReviewSessionEvents>(
+    event: K,
+    payload: ReviewSessionEvents[K],
+  ): void {
+    this.events.emit(event, payload);
   }
 
   /** 起会话 + 注入 + 跑首轮扫描;resolve 于扫描 turn 完成。 */

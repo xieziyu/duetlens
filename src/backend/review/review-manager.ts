@@ -32,7 +32,7 @@ import type {
   RepoRemoteInfo,
 } from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
-import { DEFAULT_SCAN_PROMPT, ReviewSession } from './review-session';
+import { DEFAULT_SCAN_PROMPT, ReviewSession, type ReviewSessionEvents } from './review-session';
 
 /** 首轮扫描指令:有附加上下文时拼在缺省指令之后一并注入,否则用缺省。 */
 function buildScanPrompt(context?: string): string | undefined {
@@ -42,6 +42,21 @@ function buildScanPrompt(context?: string): string | undefined {
 }
 
 // 演示用内置 fixture(source 层接好前,让 app 能端到端跑一遍真实审核)。
+/**
+ * session 事件 → IPC ReviewEvent 的转发表。写成 keyof 映射而非一串 `session.on(...)`:
+ * ReviewSessionEvents 新增一条事件却忘了在这里转发,编译期即报缺属性
+ * (agent finding 的承载 discussion 就漏发过一次,整个 Discussion 栏因此是空的)。
+ */
+const SESSION_FORWARDERS: {
+  [K in keyof ReviewSessionEvents]: (reviewId: string, payload: ReviewSessionEvents[K]) => ReviewEvent;
+} = {
+  finding: (reviewId, payload) => ({ reviewId, type: 'finding', payload }),
+  discussion: (reviewId, payload) => ({ reviewId, type: 'discussion', payload }),
+  message: (reviewId, payload) => ({ reviewId, type: 'message', payload }),
+  status: (reviewId, payload) => ({ reviewId, type: 'status', payload }),
+  'agent-event': (reviewId, payload) => ({ reviewId, type: 'agent', payload }),
+};
+
 const DEMO_FILE = 'src/login.js';
 const DEMO_SRC = `const db = require('./db');
 
@@ -494,13 +509,10 @@ export class ReviewManager extends EventEmitter {
     this.sessions.set(reviewId, session);
     if (onDispose) this.cleanups.set(reviewId, onDispose);
 
-    session.on('finding', (payload: Finding) => this.forward({ reviewId, type: 'finding', payload }));
-    session.on('discussion', (payload: Discussion) =>
-      this.forward({ reviewId, type: 'discussion', payload }),
-    );
-    session.on('message', (payload: Message) => this.forward({ reviewId, type: 'message', payload }));
-    session.on('status', (payload: Review['status']) => this.forward({ reviewId, type: 'status', payload }));
-    session.on('agent-event', (payload) => this.forward({ reviewId, type: 'agent', payload }));
+    const wire = <K extends keyof ReviewSessionEvents>(name: K): void => {
+      session.on(name, (payload) => this.forward(SESSION_FORWARDERS[name](reviewId, payload)));
+    };
+    for (const name of Object.keys(SESSION_FORWARDERS) as (keyof ReviewSessionEvents)[]) wire(name);
     return session;
   }
 

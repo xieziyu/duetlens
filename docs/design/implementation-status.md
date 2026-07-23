@@ -53,6 +53,7 @@
 | `codex` | app-server 常驻会话 + MCP 注入 + report_finding 双向可见 + elicitation |
 | `db` | 持久化读写 / 迁移(V3 model/effort · V4 notify)/ triage / update / 级联删 |
 | `review` | ReviewSession 垂直:codex 扫描 → MCP → sqlite 落库 |
+| `session-events` | ReviewSession 对外事件面(stub agent + 真实 MCP,不烧 token):finding 与其**承载 discussion** 成对外发 |
 | `source` | LocalGitSource 取真实 git diff/文件 → codex → 落库;parsePrRef |
 | `discussion` | 扫描后多轮追问 → user/agent 消息成对落库(同一 thread) |
 | `resume` | session dispose 后按 threadId `thread/resume` 续接 → 复用会话记忆追问 |
@@ -82,4 +83,4 @@
 
 ## 后续可选项
 
-diff-review 主流程(三栏 / triage / discussion / summary / 提交导出)与入口页丰富流程均已收口。未收口的整屏:settings / history / onboarding 三块从 mockup 接入 React——均不阻断核心 dogfood,按需再做。
+七屏(entry / review / submit-export / prompt-rules / settings / history / onboarding)与应用外壳均已收口。剩下的是打磨项,见上「尚缺」——均不阻断核心 dogfood,按需再做。
