@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 状态:实现前设计。从稳定 mockup 抽组件层,定 UI 状态的分层与持久化,承接 [design-system](design-system.md) 的收敛 TODO。**mockup 内联样式 / JS 仍是唯一实现来源,本篇是搬到 React 时的目标结构,不是既有代码。**
+> 状态:**已落地**(2026-07-23)。组件树、状态分层与持久化均已实现于 `src/renderer/`;本篇是结构索引,细节以代码为准,视觉以 `mockup/` 为准。
 
 前端为 **React SPA**,承载于 Electron renderer(见 [architecture](architecture.md))。本篇定三件事:组件如何拆、状态放哪层、哪些状态要持久化。视觉 tokens 直接复用 `mockup/tokens.css`;组件承载的状态机见 [ui-states](ui-states.md)。
 
@@ -89,6 +89,8 @@ codex app-server ──JSON-RPC──▶ Node (ConversationalAgent)
 ```
 
 agent 侧的 event / approval 不直接渗入 UI:`ConversationalAgent` 薄封装后,后端把 turn 事件、`report_finding` 等归一成 Duetlens 领域事件再经 IPC 推给前端(对照 [architecture](architecture.md) 抽象层)。
+
+**这条链路上的事件面全程编译期收敛**,三处缺一即报错:`ReviewSessionEvents`(事件名→载荷的单一来源,ReviewSession 组合 EventEmitter、`emit` 私有)→ ReviewManager 的 `keyof` 映射转发表 → renderer `useReviewStream` 的 `switch` + never 哨兵。新增一种领域事件时三处都要动。之所以这么收:agent finding 的**承载 discussion** 曾只落库、未随事件外发,Discussion 栏整栏为空而无任何报错。
 
 ## UI 状态持久化
 

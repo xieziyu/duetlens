@@ -55,7 +55,7 @@
 
 - 机审耗时长,**不能用打断心智的 overlay**;「开始审核」直接切到 review 屏,进度在**右栏内联**展示。
 - 右栏显示纵向 **timeline**(拉 diff → 注入 per-thread MCP → 通读 N/M files → 就绪)+ **实时流入的 findings 卡**(可点跳 diff);左侧 diff 全程可读,扫描期可点 finding / 框选提问,无需等待机审结束。
-- 扫描结束自动切回 Discussion / Findings tab。(mockup 顶栏有 `扫描中 / 已完成` demo 开关。)
+- 扫描结束自动切回 Discussion / Findings tab。(mockup 状态栏尾部有 `扫描中 / 已完成` demo 开关。)
 
 ### 运行时 / 异常态(`mockup/review-runtime.html`)
 

@@ -63,7 +63,7 @@ stateDiagram-v2
     Reviewing --> Reviewing : ● 编辑 finding / triage / 提交
 ```
 
-顶栏 `扫描中 / 已完成` demo 开关对应 `Scanning ↔ Reviewing` 两态(mockup 里手动切换以演示)。scan 的四个子步是右栏纵向 timeline 的 `pending → active → done` 序列(见下)。
+状态栏尾部的 `扫描中 / 已完成` demo 开关对应 `Scanning ↔ Reviewing` 两态(mockup 里手动切换以演示)。scan 的四个子步是右栏纵向 timeline 的 `pending → active → done` 序列(见下)。
 
 ### Scan timeline 单步
 

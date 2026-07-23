@@ -1,6 +1,6 @@
 # 实现进度
 
-> 返回 [文档索引](../README.md) · 最后更新 2026-07-23
+> 返回 [文档索引](../README.md) · 最后更新 2026-07-23 · origin/main HEAD=123e358
 >
 > 本页只做**导航与当前状态**:各层落地情况、如何运行、尚缺的整屏、spike 验证、与设计的偏差。实现细节以代码为准。逐切片的开发流水不在此保留(见 git history)。
 
@@ -14,7 +14,8 @@
 
 ### 如何运行
 - **实机**:`npm run rebuild:electron` → `npm start`。前提:`codex login`(扫描/追问烧 token);github-pr source 需 `gh auth login`。
-- **前端视觉自查(不需 Electron)**:`npm run preview:ui` → 浏览器开 `/preview.html`。`src/renderer/preview/` 用 fixture stub `window.duetlens`,顶栏切明暗×配色两轴;支持 `?screen=entry|review|submit|prompt`、`?source=github`、`?submit=invalid|failed`、`?scan`、`?clean`。
+- **前端视觉自查(不需 Electron)**:`npm run preview:ui` → 浏览器开 `/preview.html`。`src/renderer/preview/` 用 fixture stub `window.duetlens`;明暗在左侧 rail 底部切,配色主题在设置屏(`?screen=settings`)。支持 `?screen=entry|review|submit|prompt|settings|history|onboarding`、`?source=github`、`?submit=invalid|failed`、`?scan`、`?clean`。
+- **mockup 自查**:`mockup/*.html` 要用静态服务打开(如 `python3 -m http.server`),**不能走 `preview:ui`** —— vite 会把 mockup 当入口做 HTML transform,代码示例里的 `Result<()>` 之类会被当标签解析而报错。
 - **ABI 坑**:同一 `better-sqlite3` 服务两运行时——app 需 Electron ABI(`rebuild:electron`)、spike/tsx 需 Node ABI(`rebuild:node`),切换后对方失效。
 
 ### 应用外壳(2026-07-23 重设计,方案见 [ui](ui.md#应用外壳导航-rail--顶栏--底部状态栏2026-07-23-重设计))
@@ -79,6 +80,7 @@
 - **finding id 回环**:report_finding 由 MCP 生成 id 回传,codex 侧 id 与存储 id 一致,update_finding 据此定位。
 - **提示词分节覆盖**:project→global→builtin 每节独立取最高优先层,整节替换(**节内追加已拍板不做**,winner-takes-all)。
 - **右栏 tab 持久化**:全局 `ui_settings.default_tab` 为「无记忆时的初始默认」,per-review `review_ui_state.last_active_tab` 覆盖。
+- **领域事件面全程编译期收敛**:`ReviewSessionEvents` 是事件名→载荷的单一来源;ReviewSession **组合**(非继承)EventEmitter,`on/off` 收窄、`emit` 私有;ReviewManager 用 `keyof` 映射的转发表;renderer `useReviewStream` 用 `switch` + never 哨兵(运行时只告警不抛,容忍 main 比 renderer 新)。三处任一漏接新事件都编译失败 —— 起因是 agent finding 的承载 discussion 曾只落库未外发,整个 Discussion 栏为空却无人报错。
 - codex 版本以 **0.144.1** 实测为准,**0.144.6 经 `generate-ts` 全量 diff 确认协议逐字节无变化**(详见 [codex-integration](codex-integration.md));协议子集手写在 `protocol.ts`。
 
 ## 后续可选项

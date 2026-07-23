@@ -35,7 +35,10 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 
 | 组件 | 用途 | 关键 class | 状态 |
 | --- | --- | --- | --- |
-| Top bar | 来源 / 模型 / ctx / 提交 CTA / 主题切换 | `.topbar .brand .status .submit-cta` | scan / reviewing |
+| Nav rail | 全局导航:入口/当前审核/历史/规则 ▸ 明暗/设置 | `.rail .rail-btn` | on / hover |
+| Top bar | 来源 chip(含 ⧉ 外链)/ 标题 / 提交 CTA | `.topbar .pr-chip .submit-cta` | github / 本地 |
+| Status bar | agent 运行态 · ctx/token · 通读进度 · Unified\|Split | `.statusbar .sb-status .sb-item .sb-seg` | scan / reviewing / failed |
+| File header | 文件名 / 路径两行 + 计量 + 已看/折叠 | `.file-header .fh-name .fh-path .fh-meta` | viewed / collapsed |
 | File tree | 改动文件 + finding 徽标 + Viewed | `.tree .file .badge .vtick` | active / viewed |
 | Diff | unified / split 代码 + 展开未改动 | `.code.unified .code.split .expander` | unified / split / collapsed |
 | Inline card | 内联 finding / discussion | `.card.agent .card.human` | view / edit / submitted / dismissed |
