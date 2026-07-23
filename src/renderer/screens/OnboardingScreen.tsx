@@ -4,7 +4,7 @@ import { Wordmark } from '../components/Wordmark';
 import { ThemeControls } from '../components/ThemeControls';
 import './OnboardingScreen.css';
 
-// 首启环境自检屏(→ mockup/onboarding.html)。
+// 首启环境自检屏。
 // codex + app-server 必需就绪才放行;gh 可选(仅 GitHub 来源需要),缺失只提示不拦。
 
 type StepStatus = 'checking' | 'ok' | 'fail' | 'warn' | 'wait';

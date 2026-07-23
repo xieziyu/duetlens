@@ -6,8 +6,8 @@ import type { EnvironmentReport } from '@shared/environment';
 import { useSettings } from '../settings/SettingsProvider';
 import './SettingsScreen.css';
 
-// 独立设置屏(→ mockup/settings.html)。左导航分节 + 右内容;改动经 useSettings 即时去抖落库。
-// 说明:mockup 的「跟随系统」明暗档暂未接(需 SettingsProvider 支持 system 解析),此处为浅色/深色两档。
+// 独立设置屏。左导航分节 + 右内容;改动经 useSettings 即时去抖落库。
+// 明暗只有浅色/深色两档:「跟随系统」未接,需 SettingsProvider 先支持 system 解析。
 
 const NAV: { group: string; items: { id: SectionId; icon: string; label: string }[] }[] = [
   {

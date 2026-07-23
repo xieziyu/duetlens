@@ -5,7 +5,7 @@
      data-theme = duetlens | github   (配色主题 · 成套:语法 token + diff + severity + 代码高亮)
    配色主题跟随 data-mode 自动切子模式(GitHub → Dark/Light)。
    CHROME 变量与 THEME 变量分离,互不耦合;新增主题只补一组 THEME 变量。
-   所有 mockup 与实现共用本文件;勿在各页内联复制这些值。
+   本文件是配色 tokens 的单一来源;勿在各处内联复制这些值。
    ========================================================= */
 
 /* ---- 共享 primitives(与明暗/主题无关)---- */

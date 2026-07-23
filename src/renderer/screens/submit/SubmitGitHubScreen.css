@@ -1,4 +1,4 @@
-/* GitHub 提交屏:左 findings 筛选 + 右 Finish your review,对齐 mockup/submit-to-github.html。 */
+/* GitHub 提交屏:左 findings 筛选 + 右 Finish your review。 */
 .submit-gh {
   display: grid;
   grid-template-rows: auto 1fr;

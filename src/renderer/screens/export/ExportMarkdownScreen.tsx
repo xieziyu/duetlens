@@ -20,7 +20,7 @@ interface Props {
   onToggleKeep: (finding: Finding) => void;
 }
 
-// → mockup/export-markdown.html:左预览(渲染/源码)+ 右导出配置。
+// 左预览(渲染/源码)+ 右导出配置。
 export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep }: Props) {
   const [opts, setOpts] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
   const [mode, setMode] = useState<'rendered' | 'raw'>('rendered');

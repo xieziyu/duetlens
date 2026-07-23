@@ -16,7 +16,7 @@ export interface ResizerProps {
 }
 
 /**
- * 列间可拖拽分隔条(对齐 mockup .resizer)。拖拽期间只命令式改 .rev-root 的栏宽 CSS 变量,
+ * 列间可拖拽分隔条。拖拽期间只命令式改 .rev-root 的栏宽 CSS 变量,
  * 不走 React state,避免每次 pointermove 重渲染整棵 DiffPane 导致卡顿;松手才提交一次落库。
  */
 export function Resizer({ cssVar, width, min, max, sign, onCommit }: ResizerProps) {

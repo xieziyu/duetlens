@@ -10,7 +10,7 @@ const STATUS_LABEL: Record<ReviewStatus, string> = {
 };
 
 /**
- * review 屏底部状态栏(→ mockup/diff-review.html .statusbar):agent 运行态从顶栏下沉到此,
+ * review 屏底部状态栏:agent 运行态从顶栏下沉到此,
  * 顶栏只留导航与上下文。右侧放全局 diff 视图与通读进度。
  */
 export function ReviewStatusBar({

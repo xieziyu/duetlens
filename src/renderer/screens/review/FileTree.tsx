@@ -26,7 +26,7 @@ interface DirGroup {
   files: DiffFile[];
 }
 
-/** 按父目录把文件分组,保留目录与组内文件的首次出现顺序(对齐 mockup 的 .group/.dir)。 */
+/** 按父目录把文件分组,保留目录与组内文件的首次出现顺序。 */
 function groupByDir(files: DiffFile[]): DirGroup[] {
   const groups: DirGroup[] = [];
   const index = new Map<string, DirGroup>();
@@ -44,7 +44,7 @@ function groupByDir(files: DiffFile[]): DirGroup[] {
 }
 
 /**
- * 左栏文件树(对齐 mockup .tree):按目录分组,每组一个目录头 + 组内文件(仅 basename)。
+ * 左栏文件树:按目录分组,每组一个目录头 + 组内文件(仅 basename)。
  * 每行:状态标记 + 文件名 + finding 徽标 + diffstat + viewed tick。树头显示「N 改动 · M 已看」。
  */
 export function FileTree({ files, findings, activePath, onSelect, viewed, onToggleViewed }: FileTreeProps) {

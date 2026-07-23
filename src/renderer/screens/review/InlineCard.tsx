@@ -26,7 +26,7 @@ export interface InlineCardProps {
 }
 
 /**
- * 锚定在 diff 行处的内联 finding 卡(对齐 mockup .card):view / edit / dismissed 三态。
+ * 锚定在 diff 行处的内联 finding 卡:view / edit / dismissed 三态。
  * submitted 为只读锁定;编辑经 IPC 落库,回推事件再刷新视图(前端不臆造权威数据)。
  */
 export function InlineCard({

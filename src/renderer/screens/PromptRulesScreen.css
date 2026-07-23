@@ -1,4 +1,4 @@
-/* 审核规则三层编辑器(→ mockup/prompt-rules.html):优先级 ribbon + 层选 rail + 分节编辑 + 常驻合并预览。 */
+/* 审核规则三层编辑器:优先级 ribbon + 层选 rail + 分节编辑 + 常驻合并预览。 */
 .prompt-rules {
   display: grid;
   grid-template-rows: auto 1fr;

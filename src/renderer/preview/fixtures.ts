@@ -292,7 +292,7 @@ const promptLayers: Record<EditablePromptLayer, Partial<Record<PromptSectionKey,
   project: {
     focus:
       '除通用重点外,特别关注:\n- Electron IPC 边界的输入校验\n- 直接拼接的 SQL / shell,警惕注入\n- codex thread 只读沙箱假设是否被打破',
-    ignore: '额外忽略:mockup/*.html 的内联样式与演示 JS(设计稿,不进产物)。',
+    ignore: '额外忽略:`preview.html` 与 `src/renderer/preview/`(前端自查用的 fixture,不进 app 打包路径)。',
     context: '本仓库:Electron + Node/TS 主进程后端 + codex app-server;前端为 React SPA;审核 agent 只读代码,不改动。',
     // 只覆盖 high 一档 —— 用来自查右栏「逐档 provenance」在混合来源下的显示
     severity: '- high: 仅安全问题与数据损坏;性能退化不算 high',

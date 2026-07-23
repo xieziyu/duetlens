@@ -1,4 +1,4 @@
-/* 首启环境自检屏(← mockup/onboarding.html);全部选择器挂在 .onboarding 下,避免与别屏碰撞。 */
+/* 首启环境自检屏;全部选择器挂在 .onboarding 下,避免与别屏碰撞。 */
 .onboarding {
   display: flex;
   flex-direction: column;

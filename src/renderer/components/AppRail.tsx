@@ -3,7 +3,7 @@ import './AppRail.css';
 
 export type RailScreen = 'entry' | 'review' | 'history' | 'prompt' | 'settings';
 
-// 全局导航 rail(→ mockup/diff-review.html 左侧 rail):所有工作屏共用,
+// 全局导航 rail:所有工作屏共用,
 // 让 review 屏也能一键回入口 / 进设置。配色主题(两轴中的 data-theme)只在设置屏里改。
 export function AppRail({
   active,

@@ -31,7 +31,7 @@ interface Props {
   onBack: () => void;
 }
 
-// → mockup/submit-to-github.html:左 findings 筛选 + 右 Finish your review。
+// 左 findings 筛选 + 右 Finish your review。
 export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   const reviewId = review.id;
   const [event, setEvent] = useState<GhReviewEvent>('comment');

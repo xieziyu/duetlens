@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-// → mockup/diff-review.html:#kbdHelp 键盘快捷键浮层。仅列已实现的快捷键。
+// 键盘快捷键浮层。仅列已实现的快捷键。
 const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
   {
     title: '导航',

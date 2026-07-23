@@ -1,5 +1,5 @@
 /**
- * 框选 diff 代码后浮出的动作条(对齐 mockup .sel-pop):选区 file:行范围 +
+ * 框选 diff 代码后浮出的动作条:选区 file:行范围 +
  * 「发起 discussion」(human 琥珀)/「追问 codex」(agent 天蓝)/「记为 finding」。
  * 纯呈现:定位与选区解析在 DiffPane 里,这里只画。
  */

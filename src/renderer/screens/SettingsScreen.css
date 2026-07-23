@@ -1,4 +1,4 @@
-/* 独立设置屏(← mockup/settings.html);左导航 + 右内容自带滚动,类名全带 set- 前缀防碰撞。 */
+/* 独立设置屏;左导航 + 右内容自带滚动,类名全带 set- 前缀防碰撞。 */
 .settings {
   display: flex;
   height: 100%;

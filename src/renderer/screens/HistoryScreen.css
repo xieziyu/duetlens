@@ -1,4 +1,4 @@
-/* 全部审核历史屏(← mockup/history.html);在全局顶栏之下渲染,类名全带 hist- 前缀防碰撞。 */
+/* 全部审核历史屏;在全局顶栏之下渲染,类名全带 hist- 前缀防碰撞。 */
 .hist {
   height: 100%;
   min-height: 0;

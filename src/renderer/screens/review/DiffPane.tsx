@@ -101,7 +101,7 @@ export interface DiffPaneProps {
 }
 
 /**
- * 中栏 diff 主场(对齐 mockup .diff):unified/split 双视图 + 锚定内联 finding 卡 +
+ * 中栏 diff 主场:unified/split 双视图 + 锚定内联 finding 卡 +
  * 框选 / 行内 ＋ 发起 discussion。selection popover 与内联 composer 都由本组件托管;
  * 发起后交由 ReviewScreen 落库并在 Discussion 栏承载对话。
  */
@@ -457,7 +457,7 @@ function gapLabel(side: Gap['side'], remaining: number | null): string {
 }
 
 /**
- * 隐藏区间的整行展开条(对齐 mockup .expander):贴近改动逐块揭示未改动上下文——首部向上、
+ * 隐藏区间的整行展开条:贴近改动逐块揭示未改动上下文——首部向上、
  * hunk 间与尾部向下。尾部在拉到全文前行数未知,只显方向;拉全文后若无剩余行(末改动即 EOF)则整条隐藏。
  */
 function GapExpander({
@@ -808,7 +808,7 @@ function segmentByAnchor<T>(
   return segs;
 }
 
-/** 单个 hunk:在锚点行处把 code 表切段插内联卡 / composer(对齐 mockup table → 卡 → table)。 */
+/** 单个 hunk:在锚点行处把 code 表切段插内联卡 / composer(结构:table → 卡 → table)。 */
 function HunkView({
   hunk,
   lang,

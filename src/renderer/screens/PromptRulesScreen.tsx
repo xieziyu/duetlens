@@ -11,7 +11,7 @@ import {
 } from '@shared/prompt';
 import './PromptRulesScreen.css';
 
-// 三层审核规则提示词编辑器(→ mockup/prompt-rules.html)。
+// 三层审核规则提示词编辑器。
 // 合并模型=分节覆盖:每节独立取 project ▸ global ▸ builtin 里最高优先且有定义的层。
 // project 层落 `<cwd>/.duetlens/review.md`,需先选仓库目录;global 层落 `~/.duetlens/review.md`。
 //

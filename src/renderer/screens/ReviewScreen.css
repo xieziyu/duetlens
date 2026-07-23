@@ -1,4 +1,4 @@
-/* diff-review 三栏(对齐 mockup/diff-review.html);配色 tokens 见 theme/tokens.css。
+/* diff-review 三栏;配色 tokens 见 theme/tokens.css。
    根节点 display:contents —— 顶栏 / 主体 / 状态栏各自落进 App 外壳网格的 top/host/foot。 */
 .rev-root {
   --left-w: 236px;
@@ -864,7 +864,7 @@
   color: var(--text-faint);
   margin-left: 14px;
 }
-/* diff 外上下文展开条(→ mockup .expander):整行可点,左侧图标框 + 文案 + 右侧行号范围 */
+/* diff 外上下文展开条:整行可点,左侧图标框 + 文案 + 右侧行号范围 */
 .gap-bar {
   display: flex;
   align-items: center;
@@ -1092,7 +1092,7 @@
   flex: none;
 }
 
-/* ---------- 首轮机审进度(→ mockup .scanview)---------- */
+/* ---------- 首轮机审进度 ---------- */
 .scanview {
   margin: -12px; /* 抵消 .tab-body padding,让分隔线满宽 */
 }
@@ -1533,7 +1533,7 @@
   color: var(--agent-2);
   border-color: var(--agent-line);
 }
-/* 追问是这张卡的主动作(→ mockup .c-actions 的 ↳ 追问),按 agent 声道着色 */
+/* 追问是这张卡的主动作,按 agent 声道着色 */
 .btn.f-ask {
   background: var(--agent-soft);
   border-color: var(--agent-line);
@@ -1562,7 +1562,7 @@
   color: var(--human);
   border-color: var(--human-line);
 }
-/* Discussion 栏活跃线程的提升操作条(→ mockup .c-actions) */
+/* Discussion 栏活跃线程的提升操作条 */
 .disc-actions {
   display: flex;
   align-items: center;
@@ -2754,7 +2754,7 @@
   line-height: 1;
 }
 
-/* ---- 键盘快捷键帮助浮层(→ mockup .kbd-*) ---- */
+/* ---- 键盘快捷键帮助浮层 ---- */
 .kbd-btn {
   width: 26px;
   height: 22px;

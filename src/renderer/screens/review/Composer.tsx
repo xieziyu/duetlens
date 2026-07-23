@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 /**
- * Discussion 栏底部输入区(对齐 mockup .composer):可移除的引用选区 chip + textarea + 发送。
+ * Discussion 栏底部输入区:可移除的引用选区 chip + textarea + 发送。
  * 引用 chip 由框选「追问 codex」带入;发送把文本交回上层(追问活跃 discussion 或从锚点新建)。
  */
 export interface ComposerProps {

@@ -1,4 +1,4 @@
-/* 导出 Markdown 屏:左预览(hero)+ 右配置,与 mockup/export-markdown.html 对齐。 */
+/* 导出 Markdown 屏:左预览(hero)+ 右配置。 */
 .export-md {
   display: grid;
   grid-template-rows: auto 1fr;

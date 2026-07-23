@@ -32,7 +32,7 @@ export function SubmitExportScreen({
     return (
       <ScreenPlaceholder
         title="提交 / 导出"
-        mockup="从审核屏进入"
+        hint="从审核屏进入"
         parts={['先在入口发起或打开一次 review,再进入提交/导出']}
       />
     );

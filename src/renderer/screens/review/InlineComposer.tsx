@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * diff 主区锚点处的内联新建 discussion 卡(对齐 mockup .card.new-disc):
+ * diff 主区锚点处的内联新建 discussion 卡:
  * 引用块 + textarea + 发送/取消。发送即创建一条 user discussion 并向 codex 发出首问,
  * 随后由 Discussion 栏承载后续对话(见 ReviewScreen.onStartDiscussion)。
  */

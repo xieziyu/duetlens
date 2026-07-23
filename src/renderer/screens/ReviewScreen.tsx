@@ -36,7 +36,7 @@ type RightTab = 'discussion' | 'findings' | 'summary';
 const RIGHT_TABS: RightTab[] = ['discussion', 'findings', 'summary'];
 const isRightTab = (t: string | null): t is RightTab => t !== null && RIGHT_TABS.includes(t as RightTab);
 
-// → mockup/diff-review.html:合并单顶栏 + 三栏(file tree | diff | right panel)。
+// 合并单顶栏 + 三栏(file tree | diff | right panel)。
 export function ReviewScreen({
   reviewId,
   onOpenSubmit,
@@ -265,7 +265,7 @@ export function ReviewScreen({
     if (focusRequest) focusDiscussion(focusRequest.id);
   }, [focusRequest]);
 
-  // 全局导航快捷键(→ mockup #kbdHelp):? 帮助 / 1-3 切 tab / u 切 diff / Esc 关闭。
+  // 全局导航快捷键:? 帮助 / 1-3 切 tab / u 切 diff / Esc 关闭。
   // 焦点在输入框或按住修饰键时让位;编辑/发送的 ⌘↵·Esc·↵ 由各 composer/编辑器自理。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

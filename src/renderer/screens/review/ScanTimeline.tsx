@@ -19,7 +19,7 @@ export interface ScanTimelineProps {
 }
 
 /**
- * 首轮机审进度(→ mockup .scanview):阶段 timeline + 实时 findings 流。
+ * 首轮机审进度:阶段 timeline + 实时 findings 流。
  * 阶段态由现有信号派生(diff 预取 / 会话就绪 / findings 数),不臆造后端没有的粒度。
  */
 export function ScanTimeline({ findings, diffReady, sessionReady, onPickFinding }: ScanTimelineProps) {

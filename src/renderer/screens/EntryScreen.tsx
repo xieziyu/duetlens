@@ -31,7 +31,7 @@ const EFFORT_LABELS: Record<ReasoningEffort, string> = {
   xhigh: 'xhigh · 最深',
 };
 
-// → mockup/entry.html:三来源分段选择器 + 各 panel + 附加上下文 + 最近的审核
+// 三来源分段选择器 + 各 panel + 附加上下文 + 最近的审核
 export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => void }) {
   const { settings, update, loaded } = useSettings();
   const [reviews, setReviews] = useState<RecentReview[]>([]);

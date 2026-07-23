@@ -1,4 +1,4 @@
-/* → mockup/entry.html。配色 token 复用全局 tokens.css;此屏内联布局与状态样式。 */
+/* 入口屏。配色 token 复用全局 tokens.css;此屏内联布局与状态样式。 */
 .entry-wrap {
   max-width: 780px;
   margin: 0 auto;

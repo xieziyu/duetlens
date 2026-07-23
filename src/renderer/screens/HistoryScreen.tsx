@@ -4,7 +4,7 @@ import type { ReviewStatus, SourceKind } from '@shared/domain';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './entry/icons';
 import './HistoryScreen.css';
 
-// 全部审核历史屏(→ mockup/history.html)。数据来自 review:list-recent;
+// 全部审核历史屏。数据来自 review:list-recent;
 // 搜索 / 来源 & 状态筛选 / 时间分组均在前端做;删除软删 + 撤销,真实删库延迟到宽限期后提交。
 
 type SourceFilter = 'all' | 'github-pr' | 'local-branch' | 'gitbutler-vbranch';
