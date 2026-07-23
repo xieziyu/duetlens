@@ -2,7 +2,7 @@
 
 > Duetlens 是 [better-review](https://github.com/xieziyu/better-review) 的 **2.0 全重写**:把 code review 从"人消费 agent 一次吐出的 findings"变成"**人与 agent 协同对话式** review"。
 >
-> 状态:设计定稿 · 关键技术假设已验证 · **后端 + 前端 diff-review 主流程全部落地并合入 main**;核心 review 闭环(发起 → codex 扫描 → 协同讨论 → 提交/导出)可实机使用。仅剩 settings/history/onboarding 三块整屏未接 React。最后更新 2026-07-22
+> 状态:设计定稿 · 关键技术假设已验证 · **后端 + 前端七屏全部落地并合入 main**;核心 review 闭环(发起 → codex 扫描 → 协同讨论 → **多轮重跑复审** → 提交/导出)可实机使用。最后更新 2026-07-23
 >
 > 实现进度、如何运行、尚缺项见 [design/implementation-status.md](design/implementation-status.md)。设计文档描述目标,实现细节以代码为准。
 
@@ -42,3 +42,4 @@ codex app-server 把"一次常驻会话"本身称作 `thread`。为避免冲突,
 7. UI 整体重设计,**diff review 为核心界面**;讨论线程统一命名 **discussion**。→ [ui](design/ui.md)
 8. MCP server 采用 **in-process HTTP transport**,经 `thread/start` 的 **per-thread config 注入**,不写全局 `~/.codex/config.toml`。→ [codex-integration](design/codex-integration.md)
 9. **Elicitation 处理器为架构必需件**:对自建受信工具自动 accept,避免协同流程卡在审批。→ [codex-integration](design/codex-integration.md)
+10. **多轮重跑**:每轮新 thread + 全量重扫;agent 必须对上一轮 findings 三态表态(`fixed` / `wont_fix` / `still_present`),被剔除项经 prompt + 去重双层抑制;github-pr 同步 PR 评论作为**外部参考材料**注入(带隔离围栏)。→ [rerun](design/rerun.md)

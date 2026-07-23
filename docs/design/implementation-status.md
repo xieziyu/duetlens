@@ -1,6 +1,6 @@
 # 实现进度
 
-> 返回 [文档索引](../README.md) · 最后更新 2026-07-23 · origin/main HEAD=123e358
+> 返回 [文档索引](../README.md) · 最后更新 2026-07-23 · origin/main HEAD=fb2122b
 >
 > 本页只做**导航与当前状态**:各层落地情况、如何运行、尚缺的整屏、spike 验证、与设计的偏差。实现细节以代码为准。逐切片的开发流水不在此保留(见 git history)。
 
@@ -82,6 +82,7 @@
 - **提示词分节覆盖**:project→global→builtin 每节独立取最高优先层,整节替换(**节内追加已拍板不做**,winner-takes-all)。
 - **复审换新 thread**:一次 review 不再恒等于一个 codex thread —— 每轮机审各起一个,上一轮结论靠结构化 prompt 注入。原因是新旧 diff 的行号在同一上下文里会串位;副作用是追问不能再依赖会话记忆,故 `buildFollowupPrompt` 一并重述该线程近几条往来(顺带修好 compact 之后追问的老问题)。详见 [rerun](rerun.md)。
 - **finding 去重从软约束升级为软+硬**:prompt 要求不重报之外,`shared/finding-dedupe.ts` 兜底吸收(同文件 + 邻近行 + 标题 bigram 相似度)。阈值取保守值 —— 宁可多出一条也不吞掉真问题。该兜底对首轮同样生效(agent 偶尔会重复上报同一处)。
+- **复审表态是三态而非两态**:`resolve_finding` 除 `fixed` / `still_present` 外必须有 `wont_fix`(作者已回应说明不改)。实机踩过:作者在 PR 上回「纯联调,手动调试脚本,可忽略」后代码原样未变,只有两格时 agent 只能答 `still_present`,同一条每轮重报 —— 它没答错,是**我们问错了问题**。thread 回复一直都注入到了 prompt,缺的是**表达结论的词**与**要求它先读作者回复的指令**。判定顺序因此把「作者怎么说」排在「代码变没变」之前。`wont_fix` **不自动剔除**:作者一句"可忽略"不该自动关掉一条真实的安全问题,采纳与否是 reviewer 的决定(卡上给一键采纳,把作者原话存为剔除理由)。
 - **右栏 tab 持久化**:全局 `ui_settings.default_tab` 为「无记忆时的初始默认」,per-review `review_ui_state.last_active_tab` 覆盖。
 - **领域事件面全程编译期收敛**:`ReviewSessionEvents` 是事件名→载荷的单一来源;ReviewSession **组合**(非继承)EventEmitter,`on/off` 收窄、`emit` 私有;ReviewManager 用 `keyof` 映射的转发表;renderer `useReviewStream` 用 `switch` + never 哨兵(运行时只告警不抛,容忍 main 比 renderer 新)。三处任一漏接新事件都编译失败 —— 起因是 agent finding 的承载 discussion 曾只落库未外发,整个 Discussion 栏为空却无人报错。
 - codex 版本以 **0.144.1** 实测为准,**0.144.6 经 `generate-ts` 全量 diff 确认协议逐字节无变化**(详见 [codex-integration](codex-integration.md));协议子集手写在 `protocol.ts`。
