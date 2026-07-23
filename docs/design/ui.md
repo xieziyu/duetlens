@@ -59,10 +59,10 @@
 
 ### 运行时 / 异常态(`mockup/review-runtime.html`)
 
-主干只画了 happy path;这些态叠加在 review 屏之上,由后端事件驱动。mockup 顶栏「运行态」下拉切换演示,状态机见 [ui-states](ui-states.md#运行时--异常态)。呈现分三处**互不打断阅读**的位置:
+主干只画了 happy path;这些态叠加在 review 屏之上,由后端事件驱动。mockup 状态栏尾部「demo · 运行态」下拉切换演示,状态机见 [ui-states](ui-states.md#运行时--异常态)。呈现分三处**互不打断阅读**的位置:
 
-- **状态栏 status 胶囊**(底部状态栏最左):随态换文案/配色 —— Reviewing(天蓝)/ 运行中 / 待审批(琥珀)/ turn 失败 · agent 已断开 · 回传通道故障(红)/ 离线(琥珀)/ 压缩中(天蓝转圈)。
-- **全局横幅**(仅连接级异常,置于顶栏下方,分级):**阻断级(红)** = agent app-server 断开(自动重连 N/5 + 查看日志)、MCP 回传通道故障(诊断 + 重启通道);**警告级(琥珀)** = 网络离线(重试)。阻断态下主体轻微降饱和,强调需先恢复连接;会话与已上报 findings 已本地保存,重连从断点续接。
+- **状态栏 status 胶囊**(底部状态栏最左):基线是 review 状态(扫描中天蓝 / 审核中绿 / 失败红,见 `screens/review/StatusBar.tsx`),运行时态在其上覆盖文案与配色 —— 运行中(天蓝 pulse)/ 待审批(琥珀)/ turn 失败 · agent 已断开 · 回传通道故障(红)/ 离线(琥珀)/ 压缩中(天蓝转圈)。
+- **全局横幅**(仅连接级异常,置于顶栏下方、rail 之上整幅宽,分级):**阻断级(红)** = agent app-server 断开(自动重连 N/5 + 查看日志)、MCP 回传通道故障(诊断 + 重启通道);**警告级(琥珀)** = 网络离线(重试)。阻断态下主体轻微降饱和,强调需先恢复连接;会话与已上报 findings 已本地保存,重连从断点续接。
 - **右栏底部运行区**(随态切内容):
   - **6 中断**:turn 运行中显示流式指示(已读 N 文件 · 用时)+ 红色 **`停止 ⌘.`**(对应 `ConversationalAgent.interrupt`)。
   - **7 审批 / elicitation**:反向审批请求冒出时(自建工具自动 accept 之外,如 `execCommandApproval` / `applyPatchApproval`)显示审批卡 —— 工具名 + 参数摘要(如待执行命令)+ 用途说明 + **拒绝 / 仅这次 / 本会话始终允许**。见 [codex-integration](codex-integration.md) 与 [open-questions](open-questions.md)「审批面收敛」。
@@ -188,7 +188,7 @@ review 屏原先把品牌、来源、模型、用量、状态、CTA、主题、�
 
 - `mockup/entry.html` —— 主入口 / launcher:三源发起 + 粘贴解析 + 会话历史。
 - `mockup/diff-review.html` —— 核心屏:应用外壳(全局导航 rail + 上下文顶栏 + 底部状态栏)+ 三栏(可调宽)+ 两行 file-header + 内联 discussion + 右栏三 tab(Discussion/Findings/Summary)+ 首轮机审扫描态 + finding 就地编辑器(view/edit/submitted/dismissed 四态)+ Summary 正文就地编辑 + 框选发起 discussion / composer 引用 + per-file Viewed / off-diff findings 区 + split / unified 切换(状态栏)+ 键盘快捷键帮助层(`?`)+ 两轴配色切换。
-- `mockup/review-runtime.html` —— review **运行时 / 异常态**(外壳仍是重设计前的单顶栏,待同步;状态呈现位置以本页「应用外壳」为准):顶栏「运行态」下拉切 9 态(空闲 / turn 运行中+中断 / 反向审批 / turn 失败 / agent 断开重连 / 离线 / MCP 通道故障 / ctx 接近上限 / 压缩中);演示 status 胶囊、全局横幅、右栏底部运行区、ctx 用量表。见上「运行时 / 异常态」。
+- `mockup/review-runtime.html` —— review **运行时 / 异常态**(外壳与 `diff-review.html` 同构:rail + 上下文顶栏 + 底部状态栏 + 两行 file-header):状态栏「demo · 运行态」下拉切 9 态(空闲 / turn 运行中+中断 / 反向审批 / turn 失败 / agent 断开重连 / 离线 / MCP 通道故障 / ctx 接近上限 / 压缩中);演示 status 胶囊、全局横幅、右栏底部运行区、ctx 用量表。见上「运行时 / 异常态」。
 - `mockup/submit-to-github.html` —— findings 筛选与提交到 GitHub 的流程屏(见 [findings-submit](findings-submit.md));顶栏「提交态」切换器演示提交结果/异常态(submitting / success / **invalid 行锚点失效** / failed / **incremental 增量**)。
 - `mockup/export-markdown.html` —— 非 GitHub source(本地分支 / GitButler)的**本地 Markdown 导出屏**:左侧实时报告预览(渲染/源码)、右侧导出配置(包含项 + 分组 + 勾选保留 + 复制/保存 .md)。见 [findings-submit](findings-submit.md#非-github-source--导出为-markdown)。
 - `mockup/tokens.css` —— 配色 tokens 单一来源(两轴);`diff-review.html` / `entry.html` / `design-system.html` 均已引用。

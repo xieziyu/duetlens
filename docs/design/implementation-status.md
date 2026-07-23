@@ -23,8 +23,8 @@
 开发态的顶栏屏切换已由**全局导航 rail** 取代(`src/renderer/components/AppRail.tsx`,除 onboarding 外各屏共用);review 屏顶栏瘦身为纯上下文 + CTA,agent 运行态与 diff 视图切换下沉到**底部状态栏**(`screens/review/StatusBar.tsx`);file-header 改为文件名 / 路径两行。App 外壳是一张 `top / rail+host / foot` 网格,屏根用 `display:contents` 直接落进去。github-pr review 顶栏新增 **⧉ 用系统默认浏览器打开 PR**(IPC `review:open-in-browser`,URL 在 main 侧解析后 `shell.openExternal`)。
 
 ### 尚缺
-1. `mockup/review-runtime.html` 仍是重设计前的单顶栏,运行时/异常态的呈现位置待同步。
-2. 键位表不可配置(帮助层为只读 cheatsheet)。
+1. 键位表不可配置(帮助层为只读 cheatsheet)。
+2. 运行时/异常态(turn 中断 / 反向审批 / turn 失败 / 连接断 / 压缩)只有设计,未落地 —— 设计见 `mockup/review-runtime.html`(已按新外壳同步)。
 
 > 入口页丰富流程已接 mockup(见「前端屏」):三来源分段选择器、GitHub PR 粘贴+实时预览卡+remote 校验、最近 open PR 列表、gh 未登录引导、本地分支选择器(commits ahead + base)、GitButler workspace 检测+虚拟分支列表、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / detect-gitbutler）+ `review:list-recent`（附计数）。
 
