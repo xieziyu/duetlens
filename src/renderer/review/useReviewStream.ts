@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Discussion, Finding, Message, Review } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, ReviewRound } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AgentEvent } from '@shared/agent-events';
 
@@ -12,6 +12,8 @@ export interface ReviewStreamState {
   /** 按 discussionId 聚合的消息(user/agent),随 message 事件增量追加 */
   messages: Record<string, Message[]>;
   status: Review['status'] | null;
+  /** 轮次履历(首轮 + 每次重跑);末条即当前轮 */
+  rounds: ReviewRound[];
   tokenUsage: { used: number; total?: number } | null;
   lastTool: string | null;
   /** 懒加载一条 discussion 的历史消息(续接的旧 review);实时消息仍走事件流。 */
@@ -41,6 +43,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [diff, setDiff] = useState<DiffFile[]>([]);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [status, setStatus] = useState<Review['status'] | null>(null);
+  const [rounds, setRounds] = useState<ReviewRound[]>([]);
   const [tokenUsage, setTokenUsage] = useState<{ used: number; total?: number } | null>(null);
   const [lastTool, setLastTool] = useState<string | null>(null);
   // 已发起过历史拉取的 discussionId,避免重复 fetch(实时消息由事件流补充)
@@ -96,6 +99,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     void window.duetlens.review.findings(reviewId).then((f) => alive && setFindings(f));
     void window.duetlens.review.discussions(reviewId).then((d) => alive && setDiscussions(d));
     void window.duetlens.review.diff(reviewId).then((d) => alive && setDiff(d));
+    void window.duetlens.review.rounds(reviewId).then((r) => alive && setRounds(r));
 
     // switch + 兜底哨兵:ReviewEvent 新增一支而这里漏处理,编译期即报错(见 assertExhaustive)
     const off = window.duetlens.review.onEvent((e) => {
@@ -144,6 +148,20 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
           setMessages((prev) => (prev[discussionId] ? { ...prev, [discussionId]: [] } : prev));
           return;
         }
+        case 'round': {
+          // upsert:开轮时插入,收轮时(带统计)就地替换
+          const r = e.payload;
+          setRounds((prev) => {
+            const i = prev.findIndex((x) => x.round === r.round);
+            if (i < 0) return [...prev, r].sort((a, b) => a.round - b.round);
+            const next = prev.slice();
+            next[i] = r;
+            return next;
+          });
+          // 开新一轮会改 review.currentRound,重拉一次让轮次角标与后端一致
+          void window.duetlens.review.get(reviewId).then((rv) => rv && setReview(rv));
+          return;
+        }
         case 'review':
           setReview(e.payload);
           setStatus(e.payload.status);
@@ -178,6 +196,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     diff,
     messages,
     status,
+    rounds,
     tokenUsage,
     lastTool,
     ensureMessages,

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Finding, Severity, Triage } from '@shared/domain';
 import type { FindingEditInput } from '@shared/ipc';
 import { renderMarkdown } from './markdown';
+import { currentResolution, isNewThisRound } from './rounds';
 
 const SEV_LABEL: Record<Severity, string> = { high: 'high', medium: 'med', low: 'low' };
 const SEV_OPTIONS: Severity[] = ['high', 'medium', 'low'];
@@ -14,8 +15,10 @@ export interface InlineCardProps {
   offDiff?: boolean;
   /** 锚点新侧行的原文;有则 suggestion 预览渲染成 GitHub 式 diff(删原行 / 增 suggestion)。off-diff 无原行时缺省。 */
   originalLine?: string;
-  /** 用户裁决(保留/剔除/复位);缺省时卡为纯只读(如预览/未接线场景) */
-  onTriage?: (finding: Finding, triage: Triage) => void;
+  /** review 当前轮次;用于判定卡上的「本轮新增 / 已修复」标记 */
+  currentRound?: number;
+  /** 用户裁决(保留/剔除/复位);剔除可带理由,注入下一轮复审。缺省时卡为纯只读(如预览/未接线场景) */
+  onTriage?: (finding: Finding, triage: Triage, reason?: string | null) => void;
   /** 就地编辑保存 */
   onUpdate?: (input: FindingEditInput) => void;
   /** 就这条 finding 追问 agent:切到 Discussion 栏并选中其承载线程 */
@@ -31,6 +34,7 @@ export function InlineCard({
   focused,
   offDiff,
   originalLine,
+  currentRound = 1,
   onTriage,
   onUpdate,
   onDiscuss,
@@ -40,12 +44,14 @@ export function InlineCard({
   const dismissed = finding.triage === 'dismiss';
   const [editing, setEditing] = useState(false);
   const writable = !!(onTriage || onUpdate) && !submitted;
+  const resolution = currentResolution(finding, currentRound);
 
   const cardClass =
     `card ${isAgent ? 'agent' : 'human'} finding` +
     (focused ? ' focused' : '') +
     (submitted ? ' submitted' : '') +
     (dismissed && !editing ? ' dismissed' : '') +
+    (resolution === 'fixed' && !editing ? ' resolved' : '') +
     (editing ? ' editing' : '');
 
   return (
@@ -61,15 +67,7 @@ export function InlineCard({
             }}
           />
         ) : dismissed ? (
-          <div className="c-dismissed">
-            <span className="dm-x">✕</span>
-            <span className="dm-t">已剔除 · {finding.title}</span>
-            {onTriage && (
-              <button className="f-restore" onClick={() => onTriage(finding, 'open')}>
-                ↩ 恢复
-              </button>
-            )}
-          </div>
+          <DismissedCard finding={finding} onTriage={onTriage} />
         ) : (
           <CardView
             finding={finding}
@@ -78,12 +76,79 @@ export function InlineCard({
             writable={writable}
             offDiff={offDiff}
             originalLine={originalLine}
+            resolution={resolution}
+            isNew={isNewThisRound(finding, currentRound)}
             onEdit={onUpdate ? () => setEditing(true) : undefined}
             onDismiss={onTriage ? () => onTriage(finding, 'dismiss') : undefined}
             onDiscuss={onDiscuss ? () => onDiscuss(finding) : undefined}
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * 已剔除态。理由是**事后可选补充**而非剔除时的必填门槛 ——
+ * 一键剔除的速度不能被输入框拖慢,但填了理由下一轮的同类抑制会准得多。
+ */
+function DismissedCard({
+  finding,
+  onTriage,
+}: {
+  finding: Finding;
+  onTriage?: (finding: Finding, triage: Triage, reason?: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [reason, setReason] = useState(finding.dismissReason ?? '');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const save = () => {
+    onTriage?.(finding, 'dismiss', reason.trim() || null);
+    setEditing(false);
+  };
+
+  return (
+    <div className="c-dismissed">
+      <div className="dm-row">
+        <span className="dm-x">✕</span>
+        <span className="dm-t">已剔除 · {finding.title}</span>
+        {onTriage && (
+          <>
+            <button className="dm-why" onClick={() => setEditing((v) => !v)} title="理由会注入下一轮复审">
+              {finding.dismissReason ? '✎ 理由' : '＋ 理由'}
+            </button>
+            <button className="f-restore" onClick={() => onTriage(finding, 'open')}>
+              ↩ 恢复
+            </button>
+          </>
+        )}
+      </div>
+      {!editing && finding.dismissReason && <div className="dm-reason">{finding.dismissReason}</div>}
+      {editing && (
+        <div className="dm-edit">
+          <input
+            ref={inputRef}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save();
+              if (e.key === 'Escape') {
+                setReason(finding.dismissReason ?? '');
+                setEditing(false);
+              }
+            }}
+            placeholder="为什么这不算问题?下一轮 agent 会据此不再报同类"
+          />
+          <button className="dm-save" onClick={save}>
+            存
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -95,6 +160,8 @@ function CardView({
   writable,
   offDiff,
   originalLine,
+  resolution,
+  isNew,
   onEdit,
   onDismiss,
   onDiscuss,
@@ -105,6 +172,8 @@ function CardView({
   writable: boolean;
   offDiff?: boolean;
   originalLine?: string;
+  resolution: 'fixed' | 'still_present' | null;
+  isNew: boolean;
   onEdit?: () => void;
   onDismiss?: () => void;
   onDiscuss?: () => void;
@@ -120,10 +189,19 @@ function CardView({
           {SEV_LABEL[finding.severity]}
           {finding.category ? ` · ${finding.category}` : ''}
         </span>
+        {isNew && <span className="round-tag new">本轮新增</span>}
+        {resolution === 'fixed' && <span className="round-tag fixed">✓ 本轮已修复</span>}
+        {resolution === 'still_present' && <span className="round-tag still">本轮复核 · 仍存在</span>}
       </div>
       <div className="c-body">
         <strong className="c-title">{finding.title}</strong>
         {finding.body && <div className="c-prose">{renderMarkdown(finding.body)}</div>}
+        {resolution && finding.resolutionNote && (
+          <div className="c-resnote">
+            <span className="crn-lbl">复核</span>
+            {finding.resolutionNote}
+          </div>
+        )}
       </div>
       {finding.suggestion && (
         <div className="c-sugg">

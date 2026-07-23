@@ -1,6 +1,16 @@
 import { EventEmitter } from 'node:events';
-import type { CodexModelInfo, Discussion, Finding, Message, Review, ReviewUiState, Triage, UiSettings } from '@shared/domain';
-import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
+import type {
+  CodexModelInfo,
+  Discussion,
+  Finding,
+  Message,
+  Review,
+  ReviewRound,
+  ReviewUiState,
+  Triage,
+  UiSettings,
+} from '@shared/domain';
+import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, FindingEditInput, RecentReview, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/github-review';
@@ -8,7 +18,9 @@ import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
 import { loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
+import { buildRerunPrompt } from '../prompt/rerun-prompt';
 import { createSource } from '../source/create-source';
+import { fetchPrContextForReview } from '../source/github-pr-context';
 import { checkEnvironment } from '../env/environment-check';
 import type { EnvCheckOptions, EnvironmentReport } from '@shared/environment';
 import { setToolPath } from '../config/tool-paths';
@@ -201,9 +213,12 @@ export class ReviewManager extends EventEmitter {
     return finding;
   }
 
-  /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推。 */
-  setTriage(reviewId: string, findingId: string, triage: Triage): Finding {
-    this.store.setTriage(findingId, triage);
+  /**
+   * 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推。
+   * 剔除可带理由 —— 下一轮复审会把它注入,让 agent 明白为何不算问题、不再报同类。
+   */
+  setTriage(reviewId: string, findingId: string, triage: Triage, reason?: string | null): Finding {
+    this.store.setTriage(findingId, triage, reason);
     const finding = this.store.getFinding(findingId);
     if (!finding) throw new Error(`finding 不存在: ${findingId}`);
     this.forward({ reviewId, type: 'finding', payload: finding });
@@ -392,22 +407,111 @@ export class ReviewManager extends EventEmitter {
     // 预取 diff 落库:MCP 与 renderer 共用同一份,省 codex 侧一次 get_diff 往返。
     const rawDiff = await source.getDiff();
     this.store.setDiff(review.id, rawDiff);
+    // 首轮也建轮次记录:轮次表是完整履历,复审只是往后追加,不是另一套东西。
+    this.store.startRound(review.id, 1, { headSha: prepared.headSha, note: target.context });
     const { baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd });
     this.launch(review, prepared.cwd, {
       getDiff: () => rawDiff,
       getFile: (p) => source.getFile(p),
-    }, () => source.dispose(), baseInstructions, target.context);
+    }, () => source.dispose(), baseInstructions, buildScanPrompt(target.context), 1);
     return review;
   }
 
-  /** 建 session、接事件、后台跑首轮扫描(startReview / startDemoReview 共用)。 */
+  /** 某次 review 的全部轮次履历(首轮 + 每次重跑)。 */
+  getRounds(reviewId: string): ReviewRound[] {
+    return this.store.listRounds(reviewId);
+  }
+
+  /**
+   * 重跑一轮机审。每轮**新开 codex thread**、**重新拉取最新 diff 做全量重扫**,
+   * 上一轮的产出与 reviewer 的处置靠结构化 prompt 带过来(见 prompt/rerun-prompt.ts)。
+   * 立即返回新建的轮次记录,扫描在后台跑、findings 经事件流入。
+   */
+  async rerunReview(reviewId: string, input: { note?: string } = {}): Promise<ReviewRound> {
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    const prevRound = this.store.getRound(reviewId, review.currentRound);
+    if (prevRound?.status === 'scanning') {
+      throw new Error('上一轮扫描尚未结束,不能重跑');
+    }
+
+    // 每轮新 thread:先彻底释放上一轮的会话、MCP 与 source,再重建。
+    await this.teardown(reviewId);
+
+    const source = createSource({
+      source: review.source,
+      ref: review.sourceRef,
+      repoPath: review.repoPath ?? '',
+    });
+    let round: ReviewRound;
+    let prepared: Awaited<ReturnType<typeof source.prepare>>;
+    let rawDiff: string;
+    let prompt: string;
+    let baseInstructions: string;
+    try {
+      prepared = await source.prepare();
+      rawDiff = await source.getDiff();
+      const prevDiff = this.store.getRawDiff(reviewId);
+      const changedFiles = changedFilesBetween(prevDiff, rawDiff);
+      const codeChanged = prevDiff !== rawDiff;
+      this.store.setDiff(reviewId, rawDiff);
+
+      // gh 拉不到就是空上下文,不阻断复审(见 fetchPrContextForReview)
+      const pr = review.source === 'github-pr' ? await fetchPrContextForReview(review) : null;
+
+      const findings = this.store.listFindings(reviewId);
+      const openFindings = findings.filter((f) => f.triage !== 'dismiss');
+      const dismissedFindings = findings.filter((f) => f.triage === 'dismiss');
+      const messagesByDiscussion: Record<string, Message[]> = {};
+      for (const f of openFindings) {
+        const msgs = this.store.listMessages(f.discussionId);
+        if (msgs.length) messagesByDiscussion[f.discussionId] = msgs;
+      }
+
+      round = this.store.startRound(reviewId, review.currentRound + 1, {
+        headSha: prepared.headSha,
+        note: input.note,
+      });
+      prompt = buildRerunPrompt({
+        round: round.round,
+        prevRound,
+        headSha: prepared.headSha ?? null,
+        changedFiles,
+        codeChanged,
+        openFindings,
+        dismissedFindings,
+        messagesByDiscussion,
+        pr: pr && pr.fetchedAt ? pr : null,
+        note: input.note,
+      });
+      ({ baseInstructions } = await loadReviewPrompt({ cwd: prepared.cwd }));
+    } catch (e) {
+      await source.dispose();
+      throw e;
+    }
+
+    this.launch(
+      { ...review, currentRound: round.round },
+      prepared.cwd,
+      { getDiff: () => rawDiff, getFile: (p) => source.getFile(p) },
+      () => source.dispose(),
+      baseInstructions,
+      prompt,
+      round.round,
+    );
+    this.forward({ reviewId, type: 'round', payload: round });
+    return round;
+  }
+
+  /** 建 session、接事件、后台跑一轮机审(首轮与重跑共用)。 */
   private launch(
     review: Review,
     cwd: string,
     providers: McpContentProviders,
-    onDone?: () => void | Promise<void>,
-    baseInstructions?: string,
-    context?: string,
+    onDone: (() => void | Promise<void>) | undefined,
+    baseInstructions: string | undefined,
+    scanPrompt: string | undefined,
+    round: number,
   ): void {
     const session = this.createSession(review.id, onDone);
     this.providers.set(review.id, providers);
@@ -417,11 +521,28 @@ export class ReviewManager extends EventEmitter {
         cwd,
         providers,
         baseInstructions,
-        scanPrompt: buildScanPrompt(context),
+        scanPrompt,
         model: review.model,
         reasoningEffort: review.reasoningEffort,
+        round,
       })
-      .catch(() => this.forward({ reviewId: review.id, type: 'status', payload: 'failed' }));
+      .then(
+        () => this.settleRound(review.id, round, 'done'),
+        () => {
+          this.settleRound(review.id, round, 'failed');
+          this.forward({ reviewId: review.id, type: 'status', payload: 'failed' });
+        },
+      );
+  }
+
+  /** 收一轮:统计本轮新增/判定已修复的条数落库(抑制数在命中时已累加),并外发轮次事件。 */
+  private settleRound(reviewId: string, round: number, status: 'done' | 'failed'): void {
+    const findings = this.store.listFindings(reviewId);
+    const finished = this.store.finishRound(reviewId, round, status, {
+      newFindings: findings.filter((f) => f.round === round).length,
+      fixedCount: findings.filter((f) => f.lastSeenRound === round && f.resolution === 'fixed').length,
+    });
+    if (finished) this.forward({ reviewId, type: 'round', payload: finished });
   }
 
   /** 按持久化的 target 重建 source 并续接 codex thread(会话已不在内存)。 */

@@ -6,7 +6,7 @@
 import { parseUnifiedDiff } from '@shared/diff';
 import type { CompletionNotice, DuetlensApi, RecentReview, ReviewEvent } from '@shared/ipc';
 import type { PrSummary } from '@shared/source-discovery';
-import type { Discussion, Finding, Message, Review, ReviewUiState, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
 import type {
   EditablePromptLayer,
   PromptLayer,
@@ -99,6 +99,7 @@ const REVIEW: Review = {
   title: 'feat: streaming transcode pipeline',
   status: 'reviewing',
   summaryBody: '本次改动引入并发编码管线,整体方向合理,但并发计数存在数据竞争,需修正。',
+  currentRound: 2,
   createdAt: now,
   updatedAt: now,
 };
@@ -129,8 +130,13 @@ function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'titl
     body: '',
     suggestion: null,
     triage: 'open',
+    dismissReason: null,
     submission: 'unsubmitted',
     submittedUrl: null,
+    round: 1,
+    lastSeenRound: 1,
+    resolution: null,
+    resolutionNote: null,
     createdAt: now,
     updatedAt: now,
     ...p,
@@ -146,6 +152,9 @@ const FINDINGS: Finding[] = [
     body: 'Cell<usize> 不是线程安全的,不能跨 spawn 共享;每个 task 在独立线程执行,counter.set 无原子性也不满足 Sync。用 Arc<AtomicUsize> + fetch_add(1, Ordering::Relaxed) 替代。',
     file: 'src/pipeline.ts',
     line: 20,
+    lastSeenRound: 2,
+    resolution: 'still_present',
+    resolutionNote: '第 2 轮复核:counter 仍是 Cell,未改。',
     suggestion: 'const counter = new AtomicCounter(0);\n// in task:\ncounter.increment();',
   }),
   mkFinding({
@@ -156,6 +165,9 @@ const FINDINGS: Finding[] = [
     body: '这里统计的是已完成分片数,建议命名为 completedCount,与相邻的 done 语义对齐。',
     file: 'src/pipeline.ts',
     line: 16,
+    lastSeenRound: 2,
+    resolution: 'fixed',
+    resolutionNote: '第 2 轮已改名为 completedCount。',
   }),
   mkFinding({
     id: 'f3',
@@ -165,6 +177,8 @@ const FINDINGS: Finding[] = [
     body: '硬编码 4px 8px,项目已有 --space-* 变量,建议改用 token 保持一致。',
     file: 'styles/app.css',
     line: 3,
+    triage: 'dismiss',
+    dismissReason: '这套样式将随设计系统一并替换,本次不改。',
   }),
   mkFinding({
     id: 'f4',
@@ -174,7 +188,22 @@ const FINDINGS: Finding[] = [
     body: '新增 spawn_worker 未定义 Worker 的停止/回收路径;锚点在未展开区,以 off-diff 提出。',
     file: 'src/worker.rs',
     line: 99,
+    round: 2,
+    lastSeenRound: 2,
   }),
+];
+
+const ROUNDS: ReviewRound[] = [
+  {
+    reviewId: 'demo', round: 1, codexThreadId: 'thread-demo-1', headSha: '3f9a1c2e5b7d',
+    status: 'done', note: null, newFindings: 3, fixedCount: 0, suppressedCount: 0,
+    startedAt: now - 3 * 3600_000, endedAt: now - 3 * 3600_000 + 210_000,
+  },
+  {
+    reviewId: 'demo', round: 2, codexThreadId: 'thread-demo-2', headSha: 'a41d80b6cc02',
+    status: 'done', note: '作者说已修了并发那条,重点复核。', newFindings: 1, fixedCount: 1, suppressedCount: 2,
+    startedAt: now - 25 * 60_000, endedAt: now - 21 * 60_000,
+  },
 ];
 
 const DISCUSSIONS: Discussion[] = [
@@ -317,7 +346,8 @@ export function installPreviewApi(): void {
   const asClean = params.has('clean');
   // ?stream findings 逐条经事件流到达(复现流式插入内联卡时的重绘行为)
   const asStream = params.has('stream');
-  const review: Review = {
+  // 可变:重跑 stub 会改 currentRound / status,模拟后端回推后的新值
+  let review: Review = {
     ...REVIEW,
     ...(asGithub ? { source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null } : {}),
     ...(asScanning ? { status: 'scanning' as const } : {}),
@@ -329,6 +359,7 @@ export function installPreviewApi(): void {
     lastActiveTab: null,
   };
   const findings = asClean || asStream ? [] : FINDINGS.map((f) => ({ ...f }));
+  const rounds: ReviewRound[] = asClean || asStream ? [] : ROUNDS.map((r) => ({ ...r }));
   const discussions = asClean || asStream ? [] : DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const listeners = new Set<(e: ReviewEvent) => void>();
@@ -393,6 +424,35 @@ export function installPreviewApi(): void {
       discussions: async () => discussions,
       messages: async (discussionId) => msgStore[discussionId] ?? [],
       start: async () => review,
+      rounds: async () => rounds,
+      // 开一轮:插入 scanning 记录并回推,4s 后收轮 —— 够看清面板→扫描→收轮的整条视觉链路
+      rerun: async (_r, input) => {
+        const round: ReviewRound = {
+          reviewId: 'demo',
+          round: rounds.length + 1,
+          codexThreadId: `thread-demo-${rounds.length + 1}`,
+          headSha: 'bb17e4f0a993',
+          status: 'scanning',
+          note: input?.note ?? null,
+          newFindings: 0,
+          fixedCount: 0,
+          suppressedCount: 0,
+          startedAt: Date.now(),
+          endedAt: null,
+        };
+        rounds.push(round);
+        review = { ...review, currentRound: round.round, status: 'scanning' };
+        fire({ reviewId: 'demo', type: 'round', payload: round });
+        fire({ reviewId: 'demo', type: 'status', payload: 'scanning' });
+        setTimeout(() => {
+          const done: ReviewRound = { ...round, status: 'done', newFindings: 1, fixedCount: 1, endedAt: Date.now() };
+          rounds[rounds.length - 1] = done;
+          review = { ...review, status: 'reviewing' };
+          fire({ reviewId: 'demo', type: 'round', payload: done });
+          fire({ reviewId: 'demo', type: 'status', payload: 'reviewing' });
+        }, 4000);
+        return round;
+      },
       resume: async () => review,
       release: async () => {},
       delete: async () => {},
@@ -438,9 +498,14 @@ export function installPreviewApi(): void {
         msgStore[discussionId] = [];
         fire({ reviewId: 'demo', type: 'messages-cleared', discussionId });
       },
-      setTriage: async (_r, findingId, triage) => {
+      setTriage: async (_r, findingId, triage, reason) => {
         const f = findings.find((x) => x.id === findingId)!;
-        const next = { ...f, triage, updatedAt: Date.now() };
+        const next = {
+          ...f,
+          triage,
+          dismissReason: triage === 'dismiss' ? (reason?.trim() || null) : null,
+          updatedAt: Date.now(),
+        };
         emit(next);
         return next;
       },
@@ -468,8 +533,13 @@ export function installPreviewApi(): void {
           line: input.line,
           suggestion: input.suggestion ?? null,
           triage: 'open',
+          dismissReason: null,
           submission: 'unsubmitted',
           submittedUrl: null,
+          round: 2,
+          lastSeenRound: 2,
+          resolution: null,
+          resolutionNote: null,
           createdAt: ts,
           updatedAt: ts,
         };
@@ -506,8 +576,13 @@ export function installPreviewApi(): void {
           line: d.line!,
           suggestion: null,
           triage: 'open',
+          dismissReason: null,
           submission: 'unsubmitted',
           submittedUrl: null,
+          round: 2,
+          lastSeenRound: 2,
+          resolution: null,
+          resolutionNote: null,
           createdAt: ts,
           updatedAt: ts,
         };

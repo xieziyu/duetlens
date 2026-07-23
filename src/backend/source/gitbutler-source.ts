@@ -28,6 +28,7 @@ export class GitButlerSource implements Source {
     const repo = this.target.repoPath;
     if (!repo) throw new Error('gitbutler-vbranch source 需指定 repoPath(GitButler 项目目录)');
     const branch = this.branch();
+    // vbranch 的改动尚在工作区、无稳定 commit,故不给 headSha;复审改按 diff 原文比对判定变化。
     return { title: `GitButler · ${branch}`, cwd: repo };
   }
 

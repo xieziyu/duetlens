@@ -161,3 +161,27 @@ export function parseUnifiedDiff(raw: string): DiffFile[] {
   pushFile();
   return files;
 }
+
+/**
+ * 两版 unified diff 之间发生改动的文件路径(复审用:上一轮 → 本轮哪些文件变了)。
+ * 按「该文件的 diff 文本是否相同」判定,而非只看文件列表 —— 同一文件内容变了也要算进去。
+ * 任一侧为空(首轮无上一版)时返回新版的全部文件。
+ */
+export function changedFilesBetween(prevRaw: string | null, nextRaw: string): string[] {
+  const next = parseUnifiedDiff(nextRaw);
+  if (!prevRaw) return next.map((f) => f.path);
+  const prev = new Map(parseUnifiedDiff(prevRaw).map((f) => [f.path, fileFingerprint(f)]));
+  const changed = next.filter((f) => prev.get(f.path) !== fileFingerprint(f)).map((f) => f.path);
+  // 上一版有、本版没有的文件:该文件的改动被撤回了,同样值得 agent 知道
+  const nextPaths = new Set(next.map((f) => f.path));
+  for (const p of prev.keys()) if (!nextPaths.has(p)) changed.push(p);
+  return changed;
+}
+
+/** 文件级指纹:状态 + 逐行内容;行号随上下文漂移也算变化,宁可多报不可漏报。 */
+function fileFingerprint(f: DiffFile): string {
+  const body = f.hunks
+    .map((h) => `${h.newStart},${h.newCount}:${h.lines.map((l) => l.kind + l.text).join('\n')}`)
+    .join('|');
+  return `${f.status}:${f.binary ? 'bin' : body}`;
+}

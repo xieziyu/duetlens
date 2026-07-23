@@ -109,7 +109,34 @@ ALTER TABLE ui_settings ADD COLUMN codex_path TEXT NOT NULL DEFAULT '';
 ALTER TABLE ui_settings ADD COLUMN gh_path TEXT NOT NULL DEFAULT '';
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5];
+// 多轮重跑:轮次表 + finding 的轮次归属与复审判定 + 剔除理由。
+// 存量数据一律视作第 1 轮(默认值),无需回填。
+const V6 = `
+CREATE TABLE review_rounds (
+  review_id       TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  round           INTEGER NOT NULL,
+  codex_thread_id TEXT,
+  head_sha        TEXT,
+  status          TEXT NOT NULL,
+  note            TEXT,
+  new_findings    INTEGER NOT NULL DEFAULT 0,
+  fixed_count     INTEGER NOT NULL DEFAULT 0,
+  suppressed_count INTEGER NOT NULL DEFAULT 0,
+  started_at      INTEGER NOT NULL,
+  ended_at        INTEGER,
+  PRIMARY KEY (review_id, round)
+);
+
+ALTER TABLE reviews ADD COLUMN current_round INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE findings ADD COLUMN round INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE findings ADD COLUMN last_seen_round INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE findings ADD COLUMN resolution TEXT;
+ALTER TABLE findings ADD COLUMN resolution_note TEXT;
+ALTER TABLE findings ADD COLUMN dismiss_reason TEXT;
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

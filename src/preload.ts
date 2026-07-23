@@ -22,6 +22,8 @@ const api: DuetlensApi = {
     discussions: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewDiscussions, reviewId),
     messages: (discussionId) => ipcRenderer.invoke(IpcChannels.reviewMessages, discussionId),
     start: (input) => ipcRenderer.invoke(IpcChannels.reviewStart, input),
+    rerun: (reviewId, input) => ipcRenderer.invoke(IpcChannels.reviewRerun, reviewId, input),
+    rounds: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewRounds, reviewId),
     resume: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewResume, reviewId),
     release: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewRelease, reviewId),
     delete: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewDelete, reviewId),
@@ -31,8 +33,8 @@ const api: DuetlensApi = {
       ipcRenderer.invoke(IpcChannels.reviewSendMessage, reviewId, discussionId, text),
     clearDiscussion: (reviewId, discussionId) =>
       ipcRenderer.invoke(IpcChannels.reviewClearDiscussion, reviewId, discussionId),
-    setTriage: (reviewId, findingId, triage) =>
-      ipcRenderer.invoke(IpcChannels.reviewSetTriage, reviewId, findingId, triage),
+    setTriage: (reviewId, findingId, triage, reason) =>
+      ipcRenderer.invoke(IpcChannels.reviewSetTriage, reviewId, findingId, triage, reason),
     setFindingAnchor: (reviewId, findingId, line) =>
       ipcRenderer.invoke(IpcChannels.reviewSetFindingAnchor, reviewId, findingId, line),
     addFinding: (reviewId, input) => ipcRenderer.invoke(IpcChannels.reviewAddFinding, reviewId, input),

@@ -16,6 +16,25 @@ export function parsePrRef(ref: string): { nwo: string; num: string } {
 }
 
 /**
+ * 解析 PR 引用并补齐仓库:ref 里没带 owner/repo 时,从本地仓库目录的 remote 推断。
+ * `gh` 未登录 / 目录不是仓库时抛错。
+ */
+export async function resolvePrRef(
+  ref: string,
+  repoPath?: string | null,
+): Promise<{ nwo: string; num: string }> {
+  const parsed = parsePrRef(ref);
+  if (parsed.nwo) return parsed;
+  if (!repoPath) throw new Error('PR 引用缺 owner/repo,且未提供 repoPath');
+  const out = await run(
+    'gh',
+    ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'],
+    repoPath,
+  );
+  return { nwo: out.trim(), num: parsed.num };
+}
+
+/**
  * GitHub PR source:diff 走 `gh pr diff`,文件走 `gh api .../contents`(按 head sha),
  * 无需本地 clone。可选 repoPath 仅用作 codex cwd;缺省用临时空目录。
  */
@@ -40,7 +59,7 @@ export class GitHubPrSource implements Source {
     this.headSha = meta.headRefOid;
 
     const cwd = this.target.repoPath || (this.tmp = mkdtempSync(path.join(tmpdir(), 'duetlens-pr-')));
-    return { title: `#${meta.number} · ${meta.title}`, cwd };
+    return { title: `#${meta.number} · ${meta.title}`, cwd, headSha: this.headSha };
   }
 
   async getDiff(): Promise<string> {

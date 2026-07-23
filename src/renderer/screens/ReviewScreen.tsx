@@ -13,6 +13,8 @@ import { ScanTimeline } from './review/ScanTimeline';
 import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
+import { RerunPanel } from './review/RerunPanel';
+import { currentResolution, isFixedThisRound, isNewThisRound, roundSummary } from './review/rounds';
 import { isSubmittable } from '@shared/github-review';
 import './ReviewScreen.css';
 import './review/review-syntax.css';
@@ -45,6 +47,7 @@ export function ReviewScreen({
     messages,
     diff,
     status,
+    rounds,
     tokenUsage,
     lastTool,
     ensureMessages,
@@ -63,6 +66,8 @@ export function ReviewScreen({
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   // 键盘快捷键帮助浮层
   const [helpOpen, setHelpOpen] = useState(false);
+  // 重跑确认面板
+  const [rerunOpen, setRerunOpen] = useState(false);
   // 栏宽 + diff 视图:持久化偏好,拖拽 / 切换即写回(去抖)
   const leftW = settings.leftWidth;
   const rightW = settings.rightWidth;
@@ -213,9 +218,17 @@ export function ReviewScreen({
 
   // 写路径:落库后经 review:event 回推刷新(useReviewStream upsert),前端不本地臆造。
   const onTriage = useCallback(
-    (finding: Finding, triage: Triage) => {
+    (finding: Finding, triage: Triage, reason?: string | null) => {
       if (!reviewId) return;
-      void window.duetlens.review.setTriage(reviewId, finding.id, triage);
+      void window.duetlens.review.setTriage(reviewId, finding.id, triage, reason);
+    },
+    [reviewId],
+  );
+  // 重跑:立刻返回新轮次记录,扫描后台跑;失败(如上一轮仍在扫描)由面板就地展示
+  const onRerun = useCallback(
+    async (note: string) => {
+      if (!reviewId) return;
+      await window.duetlens.review.rerun(reviewId, note ? { note } : undefined);
     },
     [reviewId],
   );
@@ -280,6 +293,8 @@ export function ReviewScreen({
     return () => window.removeEventListener('keydown', onKey);
   }, [helpOpen, diffView, update, setActiveTab]);
 
+  const scanning = status === 'scanning' || !status;
+  const currentRound = review?.currentRound ?? 1;
   // 常驻 CTA:github-pr → 提交 review(徽标=待提交数);其余 → 导出 review(徽标=保留数)
   const isGithub = review?.source === 'github-pr';
   const ctaCount = isGithub
@@ -320,6 +335,14 @@ export function ReviewScreen({
         </div>
         <span className="spacer" />
         <button
+          className="rerun-cta"
+          onClick={() => setRerunOpen(true)}
+          disabled={scanning}
+          title={scanning ? '本轮扫描进行中,结束后可重跑' : '带上本轮结论与你的处置,再跑一轮机审'}
+        >
+          ↻ 重跑
+        </button>
+        <button
           className="submit-cta"
           onClick={onOpenSubmit}
           title={isGithub ? '进入筛选并提交 review 到 GitHub' : '导出 review 为 Markdown'}
@@ -329,6 +352,15 @@ export function ReviewScreen({
         </button>
       </header>
       {helpOpen && <KbdHelp onClose={() => setHelpOpen(false)} />}
+      {rerunOpen && (
+        <RerunPanel
+          review={review}
+          findings={findings}
+          rounds={rounds}
+          onClose={() => setRerunOpen(false)}
+          onRun={onRerun}
+        />
+      )}
 
       <div className="rev-main">
         <FileTree
@@ -353,6 +385,7 @@ export function ReviewScreen({
           discussions={discussions}
           activePath={activePath}
           focusFindingId={focusFindingId}
+          currentRound={currentRound}
           onTriage={onTriage}
           onUpdate={onUpdate}
           onStartDiscussion={onStartDiscussion}
@@ -385,7 +418,8 @@ export function ReviewScreen({
           messages={messages}
           review={review}
           diff={diff}
-          scanning={status === 'scanning' || !status}
+          scanning={scanning}
+          currentRound={currentRound}
           lastTool={lastTool}
           tokenUsage={tokenUsage}
           onPickFinding={focusFinding}
@@ -409,6 +443,7 @@ export function ReviewScreen({
 
       <ReviewStatusBar
         status={status}
+        round={roundSummary(rounds, currentRound)}
         model={review?.model ?? null}
         effort={review?.reasoningEffort ?? null}
         tokenUsage={tokenUsage}
@@ -476,6 +511,7 @@ function RightPanel({
   review,
   diff,
   scanning,
+  currentRound,
   lastTool,
   tokenUsage,
   onPickFinding,
@@ -504,10 +540,11 @@ function RightPanel({
   review: Review | null;
   diff: DiffFile[];
   scanning: boolean;
+  currentRound: number;
   lastTool: string | null;
   tokenUsage: { used: number; total?: number } | null;
   onPickFinding: (f: Finding) => void;
-  onTriage: (finding: Finding, triage: Triage) => void;
+  onTriage: (finding: Finding, triage: Triage, reason?: string | null) => void;
   activeDiscussionId: string | null;
   onSelectDiscussion: (id: string) => void;
   pendingRef: { anchor: DiscussionAnchor; label: string } | null;
@@ -523,10 +560,20 @@ function RightPanel({
   onEditSummary: (body: string) => void;
   onPickCategory: (cat: string) => void;
 }) {
-  const shown = useMemo(
+  const filtered = useMemo(
     () => (categoryFilter ? findings.filter((f) => (f.category ?? '未分类') === categoryFilter) : findings),
     [findings, categoryFilter],
   );
+  // 本轮判定已修复的条目移出主列表 —— 它们不再是待处理的意见,留在原位只会淹没真正要看的东西
+  const fixed = useMemo(
+    () => filtered.filter((f) => isFixedThisRound(f, currentRound)),
+    [filtered, currentRound],
+  );
+  const shown = useMemo(
+    () => filtered.filter((f) => !isFixedThisRound(f, currentRound)),
+    [filtered, currentRound],
+  );
+  const [fixedOpen, setFixedOpen] = useState(false);
   // findings 分组:按严重度(high▸low)或按文件;渲染统一走 groups 列表。
   const groups = useMemo(() => {
     if (grouping === 'file') {
@@ -595,7 +642,7 @@ function RightPanel({
                   </button>
                 </div>
               )}
-              {shown.length === 0 &&
+              {shown.length === 0 && fixed.length === 0 &&
                 (categoryFilter ? (
                   <p className="empty-note">无 {categoryFilter} 分类的 findings。</p>
                 ) : (
@@ -629,10 +676,40 @@ function RightPanel({
                     <span className="fg-line" />
                   </div>
                   {g.findings.map((f) => (
-                    <FindingRow key={f.id} finding={f} onPick={onPickFinding} onTriage={onTriage} />
+                    <FindingRow
+                      key={f.id}
+                      finding={f}
+                      currentRound={currentRound}
+                      onPick={onPickFinding}
+                      onTriage={onTriage}
+                    />
                   ))}
                 </div>
               ))}
+              {fixed.length > 0 && (
+                <div className="fgroup fixed-group">
+                  <button
+                    className="fg-head fg-toggle"
+                    onClick={() => setFixedOpen((v) => !v)}
+                    aria-expanded={fixedOpen}
+                  >
+                    <span className="fg-caret">{fixedOpen ? '▾' : '▸'}</span>
+                    <span className="fg-fixed">✓ 本轮判定已修复</span>
+                    <span className="fg-n">{fixed.length}</span>
+                    <span className="fg-line" />
+                  </button>
+                  {fixedOpen &&
+                    fixed.map((f) => (
+                      <FindingRow
+                        key={f.id}
+                        finding={f}
+                        currentRound={currentRound}
+                        onPick={onPickFinding}
+                        onTriage={onTriage}
+                      />
+                    ))}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -685,19 +762,26 @@ const ORIGIN_LABEL: Record<Finding['origin'], string> = {
 
 const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
-/** 右栏 Findings tab 单行:锚点导航 + triage(剔除/恢复)。 */
+/** 右栏 Findings tab 单行:锚点导航 + triage(剔除/恢复)+ 复审轮次标记。 */
 function FindingRow({
   finding: f,
+  currentRound,
   onPick,
   onTriage,
 }: {
   finding: Finding;
+  currentRound: number;
   onPick: (f: Finding) => void;
-  onTriage: (finding: Finding, triage: Triage) => void;
+  onTriage: (finding: Finding, triage: Triage, reason?: string | null) => void;
 }) {
   const submitted = f.submission === 'submitted';
   const dismissed = f.triage === 'dismiss';
-  const rowClass = 'frow' + (submitted ? ' submitted' : dismissed ? ' dismissed' : ' kept');
+  const resolution = currentResolution(f, currentRound);
+  const isNew = isNewThisRound(f, currentRound);
+  const rowClass =
+    'frow' +
+    (submitted ? ' submitted' : dismissed ? ' dismissed' : ' kept') +
+    (resolution === 'fixed' ? ' resolved' : '');
   const triage = (t: Triage) => (e: React.MouseEvent) => {
     e.stopPropagation();
     onTriage(f, t);
@@ -710,12 +794,17 @@ function FindingRow({
           {SEV_LABEL[f.severity]}
           {f.category ? ` · ${f.category}` : ''}
         </span>
+        {isNew && <span className="round-tag new">本轮新增</span>}
+        {resolution === 'fixed' && <span className="round-tag fixed">✓ 已修复</span>}
+        {resolution === 'still_present' && <span className="round-tag still">仍存在</span>}
         <span className={`origin ${f.origin === 'agent' ? 'agent' : 'human'}`}>
           <span className="d" />
           {ORIGIN_LABEL[f.origin]}
         </span>
       </div>
       <div className="fr-title">{f.title}</div>
+      {f.resolutionNote && resolution && <div className="fr-note">{f.resolutionNote}</div>}
+      {dismissed && f.dismissReason && <div className="fr-note reason">理由:{f.dismissReason}</div>}
       <div className="fr-foot">
         <span className="mono anchor" title={`${f.file}:${f.line}`}>
           {basename(f.file)}:{f.line}

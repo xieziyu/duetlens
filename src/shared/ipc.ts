@@ -9,6 +9,7 @@ import type {
   Message,
   ReasoningEffort,
   Review,
+  ReviewRound,
   ReviewUiState,
   SourceKind,
   Triage,
@@ -38,6 +39,8 @@ export const IpcChannels = {
   reviewDiff: 'review:diff',
   reviewFileContent: 'review:file-content',
   reviewStart: 'review:start',
+  reviewRerun: 'review:rerun',
+  reviewRounds: 'review:rounds',
   reviewResume: 'review:resume',
   reviewRelease: 'review:release',
   reviewDelete: 'review:delete',
@@ -86,6 +89,12 @@ export interface ReviewStartInput {
   reasoningEffort?: ReasoningEffort;
   /** 用户给 agent 的附加上下文,随首轮机审注入(可选) */
   context?: string;
+}
+
+/** 发起一轮重跑的入参。 */
+export interface RerunInput {
+  /** reviewer 对本轮的额外说明(如「重点看并发那块」),随复审指令注入 */
+  note?: string;
 }
 
 /** 交给系统默认浏览器打开的结果;失败原因回前端做提示,不抛异常。 */
@@ -173,6 +182,7 @@ export interface AppInfo {
 
 /** 一次 review 生命周期里推给 renderer 的领域事件。 */
 export type ReviewEvent =
+  | { reviewId: string; type: 'round'; payload: ReviewRound }
   | { reviewId: string; type: 'finding'; payload: Finding }
   | { reviewId: string; type: 'message'; payload: Message }
   | { reviewId: string; type: 'messages-cleared'; discussionId: string }
@@ -200,6 +210,13 @@ export interface DuetlensApi {
     messages(discussionId: string): Promise<Message[]>;
     /** 对真实 target 发起审核;立即返回 review,首轮扫描后台跑、findings 经事件流入。 */
     start(input: ReviewStartInput): Promise<Review>;
+    /**
+     * 再跑一轮机审:重拉最新 diff 全量重扫,并带上「上轮 findings + reviewer 处置 + GitHub 评论」。
+     * 立即返回新轮次记录,扫描后台跑。上一轮仍在扫描中时抛错。
+     */
+    rerun(reviewId: string, input?: RerunInput): Promise<ReviewRound>;
+    /** 该 review 的轮次履历(首轮 + 每次重跑),用于展示轮次与各轮统计。 */
+    rounds(reviewId: string): Promise<ReviewRound[]>;
     /** 续接一个非活跃 review(app 重启后按 codexThreadId 恢复会话),之后可追问。 */
     resume(reviewId: string): Promise<Review>;
     /** 释放某 review 的活跃会话(codex 子进程 + MCP);下次追问自动续接。 */
@@ -212,8 +229,11 @@ export interface DuetlensApi {
     sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message>;
     /** 清空一条 discussion 的往来消息(finding 卡保留);经 `messages-cleared` 事件回推。 */
     clearDiscussion(reviewId: string, discussionId: string): Promise<void>;
-    /** 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推更新。 */
-    setTriage(reviewId: string, findingId: string, triage: Triage): Promise<Finding>;
+    /**
+     * 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推更新。
+     * reason 只在剔除时有意义(可选),会注入下一轮复审让 agent 不再报同类问题;恢复时自动清空。
+     */
+    setTriage(reviewId: string, findingId: string, triage: Triage, reason?: string | null): Promise<Finding>;
     /** 改一条 finding 的行锚点(提交屏修 422 失效锚点):line>0 改锚,line=0 脱锚(降级为摘要)。 */
     setFindingAnchor(reviewId: string, findingId: string, line: number): Promise<Finding>;
     /** 用户手动新增一条锚定 finding(origin=manual),同 agent finding 的 schema/提交路径。 */

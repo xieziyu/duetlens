@@ -73,8 +73,10 @@ export interface DiffPaneProps {
   activePath: string | null;
   /** 右栏点选的 finding;变化时滚动到内联卡并高亮 */
   focusFindingId: string | null;
+  /** review 当前轮次;内联卡据此显示「本轮新增 / 已修复」标记 */
+  currentRound?: number;
   /** finding 写路径:裁决 / 就地编辑,缺省则内联卡为只读 */
-  onTriage?: (finding: Finding, triage: Triage) => void;
+  onTriage?: (finding: Finding, triage: Triage, reason?: string | null) => void;
   onUpdate?: (input: FindingEditInput) => void;
   /** 框选 / hover ＋ 发起 discussion:创建 user discussion 并发出首问 */
   onStartDiscussion?: (anchor: DiscussionAnchor, text: string) => void;
@@ -250,6 +252,7 @@ export function DiffPane(props: DiffPaneProps) {
           discussions={discByFile.get(f.path) ?? []}
           onAnchorClick={onAnchorClick}
           focusFindingId={focusFindingId}
+          currentRound={props.currentRound ?? 1}
           onTriage={props.onTriage}
           onUpdate={props.onUpdate}
           onDiscussFinding={props.onDiscussFinding}
@@ -530,6 +533,7 @@ function DiffFileView({
   discussions,
   onAnchorClick,
   focusFindingId,
+  currentRound,
   onTriage,
   onUpdate,
   onDiscussFinding,
@@ -550,7 +554,8 @@ function DiffFileView({
   discussions: Discussion[];
   onAnchorClick: (mark: AnchorMark) => void;
   focusFindingId: string | null;
-  onTriage?: (finding: Finding, triage: Triage) => void;
+  currentRound: number;
+  onTriage?: (finding: Finding, triage: Triage, reason?: string | null) => void;
   onUpdate?: (input: FindingEditInput) => void;
   onDiscussFinding?: (finding: Finding) => void;
   view: DiffView;
@@ -729,6 +734,7 @@ function DiffFileView({
               finding={f}
               focused={f.id === focusFindingId}
               offDiff
+              currentRound={currentRound}
               onTriage={onTriage}
               onUpdate={onUpdate}
               onDiscuss={onDiscussFinding}
@@ -760,6 +766,7 @@ function DiffFileView({
                 onAnchorClick={onAnchorClick}
                 focusFindingId={focusFindingId}
                 view={view}
+                currentRound={currentRound}
                 onTriage={onTriage}
                 onUpdate={onUpdate}
                 onDiscussFinding={onDiscussFinding}
@@ -810,6 +817,7 @@ function HunkView({
   onAnchorClick,
   focusFindingId,
   view,
+  currentRound,
   onTriage,
   onUpdate,
   onDiscussFinding,
@@ -824,7 +832,8 @@ function HunkView({
   onAnchorClick: (mark: AnchorMark) => void;
   focusFindingId: string | null;
   view: DiffView;
-  onTriage?: (finding: Finding, triage: Triage) => void;
+  currentRound: number;
+  onTriage?: (finding: Finding, triage: Triage, reason?: string | null) => void;
   onUpdate?: (input: FindingEditInput) => void;
   onDiscussFinding?: (finding: Finding) => void;
   onAddThread?: (line: number, snippet: string) => void;
@@ -841,6 +850,7 @@ function HunkView({
         finding={f}
         focused={f.id === focusFindingId}
         originalLine={textByNewLine.get(f.line)}
+        currentRound={currentRound}
         onTriage={onTriage}
         onUpdate={onUpdate}
         onDiscuss={onDiscussFinding}

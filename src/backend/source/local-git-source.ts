@@ -18,7 +18,8 @@ export class LocalGitSource implements Source {
       (await run('git', ['-C', repo, 'rev-parse', '--abbrev-ref', 'HEAD'])).trim();
     this.base = this.target.baseRef ?? (await this.detectBase(repo));
     const subject = (await run('git', ['-C', repo, 'log', '-1', '--format=%s', this.head])).trim();
-    return { title: `${this.head} · ${subject}`, cwd: repo };
+    const headSha = (await run('git', ['-C', repo, 'rev-parse', this.head])).trim();
+    return { title: `${this.head} · ${subject}`, cwd: repo, headSha };
   }
 
   async getDiff(): Promise<string> {

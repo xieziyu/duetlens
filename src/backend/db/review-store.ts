@@ -5,13 +5,16 @@ import {
   DEFAULT_UI_SETTINGS,
   type Discussion,
   type Finding,
+  type FindingResolution,
   type Message,
   type MessageRole,
   type ReportFindingInput,
   DEFAULT_REVIEW_UI_STATE,
   type Review,
+  type ReviewRound,
   type ReviewStatus,
   type ReviewUiState,
+  type RoundStatus,
   type SourceKind,
   type Submission,
   type Triage,
@@ -32,8 +35,23 @@ interface ReviewRow {
   title: string | null;
   status: string;
   summary_body: string | null;
+  current_round: number;
   created_at: number;
   updated_at: number;
+}
+
+interface RoundRow {
+  review_id: string;
+  round: number;
+  codex_thread_id: string | null;
+  head_sha: string | null;
+  status: string;
+  note: string | null;
+  new_findings: number;
+  fixed_count: number;
+  suppressed_count: number;
+  started_at: number;
+  ended_at: number | null;
 }
 
 interface FindingRow {
@@ -49,8 +67,13 @@ interface FindingRow {
   line: number;
   suggestion: string | null;
   triage: string;
+  dismiss_reason: string | null;
   submission: string;
   submitted_url: string | null;
+  round: number;
+  last_seen_round: number;
+  resolution: string | null;
+  resolution_note: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -86,8 +109,25 @@ function toReview(r: ReviewRow): Review {
     title: r.title,
     status: r.status as ReviewStatus,
     summaryBody: r.summary_body,
+    currentRound: r.current_round,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+function toRound(r: RoundRow): ReviewRound {
+  return {
+    reviewId: r.review_id,
+    round: r.round,
+    codexThreadId: r.codex_thread_id,
+    headSha: r.head_sha,
+    status: r.status as RoundStatus,
+    note: r.note,
+    newFindings: r.new_findings,
+    fixedCount: r.fixed_count,
+    suppressedCount: r.suppressed_count,
+    startedAt: r.started_at,
+    endedAt: r.ended_at,
   };
 }
 
@@ -105,8 +145,13 @@ function toFinding(r: FindingRow): Finding {
     line: r.line,
     suggestion: r.suggestion,
     triage: (r.triage === 'keep' ? 'open' : r.triage) as Triage,
+    dismissReason: r.dismiss_reason,
     submission: r.submission as Submission,
     submittedUrl: r.submitted_url,
+    round: r.round,
+    lastSeenRound: r.last_seen_round,
+    resolution: r.resolution as FindingResolution | null,
+    resolutionNote: r.resolution_note,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -163,13 +208,14 @@ export class ReviewStore {
       title: input.title ?? null,
       status: 'scanning',
       summary_body: null,
+      current_round: 1,
       created_at: ts,
       updated_at: ts,
     };
     this.db
       .prepare(
-        `INSERT INTO reviews (id, source, source_ref, repo_path, codex_thread_id, model, reasoning_effort, title, status, summary_body, created_at, updated_at)
-         VALUES (@id, @source, @source_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @title, @status, @summary_body, @created_at, @updated_at)`,
+        `INSERT INTO reviews (id, source, source_ref, repo_path, codex_thread_id, model, reasoning_effort, title, status, summary_body, current_round, created_at, updated_at)
+         VALUES (@id, @source, @source_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @title, @status, @summary_body, @current_round, @created_at, @updated_at)`,
       )
       .run(row);
     return toReview(row);
@@ -247,6 +293,99 @@ export class ReviewStore {
     return r?.raw ?? null;
   }
 
+  // ---- 轮次(首轮 + 每次重跑各一条;轮次号只增不退,失败轮次留在历史里)----
+
+  /** 开一轮:写轮次记录并把 review 的当前轮推到该轮。round 由调用方从 currentRound+1 推得。 */
+  startRound(
+    reviewId: string,
+    round: number,
+    input: { headSha?: string | null; note?: string | null } = {},
+  ): ReviewRound {
+    const ts = now();
+    const row: RoundRow = {
+      review_id: reviewId,
+      round,
+      codex_thread_id: null,
+      head_sha: input.headSha ?? null,
+      status: 'scanning',
+      note: input.note?.trim() || null,
+      new_findings: 0,
+      fixed_count: 0,
+      suppressed_count: 0,
+      started_at: ts,
+      ended_at: null,
+    };
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `INSERT INTO review_rounds (review_id, round, codex_thread_id, head_sha, status, note, new_findings, fixed_count, suppressed_count, started_at, ended_at)
+           VALUES (@review_id, @round, @codex_thread_id, @head_sha, @status, @note, @new_findings, @fixed_count, @suppressed_count, @started_at, @ended_at)`,
+        )
+        .run(row);
+      this.db
+        .prepare('UPDATE reviews SET current_round = ?, updated_at = ? WHERE id = ?')
+        .run(round, ts, reviewId);
+    })();
+    return toRound(row);
+  }
+
+  setRoundThreadId(reviewId: string, round: number, threadId: string): void {
+    this.db
+      .prepare('UPDATE review_rounds SET codex_thread_id = ? WHERE review_id = ? AND round = ?')
+      .run(threadId, reviewId, round);
+  }
+
+  /** 收一轮:统计由调用方在轮次结束时算好一并写入。 */
+  finishRound(
+    reviewId: string,
+    round: number,
+    status: RoundStatus,
+    counts: { newFindings?: number; fixedCount?: number; suppressedCount?: number } = {},
+  ): ReviewRound | null {
+    this.db
+      .prepare(
+        `UPDATE review_rounds
+            SET status = ?, ended_at = ?,
+                new_findings = COALESCE(?, new_findings),
+                fixed_count = COALESCE(?, fixed_count),
+                suppressed_count = COALESCE(?, suppressed_count)
+          WHERE review_id = ? AND round = ?`,
+      )
+      .run(
+        status,
+        now(),
+        counts.newFindings ?? null,
+        counts.fixedCount ?? null,
+        counts.suppressedCount ?? null,
+        reviewId,
+        round,
+      );
+    return this.getRound(reviewId, round);
+  }
+
+  /** 累加本轮被抑制的重复上报数(每次命中即时 +1,不必等收轮)。 */
+  bumpSuppressed(reviewId: string, round: number): void {
+    this.db
+      .prepare(
+        'UPDATE review_rounds SET suppressed_count = suppressed_count + 1 WHERE review_id = ? AND round = ?',
+      )
+      .run(reviewId, round);
+  }
+
+  getRound(reviewId: string, round: number): ReviewRound | null {
+    const r = this.db
+      .prepare('SELECT * FROM review_rounds WHERE review_id = ? AND round = ?')
+      .get(reviewId, round) as RoundRow | undefined;
+    return r ? toRound(r) : null;
+  }
+
+  listRounds(reviewId: string): ReviewRound[] {
+    const rows = this.db
+      .prepare('SELECT * FROM review_rounds WHERE review_id = ? ORDER BY round ASC')
+      .all(reviewId) as RoundRow[];
+    return rows.map(toRound);
+  }
+
   // ---- findings(每条 finding 同时建一条 kind=finding 的 discussion 承载后续追问)----
   // id 可显式传入(用 MCP 生成的 id,使 codex 的 finding id === 存储 id,便于 update_finding)
   addFinding(
@@ -258,6 +397,8 @@ export class ReviewStore {
     const ts = now();
     const discussionId = randomUUID();
     const findingId = id;
+    // 轮次由 review 当前轮推导,而非由调用方传入 —— 保证 agent / 手动 / 提升三条入口一致。
+    const round = this.currentRound(reviewId);
     const insert = this.db.transaction(() => {
       this.db
         .prepare(
@@ -267,8 +408,8 @@ export class ReviewStore {
         .run(discussionId, reviewId, origin, input.file, input.line, ts);
       this.db
         .prepare(
-          `INSERT INTO findings (id, review_id, discussion_id, origin, severity, category, title, body, file, line, suggestion, triage, submission, submitted_url, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 'unsubmitted', NULL, ?, ?)`,
+          `INSERT INTO findings (id, review_id, discussion_id, origin, severity, category, title, body, file, line, suggestion, triage, dismiss_reason, submission, submitted_url, round, last_seen_round, resolution, resolution_note, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 'unsubmitted', NULL, ?, ?, NULL, NULL, ?, ?)`,
         )
         .run(
           findingId,
@@ -282,12 +423,22 @@ export class ReviewStore {
           input.file,
           input.line,
           input.suggestion ?? null,
+          round,
+          round,
           ts,
           ts,
         );
     });
     insert();
     return this.getFinding(findingId)!;
+  }
+
+  /** review 当前轮次;review 不存在时按第 1 轮兜底(调用方随后自会因外键失败)。 */
+  private currentRound(reviewId: string): number {
+    const r = this.db.prepare('SELECT current_round FROM reviews WHERE id = ?').get(reviewId) as
+      | { current_round: number }
+      | undefined;
+    return r?.current_round ?? 1;
   }
 
   getFinding(id: string): Finding | null {
@@ -331,10 +482,42 @@ export class ReviewStore {
     return this.getFinding(input.findingId);
   }
 
-  setTriage(findingId: string, triage: Triage): void {
+  /**
+   * 用户裁决。剔除可带理由(复审时注入,让 agent 明白为何不是问题、不再报同类);
+   * 恢复为 open 时理由随之清空,避免陈旧理由在下一轮误导 agent。
+   */
+  setTriage(findingId: string, triage: Triage, reason?: string | null): void {
+    const dismissReason = triage === 'dismiss' ? (reason?.trim() || null) : null;
     this.db
-      .prepare('UPDATE findings SET triage = ?, updated_at = ? WHERE id = ?')
-      .run(triage, now(), findingId);
+      .prepare('UPDATE findings SET triage = ?, dismiss_reason = ?, updated_at = ? WHERE id = ?')
+      .run(triage, dismissReason, now(), findingId);
+  }
+
+  /** agent 在复审轮次对一条旧 finding 表态;同时把它标记为「本轮已看过」。 */
+  setFindingResolution(
+    findingId: string,
+    round: number,
+    resolution: FindingResolution,
+    note?: string | null,
+  ): void {
+    this.db
+      .prepare(
+        `UPDATE findings SET resolution = ?, resolution_note = ?, last_seen_round = ?, updated_at = ? WHERE id = ?`,
+      )
+      .run(resolution, note?.trim() || null, round, now(), findingId);
+  }
+
+  /**
+   * 兜底去重命中已有 finding 时调用:等价于 agent 表态「仍存在」,但不覆盖已有的 resolution note。
+   * 只前推 last_seen_round,不回退(同一轮多次命中幂等)。
+   */
+  touchFindingSeen(findingId: string, round: number): void {
+    this.db
+      .prepare(
+        `UPDATE findings SET last_seen_round = ?, resolution = 'still_present', updated_at = ?
+         WHERE id = ? AND last_seen_round < ?`,
+      )
+      .run(round, now(), findingId, round);
   }
 
   setSubmission(findingId: string, submission: Submission, url: string | null = null): void {
@@ -392,14 +575,15 @@ export class ReviewStore {
     if (!disc.file || disc.line == null) throw new Error('无代码锚点的 discussion 不能提升为 finding');
     const ts = now();
     const findingId = randomUUID();
+    const round = this.currentRound(disc.reviewId);
     const run = this.db.transaction(() => {
       this.db
         .prepare(`UPDATE discussions SET kind = 'finding', origin = 'promoted' WHERE id = ?`)
         .run(discussionId);
       this.db
         .prepare(
-          `INSERT INTO findings (id, review_id, discussion_id, origin, severity, category, title, body, file, line, suggestion, triage, submission, submitted_url, created_at, updated_at)
-           VALUES (?, ?, ?, 'promoted', ?, ?, ?, ?, ?, ?, ?, 'open', 'unsubmitted', NULL, ?, ?)`,
+          `INSERT INTO findings (id, review_id, discussion_id, origin, severity, category, title, body, file, line, suggestion, triage, dismiss_reason, submission, submitted_url, round, last_seen_round, resolution, resolution_note, created_at, updated_at)
+           VALUES (?, ?, ?, 'promoted', ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 'unsubmitted', NULL, ?, ?, NULL, NULL, ?, ?)`,
         )
         .run(
           findingId,
@@ -412,6 +596,8 @@ export class ReviewStore {
           disc.file,
           disc.line,
           input.suggestion ?? null,
+          round,
+          round,
           ts,
           ts,
         );

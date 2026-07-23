@@ -15,6 +15,7 @@ const STATUS_LABEL: Record<ReviewStatus, string> = {
  */
 export function ReviewStatusBar({
   status,
+  round,
   model,
   effort,
   tokenUsage,
@@ -26,6 +27,8 @@ export function ReviewStatusBar({
   onOpenHelp,
 }: {
   status: ReviewStatus | null;
+  /** 多轮复审时的轮次摘要(如「第 2 轮 · 修复 3 · 新增 1」);单轮为 null */
+  round: string | null;
   model: string | null;
   effort: string | null;
   tokenUsage: { used: number; total?: number } | null;
@@ -46,6 +49,11 @@ export function ReviewStatusBar({
         {running && <span className="pulse" />}
         {STATUS_LABEL[st]}
       </span>
+      {round && (
+        <span className="sb-item sb-round" title="复审轮次与本轮统计">
+          ↻ {round}
+        </span>
+      )}
       <span className="sb-item" title="审阅 agent">
         <span className="glyph" />
         codex{model ? ` · ${model}` : ''}

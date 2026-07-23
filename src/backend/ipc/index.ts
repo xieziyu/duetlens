@@ -9,6 +9,7 @@ import {
   type AddFindingInput,
   type FindingEditInput,
   type OpenExternalResult,
+  type RerunInput,
   type ReviewEvent,
   type ReviewStartInput,
   type SubmitReviewInput,
@@ -61,6 +62,10 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
       context: input.context,
     }),
   );
+  ipcMain.handle(IpcChannels.reviewRerun, (_e, reviewId: string, input?: RerunInput) =>
+    manager.rerunReview(reviewId, input ?? {}),
+  );
+  ipcMain.handle(IpcChannels.reviewRounds, (_e, reviewId: string) => manager.getRounds(reviewId));
   ipcMain.handle(IpcChannels.reviewResume, (_e, reviewId: string) => manager.resumeReview(reviewId));
   ipcMain.handle(IpcChannels.reviewRelease, (_e, reviewId: string) => manager.disposeReview(reviewId));
   ipcMain.handle(IpcChannels.reviewDelete, (_e, reviewId: string) => manager.deleteReview(reviewId));
@@ -73,8 +78,10 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewClearDiscussion, (_e, reviewId: string, discussionId: string) =>
     manager.clearDiscussion(reviewId, discussionId),
   );
-  ipcMain.handle(IpcChannels.reviewSetTriage, (_e, reviewId: string, findingId: string, triage: Triage) =>
-    manager.setTriage(reviewId, findingId, triage),
+  ipcMain.handle(
+    IpcChannels.reviewSetTriage,
+    (_e, reviewId: string, findingId: string, triage: Triage, reason?: string | null) =>
+      manager.setTriage(reviewId, findingId, triage, reason),
   );
   ipcMain.handle(IpcChannels.reviewSetFindingAnchor, (_e, reviewId: string, findingId: string, line: number) =>
     manager.setFindingAnchor(reviewId, findingId, line),

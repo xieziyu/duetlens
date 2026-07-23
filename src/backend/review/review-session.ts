@@ -3,21 +3,36 @@ import {
   DuetlensMcpServer,
   type McpContentProviders,
   type ReportedFinding,
+  type ReportedFindingResolution,
   type ReportedFindingUpdate,
 } from '../mcp/duetlens-mcp-server';
 import {
   reportFindingSchema,
+  resolveFindingSchema,
   updateFindingSchema,
   type Discussion,
   type Finding,
   type Message,
 } from '@shared/domain';
+import { findDuplicate } from '@shared/finding-dedupe';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
 import type { ReviewStore } from '../db/review-store';
 import { BUILTIN_BASE_INSTRUCTIONS } from '../prompt/review-prompt';
 
 /** 首轮机审的缺省指令(未附加用户上下文时使用)。 */
 export const DEFAULT_SCAN_PROMPT = '请审核本次改动,对每个问题调用 report_finding 上报。';
+
+/** 追问时重述的历史条数上限;够唤起线程脉络,又不至于把整条对话再喂一遍。 */
+const FOLLOWUP_RECAP = 6;
+
+/** 把一条 discussion 的既往往来压成一段可注入的回顾;无历史返回空串。 */
+function recap(history: readonly Message[]): string {
+  if (history.length === 0) return '';
+  const lines = history
+    .slice(-FOLLOWUP_RECAP)
+    .map((m) => `- ${m.role === 'user' ? 'reviewer' : '你'}: ${m.text.trim()}`);
+  return `本讨论此前的往来(供你回忆,不必复述):\n${lines.join('\n')}\n\n`;
+}
 
 export interface StartReviewOptions {
   cwd: string;
@@ -28,6 +43,8 @@ export interface StartReviewOptions {
   model?: string | null;
   /** reasoning effort(缺省 codex medium) */
   reasoningEffort?: string | null;
+  /** 本次扫描属于第几轮;传入则把新建的 codex thread 记到该轮次上 */
+  round?: number;
 }
 
 /**
@@ -92,7 +109,11 @@ export class ReviewSession {
     this.events.emit(event, payload);
   }
 
-  /** 起会话 + 注入 + 跑首轮扫描;resolve 于扫描 turn 完成。 */
+  /**
+   * 起一个新的 codex thread + 注入 + 跑一轮机审;resolve 于该 turn 完成。
+   * 首轮与每次重跑都走这里 —— 复审不复用上一轮会话,靠 scanPrompt 把上下文结构化带过来
+   * (复用会话会让新旧 diff 的行号在同一上下文里互相污染)。
+   */
   async start(opts: StartReviewOptions): Promise<Finding[]> {
     const mcpUrl = await this.setupMcp(opts.providers);
 
@@ -106,12 +127,14 @@ export class ReviewSession {
     });
     this.conversationId = handle.conversationId;
     this.store.setCodexThreadId(this.reviewId, handle.conversationId);
+    if (opts.round) this.store.setRoundThreadId(this.reviewId, opts.round, handle.conversationId);
     this.setStatus('scanning');
 
     const outcome = await this.runTurn(opts.scanPrompt ?? DEFAULT_SCAN_PROMPT);
     if (!outcome.ok) {
       this.setStatus('failed');
-      throw new Error(`首轮扫描失败: ${outcome.error}`);
+      const label = opts.round && opts.round > 1 ? `第 ${opts.round} 轮复审` : '首轮扫描';
+      throw new Error(`${label}失败: ${outcome.error}`);
     }
     this.setStatus('reviewing');
     return this.store.listFindings(this.reviewId);
@@ -149,10 +172,12 @@ export class ReviewSession {
     const discussion = this.store.getDiscussion(discussionId);
     if (!discussion) throw new Error(`discussion 不存在: ${discussionId}`);
 
+    // 历史要在落库新消息之前取,否则本次追问会被重复叙述一遍
+    const history = this.store.listMessages(discussionId);
     const userMsg = this.store.addMessage(discussionId, 'user', text);
     this.emit('message', userMsg);
 
-    const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text));
+    const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text, history));
     if (!outcome.ok) throw new Error(`追问失败: ${outcome.error}`);
 
     const reply = outcome.reply.trim();
@@ -174,6 +199,7 @@ export class ReviewSession {
     this.mcp.on('finding', (raw: ReportedFinding) => {
       const parsed = reportFindingSchema.safeParse(raw);
       if (!parsed.success) return; // 非法上报忽略;后续可回错误内容给 agent
+      if (this.absorbDuplicate(parsed.data)) return;
       // 用 MCP 生成的 id 落库,使 codex 侧 id 与存储 id 一致(update_finding 可定位)
       const finding = this.store.addFinding(this.reviewId, parsed.data, 'agent', raw.id);
       // 承载 discussion 与 finding 同事务建出;不一并外发的话,本轮会话内 Discussion 栏拿不到它,
@@ -188,27 +214,69 @@ export class ReviewSession {
       const updated = this.store.updateFinding(parsed.data);
       if (updated) this.emit('finding', updated); // 复用 finding 事件;renderer upsert
     });
+    this.mcp.on('finding-resolution', (raw: ReportedFindingResolution) => {
+      const parsed = resolveFindingSchema.safeParse(raw);
+      if (!parsed.success) return;
+      const { findingId, status, note } = parsed.data;
+      // 只认本 review 名下的 id,防 agent 编造 / 串号写到别处
+      const existing = this.store.getFinding(findingId);
+      if (!existing || existing.reviewId !== this.reviewId) return;
+      this.store.setFindingResolution(findingId, this.currentRound(), status, note);
+      const updated = this.store.getFinding(findingId);
+      if (updated) this.emit('finding', updated);
+    });
     const mcpUrl = await this.mcp.listen();
     this.unsubscribe = this.agent.streamEvents((e) => this.emit('agent-event', e));
     return mcpUrl;
   }
 
-  /** 把追问拼上锚点/finding 上下文,让 agent 知道在聊哪一处(codex thread 已含扫描历史)。 */
-  private buildFollowupPrompt(discussion: Discussion, text: string): string {
+  private currentRound(): number {
+    return this.store.getReview(this.reviewId)?.currentRound ?? 1;
+  }
+
+  /**
+   * 重复上报的兜底吸收(prompt 是软约束,这里是硬约束)。
+   * 命中已剔除项 → 抑制、只计数不落库;命中保留中的项 → 等价于 agent 表态「仍存在」。
+   * 返回 true 表示该上报已被吸收,不应新建 finding。
+   */
+  private absorbDuplicate(candidate: { file: string; line: number; title: string }): boolean {
+    const dup = findDuplicate(candidate, this.store.listFindings(this.reviewId));
+    if (!dup) return false;
+    const round = this.currentRound();
+    if (dup.triage === 'dismiss') {
+      this.store.bumpSuppressed(this.reviewId, round);
+      return true;
+    }
+    this.store.touchFindingSeen(dup.id, round);
+    const updated = this.store.getFinding(dup.id);
+    if (updated) this.emit('finding', updated);
+    return true;
+  }
+
+  /**
+   * 把追问拼上锚点/finding 上下文,让 agent 知道在聊哪一处。
+   * 讨论历史一并重述:每轮复审都换新 thread,且 codex 会 auto-compact ——
+   * 都不能指望会话自身还记得这条线程之前说过什么。
+   */
+  private buildFollowupPrompt(discussion: Discussion, text: string, history: Message[]): string {
     const loc = discussion.file
       ? `${discussion.file}:${discussion.line ?? ''}${discussion.lineEnd ? `-${discussion.lineEnd}` : ''}`
       : '';
+    const prior = recap(history);
     if (discussion.kind === 'finding') {
       const finding = this.store.getFindingByDiscussion(discussion.id);
       if (finding) {
         return (
-          `关于你上报的 finding「${finding.title}」(${finding.file}:${finding.line}):\n${text}\n` +
+          `关于你上报的 finding「${finding.title}」(${finding.file}:${finding.line}):\n` +
+          prior +
+          `${text}\n` +
           `请在对话中直接回答,默认不要改动这条 finding。` +
           `只有当我明确要求「更新 / 回写 finding」时,才调用 update_finding(finding_id="${finding.id}", ...)。`
         );
       }
     }
-    return loc ? `关于 ${loc} 处的代码:\n${text}` : text;
+    const head = loc ? `关于 ${loc} 处的代码:\n` : '';
+    return `${head}${prior}${text}`;
   }
 
   /**

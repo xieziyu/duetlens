@@ -37,6 +37,13 @@ export interface ReportedFindingUpdate {
   suggestion?: string | null;
 }
 
+/** resolve_finding 的表态(复审轮次里对上一轮 finding 判定「已修复 / 仍存在」)。 */
+export interface ReportedFindingResolution {
+  findingId: string;
+  status: 'fixed' | 'still_present';
+  note?: string;
+}
+
 /** 供 agent 读取源码/diff 的回调;由 review 会话注入真实数据。 */
 export interface McpContentProviders {
   getDiff: () => string | Promise<string>;
@@ -80,6 +87,25 @@ const TOOLS = [
     },
   },
   {
+    name: 'resolve_finding',
+    description:
+      '复审轮次专用:对上一轮的一条 finding 表态 —— 在最新代码里它是否仍然存在。' +
+      '复审时给出的每条待确认 finding 都要调用一次;这不是新问题上报,新问题仍走 report_finding。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        finding_id: { type: 'string', description: '复审指令里给出的 finding id' },
+        status: {
+          type: 'string',
+          enum: ['fixed', 'still_present'],
+          description: 'fixed=已在最新代码中修复;still_present=问题依旧',
+        },
+        note: { type: 'string', description: '可选:判定依据(如「已在 x.ts:42 增加空值保护」)' },
+      },
+      required: ['finding_id', 'status'],
+    },
+  },
+  {
     name: 'get_diff',
     description: '获取本次审核的完整 diff。',
     inputSchema: { type: 'object', properties: {} },
@@ -98,7 +124,8 @@ const TOOLS = [
 /**
  * Duetlens 对 codex 暴露的 in-process HTTP MCP server(StreamableHTTP)。
  * findings 经 report_finding 实时回传落进 app 状态,取代 1.0 watch 文件。
- * 事件:'finding' (ReportedFinding) · 'finding-update' (ReportedFindingUpdate) · 'tool-call' (name, args)。
+ * 事件:'finding' (ReportedFinding) · 'finding-update' (ReportedFindingUpdate)
+ * · 'finding-resolution' (ReportedFindingResolution) · 'tool-call' (name, args)。
  */
 export class DuetlensMcpServer extends EventEmitter {
   private httpServer?: http.Server;
@@ -215,6 +242,18 @@ export class DuetlensMcpServer extends EventEmitter {
         };
         this.emit('finding-update', update);
         return { content: [{ type: 'text', text: `finding updated, id=${update.findingId}` }] };
+      }
+      if (name === 'resolve_finding') {
+        const a = args as Record<string, unknown>;
+        const resolution: ReportedFindingResolution = {
+          findingId: String(a.finding_id ?? ''),
+          status: a.status as ReportedFindingResolution['status'],
+          note: a.note as string | undefined,
+        };
+        this.emit('finding-resolution', resolution);
+        return {
+          content: [{ type: 'text', text: `finding resolved as ${resolution.status}, id=${resolution.findingId}` }],
+        };
       }
       if (name === 'get_diff') {
         return { content: [{ type: 'text', text: await this.providers.getDiff() }] };

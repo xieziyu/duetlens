@@ -41,6 +41,17 @@ export type Triage = (typeof TRIAGES)[number];
 export const SUBMISSIONS = ['unsubmitted', 'submitted'] as const;
 export type Submission = (typeof SUBMISSIONS)[number];
 
+/**
+ * 复审轮次里 agent 对上一轮 finding 的判定。
+ * 只在「表态轮次 === review 当前轮次」时代表本轮结论(见 Finding.lastSeenRound)。
+ */
+export const FINDING_RESOLUTIONS = ['fixed', 'still_present'] as const;
+export type FindingResolution = (typeof FINDING_RESOLUTIONS)[number];
+
+/** 一轮机审的生命周期;失败轮次保留在历史里,不回滚轮次号。 */
+export const ROUND_STATUSES = ['scanning', 'done', 'failed'] as const;
+export type RoundStatus = (typeof ROUND_STATUSES)[number];
+
 export const DISCUSSION_KINDS = ['finding', 'user'] as const;
 export type DiscussionKind = (typeof DISCUSSION_KINDS)[number];
 
@@ -81,6 +92,14 @@ export const updateFindingSchema = z.object({
 });
 export type UpdateFindingInput = z.infer<typeof updateFindingSchema>;
 
+/** resolve_finding:复审轮次里对上一轮 finding 表态「已修复 / 仍存在」 */
+export const resolveFindingSchema = z.object({
+  findingId: z.string().min(1),
+  status: z.enum(FINDING_RESOLUTIONS),
+  note: z.string().optional(),
+});
+export type ResolveFindingInput = z.infer<typeof resolveFindingSchema>;
+
 // ---- 存储实体 ----
 export interface Review {
   id: string;
@@ -99,8 +118,35 @@ export interface Review {
   status: ReviewStatus;
   /** codex 生成、用户可编辑的总结正文(提交屏 review body 来源) */
   summaryBody: string | null;
+  /** 已跑到第几轮机审(首轮=1;每次重跑 +1) */
+  currentRound: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * 一轮机审的元信息(首轮与每次重跑各一条)。
+ * 每轮独立开一个 codex thread —— 上一轮的上下文靠结构化注入带过来,而非复用会话记忆,
+ * 避免新旧 diff 的行号在同一上下文里互相污染。
+ */
+export interface ReviewRound {
+  reviewId: string;
+  round: number;
+  /** 该轮的 codex 会话 id */
+  codexThreadId: string | null;
+  /** 开跑时被审代码的 head;与上一轮比对即知代码有无变化 */
+  headSha: string | null;
+  status: RoundStatus;
+  /** 用户在重跑面板填的附加说明 */
+  note: string | null;
+  /** 本轮新报出的 finding 数 */
+  newFindings: number;
+  /** 本轮被 agent 判定已修复的数 */
+  fixedCount: number;
+  /** 命中已剔除项、被抑制未落库的重复上报数 */
+  suppressedCount: number;
+  startedAt: number;
+  endedAt: number | null;
 }
 
 export interface Discussion {
@@ -129,9 +175,18 @@ export interface Finding {
   line: number;
   suggestion: string | null;
   triage: Triage;
+  /** reviewer 剔除时可选填的理由;复审时注入,让 agent 不再报同类问题 */
+  dismissReason: string | null;
   submission: Submission;
   /** 提交后回填的 GitHub 评论链接 */
   submittedUrl: string | null;
+  /** 首次被报出的轮次 */
+  round: number;
+  /** agent 最近一次对它表态或重报的轮次 */
+  lastSeenRound: number;
+  /** 该次表态的结论;仅当 lastSeenRound === Review.currentRound 时代表本轮判定 */
+  resolution: FindingResolution | null;
+  resolutionNote: string | null;
   createdAt: number;
   updatedAt: number;
 }
