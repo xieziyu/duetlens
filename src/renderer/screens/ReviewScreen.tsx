@@ -12,8 +12,7 @@ import { SummaryTab } from './review/SummaryTab';
 import { ScanTimeline } from './review/ScanTimeline';
 import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
-import { Wordmark } from '../components/Wordmark';
-import { ThemeControls } from '../components/ThemeControls';
+import { ReviewStatusBar } from './review/StatusBar';
 import { isSubmittable } from '@shared/github-review';
 import './ReviewScreen.css';
 import './review/review-syntax.css';
@@ -27,14 +26,6 @@ type RightTab = 'discussion' | 'findings' | 'summary';
 
 const RIGHT_TABS: RightTab[] = ['discussion', 'findings', 'summary'];
 const isRightTab = (t: string | null): t is RightTab => t !== null && RIGHT_TABS.includes(t as RightTab);
-
-const STATUS_LABEL: Record<string, string> = {
-  scanning: '扫描中',
-  reviewing: '审核中',
-  submitted: '已提交',
-  exported: '已导出',
-  failed: '失败',
-};
 
 // → mockup/diff-review.html:合并单顶栏 + 三栏(file tree | diff | right panel)。
 export function ReviewScreen({
@@ -280,12 +271,20 @@ export function ReviewScreen({
     return () => window.removeEventListener('keydown', onKey);
   }, [helpOpen, diffView, update, setActiveTab]);
 
-  const pct = tokenUsage?.total ? Math.round((tokenUsage.used / tokenUsage.total) * 100) : null;
   // 常驻 CTA:github-pr → 提交 review(徽标=待提交数);其余 → 导出 review(徽标=保留数)
   const isGithub = review?.source === 'github-pr';
   const ctaCount = isGithub
     ? findings.filter(isSubmittable).length
     : findings.filter((f) => f.triage !== 'dismiss').length;
+  // 顶栏源标识:PR 拆成「#号 chip + 仓库 nwo 尾注」,分支 / vbranch 直接显示 ref
+  const pr = isGithub ? parsePrRefLoose(review.sourceRef) : null;
+  const sourceLabel = pr ? `#${pr.num}` : (review?.sourceRef ?? '…');
+
+  // URL 解析与打开都在 main 侧(ref 可能只有 PR 号,需借 repoPath 推断仓库)
+  const openInBrowser = useCallback(() => {
+    if (!reviewId) return;
+    void window.duetlens.review.openInBrowser(reviewId);
+  }, [reviewId]);
 
   if (!reviewId) {
     return <div className="rev-empty">从入口开始一个审核。</div>;
@@ -296,52 +295,30 @@ export function ReviewScreen({
       className="rev-root"
       style={{ ['--left-w' as string]: `${leftW}px`, ['--right-w' as string]: `${rightW}px` }}
     >
-      <div className="rev-topbar">
-        <Wordmark />
+      <header className="rev-topbar">
         <div className="source">
-          <span className="mono ref">{review?.sourceRef ?? '…'}</span>
+          <span className="srcchip">
+            <SourceIcon source={review?.source} />
+            <span className="mono ref">{sourceLabel}</span>
+            {isGithub && (
+              <button className="ext" onClick={openInBrowser} title="在浏览器中打开 PR">
+                <ExternalIcon />
+              </button>
+            )}
+          </span>
           <span className="title">{review?.title ?? '加载中…'}</span>
+          {pr?.nwo && <span className="mono nwo">{pr.nwo}</span>}
         </div>
         <span className="spacer" />
-        <div className="meta">
-          <span className="model" title="审阅 agent">
-            <span className="glyph" /> codex{review?.model ? ` · ${review.model}` : ''}
-          </span>
-          {review?.reasoningEffort && (
-            <span className="mono effort" title="reasoning effort">{review.reasoningEffort}</span>
-          )}
-          {lastTool && <span className="mono tool" title="最近工具调用">{lastTool}</span>}
-          {tokenUsage && (
-            <span className="tokens">
-              {pct !== null && (
-                <svg className="ring" viewBox="0 0 18 18" style={{ ['--ctx' as string]: (pct / 100).toString() }}>
-                  <circle className="bg" cx="9" cy="9" r="7" />
-                  <circle className="fg" cx="9" cy="9" r="7" />
-                </svg>
-              )}
-              {tokenUsage.used.toLocaleString()} tok
-            </span>
-          )}
-          <span className={`status s-${status ?? 'scanning'}`}>
-            {(status === 'scanning' || !status) && <span className="pulse" />}
-            {STATUS_LABEL[status ?? 'scanning'] ?? status}
-          </span>
-          <button
-            className="submit-cta"
-            onClick={onOpenSubmit}
-            title={isGithub ? '进入筛选并提交 review 到 GitHub' : '导出 review 为 Markdown'}
-          >
-            {isGithub ? '提交 review' : '↓ 导出 review'}
-            {ctaCount > 0 && <span className="cta-badge">{ctaCount}</span>}
-          </button>
-          <div className="switches">
-            <ThemeControls />
-            <button className="kbd-btn" onClick={() => setHelpOpen(true)} title="键盘快捷键 (?)">
-              ⌘
-            </button>
-          </div>
-        </div>
-      </div>
+        <button
+          className="submit-cta"
+          onClick={onOpenSubmit}
+          title={isGithub ? '进入筛选并提交 review 到 GitHub' : '导出 review 为 Markdown'}
+        >
+          {isGithub ? '提交 review' : '↓ 导出 review'}
+          {ctaCount > 0 && <span className="cta-badge">{ctaCount}</span>}
+        </button>
+      </header>
       {helpOpen && <KbdHelp onClose={() => setHelpOpen(false)} />}
 
       <div className="rev-main">
@@ -376,7 +353,6 @@ export function ReviewScreen({
           onJumpDiscussion={focusDiscussion}
           fetchFileContent={fetchFileContent}
           view={diffView}
-          onViewChange={setDiffView}
           viewed={viewed}
           collapsed={collapsed}
           onToggleViewed={onToggleViewed}
@@ -420,9 +396,62 @@ export function ReviewScreen({
           onPickCategory={onPickCategory}
         />
       </div>
+
+      <ReviewStatusBar
+        status={status}
+        model={review?.model ?? null}
+        effort={review?.reasoningEffort ?? null}
+        tokenUsage={tokenUsage}
+        lastTool={lastTool}
+        view={diffView}
+        onViewChange={setDiffView}
+        fileCount={diff.length}
+        viewedCount={diff.filter((f) => viewed.has(f.path)).length}
+        onOpenHelp={() => setHelpOpen(true)}
+      />
     </div>
   );
 }
+
+/**
+ * 顶栏展示用的 PR 引用拆解(URL / owner/repo#123 / 纯号);解析不出就退回原样显示,
+ * 不与 main 侧 parsePrRef 共用 —— 那条路径要抛错并回退推断仓库,展示态不需要。
+ */
+function parsePrRefLoose(ref: string): { nwo: string; num: string } | null {
+  const url = ref.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+  if (url) return { nwo: url[1], num: url[2] };
+  const short = ref.match(/^([^/\s]+\/[^/#\s]+)#(\d+)$/);
+  if (short) return { nwo: short[1], num: short[2] };
+  const numOnly = ref.match(/^#?(\d+)$/);
+  return numOnly ? { nwo: '', num: numOnly[1] } : null;
+}
+
+/** 顶栏源标识图标:三来源各一枚,与入口页 srcbadge 同一视觉词汇。 */
+function SourceIcon({ source }: { source?: Review['source'] }) {
+  if (source === 'github-pr') {
+    return (
+      <svg className="si" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+        <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.05-.49.05-.49.81.06 1.23.83 1.23.83.72 1.23 1.89.87 2.35.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden>
+      <circle cx="6.5" cy="5.5" r="2.5" />
+      <circle cx="6.5" cy="18.5" r="2.5" />
+      <circle cx="17.5" cy="12" r="2.5" />
+      <path d="M6.5 8v8M9 5.5h4a2.5 2.5 0 0 1 2.5 2.5v1.5" />
+    </svg>
+  );
+}
+
+const ExternalIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M13.5 4.5H19.5V10.5" />
+    <path d="M19.5 4.5 11 13" />
+    <path d="M18 14.5v4a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6h4" />
+  </svg>
+);
 
 const SEV_ORDER: Severity[] = ['high', 'medium', 'low'];
 const SEV_LABEL: Record<Severity, string> = { high: 'High', medium: 'Med', low: 'Low' };

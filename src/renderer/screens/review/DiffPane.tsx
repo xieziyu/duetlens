@@ -23,6 +23,8 @@ export function fileAnchorId(path: string): string {
 }
 
 const basename = (p: string) => p.split('/').pop() ?? p;
+/** 目录段(含尾部 /);根目录文件返回空串 */
+const dirname = (p: string) => p.slice(0, p.lastIndexOf('/') + 1);
 
 /** 非常规状态的文件在 file-header 标一枚 pill;modified 是默认、不标以免噪音。 */
 const FILE_STATUS_LABEL: Partial<Record<DiffFile['status'], string>> = {
@@ -85,9 +87,8 @@ export interface DiffPaneProps {
   onJumpDiscussion?: (discussionId: string) => void;
   /** 按需拉取文件新侧全文,用于展开 diff 外上下文;缺省则不显示展开控件(如预览)。 */
   fetchFileContent?: (path: string) => Promise<string | null>;
-  /** unified / split 视图(全局,file-header segmented 驱动) */
+  /** unified / split 视图(全局偏好,底部状态栏驱动) */
   view: DiffView;
-  onViewChange: (v: DiffView) => void;
   /** per-file 已看 / 折叠(本地态) */
   viewed: Set<string>;
   collapsed: Set<string>;
@@ -250,7 +251,6 @@ export function DiffPane(props: DiffPaneProps) {
           onTriage={props.onTriage}
           onUpdate={props.onUpdate}
           view={props.view}
-          onViewChange={props.onViewChange}
           fetchFileContent={props.fetchFileContent}
           viewed={props.viewed.has(f.path)}
           collapsed={props.collapsed.has(f.path)}
@@ -530,7 +530,6 @@ function DiffFileView({
   onTriage,
   onUpdate,
   view,
-  onViewChange,
   fetchFileContent,
   viewed,
   collapsed,
@@ -550,7 +549,6 @@ function DiffFileView({
   onTriage?: (finding: Finding, triage: Triage) => void;
   onUpdate?: (input: FindingEditInput) => void;
   view: DiffView;
-  onViewChange: (v: DiffView) => void;
   fetchFileContent?: (path: string) => Promise<string | null>;
   viewed: boolean;
   collapsed: boolean;
@@ -675,48 +673,46 @@ function DiffFileView({
   return (
     <section className={`diff-file${collapsed ? ' collapsed' : ''}`} data-path={file.path}>
       <div className="file-header" id={fileAnchorId(file.path)}>
-        <span className="fp">
-          {file.oldPath && file.oldPath !== file.path && (
-            <span className="dim">{file.oldPath} → </span>
-          )}
-          {file.path}
-        </span>
-        <span className="chips">
-          {FILE_STATUS_LABEL[file.status] && (
-            <span className={`fstat ${file.status}`}>{FILE_STATUS_LABEL[file.status]}</span>
-          )}
-          {file.binary && <span className="fstat binary">二进制</span>}
-          {!file.binary && file.hunks.length > 0 && (
-            <span className="view-seg">
-              {(['unified', 'split'] as DiffView[]).map((v) => (
-                <button
-                  key={v}
-                  className={view === v ? 'on' : ''}
-                  onClick={() => onViewChange(v)}
-                >
-                  {v === 'unified' ? 'Unified' : 'Split'}
-                </button>
-              ))}
+        <div className="fh-id">
+          <div className="fh-line1">
+            <span className="fh-name" title={file.path}>{basename(file.path)}</span>
+            {FILE_STATUS_LABEL[file.status] && (
+              <span className={`fstat ${file.status}`}>{FILE_STATUS_LABEL[file.status]}</span>
+            )}
+            {file.binary && <span className="fstat binary">二进制</span>}
+          </div>
+          {/* 路径退居次要行;超长时从头部省略(尾部目录更有辨识度) */}
+          <div className="fh-path" title={file.path}>
+            <bdi>
+              {dirname(file.path)}
+              {file.oldPath && file.oldPath !== file.path && (
+                <span className="fh-rename"> ← {file.oldPath}</span>
+              )}
+            </bdi>
+          </div>
+        </div>
+        <div className="fh-meta">
+          {findings.length > 0 && <span className="fh-fnd">⚑ {findings.length}</span>}
+          {!file.binary && (
+            <span className="fh-num">
+              <span className="a">+{file.additions}</span>
+              <span className="d">−{file.deletions}</span>
             </span>
           )}
-          {findings.length > 0 && <span className="mini fnd">{findings.length} finding</span>}
-          {!file.binary && (
-            <>
-              <span className="mini add">+{file.additions}</span>
-              <span className="mini del">−{file.deletions}</span>
-            </>
-          )}
-          <button
-            className={`icon-btn${viewed ? ' on' : ''}`}
-            title="标记已看并折叠"
-            onClick={onToggleViewed}
-          >
-            ✓
-          </button>
-          <button className="icon-btn" title="折叠 / 展开" onClick={onToggleCollapsed}>
-            ⌄
-          </button>
-        </span>
+          <span className="fh-acts">
+            <button
+              className={`icon-btn${viewed ? ' on' : ''}`}
+              title="标记已看并折叠"
+              aria-pressed={viewed}
+              onClick={onToggleViewed}
+            >
+              ✓
+            </button>
+            <button className="icon-btn" title="折叠 / 展开" onClick={onToggleCollapsed}>
+              ⌄
+            </button>
+          </span>
+        </div>
       </div>
 
       {offDiff.length > 0 && (
