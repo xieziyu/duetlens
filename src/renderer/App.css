@@ -1,24 +1,41 @@
+/* 外壳网格:整幅顶栏 / 左 rail + 屏内容 / 整幅状态栏(仅 review 屏占用第三行)。
+   review 屏根节点是 display:contents,其顶栏与状态栏直接落进这三个 area。 */
 .app {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'top  top'
+    'rail host'
+    'foot foot';
   height: 100%;
 }
 
-.topbar {
+.app-topbar {
+  grid-area: top;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
   height: 48px;
-  padding: 0 16px;
-  padding-left: 88px; /* 让开 macOS 交通灯(hiddenInset) */
+  padding: 0 16px 0 88px; /* 让开 macOS 交通灯(hiddenInset) */
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
   -webkit-app-region: drag;
 }
-
-.topbar button,
-.topbar select {
+.app-topbar button,
+.app-topbar select,
+.app-topbar input {
   -webkit-app-region: no-drag;
+}
+.app-topbar .tb-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+.app-topbar .tb-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
 }
 
 /* wordmark:duet(text) + lens(天蓝) + _(琥珀,闪烁),对齐 mockup .brand .mark */
@@ -52,34 +69,7 @@
   }
 }
 
-.screen-nav {
-  display: flex;
-  gap: 2px;
-}
-
-.seg {
-  padding: 5px 12px;
-  border: none;
-  border-radius: var(--r);
-  background: transparent;
-  color: var(--text-dim);
-  font-family: var(--sans);
-  font-size: 13px;
-  cursor: pointer;
-}
-.seg:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.seg.active {
-  background: var(--agent-soft);
-  color: var(--agent-2);
-}
-
-.tb-spacer {
-  flex: 1;
-}
-
+/* 明暗 + 配色两轴控件(onboarding 顶栏);工作屏里明暗在 rail、配色在设置屏 */
 .theme-controls {
   display: flex;
   align-items: center;
@@ -106,7 +96,7 @@
 }
 
 .screen-host {
-  flex: 1;
+  grid-area: host;
   min-height: 0;
   overflow: auto;
 }

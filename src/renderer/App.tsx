@@ -8,21 +8,32 @@ import { OnboardingScreen } from './screens/OnboardingScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { Wordmark } from './components/Wordmark';
-import { ThemeControls } from './components/ThemeControls';
+import { AppRail, type RailScreen } from './components/AppRail';
 import { CompletionToast } from './components/CompletionToast';
 import './App.css';
 
-// 骨架期极简屏路由;review / onboarding 屏自带顶栏,故此处不再套全局栏。
+// 屏路由。除 onboarding(全屏引导)外都套同一外壳:整幅顶栏 + 左侧 rail;
+// review 屏用 display:contents 把自己的顶栏/主体/状态栏直接放进外壳网格。
 type Screen = 'entry' | 'review' | 'submit' | 'prompt' | 'onboarding' | 'history' | 'settings';
 
-const SCREENS: { id: Screen; label: string }[] = [
-  { id: 'entry', label: '入口' },
-  { id: 'review', label: '审核' },
-  { id: 'submit', label: '提交/导出' },
-  { id: 'prompt', label: '审核规则' },
-  { id: 'history', label: '历史' },
-  { id: 'settings', label: '设置' },
-];
+const SCREEN_TITLE: Partial<Record<Screen, string>> = {
+  entry: '发起审核',
+  submit: '提交 / 导出',
+  prompt: '审核规则',
+  history: '审核历史',
+  settings: '设置',
+};
+
+/** submit 是当前 review 的子流程,rail 上仍高亮「当前审核」。 */
+const RAIL_OF: Record<Screen, RailScreen> = {
+  entry: 'entry',
+  review: 'review',
+  submit: 'review',
+  prompt: 'prompt',
+  history: 'history',
+  settings: 'settings',
+  onboarding: 'entry',
+};
 
 // initialReviewId / initialScreen 仅 preview 入口用于直达某屏;production main.tsx 不传。
 export function App({
@@ -73,47 +84,46 @@ export function App({
     };
   }, [initialScreen, initialReviewId]);
 
+  // 首启引导独占整窗(自带顶栏与交通灯留白),不套外壳
+  if (screen === 'onboarding') {
+    return <OnboardingScreen onEnter={() => setScreen('entry')} onSkip={() => setScreen('entry')} />;
+  }
+
+  const onRail = (s: RailScreen) => {
+    if (s === 'review' && !activeReviewId) return;
+    setScreen(s);
+  };
+
   return (
     <div className="app">
-      {/* review / onboarding 屏自渲染顶栏;entry/submit 保留骨架期全局栏(含开发用屏切换) */}
-      {screen !== 'review' && screen !== 'onboarding' && (
-        <header className="topbar">
+      {/* review 屏自带上下文顶栏;其余屏用这条通用栏(同时是窗口拖拽区 + 交通灯留白) */}
+      {screen !== 'review' && (
+        <header className="app-topbar">
           <Wordmark />
-          <nav className="screen-nav">
-            {SCREENS.map((s) => (
-              <button
-                key={s.id}
-                className={s.id === screen ? 'seg active' : 'seg'}
-                onClick={() => setScreen(s.id)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </nav>
-          <span className="tb-spacer" />
-          <ThemeControls />
+          <span className="tb-sep" />
+          <h1 className="tb-title">{SCREEN_TITLE[screen]}</h1>
         </header>
       )}
 
-      <main className="screen-host">
-        {screen === 'entry' && <EntryScreen onOpenReview={openReview} />}
-        {screen === 'review' && (
-          <ReviewScreen
-            reviewId={activeReviewId}
-            onOpenSubmit={() => setScreen('submit')}
-            focusRequest={focusDiscussion}
-          />
-        )}
-        {screen === 'submit' && (
-          <SubmitExportScreen reviewId={activeReviewId} onBack={() => setScreen('review')} />
-        )}
-        {screen === 'prompt' && <PromptRulesScreen onBack={() => setScreen('entry')} />}
-        {screen === 'onboarding' && (
-          <OnboardingScreen onEnter={() => setScreen('entry')} onSkip={() => setScreen('entry')} />
-        )}
-        {screen === 'history' && <HistoryScreen onOpen={openReview} />}
-        {screen === 'settings' && <SettingsScreen onOpenPrompt={() => setScreen('prompt')} />}
-      </main>
+      <AppRail active={RAIL_OF[screen]} reviewAvailable={activeReviewId !== null} onNavigate={onRail} />
+
+      {screen === 'review' ? (
+        <ReviewScreen
+          reviewId={activeReviewId}
+          onOpenSubmit={() => setScreen('submit')}
+          focusRequest={focusDiscussion}
+        />
+      ) : (
+        <main className="screen-host">
+          {screen === 'entry' && <EntryScreen onOpenReview={openReview} />}
+          {screen === 'submit' && (
+            <SubmitExportScreen reviewId={activeReviewId} onBack={() => setScreen('review')} />
+          )}
+          {screen === 'prompt' && <PromptRulesScreen onBack={() => setScreen('entry')} />}
+          {screen === 'history' && <HistoryScreen onOpen={openReview} />}
+          {screen === 'settings' && <SettingsScreen onOpenPrompt={() => setScreen('prompt')} />}
+        </main>
+      )}
 
       {toast && (
         <CompletionToast

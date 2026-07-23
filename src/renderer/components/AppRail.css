@@ -1,0 +1,60 @@
+/* 全局导航 rail:位于顶栏之下,故不必为 macOS 交通灯让位(顶栏已让) */
+.app-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 52px;
+  padding: 10px 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.rail-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+.rail-btn:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+.rail-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.rail-btn:focus-visible {
+  outline: 2px solid var(--agent);
+  outline-offset: -2px;
+}
+.rail-btn.on {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+}
+/* 选中指示条贴在 rail 左缘 */
+.rail-btn.on::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 9px;
+  bottom: 9px;
+  width: 2.5px;
+  border-radius: 0 3px 3px 0;
+  background: var(--agent);
+}
+
+.rail-gap {
+  flex: 1;
+}
