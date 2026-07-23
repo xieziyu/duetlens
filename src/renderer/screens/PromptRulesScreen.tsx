@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type {
-  EditablePromptLayer,
-  PromptLayer,
-  PromptLayerSection,
-  PromptSectionKey,
-  ReviewPromptView,
+import {
+  parseSeverityLevels,
+  serializeSeverityLevels,
+  type EditablePromptLayer,
+  type PromptFieldSection,
+  type PromptLayer,
+  type PromptLayerSection,
+  type PromptSectionKey,
+  type ReviewPromptView,
 } from '@shared/prompt';
 import './PromptRulesScreen.css';
 
 // 三层审核规则提示词编辑器(→ mockup/prompt-rules.html)。
 // 合并模型=分节覆盖:每节独立取 project ▸ global ▸ builtin 里最高优先且有定义的层。
 // project 层落 `<cwd>/.duetlens/review.md`,需先选仓库目录;global 层落 `~/.duetlens/review.md`。
+//
+// 这里只呈现**可配置节**。与 MCP 契约绑定的锁定段(角色/工具流程/字段协议)由后端拼进
+// baseInstructions,不下发也不展示 —— 故右栏标题是「合并后的审核规则」而非「最终 prompt」。
+// structured 节(严重度)按字段编辑:档位名锁死,只有判定标准可改。
 
 const LAYER_DESC: Record<PromptLayer, string> = {
   project: '本仓库的审核规则,随代码提交、团队共享;覆盖 global 与 builtin。',
@@ -24,10 +31,24 @@ const SRC_LABEL: Record<PromptLayer, string> = {
   builtin: '默认',
 };
 
+/** 定位正在编辑的目标:free 节只有 key,structured 节还要 field。 */
+interface EditTarget {
+  key: PromptSectionKey;
+  field?: string;
+}
+
+const sameTarget = (a: EditTarget | null, key: PromptSectionKey, field?: string): boolean =>
+  a?.key === key && a.field === field;
+
 /** 某节在指定层之下最近一层的继承文本(供「＋ 覆盖此节」起编与继承提示)。 */
 function belowText(s: PromptLayerSection, layer: EditablePromptLayer): { layer: PromptLayer; text: string } {
   if (layer === 'project' && s.global != null) return { layer: 'global', text: s.global };
   return { layer: 'builtin', text: s.builtin };
+}
+
+function belowField(f: PromptFieldSection, layer: EditablePromptLayer): { layer: PromptLayer; text: string } {
+  if (layer === 'project' && f.global != null) return { layer: 'global', text: f.global };
+  return { layer: 'builtin', text: f.builtin };
 }
 
 function layerText(s: PromptLayerSection, layer: PromptLayer): string | null {
@@ -36,8 +57,18 @@ function layerText(s: PromptLayerSection, layer: PromptLayer): string | null {
   return s.builtin;
 }
 
+function fieldText(f: PromptFieldSection, layer: PromptLayer): string | null {
+  if (layer === 'project') return f.project;
+  if (layer === 'global') return f.global;
+  return f.builtin;
+}
+
 function winnerText(s: PromptLayerSection): string {
   return s.winner === 'project' ? (s.project ?? '') : s.winner === 'global' ? (s.global ?? '') : s.builtin;
+}
+
+function fieldWinnerText(f: PromptFieldSection): string {
+  return f.winner === 'project' ? (f.project ?? '') : f.winner === 'global' ? (f.global ?? '') : f.builtin;
 }
 
 /** 从视图重建某层的全部覆盖 map(整层重写用)。 */
@@ -57,7 +88,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
   const [view, setView] = useState<ReviewPromptView | null>(null);
   const [cwd, setCwd] = useState<string | null>(null);
   const [curLayer, setCurLayer] = useState<PromptLayer>('project');
-  const [editingKey, setEditingKey] = useState<PromptSectionKey | null>(null);
+  const [editing, setEditing] = useState<EditTarget | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -81,17 +112,17 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
   const pickRepo = async (): Promise<void> => {
     const dir = await window.duetlens.dialog.pickDirectory();
     if (dir) {
-      setEditingKey(null);
+      setEditing(null);
       setCwd(dir);
     }
   };
 
-  const startEdit = (key: PromptSectionKey, initial: string): void => {
-    setEditingKey(key);
+  const startEdit = (target: EditTarget, initial: string): void => {
+    setEditing(target);
     setDraft(initial);
   };
   const cancelEdit = (): void => {
-    setEditingKey(null);
+    setEditing(null);
     setDraft('');
   };
 
@@ -107,29 +138,142 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
     try {
       const next = await window.duetlens.prompt.save({ layer, cwd: cwd ?? undefined, sections });
       setView(next);
-      setEditingKey(null);
+      setEditing(null);
       setDraft('');
     } finally {
       setSaving(false);
     }
   };
 
-  const commit = (layer: EditablePromptLayer, key: PromptSectionKey): void => {
+  const commitSection = (layer: EditablePromptLayer, key: PromptSectionKey): void => {
     const text = draft.trim();
     void persistLayer(layer, (o) => {
       if (text) o[key] = draft;
       else delete o[key];
     });
   };
-  const reset = (layer: EditablePromptLayer, key: PromptSectionKey): void => {
+  const resetSection = (layer: EditablePromptLayer, key: PromptSectionKey): void => {
     void persistLayer(layer, (o) => {
       delete o[key];
+    });
+  };
+
+  // structured 节按字段增删:改一档 → 重新序列化该节该层的全部档位(空节即整节不覆盖)。
+  const writeField = (
+    layer: EditablePromptLayer,
+    key: PromptSectionKey,
+    field: string,
+    text: string | null,
+  ): void => {
+    void persistLayer(layer, (o) => {
+      const levels = parseSeverityLevels(o[key] ?? '');
+      if (text?.trim()) levels[field as keyof typeof levels] = text.trim();
+      else delete levels[field as keyof typeof levels];
+      const next = serializeSeverityLevels(levels);
+      if (next) o[key] = next;
+      else delete o[key];
     });
   };
 
   if (!view) return <div className="pr-loading">加载审核规则…</div>;
 
   const projectDisabled = view.projectPath == null;
+
+  /** 编辑框 + 取消/保存;free 节与 structured 字段共用。 */
+  const editor = (onCommit: () => void, rows: number): React.JSX.Element => (
+    <textarea
+      className="pr-ta"
+      autoFocus
+      rows={rows}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          onCommit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelEdit();
+        }
+      }}
+    />
+  );
+
+  const editActions = (onCommit: () => void): React.JSX.Element => (
+    <>
+      <button className="pr-btn" onClick={cancelEdit} disabled={saving}>
+        取消
+      </button>
+      <button className="pr-save" onClick={onCommit} disabled={saving}>
+        保存覆盖
+      </button>
+    </>
+  );
+
+  /** structured 节:档位名锁死的字段行。 */
+  const fieldRow = (
+    s: PromptLayerSection,
+    f: PromptFieldSection,
+    layer: EditablePromptLayer,
+  ): React.JSX.Element => {
+    const overridden = fieldText(f, layer) != null;
+    const isEditing = sameTarget(editing, s.key, f.id);
+    const below = belowField(f, layer);
+    const commit = (): void => writeField(layer, s.key, f.id, draft);
+    return (
+      <div className={`pr-frow${overridden ? ' overridden' : ''}`} key={f.id}>
+        <div className="fk">
+          <span className={`pr-lvl ${f.id}`}>{f.label}</span>
+          {/* 未覆盖时右侧已写明「继承自 X」,再挂徽标是重复 */}
+          {overridden && <span className={`win ${f.winner}`}>{SRC_LABEL[f.winner]}</span>}
+        </div>
+        <div className="fv">
+          {isEditing ? (
+            editor(commit, 2)
+          ) : overridden ? (
+            <div className="txt">{fieldText(f, layer)}</div>
+          ) : (
+            <div className="txt inherit">
+              继承自 <span className="from">{below.layer}</span>:{below.text}
+            </div>
+          )}
+        </div>
+        <div className="fa">
+          {isEditing ? (
+            editActions(commit)
+          ) : overridden ? (
+            <>
+              <button className="pr-btn" onClick={() => startEdit({ key: s.key, field: f.id }, fieldText(f, layer) ?? '')}>
+                ✎
+              </button>
+              <button
+                className="pr-btn danger"
+                onClick={() => writeField(layer, s.key, f.id, null)}
+                disabled={saving}
+                title="重置为继承"
+              >
+                ↺
+              </button>
+            </>
+          ) : (
+            <button className="pr-btn" onClick={() => startEdit({ key: s.key, field: f.id }, below.text)}>
+              ＋ 覆盖
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const sectionHead = (s: PromptLayerSection): React.JSX.Element => (
+    <div className="sh">
+      <div className="stwrap">
+        <span className="st">{s.title}</span>
+        <span className="shint">{s.hint}</span>
+      </div>
+      <span className={`win ${s.winner}`}>生效层 {s.winner}</span>
+    </div>
+  );
 
   return (
     <div className="prompt-rules">
@@ -143,9 +287,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
           <span className="lz builtin"><span className="d" />builtin</span>
         </div>
         <span style={{ color: 'var(--text-faint)', fontSize: 11 }}>上层按节覆盖下层</span>
-        <span className="note">
-          合并结果注入 codex <code>thread/start · baseInstructions</code>
-        </span>
+        <span className="note">这些规则决定 agent 的审核口径;上报字段的格式由 Duetlens 固定</span>
       </div>
 
       <div className="pr-main">
@@ -156,7 +298,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
             className={`pr-layer${curLayer === 'project' ? ' on' : ''}`}
             onClick={() => {
               setCurLayer('project');
-              setEditingKey(null);
+              setEditing(null);
             }}
           >
             <div className="top">
@@ -175,7 +317,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
             className={`pr-layer${curLayer === 'global' ? ' on' : ''}`}
             onClick={() => {
               setCurLayer('global');
-              setEditingKey(null);
+              setEditing(null);
             }}
           >
             <div className="top">
@@ -192,7 +334,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
             className={`pr-layer${curLayer === 'builtin' ? ' on' : ''}`}
             onClick={() => {
               setCurLayer('builtin');
-              setEditingKey(null);
+              setEditing(null);
             }}
           >
             <div className="top">
@@ -234,43 +376,49 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
               if (curLayer === 'builtin') {
                 return (
                   <div className="pr-card builtinlock" key={s.key}>
-                    <div className="sh">
-                      <span className="st">{s.title}</span>
-                      <span className={`win ${s.winner}`}>生效层 {s.winner}</span>
-                    </div>
+                    {sectionHead(s)}
                     <div className="sb">
-                      <div className="txt">{s.builtin || '(无内置默认;由 project 层补充仓库背景)'}</div>
+                      {s.kind === 'structured' ? (
+                        (s.fields ?? []).map((f) => (
+                          <div className="pr-frow" key={f.id}>
+                            <div className="fk">
+                              <span className={`pr-lvl ${f.id}`}>{f.label}</span>
+                            </div>
+                            <div className="fv">
+                              <div className="txt">{f.builtin}</div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="txt">{s.builtin || '(无内置默认;由 project 层补充仓库背景)'}</div>
+                      )}
                     </div>
                   </div>
                 );
               }
               const layer = curLayer as EditablePromptLayer;
               const overridden = layerText(s, layer) != null;
-              const isEditing = editingKey === s.key;
+
+              if (s.kind === 'structured') {
+                return (
+                  <div className={`pr-card${overridden ? ' overridden' : ''}`} key={s.key}>
+                    {sectionHead(s)}
+                    <div className="sb structured">
+                      {(s.fields ?? []).map((f) => fieldRow(s, f, layer))}
+                    </div>
+                  </div>
+                );
+              }
+
+              const isEditing = sameTarget(editing, s.key);
               const below = belowText(s, layer);
+              const commit = (): void => commitSection(layer, s.key);
               return (
                 <div className={`pr-card${overridden ? ' overridden' : ''}`} key={s.key}>
-                  <div className="sh">
-                    <span className="st">{s.title}</span>
-                    <span className={`win ${s.winner}`}>生效层 {s.winner}</span>
-                  </div>
+                  {sectionHead(s)}
                   <div className="sb">
                     {isEditing ? (
-                      <textarea
-                        className="pr-ta"
-                        autoFocus
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                            e.preventDefault();
-                            commit(layer, s.key);
-                          } else if (e.key === 'Escape') {
-                            e.preventDefault();
-                            cancelEdit();
-                          }
-                        }}
-                      />
+                      editor(commit, 8)
                     ) : overridden ? (
                       <div className="txt">{layerText(s, layer)}</div>
                     ) : (
@@ -282,32 +430,25 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
                   </div>
                   <div className="sf">
                     {isEditing ? (
-                      <>
-                        <button className="pr-btn" onClick={cancelEdit} disabled={saving}>
-                          取消
-                        </button>
-                        <button
-                          className="pr-save"
-                          onClick={() => commit(layer, s.key)}
-                          disabled={saving}
-                        >
-                          保存覆盖
-                        </button>
-                      </>
+                      editActions(commit)
                     ) : overridden ? (
                       <>
                         <button
                           className="pr-btn"
-                          onClick={() => startEdit(s.key, layerText(s, layer) ?? '')}
+                          onClick={() => startEdit({ key: s.key }, layerText(s, layer) ?? '')}
                         >
                           ✎ 编辑
                         </button>
-                        <button className="pr-btn danger" onClick={() => reset(layer, s.key)} disabled={saving}>
+                        <button
+                          className="pr-btn danger"
+                          onClick={() => resetSection(layer, s.key)}
+                          disabled={saving}
+                        >
                           重置(改回继承)
                         </button>
                       </>
                     ) : (
-                      <button className="pr-btn" onClick={() => startEdit(s.key, below.text)}>
+                      <button className="pr-btn" onClick={() => startEdit({ key: s.key }, below.text)}>
                         ＋ 覆盖此节
                       </button>
                     )}
@@ -322,12 +463,29 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
         <div className="pr-merged">
           <div className="pr-mg-head">
             <div className="t">◈ 生效结果</div>
-            <div className="s">
-              按节取最高优先层;这是最终注入 <code>baseInstructions</code> 的文本。
-            </div>
+            <div className="s">按节取最高优先层,合并后交给审核 agent。</div>
           </div>
           <div className="pr-mg-body">
             {view.sections.map((s) => {
+              if (s.kind === 'structured') {
+                return (
+                  <div className={`pr-mblock ${s.winner}`} key={s.key}>
+                    <div className="mt">
+                      {s.title}
+                      <span className={`src ${s.winner}`}>{SRC_LABEL[s.winner]}</span>
+                    </div>
+                    <div className="mtx">
+                      {(s.fields ?? []).map((f) => (
+                        <div className="mlvl" key={f.id}>
+                          <span className={`pr-lvl ${f.id}`}>{f.label}</span>
+                          <span className="lv">{fieldWinnerText(f)}</span>
+                          <span className={`dot ${f.winner}`} title={SRC_LABEL[f.winner]} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
               const text = winnerText(s);
               return (
                 <div className={`pr-mblock ${s.winner}`} key={s.key}>

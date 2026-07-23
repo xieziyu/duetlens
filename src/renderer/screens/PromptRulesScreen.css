@@ -173,7 +173,9 @@
   padding: 11px 14px;
   border-bottom: 1px solid var(--border-soft);
 }
-.pr-card .sh .st { font-weight: 600; font-size: 13px; }
+.pr-card .sh .stwrap { min-width: 0; }
+.pr-card .sh .st { font-weight: 600; font-size: 13px; display: block; }
+.pr-card .sh .shint { display: block; color: var(--text-faint); font-size: 10.5px; margin-top: 3px; }
 .pr-card .sh .win {
   margin-left: auto;
   font-family: var(--mono);
@@ -198,6 +200,35 @@
 .pr-card .sb .inherit { color: var(--text-faint); }
 .pr-card .sb .inherit .from { color: var(--text-dim); }
 .pr-card.builtinlock .sb .txt { color: var(--text-dim); }
+
+/* structured 节(严重度):档位名锁死的字段行 —— 左固定标签 / 中正文 / 右动作 */
+.pr-card .sb.structured { padding: 6px 14px 10px; }
+.pr-frow {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+.pr-frow:last-child { border-bottom: 0; }
+/* 档位名与来源徽标竖排:横排时 96px 列放不下,徽标会折到卡片外 */
+.pr-frow .fk { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-top: 2px; }
+.pr-frow .fa { display: flex; align-items: center; gap: 6px; }
+.pr-frow .fk .win { font-family: var(--mono); font-size: 9.5px; }
+.pr-frow .pr-ta { min-height: 52px; }
+/* 档位名不可编辑,视觉上做成"钉死的标签"而非输入位 */
+.pr-lvl {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.pr-lvl.high { color: var(--sev-high); border-color: var(--sev-high); }
+.pr-lvl.medium { color: var(--sev-med); border-color: var(--sev-med); }
+.pr-lvl.low { color: var(--sev-low); border-color: var(--sev-low); }
 .pr-ta {
   width: 100%;
   background: var(--bg);
@@ -285,6 +316,12 @@
   white-space: pre-wrap;
 }
 .pr-mblock .mtx.empty { color: var(--text-faint); font-style: italic; }
+.pr-mblock .mlvl { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; }
+.pr-mblock .mlvl .lv { flex: 1; min-width: 0; }
+/* 逐档 provenance:整节徽标看不出「只改了 high」,故每档再标一个点 */
+.pr-mblock .mlvl .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--text-faint); }
+.pr-mblock .mlvl .dot.project { background: var(--agent); }
+.pr-mblock .mlvl .dot.global { background: var(--human); }
 .pr-mg-legend {
   display: flex;
   gap: 14px;
