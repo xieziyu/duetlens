@@ -80,6 +80,17 @@ export function buildPrReviewPayload(
   return { event: GH_EVENT_API[event], body: parts.join('\n\n'), comments };
 }
 
+/**
+ * 提交前置校验(前后端共用,保证按钮可用性与后端判定一致)。
+ * GitHub 要求 COMMENT / REQUEST_CHANGES 至少带 body 或行评论;APPROVE 可以空手提交。
+ * 返回不可提交的原因,可提交返回 null。
+ */
+export function submitBlocker(payload: PrReviewPayload): string | null {
+  if (payload.event === 'APPROVE') return null;
+  if (payload.comments.length > 0 || payload.body.trim()) return null;
+  return 'Comment / Request changes 需要填写 Review 意见,或至少保留一条 finding。';
+}
+
 /** 待提交集:保留(triage!=dismiss)且未提交。 */
 export const isSubmittable = (f: Finding): boolean =>
   f.triage !== 'dismiss' && f.submission !== 'submitted';

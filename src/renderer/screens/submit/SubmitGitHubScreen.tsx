@@ -4,10 +4,12 @@ import type { DiffFile } from '@shared/diff';
 import type { SubmitReviewResult } from '@shared/ipc';
 import {
   GH_REVIEW_EVENTS,
+  buildPrReviewPayload,
   hasAnchor,
   isStaleAnchor,
   isSubmittable,
   nearestLiveLine,
+  submitBlocker,
   type GhReviewEvent,
 } from '@shared/github-review';
 import { renderMarkdown } from '../review/markdown';
@@ -79,18 +81,26 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     if (summary !== (review.summaryBody ?? '')) void window.duetlens.review.updateSummary(reviewId, summary);
   };
 
+  // 按钮可用性走后端同一套判定(草稿 summary 先并进去,与实际提交内容一致)
+  const blocked = useMemo(
+    () => submitBlocker(buildPrReviewPayload({ ...review, summaryBody: summary }, pending, event)),
+    [review, summary, pending, event],
+  );
+
   const submit = async () => {
-    if (pending.length === 0 || sub === 'submitting') return;
+    if (blocked || sub === 'submitting') return;
     setSub('submitting');
     const res = await window.duetlens.review.submit(reviewId, { event, summaryBody: summary });
     setResult(res);
     setSub(res.status);
   };
 
-  const btnLabel =
-    inlineCount > 0
-      ? `提交到 GitHub · ${inlineCount} 行评论${summary.trim() ? ' + 摘要' : ''} →`
-      : '提交到 GitHub · 仅摘要 →';
+  const btnLabel = (() => {
+    const parts: string[] = [];
+    if (inlineCount > 0) parts.push(`${inlineCount} 行评论`);
+    if (summary.trim()) parts.push('摘要');
+    return `提交到 GitHub · ${parts.length ? parts.join(' + ') : `仅 ${EVENT_META[event].label}`} →`;
+  })();
 
   return (
     <div className="submit-gh">
@@ -112,9 +122,11 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
           <div className="c-head">
             <h1>Submit review</h1>
           </div>
-          <div className="c-sub">
-            勾选要提交的 findings,剔除无用项。有行锚点的作为 inline 行评论,无锚点的归入 review 摘要。
-          </div>
+          {findings.length > 0 && (
+            <div className="c-sub">
+              勾选要提交的 findings,剔除无用项。有行锚点的作为 inline 行评论,无锚点的归入 review 摘要。
+            </div>
+          )}
 
           <div className="bulkbar">
             <span className="lbl">agent 报告 {findings.filter((f) => f.origin === 'agent').length}</span>
@@ -127,6 +139,12 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
 
           {submitted.length > 0 && (
             <div className="incbar">↻ 上次已提交 {submitted.length} 条 · 已锁定,不重发</div>
+          )}
+
+          {findings.length === 0 && (
+            <div className="c-empty">
+              没有 finding —— 仍可只提交一次表态:填写 Review 意见后 Comment / Request changes,或直接 Approve。
+            </div>
           )}
 
           {findings.map((f) => {
@@ -233,7 +251,8 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
             <div className="sub-banner ok">
               <span className="bi">✓</span>
               <div className="bt">
-                <b>review 已提交</b> · {result.submittedCount} 行评论 + 摘要 ·{' '}
+                <b>review 已提交</b> ·{' '}
+                {result.submittedCount > 0 ? `${result.submittedCount} 行评论 + 摘要` : EVENT_META[event].label} ·{' '}
                 <a href={result.url} target="_blank" rel="noreferrer">
                   在 GitHub 查看 ↗
                 </a>
@@ -314,11 +333,11 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                 <button
                   className={'submit' + (sub === 'failed' ? ' retry' : '')}
                   onClick={submit}
-                  disabled={pending.length === 0}
+                  disabled={blocked !== null}
                 >
-                  {sub === 'failed' ? '↻ 重试提交' : pending.length === 0 ? '无可提交的 finding' : btnLabel}
+                  {sub === 'failed' ? '↻ 重试提交' : blocked ? '需要填写 Review 意见' : btnLabel}
                 </button>
-                {(sub === 'invalid' || staleIds.size > 0) && (
+                {!blocked && (sub === 'invalid' || staleIds.size > 0) && (
                   <div className="foot-note">
                     {sub === 'invalid'
                       ? '修正红框那条后再整份提交'

@@ -3,7 +3,7 @@ import type { CodexModelInfo, Discussion, Finding, Message, Review, ReviewUiStat
 import { parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, FindingEditInput, RecentReview, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
-import { buildPrReviewPayload, isSubmittable } from '@shared/github-review';
+import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
@@ -286,11 +286,11 @@ export class ReviewManager extends EventEmitter {
     }
     const fresh = this.store.getReview(reviewId)!;
     const pending = this.store.listFindings(reviewId).filter(isSubmittable);
-    if (pending.length === 0) {
-      return { status: 'failed', message: '没有保留且未提交的 finding 可提交。' };
-    }
 
+    // 无 finding 也可提交:Comment/Approve/Request changes 本身就是表态
     const payload = buildPrReviewPayload(fresh, pending, input.event);
+    const blocked = submitBlocker(payload);
+    if (blocked) return { status: 'failed', message: blocked };
     const result = await this.submitter.submit(fresh, payload);
 
     if (result.status === 'success') {

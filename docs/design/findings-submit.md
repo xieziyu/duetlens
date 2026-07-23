@@ -39,6 +39,7 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA「提�
    - 有 `file:line` 锚点的 → **inline 行评论**(带 `suggestion` 的用 GitHub suggestion 块)。
    - `file=null`(整体/架构类)的 → 并入 **review 摘要 body**,连同 codex 审核总结。
    - 用户选 **event**:`Comment` / `Request changes` / `Approve`。
+   - **零 finding 也可提交**:event 本身就是表态(如干净通过直接 `Approve`)。仅 GitHub 的硬约束照搬 —— `Comment` / `Request changes` 至少要有 review body 或一条行评论,否则按钮禁用并给出原因。
 3. 经 `gh` 提交(`gh api` / `gh pr review`);只读 sandbox 不影响提交(提交是 app 侧用 gh,不经 codex 工具)。
 4. 提交后 finding 标 `submitted`(passive 标注,沿用 1.0 「不做 unsubmitted-changes 徽标」的约定)。
 
