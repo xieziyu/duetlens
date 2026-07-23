@@ -495,6 +495,9 @@ export class ReviewManager extends EventEmitter {
     if (onDispose) this.cleanups.set(reviewId, onDispose);
 
     session.on('finding', (payload: Finding) => this.forward({ reviewId, type: 'finding', payload }));
+    session.on('discussion', (payload: Discussion) =>
+      this.forward({ reviewId, type: 'discussion', payload }),
+    );
     session.on('message', (payload: Message) => this.forward({ reviewId, type: 'message', payload }));
     session.on('status', (payload: Review['status']) => this.forward({ reviewId, type: 'status', payload }));
     session.on('agent-event', (payload) => this.forward({ reviewId, type: 'agent', payload }));

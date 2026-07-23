@@ -24,6 +24,7 @@
     "spike:gitbutler": "tsx scripts/spike-gitbutler.ts",
     "spike:source": "tsx scripts/spike-source.ts",
     "spike:mcp": "tsx scripts/spike-mcp.ts",
+    "spike:session-events": "tsx scripts/spike-session-events.ts",
     "spike:write": "tsx scripts/spike-write.ts",
     "spike:ui-state": "tsx scripts/spike-ui-state.ts",
     "spike:promote": "tsx scripts/spike-promote.ts",

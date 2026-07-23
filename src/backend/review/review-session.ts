@@ -36,6 +36,7 @@ export interface StartReviewOptions {
  *
  * 事件:
  *   'finding'     (Finding)         — 已落库的 finding
+ *   'discussion'  (Discussion)      — finding 的承载 discussion(随 finding 一起建出)
  *   'message'     (Message)         — 已落库的对话消息(user/agent)
  *   'agent-event' (AgentEvent)      — 归一后的 agent 流事件(转发)
  *   'status'      ('scanning'|'reviewing'|'failed')
@@ -139,6 +140,10 @@ export class ReviewSession extends EventEmitter {
       if (!parsed.success) return; // 非法上报忽略;后续可回错误内容给 agent
       // 用 MCP 生成的 id 落库,使 codex 侧 id 与存储 id 一致(update_finding 可定位)
       const finding = this.store.addFinding(this.reviewId, parsed.data, 'agent', raw.id);
+      // 承载 discussion 与 finding 同事务建出;不一并外发的话,本轮会话内 Discussion 栏拿不到它,
+      // 要等下次进 review 全量拉取才出现。先发 discussion 再发 finding,保证卡片可点即可用。
+      const discussion = this.store.getDiscussion(finding.discussionId);
+      if (discussion) this.emit('discussion', discussion);
       this.emit('finding', finding);
     });
     this.mcp.on('finding-update', (raw: ReportedFindingUpdate) => {
