@@ -540,6 +540,11 @@ export function installPreviewApi(): void {
         }
         return { status: 'success', url, submittedCount: pending.filter((f) => f.file && f.line > 0).length };
       },
+      openInBrowser: async () => {
+        const url = 'https://github.com/xieziyu/podcast-go/pull/482';
+        window.open(url, '_blank', 'noopener');
+        return { ok: true, url };
+      },
       getUiState: async () => reviewUiState,
       saveUiState: async (_r, state) => {
         reviewUiState = state;

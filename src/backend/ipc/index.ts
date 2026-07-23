@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 import {
@@ -8,6 +8,7 @@ import {
   type DiscussionAnchor,
   type AddFindingInput,
   type FindingEditInput,
+  type OpenExternalResult,
   type ReviewEvent,
   type ReviewStartInput,
   type SubmitReviewInput,
@@ -16,6 +17,7 @@ import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import type { EnvCheckOptions } from '@shared/environment';
 import type { PromptSaveInput } from '@shared/prompt';
 import type { ReviewManager } from '../review/review-manager';
+import { resolvePrUrl } from '../source/source-discovery';
 
 export interface IpcDeps {
   manager: ReviewManager;
@@ -93,6 +95,19 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewSubmit, (_e, reviewId: string, input: SubmitReviewInput) =>
     manager.submitReview(reviewId, input),
   );
+  // 外链只接受自己拼出的 github.com PR 地址,不透传任意 renderer 字符串给 openExternal。
+  ipcMain.handle(IpcChannels.reviewOpenInBrowser, async (_e, reviewId: string): Promise<OpenExternalResult> => {
+    const review = await manager.getReview(reviewId);
+    if (!review) return { ok: false, message: '找不到该审核' };
+    if (review.source !== 'github-pr') return { ok: false, message: '该来源没有可打开的网页' };
+    try {
+      const url = await resolvePrUrl(review.sourceRef, review.repoPath ?? undefined);
+      await shell.openExternal(url);
+      return { ok: true, url };
+    } catch (e) {
+      return { ok: false, message: (e as Error).message };
+    }
+  });
   ipcMain.handle(IpcChannels.reviewGetUiState, (_e, reviewId: string) =>
     manager.getReviewUiState(reviewId),
   );

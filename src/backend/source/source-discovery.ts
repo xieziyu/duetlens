@@ -163,6 +163,13 @@ interface ButStatus {
   }[];
 }
 
+/** github-pr review 的 PR 网页地址;ref 缺 owner/repo 时用 repoPath 推断,推断不出向上抛。 */
+export async function resolvePrUrl(ref: string, repoPath?: string): Promise<string> {
+  const parsed = parsePrRef(ref);
+  const nwo = parsed.nwo || (await deriveNwo(repoPath));
+  return `https://github.com/${nwo}/pull/${parsed.num}`;
+}
+
 async function deriveNwo(repoPath?: string): Promise<string> {
   if (!repoPath) throw new Error('PR 引用缺 owner/repo,且未提供本地仓库路径');
   const info = await getRepoRemote(repoPath);

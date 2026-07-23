@@ -54,6 +54,7 @@ export const IpcChannels = {
   reviewUpdateFinding: 'review:update-finding',
   reviewUpdateSummary: 'review:update-summary',
   reviewSubmit: 'review:submit',
+  reviewOpenInBrowser: 'review:open-in-browser',
   reviewGetUiState: 'review:get-ui-state',
   reviewSaveUiState: 'review:save-ui-state',
   uiGetSettings: 'ui:get-settings',
@@ -86,6 +87,13 @@ export interface ReviewStartInput {
   reasoningEffort?: ReasoningEffort;
   /** 用户给 agent 的附加上下文,随首轮机审注入(可选) */
   context?: string;
+}
+
+/** 交给系统默认浏览器打开的结果;失败原因回前端做提示,不抛异常。 */
+export interface OpenExternalResult {
+  ok: boolean;
+  url?: string;
+  message?: string;
 }
 
 /** 入口「最近的审核」列表项:review 附带 finding/discussion/已提交计数(展示用)。 */
@@ -221,6 +229,8 @@ export interface DuetlensApi {
     updateSummary(reviewId: string, body: string): Promise<Review>;
     /** 把保留且未提交的 findings 组成一次 GitHub PR review 原子提交(仅 github-pr source)。 */
     submit(reviewId: string, input: SubmitReviewInput): Promise<SubmitReviewResult>;
+    /** 用系统默认浏览器打开该 review 的来源页面(目前仅 github-pr 有网页可开)。 */
+    openInBrowser(reviewId: string): Promise<OpenExternalResult>;
     /** 读某 review 的 per-review UI 进度态(已看文件等);无记录返回默认空态。 */
     getUiState(reviewId: string): Promise<ReviewUiState>;
     /** 写某 review 的 per-review UI 进度态(前端去抖调用)。 */
