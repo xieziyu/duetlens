@@ -201,6 +201,15 @@ const FINDINGS: Finding[] = [
     resolution: 'wont_fix',
     resolutionNote: '纯联调,手动调试脚本,可忽略。',
   }),
+  mkFinding({
+    id: 'f6',
+    severity: 'medium',
+    category: 'Correctness',
+    title: '拒绝不可比较的 appVersion 配置',
+    body: 'appVersion 比较未校验格式,非法值被静默视为相等;文件不在本次改动内,agent 顺 import 读到并 off-diff 提出。',
+    file: 'src/shared/config.ts',
+    line: 42,
+  }),
 ];
 
 const ROUNDS: ReviewRound[] = [
