@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  parseSeverityLevels,
-  serializeSeverityLevels,
+  parseKeyedFields,
+  serializeKeyedFields,
   type EditablePromptLayer,
   type PromptFieldSection,
   type PromptLayer,
@@ -17,7 +17,8 @@ import './PromptRulesScreen.css';
 //
 // 这里只呈现**可配置节**。与 MCP 契约绑定的锁定段(角色/工具流程/字段协议)由后端拼进
 // baseInstructions,不下发也不展示 —— 故右栏标题是「合并后的审核规则」而非「最终 prompt」。
-// structured 节(严重度)按字段编辑:档位名锁死,只有判定标准可改。
+// structured 节(审核重点 / 严重度)按字段编辑:字段名锁死,只有各字段正文可改。
+// 审核重点的字段就是 finding 分类(FINDING_CATEGORIES),逐类别独立覆盖。
 
 const LAYER_DESC: Record<PromptLayer, string> = {
   project: '本仓库的审核规则,随代码提交、团队共享;覆盖 global 与 builtin。',
@@ -39,6 +40,9 @@ interface EditTarget {
 
 const sameTarget = (a: EditTarget | null, key: PromptSectionKey, field?: string): boolean =>
   a?.key === key && a.field === field;
+
+/** 字段 id → CSS 安全的档位标签类名(severity 的 high/low 命中配色;focus 类别名带空格,归一为中性 chip)。 */
+const fieldClass = (id: string): string => `pr-lvl ${id.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
 /** 某节在指定层之下最近一层的继承文本(供「＋ 覆盖此节」起编与继承提示)。 */
 function belowText(s: PromptLayerSection, layer: EditablePromptLayer): { layer: PromptLayer; text: string } {
@@ -158,20 +162,21 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
     });
   };
 
-  // structured 节按字段增删:改一档 → 重新序列化该节该层的全部档位(空节即整节不覆盖)。
+  // structured 节按字段增删:改一个字段 → 重新序列化该节该层的全部字段(空节即整节不覆盖)。
   const writeField = (
     layer: EditablePromptLayer,
-    key: PromptSectionKey,
+    s: PromptLayerSection,
     field: string,
     text: string | null,
   ): void => {
+    const ids = (s.fields ?? []).map((f) => f.id);
     void persistLayer(layer, (o) => {
-      const levels = parseSeverityLevels(o[key] ?? '');
-      if (text?.trim()) levels[field as keyof typeof levels] = text.trim();
-      else delete levels[field as keyof typeof levels];
-      const next = serializeSeverityLevels(levels);
-      if (next) o[key] = next;
-      else delete o[key];
+      const values = parseKeyedFields(o[s.key] ?? '', ids);
+      if (text?.trim()) values[field] = text.trim();
+      else delete values[field];
+      const next = serializeKeyedFields(values, ids);
+      if (next) o[s.key] = next;
+      else delete o[s.key];
     });
   };
 
@@ -210,6 +215,16 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
     </>
   );
 
+  // 未覆盖:把「继承自 X」做成独立的来源标签,与继承来的规则正文分行,不再混排进正文里。
+  const inheritBlock = (below: { layer: PromptLayer; text: string }): React.JSX.Element => (
+    <div className="pr-inherit">
+      <span className="tag">
+        <span className={`d ${below.layer}`} />继承自 {below.layer}
+      </span>
+      <div className="txt body">{below.text.trim() || '(空)'}</div>
+    </div>
+  );
+
   /** structured 节:档位名锁死的字段行。 */
   const fieldRow = (
     s: PromptLayerSection,
@@ -219,11 +234,11 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
     const overridden = fieldText(f, layer) != null;
     const isEditing = sameTarget(editing, s.key, f.id);
     const below = belowField(f, layer);
-    const commit = (): void => writeField(layer, s.key, f.id, draft);
+    const commit = (): void => writeField(layer, s, f.id, draft);
     return (
       <div className={`pr-frow${overridden ? ' overridden' : ''}`} key={f.id}>
         <div className="fk">
-          <span className={`pr-lvl ${f.id}`}>{f.label}</span>
+          <span className={fieldClass(f.id)}>{f.label}</span>
           {/* 未覆盖时右侧已写明「继承自 X」,再挂徽标是重复 */}
           {overridden && <span className={`win ${f.winner}`}>{SRC_LABEL[f.winner]}</span>}
         </div>
@@ -233,9 +248,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
           ) : overridden ? (
             <div className="txt">{fieldText(f, layer)}</div>
           ) : (
-            <div className="txt inherit">
-              继承自 <span className="from">{below.layer}</span>:{below.text}
-            </div>
+            inheritBlock(below)
           )}
         </div>
         <div className="fa">
@@ -248,7 +261,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
               </button>
               <button
                 className="pr-btn danger"
-                onClick={() => writeField(layer, s.key, f.id, null)}
+                onClick={() => writeField(layer, s, f.id, null)}
                 disabled={saving}
                 title="重置为继承"
               >
@@ -382,7 +395,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
                         (s.fields ?? []).map((f) => (
                           <div className="pr-frow" key={f.id}>
                             <div className="fk">
-                              <span className={`pr-lvl ${f.id}`}>{f.label}</span>
+                              <span className={fieldClass(f.id)}>{f.label}</span>
                             </div>
                             <div className="fv">
                               <div className="txt">{f.builtin}</div>
@@ -422,10 +435,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
                     ) : overridden ? (
                       <div className="txt">{layerText(s, layer)}</div>
                     ) : (
-                      <div className="txt inherit">
-                        继承自 <span className="from">{below.layer}</span>:{'\n'}
-                        {below.text || '(空)'}
-                      </div>
+                      inheritBlock(below)
                     )}
                   </div>
                   <div className="sf">
@@ -477,7 +487,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
                     <div className="mtx">
                       {(s.fields ?? []).map((f) => (
                         <div className="mlvl" key={f.id}>
-                          <span className={`pr-lvl ${f.id}`}>{f.label}</span>
+                          <span className={fieldClass(f.id)}>{f.label}</span>
                           <span className="lv">{fieldWinnerText(f)}</span>
                           <span className={`dot ${f.winner}`} title={SRC_LABEL[f.winner]} />
                         </div>

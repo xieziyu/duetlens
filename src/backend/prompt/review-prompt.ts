@@ -21,7 +21,7 @@ import { FINDING_CATEGORIES, SEVERITIES } from '@shared/domain';
 import {
   BUILTIN_SECTIONS,
   mergeLayers,
-  normalizeSeverityText,
+  normalizeStructuredText,
   type EditablePromptLayer,
   type PromptSectionKey,
   type ResolvedPromptSection,
@@ -32,7 +32,9 @@ import {
 export const BUILTIN_ROLE = `你是 Duetlens 的代码审核 agent。审核本次改动,把发现的每个问题通过 duetlens MCP 的 report_finding 上报。
 - 先调用 get_diff 查看改动,需要上下文时用 get_file 读取。
 - 每个问题调用一次 report_finding,一条 finding 只讲一个问题。
-- 只审核、不修改代码。审完给一句话总结。`;
+- 只审核、不修改代码。审完给一句话总结。
+- 先判断改动属于哪类代码(前端 UI / 后端服务 / 库 / CLI / 基础设施 / 脚本 等),按「审核重点」里与之相符的类别过一遍,不要生搬不适用的检查项。
+- 只报告需要修复的真实问题:把偏离分为有理由的改进 / 可接受的差异 / 有问题的偏离,只标最后一种。`;
 
 /**
  * 锁定段之二:report_finding 的字段契约。注入在最末 —— 用户节若写了冲突口径,以本段为准。
@@ -126,7 +128,9 @@ export function serializeLayer(sections: Partial<Record<PromptSectionKey, string
   for (const def of BUILTIN_SECTIONS) {
     const raw = sections[def.key];
     const text =
-      def.kind === 'structured' ? normalizeSeverityText(raw) : (raw?.trim() ?? null);
+      def.kind === 'structured'
+        ? normalizeStructuredText(raw, (def.fields ?? []).map((f) => f.id), def.aliases)
+        : (raw?.trim() ?? null);
     if (text) blocks.push(`## ${def.title}\n${text}`);
   }
   return blocks.length ? `${blocks.join('\n\n')}\n` : '';

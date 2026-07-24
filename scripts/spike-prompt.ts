@@ -1,7 +1,7 @@
 /**
  * 确定性验证审核规则提示词的分层解析/合并/注入(不走 codex/不烧 token)。
  * 造临时 project(.duetlens/review.md)+ global(homeDir/.duetlens/review.md)两层,
- * 断言分节覆盖(project ▸ global ▸ builtin)、severity 逐档覆盖,以及
+ * 断言分节覆盖(project ▸ global ▸ builtin)、focus / severity 逐字段覆盖,以及
  * **锁定段不可被用户层改掉**(角色/工具流程、report_finding 字段协议)。
  *   运行:npm run spike:prompt
  */
@@ -13,8 +13,8 @@ import { FINDING_CATEGORIES, SEVERITIES } from '../src/shared/domain';
 import {
   BUILTIN_SECTIONS,
   mergeLayers,
-  parseSeverityLevels,
-  serializeSeverityLevels,
+  parseKeyedFields,
+  serializeKeyedFields,
 } from '../src/shared/prompt';
 import {
   BUILTIN_PROTOCOL,
@@ -29,11 +29,11 @@ import {
 const log = (m: string) => process.stdout.write(`[prompt] ${m}\n`);
 
 async function main() {
-  // 纯合并:project 覆盖 focus,global 覆盖 tone,其余落 builtin
-  const merged = mergeLayers({ focus: 'P-FOCUS' }, { tone: 'G-TONE', focus: 'G-FOCUS' });
+  // 纯合并(free 节):project 覆盖 ignore,global 覆盖 tone,其余落 builtin
+  const merged = mergeLayers({ ignore: 'P-IGNORE' }, { tone: 'G-TONE', ignore: 'G-IGNORE' });
   const bySrc = Object.fromEntries(merged.resolved.map((s) => [s.key, s]));
-  assert.equal(bySrc.focus.source, 'project', 'focus 应 project 胜出');
-  assert.equal(bySrc.focus.text, 'P-FOCUS');
+  assert.equal(bySrc.ignore.source, 'project', 'ignore 应 project 胜出');
+  assert.equal(bySrc.ignore.text, 'P-IGNORE');
   assert.equal(bySrc.tone.source, 'global', 'tone 应 global 胜出');
   assert.equal(bySrc.severity.source, 'builtin', 'severity 无覆盖应 builtin');
   log('分节覆盖 project ▸ global ▸ builtin ✓');
@@ -47,6 +47,38 @@ async function main() {
   assert.ok(!('severity' in parsed), '空正文的节不算覆盖');
   log('解析:标题映射 + 空节忽略 + 未知节忽略 ✓');
 
+  // ---- focus 是 structured 节:字段就是 FINDING_CATEGORIES,逐类别独立覆盖 ----
+  const focusDef = BUILTIN_SECTIONS.find((s) => s.key === 'focus');
+  assert.equal(focusDef?.kind, 'structured', 'focus 应是 structured 节');
+  assert.deepEqual(
+    focusDef?.fields?.map((f) => f.id),
+    [...FINDING_CATEGORIES],
+    'focus 字段必须与 finding 分类 FINDING_CATEGORIES 一一对应',
+  );
+  // 逐类别独立取层:project 只改 Security,Naming 走 global,其余走 builtin
+  const focusMerged = mergeLayers(
+    { focus: '- Security: P-SEC' },
+    { focus: '- Security: G-SEC\n- Naming: G-NAME' },
+  );
+  const focusSection = focusMerged.sections.find((s) => s.key === 'focus');
+  const fWinners = Object.fromEntries((focusSection?.fields ?? []).map((f) => [f.id, f.winner]));
+  assert.equal(fWinners.Security, 'project', 'Security 应 project 胜出');
+  assert.equal(fWinners.Naming, 'global', 'Naming 应 global 胜出');
+  assert.equal(fWinners.Scope, 'builtin', 'Scope 无覆盖应回落 builtin');
+  assert.equal(focusSection?.winner, 'project', '整节 provenance 取最具体的一类');
+  // 用户拿无类别前缀的自由文本整节覆盖 → 解析不出任何类别,视为未覆盖,builtin 要点保留
+  const focusBogus = mergeLayers({ focus: '随便写的一句话,没有类别前缀' }, {});
+  assert.equal(
+    focusBogus.sections.find((s) => s.key === 'focus')?.project,
+    null,
+    '无类别前缀的自由文本不构成覆盖',
+  );
+  assert.ok(
+    focusBogus.resolved.find((s) => s.key === 'focus')?.text.includes('- Scope:'),
+    '自由文本不得吞掉 builtin 的逐类别要点',
+  );
+  log('focus:类别锁死 + 逐类别覆盖 + 自由文本不生效 ✓');
+
   // ---- severity 是 structured 节:档位名锁死,只有判定标准可覆盖,且逐档独立 ----
   const sevDef = BUILTIN_SECTIONS.find((s) => s.key === 'severity');
   assert.equal(sevDef?.kind, 'structured', 'severity 应是 structured 节');
@@ -55,16 +87,18 @@ async function main() {
     [...SEVERITIES],
     '档位必须与 MCP ingress 的 SEVERITIES 枚举一一对应',
   );
-  const levels = parseSeverityLevels('- high: 只算安全问题\n- low: 风格');
+  const levels = parseKeyedFields('- high: 只算安全问题\n- low: 风格', [...SEVERITIES]);
   assert.equal(levels.high, '只算安全问题');
   assert.ok(!levels.medium, '未写的档位不算覆盖');
   assert.equal(
-    serializeSeverityLevels({ low: 'L', high: 'H' }),
+    serializeKeyedFields({ low: 'L', high: 'H' }, [...SEVERITIES]),
     '- high: H\n- low: L',
-    'serialize 按 SEVERITIES 固定序',
+    'serialize 按给定 id 固定序',
   );
   // 旧格式(`high = ...;` / `med`)应被迁移读回,而不是整节失效
-  const legacy = parseSeverityLevels('high = 崩溃 / 数据损坏;\nmed = 健壮性隐患;\nlow = 风格。');
+  const legacy = parseKeyedFields('high = 崩溃 / 数据损坏;\nmed = 健壮性隐患;\nlow = 风格。', [...SEVERITIES], {
+    med: 'medium',
+  });
   assert.equal(legacy.high, '崩溃 / 数据损坏', '旧 `=` 写法应可读回');
   assert.equal(legacy.medium, '健壮性隐患', '旧 `med` 简写应归一到 medium');
   // 逐档独立取层:project 只改 high,medium 仍走 global,low 仍走 builtin
@@ -96,9 +130,9 @@ async function main() {
   assert.ok(base0.endsWith(BUILTIN_PROTOCOL), '应以锁定的上报协议收尾(压过用户节里的冲突口径)');
   assert.ok(!base0.includes('## 项目上下文'), 'context 空节应略去');
   assert.ok(base0.includes('## 审核重点'), '有默认的节应在场');
-  // builtin 规范应是结构化 8 大类(源自 1.0),而非占位一句话
-  for (const cat of ['Scope', 'Correctness', 'Security', 'Architecture', 'Performance']) {
-    assert.ok(base0.includes(cat), `focus 应含类别 ${cat}`);
+  // 审核重点逐类别注入,每个 finding 分类都应出现在 focus 节
+  for (const cat of FINDING_CATEGORIES) {
+    assert.ok(base0.includes(`- ${cat}:`), `focus 应逐条列出类别 ${cat}`);
   }
   for (const cat of FINDING_CATEGORIES) {
     assert.ok(base0.includes(cat), `锁定协议应列出 category 规范集 ${cat}`);
@@ -124,7 +158,7 @@ async function main() {
   writeFileSync(path.join(home, '.duetlens', 'review.md'), '## 输出与语气\n先结论后依据。\n');
   writeFileSync(
     path.join(repo, '.duetlens', 'review.md'),
-    '## 审核重点\n关注 IPC 边界。\n\n## 项目上下文\nElectron + codex。\n',
+    '## 审核重点\n- Security: 关注 IPC 边界。\n\n## 项目上下文\nElectron + codex。\n',
   );
   const view = await loadReviewPrompt({ cwd: repo, homeDir: home });
   const win = Object.fromEntries(view.sections.map((s) => [s.key, s.winner]));
@@ -133,7 +167,8 @@ async function main() {
   assert.equal(win.context, 'project');
   assert.equal(win.severity, 'builtin');
   const base = await loadBaseInstructions({ cwd: repo, homeDir: home });
-  assert.ok(base.includes('关注 IPC 边界。'), 'project focus 应注入');
+  // 落盘归一会削掉行尾句号(与 severity 同);断言取归一后的形态
+  assert.ok(base.includes('- Security: 关注 IPC 边界'), 'project focus 逐类别覆盖应注入');
   assert.ok(base.includes('先结论后依据。'), 'global tone 应注入');
   assert.ok(base.includes('## 项目上下文\nElectron + codex。'), 'project context 应注入');
   assert.ok(base.endsWith(BUILTIN_PROTOCOL), '有用户覆盖时协议段仍在最末');
@@ -142,28 +177,33 @@ async function main() {
   assert.equal(BUILTIN_SECTIONS.length, 5, '固定 5 节');
 
   // 序列化:固定节序、H2 用节标题、空节略去、可被 parse 无损回读
-  const md = serializeLayer({ ignore: 'X', focus: 'Y', severity: '' });
-  assert.equal(md, '## 审核重点\nY\n\n## 忽略范围\nX\n', 'serialize 固定序 + 空节略去');
+  const md = serializeLayer({ ignore: 'X', focus: '- Scope: Y', severity: '' });
+  assert.equal(md, '## 审核重点\n- Scope: Y\n\n## 忽略范围\nX\n', 'serialize 固定序 + 空节略去');
   const round = parseReviewMarkdown(md);
-  assert.equal(round.focus, 'Y');
+  assert.equal(round.focus, '- Scope: Y');
   assert.equal(round.ignore, 'X');
   assert.ok(!('severity' in round), '空节不回读');
   assert.equal(serializeLayer({}), '', '无覆盖序列化为空串');
-  // structured 节落盘前先规范化:脏文本不入库
+  // structured 节落盘前先规范化:脏文本不入库(severity 逐档 / focus 逐类别)
   assert.equal(
     serializeLayer({ severity: 'medium = 边界情况\n随手写的一句话' }),
     '## 严重度判定\n- medium: 边界情况\n',
     'severity 落盘前归一为逐档格式,无法识别的行丢弃',
+  );
+  assert.equal(
+    serializeLayer({ focus: '- Performance: 只看热路径\n没有前缀的一行' }),
+    '## 审核重点\n- Performance: 只看热路径\n',
+    'focus 落盘前归一为逐类别格式,无法识别的行丢弃',
   );
   log('序列化:固定序 + 空节略去 + structured 归一 + parse 无损回读 ✓');
 
   // 写路径:save 落盘 → loadReviewPrompt 读回,project 覆盖生效
   const home2 = mkdtempSync(path.join(tmpdir(), 'duetlens-home2-'));
   const repo2 = mkdtempSync(path.join(tmpdir(), 'duetlens-repo2-'));
-  await saveReviewLayer('project', { focus: '只看 IPC 边界。' }, { cwd: repo2 });
+  await saveReviewLayer('project', { focus: '- Scope: 只看 IPC 边界' }, { cwd: repo2 });
   await saveReviewLayer('global', { tone: '先结论。' }, { homeDir: home2 });
   const saved = readFileSync(path.join(repo2, '.duetlens', 'review.md'), 'utf8');
-  assert.ok(saved.includes('## 审核重点\n只看 IPC 边界。'), 'project 层落盘含节标题');
+  assert.ok(saved.includes('## 审核重点\n- Scope: 只看 IPC 边界'), 'project 层落盘含节标题');
   const afterSave = await loadReviewPrompt({ cwd: repo2, homeDir: home2 });
   const wn = Object.fromEntries(afterSave.sections.map((s) => [s.key, s.winner]));
   assert.equal(wn.focus, 'project', '落盘后 focus 由 project 胜出');

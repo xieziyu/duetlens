@@ -197,15 +197,34 @@
   color: var(--code-text);
   white-space: pre-wrap;
 }
-.pr-card .sb .inherit { color: var(--text-faint); }
-.pr-card .sb .inherit .from { color: var(--text-dim); }
 .pr-card.builtinlock .sb .txt { color: var(--text-dim); }
 
-/* structured 节(严重度):档位名锁死的字段行 —— 左固定标签 / 中正文 / 右动作 */
+/* 未覆盖:来源标签(元信息)与继承来的规则正文分行 —— 标签是虚线小 chip,正文照常可读 */
+.pr-inherit { display: flex; flex-direction: column; gap: 6px; }
+.pr-inherit .tag {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--text-faint);
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+  padding: 1px 7px 1px 6px;
+  white-space: nowrap;
+}
+.pr-inherit .tag .d { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--text-faint); }
+.pr-inherit .tag .d.project { background: var(--agent); }
+.pr-inherit .tag .d.global { background: var(--human); }
+.pr-inherit .txt.body { color: var(--text-dim); }
+
+/* structured 节(审核重点 / 严重度):字段名锁死的字段行 —— 左固定标签 / 中正文 / 右动作 */
+/* 左列取 max-content:严重度档位名短(维持 96px),审核重点的类别名长,自适应到最宽类别 */
 .pr-card .sb.structured { padding: 6px 14px 10px; }
 .pr-frow {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(96px, max-content) minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px;
   padding: 9px 0;
@@ -225,6 +244,7 @@
   padding: 2px 8px;
   border-radius: 6px;
   border: 1px solid var(--border);
+  white-space: nowrap;
 }
 .pr-lvl.high { color: var(--sev-high); border-color: var(--sev-high); }
 .pr-lvl.medium { color: var(--sev-med); border-color: var(--sev-med); }

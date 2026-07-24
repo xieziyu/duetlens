@@ -6,7 +6,7 @@
  * 可配置面只覆盖「审核口径」;与 MCP 工具契约相关的段落(角色/工具流程/上报字段协议)
  * 是**锁定段**,既不进本模型、也不下发给 renderer —— 见 backend/prompt/review-prompt.ts。
  */
-import { SEVERITIES, type Severity } from './domain';
+import { FINDING_CATEGORIES, type FindingCategory } from './domain';
 
 export const PROMPT_SECTION_KEYS = ['focus', 'severity', 'ignore', 'tone', 'context'] as const;
 export type PromptSectionKey = (typeof PROMPT_SECTION_KEYS)[number];
@@ -17,7 +17,8 @@ export type PromptLayer = (typeof PROMPT_LAYERS)[number];
 /**
  * free = 整节一块自由文本;
  * structured = 字段集固定(字段名锁死、不可增删改名),只有每个字段的正文可改。
- * severity 走 structured:`high/medium/low` 是 MCP ingress 的枚举,改名即导致上报被拒。
+ * severity 与 focus 走 structured:severity 的档位 `high/medium/low` 是 MCP ingress 的枚举;
+ * focus 的字段就是 FINDING_CATEGORIES —— 逐类别独立覆盖,类别集与 finding 分类同源、不会漂移。
  */
 export type PromptSectionKind = 'free' | 'structured';
 
@@ -74,36 +75,72 @@ export interface PromptSaveInput {
   layer: EditablePromptLayer;
   /** project 层落 `<cwd>/.duetlens/review.md`;global 层忽略此字段。 */
   cwd?: string;
-  /** structured 节(severity)的值为 serializeSeverityLevels 的产物。 */
+  /** structured 节(focus / severity)的值为 serializeKeyedFields 的产物。 */
   sections: Partial<Record<PromptSectionKey, string>>;
 }
 
 // ---- structured 节的字段编解码(renderer 与 backend 共用,保证落盘格式单一来源)----
 
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
- * severity 节正文 ⇄ 逐档判定标准。落盘形如 `- high: 崩溃 / 数据损坏`。
- * 兼容旧的 `high = ...` 写法(2.0 早期 builtin 的格式)与 `med` 简写,免得升级后旧文件整节失效。
+ * structured 节正文 ⇄ 逐字段正文。落盘形如 `- <id>: <正文>`,一字段一行。
+ * 字段 id 由节固定(SectionDef.fields),解析只认这些 id、认不出的行忽略 ——
+ * 老版本或手写的自由文本因此不会以"覆盖了却什么也没说"的形式卡在中间层。
+ * aliases 收编历史/简写写法(如 severity 的 `med`→`medium`),使旧 review.md 不失效;
+ * 分隔符兼容 `:` `=` `:`(旧 `high = ...` 写法),不区分大小写。
  */
-export function parseSeverityLevels(text: string): Partial<Record<Severity, string>> {
-  const out: Partial<Record<Severity, string>> = {};
+export function parseKeyedFields(
+  text: string,
+  ids: readonly string[],
+  aliases: Readonly<Record<string, string>> = {},
+): Record<string, string> {
+  const canon = new Map<string, string>();
+  for (const id of ids) canon.set(id.toLowerCase(), id);
+  for (const [k, v] of Object.entries(aliases)) canon.set(k.toLowerCase(), v);
+  // 长 id 优先,避免 `med` 抢在 `medium` 前、或短类别名吃掉长类别名。
+  const alt = [...canon.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp)
+    .join('|');
+  const re = new RegExp(`^\\s*[-*]?\\s*(${alt})\\s*[:=:]\\s*(.+?)[;;。]?\\s*$`, 'i');
+  const out: Record<string, string> = {};
   for (const raw of text.split(/\r?\n/)) {
-    const m = /^\s*[-*]?\s*(high|medium|med|low)\s*[:=:]\s*(.+?)[;;。]?\s*$/i.exec(raw);
+    const m = re.exec(raw);
     if (!m) continue;
-    const level = (m[1].toLowerCase() === 'med' ? 'medium' : m[1].toLowerCase()) as Severity;
+    const id = canon.get(m[1].toLowerCase());
     const body = m[2].trim();
-    if (body && !out[level]) out[level] = body;
+    if (id && body && !(id in out)) out[id] = body;
   }
   return out;
 }
 
-/** 逐档判定标准 → 节正文。按 SEVERITIES 固定顺序,空档略去;正文压成单行(逐行=逐档)。 */
-export function serializeSeverityLevels(levels: Partial<Record<Severity, string>>): string {
-  return SEVERITIES.map((s) => {
-    const text = levels[s]?.replace(/\s*\n\s*/g, ' ').trim();
-    return text ? `- ${s}: ${text}` : null;
-  })
+/** 逐字段正文 → 节正文。按给定 id 顺序,空字段略去;正文压成单行(逐行=逐字段)。 */
+export function serializeKeyedFields(
+  values: Readonly<Record<string, string | undefined>>,
+  ids: readonly string[],
+): string {
+  return ids
+    .map((id) => {
+      const text = values[id]?.replace(/\s*\n\s*/g, ' ').trim();
+      return text ? `- ${id}: ${text}` : null;
+    })
     .filter((l): l is string => l != null)
     .join('\n');
+}
+
+/**
+ * structured 节的一层原文 → 规范化文本(只保留识别得出的字段)。
+ * 无法解析出任何字段的正文一律当**未覆盖**,返回 null,让下层生效。
+ */
+export function normalizeStructuredText(
+  raw: string | null | undefined,
+  ids: readonly string[],
+  aliases: Readonly<Record<string, string>> = {},
+): string | null {
+  if (raw == null) return null;
+  const text = serializeKeyedFields(parseKeyedFields(raw, ids, aliases), ids);
+  return text || null;
 }
 // ---- 内置基线与合并(纯函数;backend 做 IO,renderer preview 直接复用同一份)----
 
@@ -117,37 +154,60 @@ interface SectionDef {
   builtin: string;
   /** structured 节的固定字段(id 锁死,用户只能改正文) */
   fields?: readonly { id: string; label: string; builtin: string }[];
+  /** structured 节解析时收编的历史/简写别名(如 severity 的 `med`→`medium`);free 节无。 */
+  aliases?: Readonly<Record<string, string>>;
 }
 
 /**
+ * focus 逐类别的内置审核要点。字段 id 直接取 FINDING_CATEGORIES ——
+ * Record<FindingCategory> 让编译器强制每个类别都有要点,focus 类别集与 finding 分类同源、不会漂移。
+ * 要点与语言、框架无关;举例前后端各给一种形态,套用贴合实际代码的那种。
+ * 「先判断改动属于哪类代码、只报真实问题」等总则不在此,由锁定的角色段统一交代(见 review-prompt.ts)。
+ */
+const FOCUS_GUIDANCE: Record<FindingCategory, string> = {
+  Scope: '改动目标之外夹带的无关变更;需求 / PR 描述承诺、但 diff 未实现的缺失部分。',
+  Correctness:
+    '空值与边界缺保护(null / undefined / 空集合 / 越界 / 除零);资源未释放(连接 / 文件 / 句柄未关,监听 / 订阅 / 定时器未清,组件卸载后仍写状态);并发与时序(共享状态无同步、未 await 的异步、依赖渲染 / 回调 / 事件顺序的隐含假设);逻辑错误(off-by-one、条件写反、参数顺序、漏掉某分支)。',
+  'Type Safety':
+    '绕过静态检查的逃生口(类型断言 / 忽略告警 / 强制转型 / 无依据的非空断言,各语言形式不同);声明类型与实际数据形状不符;接口 / props / 数据模型的字段类型对不上消费方。动态类型代码看契约与运行期校验。',
+  Security:
+    '未净化输入导致的注入(SQL / NoSQL / command / 路径穿越,及前端 XSS / 危险 innerHTML / 动态 eval);鉴权与越权(后端 endpoint 缺 authn / authz / 租户隔离,前端把访问控制只做在 UI 层);敏感信息泄漏(secret / token / PII 落日志或响应体,或被打进前端产物 / 提交进仓库);依赖的已知漏洞与可疑来源。',
+  Architecture:
+    '边界与依赖方向(模块 / 分层 / 组件职责不互相渗透,依赖不反向、不绕过约定入口);重复逻辑(先查是否已有同类实现或工具);契约一致性(接口 / 事件 / 数据模型对齐存储或消费方,标 dead field 与不再走到的分支)。',
+  Performance:
+    '批量化远程调用(后端 N+1 与循环内可合并的 DB / RPC,前端瀑布式请求与缺失的缓存 / 复用);渲染与响应(前端不必要的重渲染 / 重排、过大的产物或资源,后端热路径的多余分配);真实数据规模下的算法复杂度,以及可增长数据集上无上限的读取。',
+  Naming: '命名自描述且与相邻代码一致(单复数、词序、术语统一);避免误导性、过度缩写或与含义不符的名字。',
+  Complexity:
+    '深嵌套 / 超长函数 / 上帝模块,建议抽 helper 或 early return;魔法值挪常量;可直接删并的冗余分支与重复判断。',
+  'Error Handling':
+    '被吞的错误(空 catch、静默吞掉不 rethrow 不 log);错误缺定位上下文;对外边界返回结构化 / 领域化的错误,不外泄堆栈与内部细节。',
+};
+
+/**
  * 可覆盖的固定几节 + builtin 默认。
- * context 无内置默认,由 project 补充仓库背景;severity 是 structured —— 档位名锁死,只开放判定标准。
+ * context 无内置默认,由 project 补充仓库背景;focus / severity 是 structured —— 字段名锁死,只开放各字段正文。
  */
 export const BUILTIN_SECTIONS: readonly SectionDef[] = [
   {
     key: 'focus',
     title: '审核重点',
-    kind: 'free',
-    hint: '优先看什么、按哪些维度过一遍改动。',
-    builtin: `按以下类别审查改动,只报告需要修复的真实问题;把偏离分为有理由的改进 / 可接受的差异 / 有问题的偏离,只标最后一种。
-- Scope 范围对齐:PR 描述之外夹带的无关改动;body 承诺但 diff 未实现的缺失部分。
-- Correctness 正确性:绕过类型检查的逃生口(as any / @ts-ignore / 无依据的非空断言 / 骗过运行时形状的 cast);null / undefined 缺保护;资源泄漏(未关的 stream / 连接 / 句柄、未移除的监听、未清的 timer);竞态(共享状态并发无同步、请求路径未 await 的 promise);逻辑错误(off-by-one、比较写反、参数顺序、漏掉某分支)。
-- Security 安全:注入(SQL / NoSQL / XSS / command / 路径穿越,源于未净化输入);新 endpoint 缺 authn / authz / 租户隔离;secret / token / PII 落日志或 response;新增或升级依赖的已知漏洞与可疑来源。
-- Architecture 架构:分层边界(route / application / domain / infra 不互相渗透);新类经构造器 / DI 接依赖,避免业务代码里 new 或隐藏全局;重复逻辑(先查仓库是否已有同类实现);契约一致性(input 类型对齐 entity 存储字段,标 dead field)。
-- Performance 性能:N+1 与循环内可批量的 DB / RPC;热路径不必要的分配;真实数据规模下的算法低效;可增长数据集上无 limit 的读取。
-- Naming / Complexity / Error handling:命名自描述且与相邻文件一致(单复数、词序);深嵌套 / 超长函数 / 上帝类,建议抽 helper 或 early return,魔法值挪常量;被吞的错误(空 catch、\`.catch(() => {})\` 不 rethrow 不 log),错误带定位上下文,API 边界用领域错误类型、不外泄堆栈 / 内部路径。`,
+    kind: 'structured',
+    hint: '每个类别看什么。',
+    builtin: '',
+    fields: FINDING_CATEGORIES.map((c) => ({ id: c, label: c, builtin: FOCUS_GUIDANCE[c] })),
   },
   {
     key: 'severity',
     title: '严重度判定',
     kind: 'structured',
-    hint: '每一档收什么问题。档位名由 Duetlens 固定,只能改判定标准。',
+    hint: '每一档收什么问题。',
     builtin: '',
     fields: [
       { id: 'high', label: 'high', builtin: '崩溃 / 数据损坏 / 安全问题' },
       { id: 'medium', label: 'medium', builtin: '边界 / 健壮性 / 可维护性隐患' },
       { id: 'low', label: 'low', builtin: '风格 / 命名 / 可读性' },
     ],
+    aliases: { med: 'medium' },
   },
   {
     key: 'ignore',
@@ -175,23 +235,6 @@ export const BUILTIN_SECTIONS: readonly SectionDef[] = [
 ];
 
 
-/**
- * structured 节的一层原文 → 规范化文本(只保留识别得出的字段)。
- * 无法解析出任何字段的正文一律当**未覆盖**:老版本手写的自由文本不会以"覆盖了却什么也没说"的
- * 形式卡在中间层,把 builtin 判定标准整段吞掉。
- */
-export function normalizeSeverityText(raw: string | null | undefined): string | null {
-  if (raw == null) return null;
-  const levels = parseSeverityLevels(raw);
-  const text = serializeSeverityLevels(levels);
-  return text || null;
-}
-
-function fieldOf(raw: string | null, id: string): string | null {
-  if (raw == null) return null;
-  return parseSeverityLevels(raw)[id as Severity] ?? null;
-}
-
 function pickLayer(project: string | null, global: string | null): PromptLayer {
   return project != null ? 'project' : global != null ? 'global' : 'builtin';
 }
@@ -205,19 +248,23 @@ export function mergeLayers(
   const resolved: ResolvedPromptSection[] = [];
   for (const def of BUILTIN_SECTIONS) {
     if (def.kind === 'structured') {
-      const p = normalizeSeverityText(project[def.key]);
-      const g = normalizeSeverityText(global[def.key]);
+      const ids = (def.fields ?? []).map((f) => f.id);
+      const aliases = def.aliases ?? {};
+      const p = normalizeStructuredText(project[def.key], ids, aliases);
+      const g = normalizeStructuredText(global[def.key], ids, aliases);
+      const pFields = p ? parseKeyedFields(p, ids, aliases) : {};
+      const gFields = g ? parseKeyedFields(g, ids, aliases) : {};
       const fields: PromptFieldSection[] = [];
       const resolvedFields: NonNullable<ResolvedPromptSection['fields']> = [];
-      const resolvedLevels: Partial<Record<Severity, string>> = {};
+      const resolvedValues: Record<string, string> = {};
       for (const f of def.fields ?? []) {
-        const fp = fieldOf(p, f.id);
-        const fg = fieldOf(g, f.id);
+        const fp = pFields[f.id] ?? null;
+        const fg = gFields[f.id] ?? null;
         const winner = pickLayer(fp, fg);
         fields.push({ id: f.id, label: f.label, builtin: f.builtin, global: fg, project: fp, winner });
         const text = fp ?? fg ?? f.builtin;
         resolvedFields.push({ id: f.id, label: f.label, text, source: winner });
-        resolvedLevels[f.id as Severity] = text;
+        resolvedValues[f.id] = text;
       }
       // 整节 provenance 取字段里最具体的一层:任一档被 project 改过,整节就算 project 覆盖。
       const source: PromptLayer = resolvedFields.some((f) => f.source === 'project')
@@ -230,8 +277,9 @@ export function mergeLayers(
         title: def.title,
         kind: def.kind,
         hint: def.hint,
-        builtin: serializeSeverityLevels(
+        builtin: serializeKeyedFields(
           Object.fromEntries((def.fields ?? []).map((f) => [f.id, f.builtin])),
+          ids,
         ),
         global: g,
         project: p,
@@ -242,7 +290,7 @@ export function mergeLayers(
         key: def.key,
         title: def.title,
         kind: def.kind,
-        text: serializeSeverityLevels(resolvedLevels),
+        text: serializeKeyedFields(resolvedValues, ids),
         source,
         fields: resolvedFields,
       });
