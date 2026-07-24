@@ -23,7 +23,7 @@
 
 ### 应用外壳(2026-07-23 重设计,方案见 [ui](ui.md#应用外壳导航-rail--顶栏--底部状态栏2026-07-23-重设计))
 
-开发态的顶栏屏切换已由**全局导航 rail** 取代(`src/renderer/components/AppRail.tsx`,除 onboarding 外各屏共用);review 屏顶栏瘦身为纯上下文 + CTA,agent 运行态与 diff 视图切换下沉到**底部状态栏**(`screens/review/StatusBar.tsx`);file-header 改为文件名 / 路径两行。App 外壳是一张 `top / rail+host / foot` 网格,屏根用 `display:contents` 直接落进去。github-pr review 顶栏新增 **⧉ 用系统默认浏览器打开 PR**(IPC `review:open-in-browser`,URL 在 main 侧解析后 `shell.openExternal`)。
+开发态的顶栏屏切换已由**全局导航 rail** 取代(`src/renderer/components/AppRail.tsx`,除 onboarding 外各屏共用);review 屏顶栏瘦身为纯上下文 + CTA,agent 运行态下沉到**底部状态栏**(`screens/review/StatusBar.tsx`),diff 视图切换归**中栏列头**(`.diff-bar`,见 `screens/review/DiffPane.tsx`);file-header 改为文件名 / 路径两行。App 外壳是一张 `top / rail+host / foot` 网格,屏根用 `display:contents` 直接落进去。github-pr review 顶栏的来源 chip **整枚可点开 PR**(IPC `review:open-in-browser`,URL 在 main 侧解析后 `shell.openExternal`)。
 
 ### 尚缺
 1. 键位表不可配置(帮助层为只读 cheatsheet)。

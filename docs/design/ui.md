@@ -103,7 +103,7 @@
 - **off-diff findings 分两类承载**:锚点不在当前 diff 新侧的 finding,按「文件在不在改动内」分开落位,都保留完整卡片(triage/编辑/追问),避免因无处内联被忽略。
   - **行 off-diff**(文件在改动内、锚点行不在新侧 hunk:被删除行 / 未展开区 / 无行锚点的 PR 级):归入**该文件区顶部**的 off-diff 段(`◇ N 条 off-diff finding(锚点不在当前改动新侧)`)。
   - **文件 off-diff**(文件整个不在本次 diff —— agent 允许顺 import 读到被引用文件并 off-diff 提出):无对应文件区承载,单列到 diff 主区**底部**、按文件成组(`◇ 文件不在本次改动内 · path`),并挂 `fileAnchorId` 锚点。**这枚锚点是必须的**:否则点该卡时 `setActivePath`/`focusFindingId` 找不到 DOM 目标,滚动静默失败(实机踩过,见 `#3912`)。
-- **split vs unified**:底部状态栏右端的 `Unified | Split` segmented 切换(全局偏好,不再逐文件重复)。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
+- **split vs unified**:中栏列头(`.diff-bar`)右端的 `Unified | Split` segmented 切换(全局偏好,不再逐文件重复)。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
 
 ### 键盘快捷键(`mockup/diff-review.html`)
 
@@ -116,9 +116,9 @@
 review 屏原先把品牌、来源、模型、用量、状态、CTA、主题、快捷键全塞进一条顶栏,既拥挤又**没有任何回到入口 / 进设置的出口**。拆成三处:
 
 - **全局导航 rail**(左侧 52px,常驻于顶栏之下):`入口 · 当前审核 · 历史 · 审核规则` ▸ 底部 `明暗切换 · 设置`。**除 onboarding 外所有屏共用**,替换掉开发态的顶栏屏切换。选中项左缘一条 accent 指示条;无活跃 review 时「当前审核」禁用。rail 在顶栏下方而非贯通全高 —— 让 macOS 交通灯始终落在顶栏的 `padding-left:88px` 里,不与 rail 抢位。
-- **顶栏只留上下文**:来源 chip(来源图标 + `#PR 号` / 分支名 + **⧉ 用系统默认浏览器打开 PR**)、PR 标题、仓库 `owner/repo` 尾注,右端常驻 CTA(提交 review / 导出 review)。整条是窗口拖拽区。
-- **底部状态栏**(28px,仅 review 屏,参照 IDE / Claude Desktop):左起 **状态胶囊**(扫描中/审核中/失败,运行时带 pulse)· `codex · 模型` · `effort` · **ctx 环 + token 用量** · 最近工具调用(最弱、限宽、窄窗口先隐);右端 **通读进度**(`N 文件 · M 已看`)· **Unified / Split** · `⌘ 快捷键`。
-- **Unified / Split 从 per-file header 迁到状态栏**:它本就是全局偏好,过去在每个文件头重复渲染一份,还与 per-file 的「已看 / 折叠」混在一起。
+- **顶栏只留上下文**:来源 chip(来源图标 + `#PR 号` / 分支名;github 来源**整枚 chip 即打开 PR 的按钮**,尾部 ⧉ 图标只作可点提示)、PR 标题、仓库 `owner/repo` 尾注,右端常驻 CTA(提交 review / 导出 review)。整条是窗口拖拽区。
+- **底部状态栏**(28px,仅 review 屏,参照 IDE / Claude Desktop):左起 **状态胶囊**(扫描中/审核中/失败,运行时带 pulse)· `codex · 模型 · effort`(模型名是 agent 侧实际生效的那个:用户没指定时由起会话的应答回填落库)· **ctx 环 + token 用量** · 最近工具调用(最弱、限宽、窄窗口先隐);右端 `⌘ 快捷键`。
+- **Unified / Split 从 per-file header 迁到中栏列头**(`.diff-bar`,sticky 于 diff 列顶,左端另给整份改动总量 `+A −D`):它本就是全局偏好,过去在每个文件头重复渲染一份,还与 per-file 的「已看 / 折叠」混在一起;放状态栏右下角则太靠边、容易被忽略,列头紧贴它作用的那一栏。
 - 配色主题(`data-theme`)只在设置屏改;明暗(`data-mode`)在 rail 一键切 —— 高频的留在外壳,低频的收进设置。
 
 ### file-header:文件名 / 路径分两行

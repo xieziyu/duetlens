@@ -27,12 +27,13 @@
 │
 ├─ <ReviewScreen>                          mockup/diff-review.html
 │  ├─ <TopBar>                             .rev-topbar 只留上下文
-│  │  ├─ <SourceChip>                      来源图标 + #PR/分支 + ⧉ 打开 PR 网页
+│  │  ├─ <SourceChip>                      来源图标 + #PR/分支;github 来源整枚可点开 PR 网页 (⧉ 仅作提示)
 │  │  └─ <SubmitCta>                       提交 review / 导出报告 (随 source)
 │  ├─ <ScanProgressBar>                    .scanbar 横跨三栏 (scan 期);点开向下展开竖排 .timeline
 │  ├─ <FileTree>                           .tree
 │  │  └─ <FileRow>                         .file (.badge finding 徽标 · .vtick viewed)
 │  ├─ <DiffPane>                           左侧主场
+│  │  ├─ <DiffBar>                        .diff-bar sticky 列头:改动总量 +A −D · <ViewSwitch> unified/split
 │  │  ├─ <OffDiffBanner>                   .offdiff 非改动行锚点 finding 集合
 │  │  ├─ <DiffFile>                        .diff (per-file, 可折叠)
 │  │  │  ├─ <DiffHeader>                   两行:文件名+状态 / 目录路径;右侧 ⚑ +− ✓ ⌄
@@ -48,8 +49,8 @@
 │  │  ├─ <FindingsTab>                     运行时 triage 列表 (.frow 分组 + tally)
 │  │  └─ <SummaryTab>                      结论卡 + 统计 + <SummaryEditor> 可编辑正文
 │  └─ <ReviewStatusBar>                    .rev-statusbar 底部整幅
-│     ├─ 状态胶囊 · codex/模型 · effort · ctx 环+token · 最近工具调用
-│     └─ 通读进度 · <ViewSegmented> unified/split · ⌘ → <KbdHelpOverlay>
+│     ├─ 状态胶囊 · codex · 模型 · effort · ctx 环+token · 最近工具调用
+│     └─ ⌘ → <KbdHelpOverlay>
 │
 ├─ <SubmitGitHubScreen>                    mockup/submit-to-github.html (source=github-pr)
 └─ <ExportMarkdownScreen>                  mockup/export-markdown.html (source=local/vbranch)
