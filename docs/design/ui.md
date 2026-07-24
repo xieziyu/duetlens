@@ -103,6 +103,7 @@
 - **off-diff findings 分两类承载**:锚点不在当前 diff 新侧的 finding,按「文件在不在改动内」分开落位,都保留完整卡片(triage/编辑/追问),避免因无处内联被忽略。
   - **行 off-diff**(文件在改动内、锚点行不在新侧 hunk:被删除行 / 未展开区 / 无行锚点的 PR 级):归入**该文件区顶部**的 off-diff 段(`◇ N 条 off-diff finding(锚点不在当前改动新侧)`)。
   - **文件 off-diff**(文件整个不在本次 diff —— agent 允许顺 import 读到被引用文件并 off-diff 提出):无对应文件区承载,单列到 diff 主区**底部**、按文件成组(`◇ 文件不在本次改动内 · path`),并挂 `fileAnchorId` 锚点。**这枚锚点是必须的**:否则点该卡时 `setActivePath`/`focusFindingId` 找不到 DOM 目标,滚动静默失败(实机踩过,见 `#3912`)。
+- **横向滚动只归 code 表**:长代码行的横滚容器是每张 `.code` 表外的 `.code-scroll`,diff 栏本身 `overflow-x:hidden`。整栏可横滚时,file-header、hunk 头、gap bar、内联卡片会跟着长行一起被推出视口(它们只有一屏宽,右侧还会露出空白底)。一份 diff 被内联卡片切成多张表,`DiffPane` 用一个捕获期 scroll 监听把各表 `scrollLeft` 同步,读长行时不会段与段错位。
 - **split vs unified**:中栏列头(`.diff-bar`)右端的 `Unified | Split` segmented 切换(全局偏好,不再逐文件重复)。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
 
 ### 键盘快捷键(`mockup/diff-review.html`)

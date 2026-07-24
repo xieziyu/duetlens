@@ -37,7 +37,7 @@
 │  │  ├─ <OffDiffBanner>                   .offdiff 非改动行锚点 finding 集合
 │  │  ├─ <DiffFile>                        .diff (per-file, 可折叠)
 │  │  │  ├─ <DiffHeader>                   两行:文件名+状态 / 目录路径;右侧 ⚑ +− ✓ ⌄
-│  │  │  ├─ <CodeTable variant>            .code.unified | .code.split
+│  │  │  ├─ <CodeTable variant>            .code-scroll > .code.unified | .code.split (横滚只归这层, 各表 scrollLeft 同步)
 │  │  │  ├─ <Expander>                     展开未改动代码
 │  │  │  ├─ <InlineCard>                   .card.agent | .card.human (view/edit/submitted/dismissed)
 │  │  │  │  ├─ <FindingEditor>             .c-edit (sev/cat/标题/正文/suggestion)
