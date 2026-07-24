@@ -1383,6 +1383,7 @@
 }
 .tl.active .tl-t {
   color: var(--agent-2);
+}
 
 /* Findings tab 顶部 tally */
 .fp-toolbar {
