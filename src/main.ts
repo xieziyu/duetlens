@@ -10,6 +10,16 @@ import { IpcEvents, type CompletionNotice, type ReviewEvent } from '@shared/ipc'
 // MAIN_WINDOW_VITE_DEV_SERVER_URL / MAIN_WINDOW_VITE_NAME 由 plugin-vite 注入,
 // 类型见 forge.env.d.ts 引用的 @electron-forge/plugin-vite/forge-vite-env
 
+// 开发态与打包版可能同时开着:各自独立 userData,否则两个进程写同一个 sqlite,
+// 且各自的内存态互相看不见对方的写入。DUETLENS_USER_DATA 可显式指向某份数据
+// (如直接开使用版的库排查问题),前提是确保只有一个实例在跑。ready 前必须设好。
+const userDataOverride = process.env.DUETLENS_USER_DATA;
+if (userDataOverride) {
+  app.setPath('userData', path.resolve(userDataOverride));
+} else if (!app.isPackaged) {
+  app.setPath('userData', `${app.getPath('userData')}-dev`);
+}
+
 let manager: ReviewManager;
 let mainWindow: BrowserWindow | null = null;
 

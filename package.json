@@ -11,6 +11,7 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "preview:ui": "vite --config vite.renderer.config.ts --port 5177 --strictPort",
+    "db:snapshot": "bash scripts/db-snapshot.sh",
     "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:node": "npm rebuild better-sqlite3",
     "typecheck": "tsc --noEmit",

@@ -25,6 +25,19 @@
 - **source 层**:延续 1.0 的 SourceFlow 思路,三种 source 各一实现。
 - **持久化**:会话历史、discussions、messages、findings 存本地 sqlite。**已定 `better-sqlite3`**(原生模块,须按运行时 rebuild ABI,见 [open-questions](open-questions.md));落地见 `src/backend/db/`。codex thread 由 codex 侧持久化,我们存 threadId 做续接。
 
+### 运行态数据目录(边开发边真实使用)
+
+日常使用打包版 app、开发跑 `npm start`,两者可同时开着,故 userData 分开(见 `src/main.ts`),各自的 `duetlens.db` 在:
+
+| 实例 | 目录 |
+| --- | --- |
+| 使用版(`npm run package` 产出的 Duetlens.app) | `~/Library/Application Support/Duetlens/` |
+| 开发版(`npm start`) | `~/Library/Application Support/Duetlens-dev/` |
+
+- 排查真实数据(复现问题 / 直接查表):`npm run db:snapshot` 单向快照使用版→开发版(旧开发库自动备份),之后用 `sqlite3 "$HOME/Library/Application Support/Duetlens-dev/duetlens.db" "…"` 随便查,重启开发版即在 UI 里复现。查快照而不是查原库,agent 怎么翻都写不坏真实数据。
+- 想直查使用版原库须加 `-readonly`,且**仅在使用版正在运行时可行**——WAL 库在无活动连接时没有 `-shm`,只读连接又无权创建它,会报 `unable to open database file (14)`。
+- `DUETLENS_USER_DATA=<dir> npm start` 可让开发版直接开某份数据,须先确认没有别的实例在跑同一份。
+
 ## 保留能力(来自 1.0)
 
 - 审核会话 **历史**
