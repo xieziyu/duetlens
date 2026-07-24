@@ -3282,6 +3282,16 @@ kbd {
   padding-left: 9px;
   border-left: 2px solid var(--del-gutter);
 }
+/* 复核已修复自动结案:同为剔除态,但语义是「问题没了」而非「不是问题」,故走 add 色而非 del 色 */
+.c-dismissed.auto .dm-x {
+  color: var(--add);
+}
+.c-dismissed.auto .dm-t {
+  text-decoration: none;
+}
+.c-dismissed.auto .dm-reason {
+  border-left-color: color-mix(in srgb, var(--add) 40%, transparent);
+}
 .c-dismissed .dm-edit {
   display: flex;
   gap: 6px;

@@ -10,6 +10,9 @@
  * 同时把 reviewer 的处置(尤其剔除及其理由)和 PR 上的协作上下文交代清楚,
  * 让被剔除的问题不再被重复报出来。
  *
+ * 已剔除的条目分两节讲,因为对「回归」的态度相反:reviewer 剔除的连同类问题都别报;
+ * 复核判定已修复而自动结案的,同一处再出现要当新问题报回来。
+ *
  * PR 评论是**外部数据**(任何人都能在 PR 上写字),统一包在隔离区块里并显式声明其非指令性质。
  */
 import type { Finding, Message, ReviewRound } from '@shared/domain';
@@ -25,6 +28,8 @@ const THREAD_TAIL = 6;
 const LOOSE_THREADS = 20;
 /** 行号相差多少以内认为 PR thread 与我方 finding 指向同一处。 */
 const ANCHOR_WINDOW = 12;
+/** 小节序号:哪几节存在取决于本轮有没有对应条目,故序号是数出来的,不写死。 */
+const SECTION_NUM = ['一', '二', '三', '四'];
 
 export interface RerunPromptInput {
   /** 本轮轮次号(>= 2) */
@@ -38,7 +43,7 @@ export interface RerunPromptInput {
   codeChanged: boolean;
   /** 保留中的 findings —— 需要 agent 逐条表态 */
   openFindings: readonly Finding[];
-  /** 已被 reviewer 剔除的 findings —— 不得再报 */
+  /** 已剔除的 findings(reviewer 主动剔除 + 复核判定已修复自动结案);两类在 prompt 里分节交代 */
   dismissedFindings: readonly Finding[];
   /** discussionId → 该线程消息(给 finding 附上 reviewer 与 agent 的讨论结论) */
   messagesByDiscussion: Readonly<Record<string, Message[]>>;
@@ -141,6 +146,15 @@ function dismissedBlock(f: Finding): string {
   );
 }
 
+function closedBlock(f: Finding): string {
+  const cat = f.category ? ` · ${f.category}` : '';
+  const note = f.resolutionNote?.trim();
+  return (
+    `- ${f.severity}${cat} | ${f.file}:${f.line} | ${f.title}(第 ${f.lastSeenRound} 轮判定已修复)` +
+    (note ? `\n  当时的复核说明:${note}` : '')
+  );
+}
+
 /**
  * 时间窗起点:首轮扫描不注入任何 PR 内容,所以**第一次复审要全取**整个 PR 的历史;
  * 第三轮起才按「上一轮开始之后」增量,避免每轮重复注入同样的旧评论。
@@ -240,7 +254,17 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
   const matchedSet = new Set<PrReviewThread>();
   for (const list of threads.values()) for (const t of list) matchedSet.add(t);
 
+  // 「已确认修复」与「reviewer 剔除」都不再要表态,但对回归的态度相反:前者再出现要当新问题报,
+  // 后者连同类问题都不该报。混在一节里讲,等于教 agent 把回归也一并咽掉。
+  const closedFixed = dismissedFindings.filter((f) => f.resolution === 'fixed');
+  const droppedByReviewer = dismissedFindings.filter((f) => f.resolution !== 'fixed');
+
   const out: string[] = [];
+  let section = 0;
+  const heading = (title: string): string => {
+    section += 1;
+    return `## ${SECTION_NUM[section - 1] ?? section}、${title}`;
+  };
 
   out.push(`这是第 ${round} 轮复审(上一轮是第 ${round - 1} 轮)。`);
   if (codeChanged) {
@@ -255,7 +279,7 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
   out.push('');
 
   if (openFindings.length) {
-    out.push('## 一、待你表态的 findings(reviewer 保留中)');
+    out.push(heading('待你表态的 findings(reviewer 保留中)'));
     out.push(
       '对下面**每一条**调用 `resolve_finding(finding_id, status, note)` 给出结论。' +
         '**按以下顺序判定,不要只看代码变没变**:',
@@ -282,14 +306,26 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
     out.push('');
   }
 
-  if (dismissedFindings.length) {
-    out.push('## 二、reviewer 已剔除的 findings —— 不要再报');
+  if (closedFixed.length) {
+    out.push(heading('往轮已确认修复、已结案的 findings —— 不必再表态'));
+    out.push(
+      '以下条目在此前的复审里已判定修复并自动结案,**不要**对它们调用 `resolve_finding`。' +
+        '但它们不是黑名单:若最新代码里同一个问题**又出现了**(改回去了 / 换个写法重犯),' +
+        '照常用 `report_finding` 当作新问题报出来,并在正文点明这是回归。',
+    );
+    out.push('');
+    out.push(closedFixed.map(closedBlock).join('\n'));
+    out.push('');
+  }
+
+  if (droppedByReviewer.length) {
+    out.push(heading('reviewer 已剔除的 findings —— 不要再报'));
     out.push(
       'reviewer 已判定以下条目**不是问题**。本轮既不要重复上报这些条目,' +
         '也不要报告与其同类的问题(剔除理由体现了 reviewer 对这类问题的取舍)。',
     );
     out.push('');
-    out.push(dismissedFindings.map(dismissedBlock).join('\n'));
+    out.push(droppedByReviewer.map(dismissedBlock).join('\n'));
     out.push('');
   }
 
@@ -311,7 +347,8 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
   }
   steps.push(
     '重新审核最新改动,只对**此前没有报告过的新问题**调用 `report_finding`;' +
-      '已在上面出现过的条目一律不要再 report_finding。',
+      '已在上面出现过的条目一律不要再 report_finding —— ' +
+      '唯一例外是已结案的问题在最新代码里回归了,那算新问题。',
   );
   steps.push('审完给一句话总结:本轮修复了多少、仍存在多少、新发现多少。');
   out.push(steps.map((s, i) => `${i + 1}. ${s}`).join('\n'));

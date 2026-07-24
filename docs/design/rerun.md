@@ -50,12 +50,22 @@ MCP 新增 `resolve_finding(finding_id, status, note)`。复审 prompt 列出所
 > 要求它读作者的回复。同一条意见因此每轮重报。thread 回复其实一直都注入到了 prompt 里,
 > 缺的是**表达结论的词**和**使用它的指令**。
 
+### 判定 `fixed` 即自动结案
+
+`fixed` 一落库就把该条 triage 置为 `dismiss`(理由记作「第 N 轮复核判定已修复」),同一条 SQL 完成,不经用户确认。代码里已经没有的问题不该继续占着待提交清单 —— 让 reviewer 把 agent 刚确认修好的东西再逐条手点一遍,纯属体力活。结案的条目下一轮也不再进"待表态"区,省掉每轮重复表态。
+
+判错了有两个出口:卡上的「↩ 恢复」照常可用;**同一处再被报出来会自动恢复**(见下一节)。
+
+`wont_fix` 则**不**自动剔除 —— 两者看着像,语义差得远:`fixed` 是"问题没了",`wont_fix` 是"作者说不改",后者是否接受始终是 reviewer 的决定,作者一句"可忽略"不该自动关掉一条真实的安全问题。
+
 ### 被剔除的不再出现
 
 两层防线:
 
 1. **软约束(prompt)**:已剔除的条目连同 reviewer 填的理由一起列出,明确要求不要重报、也不要报同类问题。理由是关键 —— 它让 agent 理解的是取舍标准,而不只是一个黑名单条目。
-2. **硬约束(去重兜底)**:`shared/finding-dedupe.ts` 对每条新上报做匹配(同文件 + 行号邻近 + 标题 bigram Dice 相似度)。命中**已剔除**项 → 抑制、不落库,只累加轮次的 `suppressedCount`;命中**保留中**项 → 等价于 agent 表态"仍存在",更新 `lastSeenRound` 而不新建。
+2. **硬约束(去重兜底)**:`shared/finding-dedupe.ts` 对每条新上报做匹配(同文件 + 行号邻近 + 标题 bigram Dice 相似度)。命中**reviewer 剔除**项 → 抑制、不落库,只累加轮次的 `suppressedCount`;命中**保留中**项 → 等价于 agent 表态"仍存在",更新 `lastSeenRound` 而不新建。
+
+**自动结案的条目不进黑名单**(`isAutoClosedFixed`:`triage=dismiss` 且 `resolution=fixed`)。它代表的是"当前代码里没有了",不是 reviewer 的判断 —— 若同一处又被报出来,那是**回归**:恢复为保留态并计入本轮,而不是当成重复上报吞掉。prompt 里两类因此分节交代,措辞相反:reviewer 剔除的连同类问题都别报;已结案的再出现要当新问题报回来。混在一节讲,等于教 agent 把回归也一并咽掉。
 
 判定刻意保守(近行 0.5 / 远行 0.8 双阈值):宁可漏判成新 finding 让用户多看一条,也不能吞掉真正的新问题。
 
@@ -86,7 +96,7 @@ Finding
   ├─ lastSeenRound    ← agent 最近一次对它表态或重报的轮次
   ├─ resolution       ← fixed | wont_fix | still_present | null
   ├─ resolutionNote
-  └─ dismissReason    ← reviewer 剔除时可选填;恢复为 open 时清空
+  └─ dismissReason    ← reviewer 剔除时可选填;判定 fixed 自动结案时写入固定文案;恢复为 open 时清空
 ```
 
 **关键约定**:`resolution` 只在 `lastSeenRound === Review.currentRound` 时代表**本轮**结论。第 2 轮判定 fixed 的条目,到第 3 轮若 agent 没再表态,就该回到"未表态",而不是一直挂着旧结论。派生逻辑收在 `renderer/screens/review/rounds.ts`,不散落在各组件里。
@@ -111,12 +121,12 @@ schema 见 `src/backend/db/schema.ts` 的 V6;存量数据一律视作第 1 轮(�
 
 ## UI
 
-- **入口**:review 顶栏「↻ 重跑」(扫描中禁用)→ `RerunPanel` 摊开"这一轮会带上什么"(保留 N 条待表态 / 剔除 M 条不再报 / 最新 diff / PR 评论),可填本轮说明,`⌘↵` 开跑。面板只统计本地已有数据 —— 最新 diff 与 PR 评论是开跑那一刻才拉的,提前拉一次既慢又会与真正开跑时的结果不一致,所以文案只说"将拉取",不给假数字。
+- **入口**:review 顶栏「↻ 重跑」(扫描中禁用)→ `RerunPanel` 摊开"这一轮会带上什么"(保留 N 条待表态 / 剔除 M 条不再报 / 已结案 K 条不再表态 / 最新 diff / PR 评论),可填本轮说明,`⌘↵` 开跑。面板只统计本地已有数据 —— 最新 diff 与 PR 评论是开跑那一刻才拉的,提前拉一次既慢又会与真正开跑时的结果不一致,所以文案只说"将拉取",不给假数字。
 - **状态栏**:`↻ 第 N 轮 · 修复 x · 新增 y · 过滤 z`(单轮时不显示)。
-- **finding 标记**:`本轮新增` / `✓ 已修复` / `仍存在` / `◇ 作者已回应`,以及 agent 的复核说明与 reviewer 的剔除理由。
+- **finding 标记**:`本轮新增` / `✓ 已修复 · 自动剔除` / `仍存在` / `◇ 作者已回应`,以及 agent 的复核说明与 reviewer 的剔除理由。自动结案的内联卡走 `✓ 已修复 · 自动剔除` 字样与 add 色(而非剔除态的 `✕` 与删除线)—— 同为剔除态,但别让人以为是自己剔的。
 - **两个折叠区**:本轮已有结论的条目移出主列表 —— 留在原位只会淹没真正待处理的意见。`✓ 本轮判定已修复` 默认收起;`◇ 作者已回应,未改动` **默认展开**,因为它还等着 reviewer 决定接不接受作者的说法。
 - **一键采纳**:`wont_fix` 的条目上给「✓ 采纳」——剔除该条,并把 agent 摘录的作者原话存为 `dismissReason`,下一轮据此抑制同类。**不自动剔除**:作者一句"可忽略"不该自动关掉一条真实的安全问题,采纳与否始终是 reviewer 点了才算。
 
 ## 验证
 
-`npm run spike:rerun`(确定性、不烧 token):轮次落库与级联删除、`changedFilesBetween`、复审 prompt 的六类内容与外部数据围栏顺序、表态词汇含 `wont_fix` 且判定顺序把作者回应排在代码之前、thread↔finding 匹配**不依赖数组顺序**、去重的命中/不误吞/跨文件、三态回写(`wont_fix` 不自动剔除)与一键采纳、抑制计数、`lastSeenRound` 不回退。
+`npm run spike:rerun`(确定性、不烧 token):轮次落库与级联删除、`changedFilesBetween`、复审 prompt 的六类内容与外部数据围栏顺序、表态词汇含 `wont_fix` 且判定顺序把作者回应排在代码之前、thread↔finding 匹配**不依赖数组顺序**、去重的命中/不误吞/跨文件、三态回写(`fixed` 自动结案且不覆盖 reviewer 已填的剔除理由、`wont_fix` 不自动剔除)与一键采纳、结案节与剔除节在 prompt 里分开且留有回归出口、抑制计数、`lastSeenRound` 不回退。

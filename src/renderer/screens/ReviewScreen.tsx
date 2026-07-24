@@ -885,7 +885,9 @@ function FindingRow({
           {f.category ? ` · ${f.category}` : ''}
         </span>
         {isNew && <span className="round-tag new">本轮新增</span>}
-        {resolution === 'fixed' && <span className="round-tag fixed">✓ 已修复</span>}
+        {resolution === 'fixed' && (
+          <span className="round-tag fixed">✓ 已修复{dismissed ? ' · 自动剔除' : ''}</span>
+        )}
         {resolution === 'still_present' && <span className="round-tag still">仍存在</span>}
         {resolution === 'wont_fix' && <span className="round-tag wontfix">◇ 作者已回应</span>}
         <span className={`origin ${f.origin === 'agent' ? 'agent' : 'human'}`}>
@@ -900,7 +902,10 @@ function FindingRow({
           {f.resolutionNote}
         </div>
       )}
-      {dismissed && f.dismissReason && <div className="fr-note reason">理由:{f.dismissReason}</div>}
+      {/* 本轮的「✓ 已修复 · 自动剔除」标签已经说明了为何剔除,不必再拿理由行重复一遍 */}
+      {dismissed && f.dismissReason && resolution !== 'fixed' && (
+        <div className="fr-note reason">理由:{f.dismissReason}</div>
+      )}
       <div className="fr-foot">
         <span className="mono anchor" title={`${f.file}:${f.line}`}>
           {basename(f.file)}:{f.line}

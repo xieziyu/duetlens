@@ -3,6 +3,7 @@ import {
   INTENSITY_HINTS,
   INTENSITY_LABELS,
   REVIEW_INTENSITIES,
+  isAutoClosedFixed,
   type Finding,
   type Review,
   type ReviewIntensity,
@@ -40,7 +41,9 @@ export function RerunPanel({
   }, []);
 
   const open = findings.filter((f) => f.triage !== 'dismiss');
-  const dismissed = findings.filter((f) => f.triage === 'dismiss');
+  // 复核已修复而自动结案的单列一档:它跟「你判定这不是问题」不是一回事,抑制口径也不同
+  const closedFixed = findings.filter(isAutoClosedFixed);
+  const dismissed = findings.filter((f) => f.triage === 'dismiss' && !isAutoClosedFixed(f));
   const withReason = dismissed.filter((f) => f.dismissReason?.trim()).length;
   const submitted = open.filter((f) => f.submission === 'submitted').length;
   const nextRound = (review?.currentRound ?? 1) + 1;
@@ -100,6 +103,15 @@ export function RerunPanel({
               )}
             </span>
           </li>
+          {closedFixed.length > 0 && (
+            <li>
+              <span className="rp-n">{closedFixed.length}</span>
+              <span className="rp-l">
+                条已确认修复、自动结案的 finding <em>不再要求表态</em>
+                <span className="rp-sub">若同一个问题回归,会作为新 finding 重新报出</span>
+              </span>
+            </li>
+          )}
           <li>
             <span className="rp-n rp-glyph">↻</span>
             <span className="rp-l">

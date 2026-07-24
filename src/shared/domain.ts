@@ -216,6 +216,14 @@ export interface Finding {
   updatedAt: number;
 }
 
+/**
+ * 复核判定已修复后**自动结案**的条目 —— 与 reviewer 主动剔除(「这不是问题」)语义不同:
+ * 它只是"当前代码里已经没有了",同一处再被报出来就是回归,应恢复而非继续抑制。
+ * `resolution === 'fixed'` 足以判别:表态只发生在保留中的条目上,一旦表态即自动剔除。
+ */
+export const isAutoClosedFixed = (f: Finding): boolean =>
+  f.triage === 'dismiss' && f.resolution === 'fixed';
+
 export interface Message {
   id: string;
   discussionId: string;

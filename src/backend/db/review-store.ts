@@ -518,18 +518,39 @@ export class ReviewStore {
       .run(triage, dismissReason, now(), findingId);
   }
 
-  /** agent 在复审轮次对一条旧 finding 表态;同时把它标记为「本轮已看过」。 */
+  /**
+   * agent 在复审轮次对一条旧 finding 表态;同时把它标记为「本轮已看过」。
+   *
+   * `fixed` 顺带自动剔除:代码里已经没有的问题不该继续占着待提交清单,让用户逐条手点纯属体力活。
+   * 判错了有出口 —— 卡上的「↩ 恢复」照常可用,下一轮回归重报也会自动恢复(见 isAutoClosedFixed)。
+   * `wont_fix` 则不自动剔除:作者一句"可忽略"不该关掉一条真实问题,采纳与否是 reviewer 的决定。
+   * 用户已自行剔除的不动,免得覆盖掉他填的理由(CASE 里读的是本行更新前的 triage)。
+   */
   setFindingResolution(
     findingId: string,
     round: number,
     resolution: FindingResolution,
     note?: string | null,
   ): void {
+    const autoDismiss = resolution === 'fixed' ? 1 : 0;
     this.db
       .prepare(
-        `UPDATE findings SET resolution = ?, resolution_note = ?, last_seen_round = ?, updated_at = ? WHERE id = ?`,
+        `UPDATE findings
+            SET resolution = ?, resolution_note = ?, last_seen_round = ?, updated_at = ?,
+                triage = CASE WHEN ? = 1 AND triage = 'open' THEN 'dismiss' ELSE triage END,
+                dismiss_reason = CASE WHEN ? = 1 AND triage = 'open' THEN ? ELSE dismiss_reason END
+          WHERE id = ?`,
       )
-      .run(resolution, note?.trim() || null, round, now(), findingId);
+      .run(
+        resolution,
+        note?.trim() || null,
+        round,
+        now(),
+        autoDismiss,
+        autoDismiss,
+        `第 ${round} 轮复核判定已修复`,
+        findingId,
+      );
   }
 
   /**

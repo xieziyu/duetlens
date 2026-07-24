@@ -10,6 +10,7 @@ import { ReviewStore } from '../src/backend/db/review-store';
 import { buildRerunPrompt, matchThreadsToFindings } from '../src/backend/prompt/rerun-prompt';
 import { changedFilesBetween } from '../src/shared/diff';
 import { findDuplicate, titleSimilarity } from '../src/shared/finding-dedupe';
+import { isAutoClosedFixed } from '../src/shared/domain';
 import type { PrContext } from '../src/shared/github-context';
 
 function log(msg: string) {
@@ -250,6 +251,24 @@ function main() {
   // ---- 6. 第 2 轮的表态与抑制回写 ----
   store.setFindingResolution(race.id, 2, 'still_present', 'AtomicCounter 用对了,但 get→set 之间仍有窗口。');
   store.setFindingResolution(naming.id, 2, 'fixed', '已改名为 completedCount。');
+  // 判定已修复 = 自动结案:不该再占着待提交清单等用户逐条手点
+  const fixedAuto = store.getFinding(naming.id)!;
+  assert.equal(fixedAuto.triage, 'dismiss', 'fixed 应自动剔除');
+  assert.match(fixedAuto.dismissReason!, /第 2 轮复核判定已修复/);
+  assert.equal(isAutoClosedFixed(fixedAuto), true);
+  assert.equal(isAutoClosedFixed(store.getFinding(race.id)!), false, 'still_present 不该被剔除');
+  // 用户自己剔过的不覆盖他的理由:那是他的判断,不是"问题没了"
+  const legacy = store.addFinding(review.id, {
+    severity: 'low', category: 'Complexity', title: '旧 helper 可以顺手删掉',
+    body: '没人再调用。', file: 'src/pipeline.ts', line: 40,
+  });
+  store.setTriage(legacy.id, 'dismiss', '留给下个 PR 一起清。');
+  store.setFindingResolution(legacy.id, 2, 'fixed', '作者顺手删了。');
+  assert.equal(
+    store.getFinding(legacy.id)!.dismissReason,
+    '留给下个 PR 一起清。',
+    'reviewer 已填的剔除理由不该被自动理由覆盖',
+  );
   // 作者回应「不改」:代码原样未变,但结论已经有了 —— 必须能表达成 wont_fix 而非 still_present
   const debug = store.addFinding(review.id, {
     severity: 'medium', category: 'Type Safety', title: '调试脚本用 cast 伪造外部 JSON 的运行时形状',
@@ -297,7 +316,35 @@ function main() {
   assert.equal(done.fixedCount, 1);
   assert.equal(done.suppressedCount, 2, 'finishRound 不该覆盖已累加的抑制数');
   assert.ok(done.endedAt! >= done.startedAt);
-  log('第 2 轮:三态回写(含 wont_fix 不自动剔除)/ 一键采纳 / 抑制计数 / 收轮统计');
+  log('第 2 轮:三态回写(fixed 自动剔除 / wont_fix 不自动剔除)/ 一键采纳 / 抑制计数 / 收轮统计');
+
+  // ---- 6.5 下一轮:自动结案的条目退出待表态区,且与 reviewer 剔除分节交代 ----
+  const all3 = store.listFindings(review.id);
+  const open3 = all3.filter((f) => f.triage !== 'dismiss');
+  const dropped3 = all3.filter((f) => f.triage === 'dismiss');
+  assert.ok(!open3.some((f) => f.id === naming.id), '已确认修复的条目不该再要求表态');
+  const p3 = buildRerunPrompt({
+    round: 3, prevRound: store.getRound(review.id, 2)!, headSha: 'eeee3333ffff',
+    changedFiles: [], codeChanged: true, openFindings: open3, dismissedFindings: dropped3,
+    messagesByDiscussion: {}, pr: null,
+  });
+  assert.match(p3, /往轮已确认修复、已结案的 findings/);
+  assert.match(p3, /reviewer 已剔除的 findings —— 不要再报/);
+  assert.match(p3, /当作新问题报出来/, '回归必须留出口,否则修好又改回来的问题会被永久吞掉');
+  assert.ok(
+    p3.indexOf('counter 命名可更贴合语义') < p3.indexOf('reviewer 已剔除的 findings'),
+    '已修复的条目应落在结案节,不能混进 reviewer 剔除节',
+  );
+  assert.match(p3, /这套样式将随设计系统一并替换/, 'reviewer 的剔除理由仍要注入');
+  assert.ok(!p3.includes(`id=${naming.id}`), '结案条目不该带 id —— 它不需要 resolve_finding');
+  // 段号是数出来的:没有待表态条目时,结案节就该是第一节
+  const p3NoOpen = buildRerunPrompt({
+    round: 3, prevRound: store.getRound(review.id, 2)!, headSha: 'eeee3333ffff',
+    changedFiles: [], codeChanged: true, openFindings: [], dismissedFindings: dropped3,
+    messagesByDiscussion: {}, pr: null,
+  });
+  assert.match(p3NoOpen, /## 一、往轮已确认修复/);
+  log('第 3 轮 prompt:结案节与剔除节分开,回归留出口,段号随内容编排');
 
   // ---- 7. 轮次履历与级联删除 ----
   const rounds = store.listRounds(review.id);

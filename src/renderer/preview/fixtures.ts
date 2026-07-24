@@ -164,6 +164,9 @@ const FINDINGS: Finding[] = [
     lastSeenRound: 2,
     resolution: 'fixed',
     resolutionNote: '第 2 轮已改名为 completedCount。',
+    // 判定已修复即自动结案(见 rerun.md),故 fixture 也是剔除态
+    triage: 'dismiss',
+    dismissReason: '第 2 轮复核判定已修复',
   }),
   mkFinding({
     id: 'f3',

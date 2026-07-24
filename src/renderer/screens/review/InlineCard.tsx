@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Finding, FindingResolution, Severity, Triage } from '@shared/domain';
+import {
+  isAutoClosedFixed,
+  type Finding,
+  type FindingResolution,
+  type Severity,
+  type Triage,
+} from '@shared/domain';
 import type { FindingEditInput } from '@shared/ipc';
 import { renderMarkdown } from './markdown';
 import { currentResolution, isNewThisRound } from './rounds';
@@ -96,6 +102,7 @@ export function InlineCard({
 /**
  * 已剔除态。理由是**事后可选补充**而非剔除时的必填门槛 ——
  * 一键剔除的速度不能被输入框拖慢,但填了理由下一轮的同类抑制会准得多。
+ * 复核判定已修复而自动结案的另标一套字样:它不是"你认为这不是问题",别让人以为自己剔过。
  */
 function DismissedCard({
   finding,
@@ -117,23 +124,33 @@ function DismissedCard({
     setEditing(false);
   };
 
+  const autoClosed = isAutoClosedFixed(finding);
+
   return (
-    <div className="c-dismissed">
+    <div className={`c-dismissed${autoClosed ? ' auto' : ''}`}>
       <div className="dm-row">
-        <span className="dm-x">✕</span>
-        <span className="dm-t">已剔除 · {finding.title}</span>
+        <span className="dm-x">{autoClosed ? '✓' : '✕'}</span>
+        <span className="dm-t">
+          {autoClosed ? '已修复 · 自动剔除' : '已剔除'} · {finding.title}
+        </span>
         {onTriage && (
           <>
-            <button className="dm-why" onClick={() => setEditing((v) => !v)} title="理由会注入下一轮复审">
-              {finding.dismissReason ? '✎ 理由' : '＋ 理由'}
-            </button>
+            {/* 自动结案的理由是系统写的固定文案,没什么可补的;真要改口径走「恢复」再手动剔除 */}
+            {!autoClosed && (
+              <button className="dm-why" onClick={() => setEditing((v) => !v)} title="理由会注入下一轮复审">
+                {finding.dismissReason ? '✎ 理由' : '＋ 理由'}
+              </button>
+            )}
             <button className="f-restore" onClick={() => onTriage(finding, 'open')}>
               ↩ 恢复
             </button>
           </>
         )}
       </div>
-      {!editing && finding.dismissReason && <div className="dm-reason">{finding.dismissReason}</div>}
+      {/* 自动结案时标题行已说明缘由,这里改挂 agent 的复核说明 —— 那才是新信息 */}
+      {!editing && (autoClosed ? finding.resolutionNote : finding.dismissReason) && (
+        <div className="dm-reason">{autoClosed ? finding.resolutionNote : finding.dismissReason}</div>
+      )}
       {editing && (
         <div className="dm-edit">
           <input

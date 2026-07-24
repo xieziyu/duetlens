@@ -7,6 +7,7 @@ import {
   type ReportedFindingUpdate,
 } from '../mcp/duetlens-mcp-server';
 import {
+  isAutoClosedFixed,
   reportFindingSchema,
   resolveFindingSchema,
   updateFindingSchema,
@@ -252,14 +253,18 @@ export class ReviewSession {
 
   /**
    * 重复上报的兜底吸收(prompt 是软约束,这里是硬约束)。
-   * 命中已剔除项 → 抑制、只计数不落库;命中保留中的项 → 等价于 agent 表态「仍存在」。
+   * 命中 reviewer 剔除项 → 抑制、只计数不落库;命中保留中的项 → 等价于 agent 表态「仍存在」;
+   * 命中「复核已修复」自动结案的项 → 视作回归,恢复保留而不是继续抑制。
    * 返回 true 表示该上报已被吸收,不应新建 finding。
    */
   private absorbDuplicate(candidate: { file: string; line: number; title: string }): boolean {
     const dup = findDuplicate(candidate, this.store.listFindings(this.reviewId));
     if (!dup) return false;
     const round = this.currentRound();
-    if (dup.triage === 'dismiss') {
+    // 自动结案不是 reviewer 的判断,不能拿它当黑名单:否则修好又改回来的问题会被静默吞掉
+    if (isAutoClosedFixed(dup)) {
+      this.store.setTriage(dup.id, 'open');
+    } else if (dup.triage === 'dismiss') {
       this.store.bumpSuppressed(this.reviewId, round);
       return true;
     }
