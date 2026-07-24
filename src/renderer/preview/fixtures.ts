@@ -676,6 +676,8 @@ export function installPreviewApi(): void {
         };
       },
       listOpenPrs: async () => OPEN_PRS,
+      // entry-state=infer 演示粘贴 PR 后自动反推本地 clone;默认不命中(留空路径)
+      inferLocalRepo: async () => (params.get('entry-state') === 'infer' ? '/Users/dev/podcast-go' : null),
       getRepoRemote: async () => ({
         nwo: params.get('entry-state') === 'path-mismatch' ? 'xieziyu/other-service' : 'xieziyu/podcast-go',
       }),

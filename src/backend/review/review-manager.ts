@@ -29,6 +29,7 @@ import {
   checkGhAuth,
   detectGitButler,
   getRepoRemote,
+  inferLocalRepo,
   listLocalBranches,
   listOpenPrs,
   previewPr,
@@ -128,6 +129,11 @@ export class ReviewManager extends EventEmitter {
 
   getRepoRemote(repoPath: string): Promise<RepoRemoteInfo> {
     return getRepoRemote(repoPath);
+  }
+
+  /** 由 PR owner/repo 反推本机 clone 路径,以历史审核用过的仓库路径为优先候选。 */
+  inferLocalRepo(nwo: string): Promise<string | null> {
+    return inferLocalRepo(nwo, this.store.listRepoPaths());
   }
 
   listLocalBranches(repoPath: string, baseRef?: string): Promise<LocalBranchList> {

@@ -137,6 +137,9 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.sourceGetRepoRemote, (_e, repoPath: string) =>
     manager.getRepoRemote(repoPath),
   );
+  ipcMain.handle(IpcChannels.sourceInferLocalRepo, (_e, nwo: string) =>
+    manager.inferLocalRepo(nwo),
+  );
   ipcMain.handle(IpcChannels.sourceListLocalBranches, (_e, repoPath: string, baseRef?: string) =>
     manager.listLocalBranches(repoPath, baseRef),
   );

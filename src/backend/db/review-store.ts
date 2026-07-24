@@ -257,6 +257,20 @@ export class ReviewStore {
     }));
   }
 
+  /** 历史审核用过的本地仓库路径(去重、最近在前),供 PR 反推本地 clone 时优先比对与取扫描根。 */
+  listRepoPaths(limit = 50): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT repo_path FROM reviews
+         WHERE repo_path IS NOT NULL AND repo_path <> ''
+         GROUP BY repo_path
+         ORDER BY MAX(updated_at) DESC
+         LIMIT ?`,
+      )
+      .all(limit) as { repo_path: string }[];
+    return rows.map((r) => r.repo_path);
+  }
+
   /** 删除一次审核;discussions / findings / messages / ui_state / diffs 经 FK 级联清理。 */
   deleteReview(id: string): void {
     this.db.prepare('DELETE FROM reviews WHERE id = ?').run(id);

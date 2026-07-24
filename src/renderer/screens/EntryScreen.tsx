@@ -326,6 +326,10 @@ function GitHubPanel({
   const [previewing, setPreviewing] = useState(false);
   const [remoteNwo, setRemoteNwo] = useState<string | null>(null);
   const [openPrs, setOpenPrs] = useState<PrSummary[] | null>(null);
+  // 反推本地 clone:粘贴 PR 后自动填 repoPath;记住是否为自动匹配、以及已为哪个 nwo 试过(避免重复反推)
+  const [inferred, setInferred] = useState(false);
+  const [inferring, setInferring] = useState(false);
+  const triedInferFor = useRef<string | null>(null);
   // open PR 列表默认折叠:已贴 PR 链接时目标已确定,展开会把开始按钮挤出视野
   const [browseOpen, setBrowseOpen] = useState(false);
 
@@ -397,6 +401,33 @@ function GitHubPanel({
       alive = false;
     };
   }, [browseOpen, remoteNwo, openPrs, repoPath]);
+
+  // PR 解析成功且用户未填本地路径时,自动反推本机 clone 并预填(每个 nwo 只试一次,尊重手动输入)
+  useEffect(() => {
+    if (!preview || repoPath.trim() || triedInferFor.current === preview.nwo) return;
+    triedInferFor.current = preview.nwo;
+    let alive = true;
+    setInferring(true);
+    window.duetlens.source
+      .inferLocalRepo(preview.nwo)
+      .then((p) => {
+        if (alive && p) {
+          setRepoPath(p);
+          setInferred(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => alive && setInferring(false));
+    return () => {
+      alive = false;
+    };
+  }, [preview, repoPath, setRepoPath]);
+
+  // 手动改动路径即视为用户接管,撤下「自动匹配」标记
+  const onPathChange = (v: string) => {
+    setRepoPath(v);
+    setInferred(false);
+  };
 
   if (ghAuth === false) {
     return (
@@ -474,14 +505,17 @@ function GitHubPanel({
         <input
           value={repoPath}
           spellCheck={false}
-          onChange={(e) => setRepoPath(e.target.value)}
+          onChange={(e) => onPathChange(e.target.value)}
           placeholder="本地仓库路径(可选)· 让 agent 读全量代码,留空则临时 checkout"
         />
         <button type="button" className="pf-pick" onClick={pickDir} disabled={busy}>
           选择…
         </button>
+        {inferring && !repoPath.trim() && <span className="pf-tag muted mono">查找本地…</span>}
         {repoPath.trim() && remoteNwo && (
-          <span className={mismatch ? 'pf-tag warn' : 'pf-tag'}>{mismatch ? 'remote 不匹配 ⚠' : '已匹配 ✓'}</span>
+          <span className={mismatch ? 'pf-tag warn' : 'pf-tag'}>
+            {mismatch ? 'remote 不匹配 ⚠' : inferred ? '自动匹配 ✓' : '已匹配 ✓'}
+          </span>
         )}
       </label>
       {mismatch && (

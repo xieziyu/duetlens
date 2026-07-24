@@ -67,6 +67,7 @@ export const IpcChannels = {
   sourcePreviewPr: 'source:preview-pr',
   sourceListOpenPrs: 'source:list-open-prs',
   sourceGetRepoRemote: 'source:get-repo-remote',
+  sourceInferLocalRepo: 'source:infer-local-repo',
   sourceListLocalBranches: 'source:list-local-branches',
   sourceDetectGitButler: 'source:detect-gitbutler',
   promptGet: 'prompt:get',
@@ -284,6 +285,8 @@ export interface DuetlensApi {
     listOpenPrs(opts: { nwo?: string; repoPath?: string }): Promise<PrSummary[]>;
     /** 读某本地目录的 remote 归属(nameWithOwner);用于 PR 本地路径 remote-匹配校验。 */
     getRepoRemote(repoPath: string): Promise<RepoRemoteInfo>;
+    /** 由 PR 的 owner/repo 反推本机已 clone 的仓库路径;找不到返回 null。 */
+    inferLocalRepo(nwo: string): Promise<string | null>;
     /** 列举本地分支(相对 base 领先若干 commit)+ base 候选。 */
     listLocalBranches(repoPath: string, baseRef?: string): Promise<LocalBranchList>;
     /** 探测目录是否 GitButler workspace 并列举其虚拟分支。 */

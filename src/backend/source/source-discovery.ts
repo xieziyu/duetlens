@@ -3,6 +3,8 @@
  * 本地分支列举、GitButler workspace 探测、目录 remote 归属)。
  * 不进入 Source 的 prepare/diff 生命周期,仅为发起前的选择器供数据。
  */
+import { readFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import type {
   GitButlerStatus,
@@ -89,6 +91,71 @@ export async function getRepoRemote(repoPath: string): Promise<RepoRemoteInfo> {
   } catch {
     return { nwo: null };
   }
+}
+
+/**
+ * 由 PR 的 owner/repo 反推本机已 clone 的仓库路径,便于粘贴 PR 链接后自动复用本地全量代码。
+ * 匹配以 origin remote 的 nameWithOwner 为准(大小写不敏感),命中即返回,全程离线、无 gh。
+ * priorPaths 为历史审核用过的仓库路径(最近在前),既作直接候选、其父目录又作扫描根。
+ */
+export async function inferLocalRepo(nwo: string, priorPaths: string[]): Promise<string | null> {
+  const target = nwo.toLowerCase();
+  const [owner, repoName] = nwo.split('/');
+  if (!owner || !repoName) return null;
+
+  // Tier 1:历史用过的路径直接比对(数量少,用 git 命令兼容 worktree/gitbutler 的 .git 文件形态)
+  for (const p of priorPaths) {
+    if ((await gitRemoteNwo(p))?.toLowerCase() === target) return p;
+  }
+
+  // Tier 2:<root>/<repoName> 同名目录直探(clone 默认目录名即仓库名,命中率最高)
+  for (const root of candidateRoots(priorPaths, owner)) {
+    const cand = path.join(root, repoName);
+    if ((await readGitConfigNwo(cand))?.toLowerCase() === target) return cand;
+  }
+  return null;
+}
+
+const INFER_ROOTS = [
+  'Projects', 'projects', 'Developer', 'dev', 'Code', 'code',
+  'src', 'repos', 'workspace', 'work', 'git', 'GitHub', 'github',
+  path.join('Documents', 'GitHub'),
+];
+
+/** 反推扫描的候选根:历史仓库的父目录 + 常见开发目录 + go 布局的 owner 目录。 */
+function candidateRoots(priorPaths: string[], owner: string): string[] {
+  const home = os.homedir();
+  const set = new Set<string>();
+  for (const p of priorPaths) set.add(path.dirname(p));
+  for (const r of INFER_ROOTS) set.add(path.join(home, r));
+  set.add(path.join(home, 'go', 'src', 'github.com', owner));
+  return [...set];
+}
+
+/** origin remote 的 nameWithOwner(去 .git 后缀);非 git / 无 origin 返回 null。用 git 命令,兼容各种 .git 形态。 */
+async function gitRemoteNwo(repoPath: string): Promise<string | null> {
+  try {
+    return parseRemoteNwo((await run('git', ['-C', repoPath, 'remote', 'get-url', 'origin'])).trim());
+  } catch {
+    return null;
+  }
+}
+
+/** 直接读 .git/config 取 origin nwo:比 spawn git 快得多,用于浅扫大量目录;非常规 clone(.git 为文件)返回 null。 */
+async function readGitConfigNwo(dir: string): Promise<string | null> {
+  try {
+    const cfg = await readFile(path.join(dir, '.git', 'config'), 'utf8');
+    const m = cfg.match(/\[remote "origin"\][^[]*?\burl\s*=\s*(\S+)/);
+    return m ? parseRemoteNwo(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 从 remote URL 解析 owner/repo,兼容 git@host:owner/repo.git、ssh://、https:// 三种写法。 */
+function parseRemoteNwo(url: string): string | null {
+  const m = url.match(/github\.com[:/]+([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
+  return m ? `${m[1]}/${m[2]}` : null;
 }
 
 /**

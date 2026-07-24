@@ -211,6 +211,7 @@
   flex: none;
 }
 .pf-tag.warn { color: var(--human); border-color: var(--human-line); background: var(--human-soft); }
+.pf-tag.muted { color: var(--text-faint); border-color: var(--border); background: transparent; }
 .path-warn {
   margin-top: 8px;
   font-size: 11.5px;
