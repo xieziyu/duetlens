@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "electron-builder": {
+      "source": "pedronauck/skills",
+      "sourceType": "github",
+      "skillPath": "skills/community/electron-builder/SKILL.md",
+      "computedHash": "f7ea4f7ebd53a5e05a9ba96f55333e3882a2455724837c7985cf2309fa919225"
+    }
+  }
+}
