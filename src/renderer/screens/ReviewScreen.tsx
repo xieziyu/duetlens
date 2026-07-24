@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type { Discussion, Finding, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
-import type { TokenUsage } from '@shared/agent-events';
 import { useSettings } from '../settings/SettingsProvider';
 import { useReviewStream } from '../review/useReviewStream';
 import { useReviewUiState } from '../review/useReviewUiState';
@@ -10,8 +9,7 @@ import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
 import { SummaryTab } from './review/SummaryTab';
-import { ScanTimeline } from './review/ScanTimeline';
-import { ScanProgressHeader } from './review/ScanProgressHeader';
+import { ScanProgressBar } from './review/ScanProgressBar';
 import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
@@ -332,6 +330,14 @@ export function ReviewScreen({
   }, [helpOpen, diffView, update, setActiveTab]);
 
   const scanning = status === 'scanning' || !status;
+  // 进度信号必须按轮次隔离:findings 是整个 review 的累积集,拿全量当"本轮实时产出"会把
+  // 上一轮的旧意见算进第 N 轮的计数里。本轮新报出的 = round === currentRound。
+  const roundFindings = useMemo(
+    () => findings.filter((f) => f.round === currentRound),
+    [findings, currentRound],
+  );
+  // 同理 sessionReady 只看本轮信号(lastTool/tokenUsage 已在开轮时清空,见 useReviewStream)
+  const sessionReady = lastTool != null || tokenUsage != null || roundFindings.length > 0;
   // 常驻 CTA:github-pr → 提交 review(徽标=待提交数);其余 → 导出 review(徽标=保留数)
   const isGithub = review?.source === 'github-pr';
   const ctaCount = isGithub
@@ -399,84 +405,92 @@ export function ReviewScreen({
         />
       )}
 
-      <div className="rev-main">
-        <FileTree
-          files={diff}
-          findings={findings}
-          activePath={activePath}
-          onSelect={setActivePath}
-          viewed={viewed}
-          onToggleViewed={onToggleViewed}
-        />
-        <Resizer
-          cssVar="--left-w"
-          width={leftW}
-          min={LEFT_MIN}
-          max={LEFT_MAX}
-          sign={1}
-          onCommit={(w) => update({ leftWidth: w })}
-        />
-        <DiffPane
-          files={diff}
-          findings={findings}
-          discussions={discussions}
-          activePath={activePath}
-          focusFindingId={focusFindingId}
-          currentRound={currentRound}
-          onTriage={onTriage}
-          onUpdate={onUpdate}
-          onStartDiscussion={onStartDiscussion}
-          onAskCodex={onAskCodex}
-          onAddFinding={onAddFinding}
-          onDiscussFinding={discussFinding}
-          onJumpFinding={focusFinding}
-          onJumpDiscussion={focusDiscussion}
-          fetchFileContent={fetchFileContent}
-          view={diffView}
-          viewed={viewed}
-          collapsed={collapsed}
-          onToggleViewed={onToggleViewed}
-          onToggleCollapsed={onToggleCollapsed}
-        />
-        <Resizer
-          cssVar="--right-w"
-          width={rightW}
-          min={RIGHT_MIN}
-          max={RIGHT_MAX}
-          sign={-1}
-          onCommit={(w) => update({ rightWidth: w })}
-        />
-        <RightPanel
-          tab={tab}
-          onTab={setTab}
-          grouping={settings.findingsGrouping}
-          findings={findings}
-          discussions={discussions}
-          messages={messages}
-          review={review}
-          diff={diff}
-          diffReady={diffReady}
-          scanning={scanning}
-          currentRound={currentRound}
-          lastTool={lastTool}
-          tokenUsage={tokenUsage}
-          onPickFinding={focusFinding}
-          onTriage={onTriage}
-          activeDiscussionId={activeDiscussionId}
-          onSelectDiscussion={focusDiscussion}
-          pendingRef={pendingRef}
-          onClearRef={() => setPendingRef(null)}
-          awaitingReply={awaitingReply}
-          onComposerSend={onComposerSend}
-          onJumpToCode={jumpToCode}
-          ensureMessages={ensureMessages}
-          onPromote={onPromote}
-          onClearMessages={onClearMessages}
-          categoryFilter={categoryFilter}
-          onClearCategory={() => setCategoryFilter(null)}
-          onEditSummary={onEditSummary}
-          onPickCategory={onPickCategory}
-        />
+      <div className="rev-host">
+        {scanning && (
+          <ScanProgressBar
+            findingCount={roundFindings.length}
+            diffReady={diffReady}
+            sessionReady={sessionReady}
+            currentRound={currentRound}
+            model={review?.model ?? null}
+          />
+        )}
+        <div className="rev-main">
+          <FileTree
+            files={diff}
+            findings={findings}
+            activePath={activePath}
+            onSelect={setActivePath}
+            viewed={viewed}
+            onToggleViewed={onToggleViewed}
+          />
+          <Resizer
+            cssVar="--left-w"
+            width={leftW}
+            min={LEFT_MIN}
+            max={LEFT_MAX}
+            sign={1}
+            onCommit={(w) => update({ leftWidth: w })}
+          />
+          <DiffPane
+            files={diff}
+            findings={findings}
+            discussions={discussions}
+            activePath={activePath}
+            focusFindingId={focusFindingId}
+            currentRound={currentRound}
+            onTriage={onTriage}
+            onUpdate={onUpdate}
+            onStartDiscussion={onStartDiscussion}
+            onAskCodex={onAskCodex}
+            onAddFinding={onAddFinding}
+            onDiscussFinding={discussFinding}
+            onJumpFinding={focusFinding}
+            onJumpDiscussion={focusDiscussion}
+            fetchFileContent={fetchFileContent}
+            view={diffView}
+            viewed={viewed}
+            collapsed={collapsed}
+            onToggleViewed={onToggleViewed}
+            onToggleCollapsed={onToggleCollapsed}
+          />
+          <Resizer
+            cssVar="--right-w"
+            width={rightW}
+            min={RIGHT_MIN}
+            max={RIGHT_MAX}
+            sign={-1}
+            onCommit={(w) => update({ rightWidth: w })}
+          />
+          <RightPanel
+            tab={tab}
+            onTab={setTab}
+            grouping={settings.findingsGrouping}
+            findings={findings}
+            discussions={discussions}
+            messages={messages}
+            review={review}
+            diff={diff}
+            scanning={scanning}
+            currentRound={currentRound}
+            onPickFinding={focusFinding}
+            onTriage={onTriage}
+            activeDiscussionId={activeDiscussionId}
+            onSelectDiscussion={focusDiscussion}
+            pendingRef={pendingRef}
+            onClearRef={() => setPendingRef(null)}
+            awaitingReply={awaitingReply}
+            onComposerSend={onComposerSend}
+            onJumpToCode={jumpToCode}
+            ensureMessages={ensureMessages}
+            onPromote={onPromote}
+            onClearMessages={onClearMessages}
+            categoryFilter={categoryFilter}
+            onClearCategory={() => setCategoryFilter(null)}
+            onEditSummary={onEditSummary}
+            onPickCategory={onPickCategory}
+          />
+        </div>
       </div>
 
       <ReviewStatusBar
@@ -548,11 +562,8 @@ function RightPanel({
   messages,
   review,
   diff,
-  diffReady,
   scanning,
   currentRound,
-  lastTool,
-  tokenUsage,
   onPickFinding,
   onTriage,
   activeDiscussionId,
@@ -578,11 +589,8 @@ function RightPanel({
   messages: Record<string, Message[]>;
   review: Review | null;
   diff: DiffFile[];
-  diffReady: boolean;
   scanning: boolean;
   currentRound: number;
-  lastTool: string | null;
-  tokenUsage: TokenUsage | null;
   onPickFinding: (f: Finding) => void;
   onTriage: (finding: Finding, triage: Triage, reason?: string | null) => void;
   activeDiscussionId: string | null;
@@ -668,30 +676,8 @@ function RightPanel({
     return { files: diff.length, additions: a, deletions: d };
   }, [diff]);
 
-  // 扫描期常驻进度头:Findings tab 已在 body 里显示完整时间线,故只在其余 tab 补一条紧凑摘要,
-  // 让停在 Discussion / Summary 时也能感知机审进度;点它切回 Findings 看完整时间线。
-  const showProgressHeader = scanning && tab !== 'findings';
-  // 进度信号必须按轮次隔离:findings 是整个 review 的累积集,拿全量当"本轮实时产出"会把
-  // 上一轮的旧意见算进第 N 轮的计数与实时流里。本轮新报出的 = round === currentRound。
-  const roundFindings = useMemo(
-    () => findings.filter((f) => f.round === currentRound),
-    [findings, currentRound],
-  );
-  // 同理 sessionReady 只看本轮信号(lastTool/tokenUsage 已在开轮时清空,见 useReviewStream)
-  const sessionReady = lastTool != null || tokenUsage != null || roundFindings.length > 0;
-
   return (
     <div className="right pane">
-      {showProgressHeader && (
-        <ScanProgressHeader
-          findingCount={roundFindings.length}
-          diffReady={diffReady}
-          sessionReady={sessionReady}
-          currentRound={currentRound}
-          model={review?.model ?? null}
-          onExpand={() => onTab('findings')}
-        />
-      )}
       <div className="tabs">
         {RIGHT_TABS.map((t) => (
           <button key={t} className={`tab${t === tab ? ' on' : ''}`} onClick={() => onTab(t)}>
@@ -707,98 +693,86 @@ function RightPanel({
 
       {tab === 'findings' && (
         <div className="tab-body">
-          {scanning ? (
-            <ScanTimeline
-              findings={roundFindings}
-              diffReady={diffReady}
-              sessionReady={sessionReady}
-              currentRound={currentRound}
-              onPickFinding={onPickFinding}
-            />
-          ) : (
-            <>
-              {categoryFilter && (
-                <div className="cat-filter">
-                  筛选 · <b>{categoryFilter}</b>
-                  <button className="cf-x" onClick={onClearCategory} title="清除筛选">
-                    ✕
-                  </button>
-                </div>
-              )}
-              {shown.length === 0 && fixed.length === 0 && wontFix.length === 0 &&
-                (categoryFilter ? (
-                  <p className="empty-note">无 {categoryFilter} 分类的 findings。</p>
-                ) : (
-                  // 扫描已结束且零 finding = 干净通过:给正向结论 + 覆盖度 + 手动新增引导
-                  <div className="findings-clean">
-                    <span className="fc-badge">✓</span>
-                    <div className="fc-title">未发现需要修复的问题</div>
-                    <div className="fc-sub">agent 已通读本次改动,没有报告 finding。</div>
-                    {coverage.files > 0 && (
-                      <div className="fc-cover">
-                        已覆盖 {coverage.files} 文件 · +{coverage.additions} −{coverage.deletions} · read-only sandbox
-                      </div>
-                    )}
-                    <div className="fc-hint">
-                      仍可框选左侧代码「＋ 记为 finding」手动新增,或在 Discussion 追问 agent。
-                    </div>
-                  </div>
-                ))}
-              {shown.length > 0 && (
-                <div className="fp-toolbar">
-                  <span className="fp-tally">
-                    保留 <b>{kept}</b> · 剔除 {dropped}
-                  </span>
-                </div>
-              )}
-              {groups.map((g) => (
-                <div key={g.key} className="fgroup">
-                  <div className="fg-head">
-                    {g.header}
-                    <span className="fg-n">{g.findings.length}</span>
-                    <span className="fg-line" />
-                  </div>
-                  {g.findings.map((f) => (
-                    <FindingRow
-                      key={f.id}
-                      finding={f}
-                      currentRound={currentRound}
-                      onPick={onPickFinding}
-                      onTriage={onTriage}
-                    />
-                  ))}
-                </div>
-              ))}
-              <FoldedGroup label="✓ 本轮判定已修复" tone="fixed" findings={fixed}>
-                {(f) => (
-                  <FindingRow
-                    key={f.id}
-                    finding={f}
-                    currentRound={currentRound}
-                    onPick={onPickFinding}
-                    onTriage={onTriage}
-                  />
-                )}
-              </FoldedGroup>
-              {/* 作者已回应的默认展开:这组还等着 reviewer 决定接不接受作者的说法 */}
-              <FoldedGroup
-                label="◇ 作者已回应,未改动"
-                tone="wontfix"
-                findings={wontFix}
-                defaultOpen
-              >
-                {(f) => (
-                  <FindingRow
-                    key={f.id}
-                    finding={f}
-                    currentRound={currentRound}
-                    onPick={onPickFinding}
-                    onTriage={onTriage}
-                  />
-                )}
-              </FoldedGroup>
-            </>
+          {categoryFilter && (
+            <div className="cat-filter">
+              筛选 · <b>{categoryFilter}</b>
+              <button className="cf-x" onClick={onClearCategory} title="清除筛选">
+                ✕
+              </button>
+            </div>
           )}
+          {shown.length === 0 && fixed.length === 0 && wontFix.length === 0 &&
+            (categoryFilter ? (
+              <p className="empty-note">无 {categoryFilter} 分类的 findings。</p>
+            ) : scanning ? (
+              // 扫描期零 finding 只是「还没报出来」,不能给干净通过的结论
+              <div className="scan-note">
+                <span className="pulse" /> agent 通读改动中,发现即刻出现在此。
+              </div>
+            ) : (
+              // 扫描已结束且零 finding = 干净通过:给正向结论 + 覆盖度 + 手动新增引导
+              <div className="findings-clean">
+                <span className="fc-badge">✓</span>
+                <div className="fc-title">未发现需要修复的问题</div>
+                <div className="fc-sub">agent 已通读本次改动,没有报告 finding。</div>
+                {coverage.files > 0 && (
+                  <div className="fc-cover">
+                    已覆盖 {coverage.files} 文件 · +{coverage.additions} −{coverage.deletions} · read-only sandbox
+                  </div>
+                )}
+                <div className="fc-hint">
+                  仍可框选左侧代码「＋ 记为 finding」手动新增,或在 Discussion 追问 agent。
+                </div>
+              </div>
+            ))}
+          {shown.length > 0 && (
+            <div className="fp-toolbar">
+              <span className="fp-tally">
+                保留 <b>{kept}</b> · 剔除 {dropped}
+              </span>
+            </div>
+          )}
+          {groups.map((g) => (
+            <div key={g.key} className="fgroup">
+              <div className="fg-head">
+                {g.header}
+                <span className="fg-n">{g.findings.length}</span>
+                <span className="fg-line" />
+              </div>
+              {g.findings.map((f) => (
+                <FindingRow
+                  key={f.id}
+                  finding={f}
+                  currentRound={currentRound}
+                  onPick={onPickFinding}
+                  onTriage={onTriage}
+                />
+              ))}
+            </div>
+          ))}
+          <FoldedGroup label="✓ 本轮判定已修复" tone="fixed" findings={fixed}>
+            {(f) => (
+              <FindingRow
+                key={f.id}
+                finding={f}
+                currentRound={currentRound}
+                onPick={onPickFinding}
+                onTriage={onTriage}
+              />
+            )}
+          </FoldedGroup>
+          {/* 作者已回应的默认展开:这组还等着 reviewer 决定接不接受作者的说法 */}
+          <FoldedGroup label="◇ 作者已回应,未改动" tone="wontfix" findings={wontFix} defaultOpen>
+            {(f) => (
+              <FindingRow
+                key={f.id}
+                finding={f}
+                currentRound={currentRound}
+                onPick={onPickFinding}
+                onTriage={onTriage}
+              />
+            )}
+          </FoldedGroup>
         </div>
       )}
 

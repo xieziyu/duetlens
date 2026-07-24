@@ -49,7 +49,7 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 | Findings list | 运行时 triage 列表 | `.frow .triage .fg-head` | kept / dismissed / submitted |
 | Summary | 结论卡 + 统计 + 可编辑正文 | `.sum-verdict .sum-stats .sb-editor` | view / editing |
 | Composer | 追问 + @file + 引用选区 | `.composer .refchip .file-menu` | — |
-| Scan timeline | 首轮机审进度 | `.scanview .timeline .tl` | done / active / pending |
+| Scan progress bar | 机审进度:整幅横条 + 展开的竖排时间线 | `.scanbar .sb-step .timeline .tl` | done / active / pending |
 
 ## 收敛 TODO(实现项)
 

@@ -29,6 +29,7 @@
 │  ├─ <TopBar>                             .rev-topbar 只留上下文
 │  │  ├─ <SourceChip>                      来源图标 + #PR/分支 + ⧉ 打开 PR 网页
 │  │  └─ <SubmitCta>                       提交 review / 导出报告 (随 source)
+│  ├─ <ScanProgressBar>                    .scanbar 横跨三栏 (scan 期);点开向下展开竖排 .timeline
 │  ├─ <FileTree>                           .tree
 │  │  └─ <FileRow>                         .file (.badge finding 徽标 · .vtick viewed)
 │  ├─ <DiffPane>                           左侧主场
@@ -43,7 +44,6 @@
 │  │  │  └─ <SelectionPopover>             .sel-pop 框选发起 discussion / 追问
 │  │  └─ …
 │  ├─ <RightPanel>                         .tabs 三 tab 互斥
-│  │  ├─ <ScanTimeline>                    .scanview 首轮机审 (scan 期占据右栏)
 │  │  ├─ <DiscussionTab>                   讨论线程 + <Composer>
 │  │  ├─ <FindingsTab>                     运行时 triage 列表 (.frow 分组 + tally)
 │  │  └─ <SummaryTab>                      结论卡 + 统计 + <SummaryEditor> 可编辑正文
