@@ -31,7 +31,7 @@
 
 | 实例 | 目录 |
 | --- | --- |
-| 使用版(`npm run package` 产出的 Duetlens.app) | `~/Library/Application Support/Duetlens/` |
+| 使用版(`npm run package` 产出的 `release/mac-arm64/Duetlens.app`) | `~/Library/Application Support/Duetlens/` |
 | 开发版(`npm start`) | `~/Library/Application Support/Duetlens-dev/` |
 
 - 排查真实数据(复现问题 / 直接查表):`npm run db:snapshot` 单向快照使用版→开发版(旧开发库自动备份),之后用 `sqlite3 "$HOME/Library/Application Support/Duetlens-dev/duetlens.db" "…"` 随便查,重启开发版即在 UI 里复现。查快照而不是查原库,agent 怎么翻都写不坏真实数据。

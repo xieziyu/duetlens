@@ -23,5 +23,5 @@
     },
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "scripts", "forge.config.ts", "forge.env.d.ts", "vite.*.config.ts"]
+  "include": ["src", "scripts", "electron.vite.config.ts", "vite.renderer.config.ts"]
 }

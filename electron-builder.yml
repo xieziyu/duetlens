@@ -1,0 +1,33 @@
+appId: com.xieziyu.duetlens
+productName: Duetlens
+directories:
+  output: release
+  buildResources: build
+
+# 只装构建产物 + package.json;生产依赖由 electron-builder 自动带上(见 asarUnpack)
+files:
+  - out/**
+  - package.json
+
+asar: true
+# better-sqlite3 是原生模块,.node 不能留在 asar 里
+asarUnpack:
+  - node_modules/better-sqlite3/**
+
+# Electron 安全基线,与 docs/architecture.md 一致;electron-builder 在打包后、签名前翻转
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+
+mac:
+  target: zip
+  category: public.app-category.developer-tools
+  # 发布用的 Developer ID 签名/公证留到发布阶段(见 docs/design/open-questions.md)。
+  # 本地必须 ad-hoc 签(identity "-"):翻过 fuses 的二进制会失去原签名,不重签会被系统 SIGKILL。
+  identity: "-"
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist

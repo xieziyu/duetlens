@@ -18,6 +18,7 @@
 - **实机**:`npm run rebuild:electron` → `npm start`。前提:`codex login`(扫描/追问烧 token);github-pr source 需 `gh auth login`。
 - **前端视觉自查(不需 Electron)**:`npm run preview:ui` → 浏览器开 `/preview.html`。`src/renderer/preview/` 用 fixture stub `window.duetlens`;明暗在左侧 rail 底部切,配色主题在设置屏(`?screen=settings`)。支持 `?screen=entry|review|submit|prompt|settings|history|onboarding`、`?source=github`、`?submit=invalid|failed`、`?scan`、`?clean`。
 - **mockup 自查**:`mockup/*.html` 要用静态服务打开(如 `python3 -m http.server`),**不能走 `preview:ui`** —— vite 会把 mockup 当入口做 HTML transform,代码示例里的 `Result<()>` 之类会被当标签解析而报错。
+- **出包**:`npm run package` 出免打包的 `release/mac-arm64/Duetlens.app`,`npm run dist` 出 zip。本地无 Developer ID,走 ad-hoc 签名(`identity: "-"` + `disable-library-validation` entitlement);翻过 fuses 的二进制不重签会被系统 SIGKILL。
 - **ABI 坑**:同一 `better-sqlite3` 服务两运行时——app 需 Electron ABI(`rebuild:electron`)、spike/tsx 需 Node ABI(`rebuild:node`),切换后对方失效。
 
 ### 应用外壳(2026-07-23 重设计,方案见 [ui](ui.md#应用外壳导航-rail--顶栏--底部状态栏2026-07-23-重设计))
@@ -34,7 +35,7 @@
 
 | 层 | 位置 | 状态 |
 | --- | --- | --- |
-| 桌面外壳 | electron-forge(vite-typescript)+ React SPA | ✅ 骨架、安全基线(contextIsolation/sandbox)、主题两轴 |
+| 桌面外壳 | electron-vite(构建)+ electron-builder(出包)+ React SPA | ✅ 骨架、安全基线(contextIsolation/sandbox)、主题两轴 |
 | 主进程后端 | `src/main.ts` + `src/backend/**` | ✅ |
 | ConversationalAgent 抽象 | `src/backend/agent/conversational-agent.ts` | ✅ 接口;codex 唯一实现 |
 | codex app-server 封装 | `src/backend/agent/codex/`(jsonrpc / codex-app-server / codex-agent / protocol) | ✅ 薄封装、事件归一、elicitation 自动 accept、`model/list` |

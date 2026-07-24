@@ -7,9 +7,6 @@ import { ReviewManager } from '@backend/review/review-manager';
 import { createCompletionNotifier } from '@backend/notify/completion-notifier';
 import { IpcEvents, type CompletionNotice, type ReviewEvent } from '@shared/ipc';
 
-// MAIN_WINDOW_VITE_DEV_SERVER_URL / MAIN_WINDOW_VITE_NAME 由 plugin-vite 注入,
-// 类型见 forge.env.d.ts 引用的 @electron-forge/plugin-vite/forge-vite-env
-
 // 开发态与打包版可能同时开着:各自独立 userData,否则两个进程写同一个 sqlite,
 // 且各自的内存态互相看不见对方的写入。DUETLENS_USER_DATA 可显式指向某份数据
 // (如直接开使用版的库排查问题),前提是确保只有一个实例在跑。ready 前必须设好。
@@ -32,7 +29,7 @@ function createWindow(): void {
     backgroundColor: '#0b0d12', // 对齐 tokens 深色 --bg,消除加载白闪
     titleBarStyle: 'hiddenInset',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, '../preload/index.js'),
       // Electron 安全基线(见 docs/architecture.md)
       contextIsolation: true,
       nodeIntegration: false,
@@ -51,11 +48,13 @@ function createWindow(): void {
     if (url.startsWith('https://')) void shell.openExternal(url);
   });
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+  // ELECTRON_RENDERER_URL 由 electron-vite dev 注入
+  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
+  if (!app.isPackaged && devServerUrl) {
+    mainWindow.loadURL(devServerUrl);
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
   mainWindow.on('closed', () => {

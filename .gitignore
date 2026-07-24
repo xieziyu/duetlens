@@ -19,9 +19,9 @@ dist-ssr/
 *.tsbuildinfo
 .eslintcache
 
-# ---- Electron / Vite / Forge build output ----
-.vite/
+# ---- Electron build output ----
 out/
+release/
 
 # ---- codex generated protocol bundle (regenerate via npm run codex:gen-types) ----
 src/backend/agent/codex/generated/
