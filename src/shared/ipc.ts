@@ -98,6 +98,8 @@ export interface ReviewStartInput {
 export interface RerunInput {
   /** reviewer 对本轮的额外说明(如「重点看并发那块」),随复审指令注入 */
   note?: string;
+  /** 本轮起调整审核强度;缺省沿用 review 现有档。给出即持久化为 review 新档,后续轮次/续接沿用 */
+  intensity?: ReviewIntensity;
 }
 
 /** 交给系统默认浏览器打开的结果;失败原因回前端做提示,不抛异常。 */

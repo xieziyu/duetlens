@@ -11,7 +11,7 @@ import type {
   UiSettings,
 } from '@shared/domain';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { AddFindingInput, FindingEditInput, RecentReview, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, FindingEditInput, RecentReview, RerunInput, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
@@ -428,12 +428,18 @@ export class ReviewManager extends EventEmitter {
    * 上一轮的产出与 reviewer 的处置靠结构化 prompt 带过来(见 prompt/rerun-prompt.ts)。
    * 立即返回新建的轮次记录,扫描在后台跑、findings 经事件流入。
    */
-  async rerunReview(reviewId: string, input: { note?: string } = {}): Promise<ReviewRound> {
+  async rerunReview(reviewId: string, input: RerunInput = {}): Promise<ReviewRound> {
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
     const prevRound = this.store.getRound(reviewId, review.currentRound);
     if (prevRound?.status === 'scanning') {
       throw new Error('上一轮扫描尚未结束,不能重跑');
+    }
+
+    // 本轮可调档:给出即持久化为 review 新档,使后续轮次与续接(追问的 baseInstructions)一致沿用。
+    const intensity = input.intensity ?? review.intensity;
+    if (input.intensity && input.intensity !== review.intensity) {
+      this.store.setReviewIntensity(reviewId, input.intensity);
     }
 
     // 每轮新 thread:先彻底释放上一轮的会话、MCP 与 source,再重建。
@@ -485,14 +491,14 @@ export class ReviewManager extends EventEmitter {
         pr: pr && pr.fetchedAt ? pr : null,
         note: input.note,
       });
-      baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: review.intensity });
+      baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity });
     } catch (e) {
       await source.dispose();
       throw e;
     }
 
     this.launch(
-      { ...review, currentRound: round.round },
+      { ...review, currentRound: round.round, intensity },
       prepared.cwd,
       { getDiff: () => rawDiff, getFile: (p) => source.getFile(p) },
       () => source.dispose(),

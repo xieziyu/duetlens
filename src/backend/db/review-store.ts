@@ -280,6 +280,13 @@ export class ReviewStore {
       .run(body, now(), reviewId);
   }
 
+  /** 调整审核强度(重跑时可改档;续接与后续轮次沿用)。 */
+  setReviewIntensity(reviewId: string, intensity: Review['intensity']): void {
+    this.db
+      .prepare('UPDATE reviews SET intensity = ?, updated_at = ? WHERE id = ?')
+      .run(intensity, now(), reviewId);
+  }
+
   // ---- diff 缓存(unified 原文;renderer 侧解析成结构化 diff 渲染)----
   setDiff(reviewId: string, raw: string): void {
     this.db

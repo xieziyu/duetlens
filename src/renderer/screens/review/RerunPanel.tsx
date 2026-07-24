@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Finding, Review, ReviewRound } from '@shared/domain';
+import {
+  INTENSITY_HINTS,
+  INTENSITY_LABELS,
+  REVIEW_INTENSITIES,
+  type Finding,
+  type Review,
+  type ReviewIntensity,
+  type ReviewRound,
+} from '@shared/domain';
 
 /**
  * 重跑确认面板:开跑前把「这一轮会带上什么」摊开讲清楚,再让用户加一句本轮说明。
@@ -18,9 +26,11 @@ export function RerunPanel({
   findings: Finding[];
   rounds: ReviewRound[];
   onClose: () => void;
-  onRun: (note: string) => Promise<void>;
+  onRun: (input: { note: string; intensity: ReviewIntensity }) => Promise<void>;
 }): React.JSX.Element {
+  const reviewIntensity = review?.intensity ?? 'standard';
   const [note, setNote] = useState('');
+  const [intensity, setIntensity] = useState<ReviewIntensity>(reviewIntensity);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
@@ -41,7 +51,7 @@ export function RerunPanel({
     setRunning(true);
     setError(null);
     try {
-      await onRun(note.trim());
+      await onRun({ note: note.trim(), intensity });
       onClose();
     } catch (e) {
       setError((e as Error).message);
@@ -106,6 +116,28 @@ export function RerunPanel({
             </li>
           )}
         </ul>
+
+        <div className="rp-int">
+          <div className="rp-int-top">
+            <span className="rp-int-lbl">本轮强度</span>
+            <div className="rp-int-seg">
+              {REVIEW_INTENSITIES.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  className={v === intensity ? 'on' : ''}
+                  onClick={() => setIntensity(v)}
+                >
+                  {INTENSITY_LABELS[v]}
+                </button>
+              ))}
+            </div>
+            {intensity !== reviewIntensity && (
+              <span className="rp-int-chg">较上轮由「{INTENSITY_LABELS[reviewIntensity]}」调整</span>
+            )}
+          </div>
+          <p className="rp-int-hint">{INTENSITY_HINTS[intensity]}</p>
+        </div>
 
         <label className="rp-note">
           <span>本轮额外说明(可选)</span>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Discussion, Finding, Message, Review, Severity, Triage, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
@@ -233,9 +233,9 @@ export function ReviewScreen({
   );
   // 重跑:立刻返回新轮次记录,扫描后台跑;失败(如上一轮仍在扫描)由面板就地展示
   const onRerun = useCallback(
-    async (note: string) => {
+    async ({ note, intensity }: { note: string; intensity: ReviewIntensity }) => {
       if (!reviewId) return;
-      await window.duetlens.review.rerun(reviewId, note ? { note } : undefined);
+      await window.duetlens.review.rerun(reviewId, { note: note || undefined, intensity });
     },
     [reviewId],
   );

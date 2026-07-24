@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  INTENSITY_HINTS,
+  INTENSITY_LABELS,
   REASONING_EFFORTS,
   REVIEW_INTENSITIES,
   type CodexModelInfo,
@@ -33,16 +35,6 @@ const EFFORT_LABELS: Record<ReasoningEffort, string> = {
   xhigh: 'xhigh · 最深',
 };
 
-const INTENSITY_LABELS: Record<ReviewIntensity, string> = {
-  standard: '标准',
-  adversarial: '对抗',
-};
-
-// 各档的代价/前提提示,随选择切换显示
-const INTENSITY_HINTS: Record<ReviewIntensity, string> = {
-  standard: '单轮扫描,直接上报 · 最快、最省 token',
-  adversarial: 'agent 以证伪立场构造反例,扫描后再自检一轮 · 更准,但 token 成倍、更慢',
-};
 
 // 三来源分段选择器 + 各 panel + 附加上下文 + 最近的审核
 export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => void }) {

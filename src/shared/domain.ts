@@ -82,6 +82,16 @@ export const REVIEW_INTENSITIES = ['standard', 'adversarial'] as const;
 export type ReviewIntensity = (typeof REVIEW_INTENSITIES)[number];
 export const DEFAULT_REVIEW_INTENSITY: ReviewIntensity = 'standard';
 
+/** 强度档位的显示名与代价提示;发起表单、重跑面板、设置页共用一份,避免文案漂移。 */
+export const INTENSITY_LABELS: Record<ReviewIntensity, string> = {
+  standard: '标准',
+  adversarial: '对抗',
+};
+export const INTENSITY_HINTS: Record<ReviewIntensity, string> = {
+  standard: '单轮扫描,直接上报 · 最快、最省 token',
+  adversarial: 'agent 以证伪立场构造反例,扫描后再自检一轮 · 更准,但 token 成倍、更慢',
+};
+
 // ---- MCP ingress schema(agent 经工具回传的字段;triage/submission 由用户侧决定,不在此)----
 export const reportFindingSchema = z.object({
   severity: z.enum(SEVERITIES),

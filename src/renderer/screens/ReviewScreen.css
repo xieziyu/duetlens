@@ -3255,6 +3255,53 @@ kbd {
   color: var(--text-faint);
   margin-top: 2px;
 }
+.rp-int {
+  margin-bottom: 14px;
+}
+.rp-int-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rp-int-lbl {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.rp-int-seg {
+  display: flex;
+  gap: 2px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+.rp-int-seg button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 14px;
+  font-family: inherit;
+}
+.rp-int-seg button.on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--agent-line) inset;
+}
+.rp-int-chg {
+  font-size: 11px;
+  color: var(--agent-2);
+}
+.rp-int-hint {
+  margin: 7px 0 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
 .rp-note {
   display: block;
   margin-bottom: 12px;
