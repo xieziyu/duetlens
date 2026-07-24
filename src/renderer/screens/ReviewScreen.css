@@ -848,6 +848,16 @@
   padding: 4px 4px 8px 66px;
   background: none;
 }
+/* 整文件不在 diff 内:比行级 off-diff 再弱一档,path 折行不撑破容器 */
+.offdiff.absent {
+  background: color-mix(in oklab, var(--text-faint) 5%, transparent);
+}
+.offdiff.absent .offdiff-head {
+  color: var(--text-faint);
+}
+.offdiff.absent .offdiff-head .mono {
+  word-break: break-all;
+}
 .hunk {
   border-bottom: 1px solid var(--border-soft);
 }

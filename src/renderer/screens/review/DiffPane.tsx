@@ -133,6 +133,20 @@ export function DiffPane(props: DiffPaneProps) {
     return m;
   }, [findings]);
 
+  // 文件整体不在本次 diff 内的 finding(允许 agent off-diff 报到被引用文件):
+  // 没有对应 DiffFileView 承载,单独成区并挂 fileAnchorId,否则点卡片 setActivePath 无锚点可滚。
+  const absentByFile = useMemo(() => {
+    const diffPaths = new Set(files.map((f) => f.path));
+    const m = new Map<string, Finding[]>();
+    for (const f of findings) {
+      if (diffPaths.has(f.file)) continue;
+      const arr = m.get(f.file) ?? [];
+      arr.push(f);
+      m.set(f.file, arr);
+    }
+    return m;
+  }, [findings, files]);
+
   // 按文件聚合 user discussions(有锚点、非 finding),用于 gutter 打点
   const discByFile = useMemo(() => {
     const m = new Map<string, Discussion[]>();
@@ -234,7 +248,7 @@ export function DiffPane(props: DiffPaneProps) {
     setComposeAt({ pick, mode });
   };
 
-  if (files.length === 0) {
+  if (files.length === 0 && absentByFile.size === 0) {
     return (
       <div className="diff pane" ref={ref}>
         <p className="diff-empty">暂无 diff。扫描期会在拉取改动后显示。</p>
@@ -287,6 +301,24 @@ export function DiffPane(props: DiffPaneProps) {
           }}
           onCancelCompose={() => setComposeAt(null)}
         />
+      ))}
+
+      {[...absentByFile.entries()].map(([path, fs]) => (
+        <div key={path} className="offdiff absent" id={fileAnchorId(path)}>
+          <div className="offdiff-head">◇ 文件不在本次改动内 · <span className="mono">{path}</span></div>
+          {fs.map((f) => (
+            <InlineCard
+              key={f.id}
+              finding={f}
+              focused={f.id === focusFindingId}
+              offDiff
+              currentRound={props.currentRound ?? 1}
+              onTriage={props.onTriage}
+              onUpdate={props.onUpdate}
+              onDiscuss={props.onDiscussFinding}
+            />
+          ))}
+        </div>
       ))}
 
       {sel && (
