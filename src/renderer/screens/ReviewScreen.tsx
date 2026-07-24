@@ -11,6 +11,7 @@ import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
 import { SummaryTab } from './review/SummaryTab';
 import { ScanTimeline } from './review/ScanTimeline';
+import { ScanProgressHeader } from './review/ScanProgressHeader';
 import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
@@ -54,6 +55,7 @@ export function ReviewScreen({
     discussions,
     messages,
     diff,
+    diffReady,
     status,
     rounds,
     tokenUsage,
@@ -135,19 +137,20 @@ export function ReviewScreen({
   // 框选 / 行内 ＋ 发起 discussion:先建 user discussion(事件回推),再发出首问。
   const onStartDiscussion = useCallback(
     async (anchor: DiscussionAnchor, text: string) => {
-      if (!reviewId) return;
+      // diff 重拉未落定时中栏仍显示上一轮内容,此刻建锚会把旧行号记到已递增的新轮次上
+      if (!reviewId || !diffReady) return;
       const d = await window.duetlens.review.addDiscussion(reviewId, anchor);
       setActiveDiscussionId(d.id);
       setTab('discussion');
       void runSend(d.id, text);
     },
-    [reviewId, runSend],
+    [reviewId, diffReady, runSend],
   );
 
   // 框选「记为 finding」:填写后新增一条 manual finding(落库回推),聚焦其内联卡。
   const onAddFinding = useCallback(
     async (anchor: DiscussionAnchor, draft: Omit<AddFindingInput, 'file' | 'line'>) => {
-      if (!reviewId) return;
+      if (!reviewId || !diffReady) return; // 同 onStartDiscussion:锚点必须落在当前轮的 diff 上
       const f = await window.duetlens.review.addFinding(reviewId, {
         file: anchor.file,
         line: anchor.line,
@@ -157,7 +160,7 @@ export function ReviewScreen({
       setFocusFindingId(f.id);
       setTab('findings');
     },
-    [reviewId],
+    [reviewId, diffReady],
   );
 
   // 框选「追问 codex」:把选区作为待发引用带进 Discussion 栏 composer(发送时再建 discussion)。
@@ -426,6 +429,7 @@ export function ReviewScreen({
           messages={messages}
           review={review}
           diff={diff}
+          diffReady={diffReady}
           scanning={scanning}
           currentRound={currentRound}
           lastTool={lastTool}
@@ -518,6 +522,7 @@ function RightPanel({
   messages,
   review,
   diff,
+  diffReady,
   scanning,
   currentRound,
   lastTool,
@@ -547,6 +552,7 @@ function RightPanel({
   messages: Record<string, Message[]>;
   review: Review | null;
   diff: DiffFile[];
+  diffReady: boolean;
   scanning: boolean;
   currentRound: number;
   lastTool: string | null;
@@ -636,8 +642,30 @@ function RightPanel({
     return { files: diff.length, additions: a, deletions: d };
   }, [diff]);
 
+  // 扫描期常驻进度头:Findings tab 已在 body 里显示完整时间线,故只在其余 tab 补一条紧凑摘要,
+  // 让停在 Discussion / Summary 时也能感知机审进度;点它切回 Findings 看完整时间线。
+  const showProgressHeader = scanning && tab !== 'findings';
+  // 进度信号必须按轮次隔离:findings 是整个 review 的累积集,拿全量当"本轮实时产出"会把
+  // 上一轮的旧意见算进第 N 轮的计数与实时流里。本轮新报出的 = round === currentRound。
+  const roundFindings = useMemo(
+    () => findings.filter((f) => f.round === currentRound),
+    [findings, currentRound],
+  );
+  // 同理 sessionReady 只看本轮信号(lastTool/tokenUsage 已在开轮时清空,见 useReviewStream)
+  const sessionReady = lastTool != null || tokenUsage != null || roundFindings.length > 0;
+
   return (
     <div className="right pane">
+      {showProgressHeader && (
+        <ScanProgressHeader
+          findingCount={roundFindings.length}
+          diffReady={diffReady}
+          sessionReady={sessionReady}
+          currentRound={currentRound}
+          model={review?.model ?? null}
+          onExpand={() => onTab('findings')}
+        />
+      )}
       <div className="tabs">
         {RIGHT_TABS.map((t) => (
           <button key={t} className={`tab${t === tab ? ' on' : ''}`} onClick={() => onTab(t)}>
@@ -646,6 +674,7 @@ function RightPanel({
               <span className="tab-count">{discussions.length}</span>
             )}
             {t === 'findings' && findings.length > 0 && <span className="tab-count">{findings.length}</span>}
+            {t === 'findings' && scanning && <span className="tab-spin" aria-hidden />}
           </button>
         ))}
       </div>
@@ -654,9 +683,10 @@ function RightPanel({
         <div className="tab-body">
           {scanning ? (
             <ScanTimeline
-              findings={findings}
-              diffReady={diff.length > 0}
-              sessionReady={lastTool != null || tokenUsage != null || findings.length > 0}
+              findings={roundFindings}
+              diffReady={diffReady}
+              sessionReady={sessionReady}
+              currentRound={currentRound}
               onPickFinding={onPickFinding}
             />
           ) : (

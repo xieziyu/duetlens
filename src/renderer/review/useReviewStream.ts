@@ -9,6 +9,11 @@ export interface ReviewStreamState {
   discussions: Discussion[];
   /** 结构化 diff;首帧拉取,scan 期已落库故立即可得 */
   diff: DiffFile[];
+  /**
+   * diff 请求是否已回。**空 diff(无改动的分支)也算 ready** —— 不能用 `diff.length > 0`
+   * 代替加载态,否则零改动的 review 会永远停在"拉取 diff"阶段。
+   */
+  diffReady: boolean;
   /** 按 discussionId 聚合的消息(user/agent),随 message 事件增量追加 */
   messages: Record<string, Message[]>;
   status: Review['status'] | null;
@@ -41,6 +46,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [discussions, setDiscussions] = useState<Discussion[]>([]);
   const [diff, setDiff] = useState<DiffFile[]>([]);
+  const [diffReady, setDiffReady] = useState(false);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [status, setStatus] = useState<Review['status'] | null>(null);
   const [rounds, setRounds] = useState<ReviewRound[]>([]);
@@ -86,9 +92,32 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   useEffect(() => {
     if (!reviewId) return;
     let alive = true;
+    // 切 review 必须把**全部** review-scoped state 打回初值:reviewId 可在组件不卸载的情况下变
+    // (点另一条 review 的完成通知 → App 只换 prop),漏清的字段会让新 review 的首批 IPC 返回前
+    // 短暂顶着上一条的 status/轮次/findings 渲染 —— 进度头会把旧 review 明确展示成当前审核。
+    setReview(null);
+    setStatus(null);
+    setFindings([]);
+    setDiscussions([]);
+    setRounds([]);
+    setTokenUsage(null);
+    setLastTool(null);
     setMessages({});
     setDiff([]);
+    setDiffReady(false);
     fetched.current = new Set();
+
+    // 失败也要把 diffReady 落定:否则进度永远停在"拉取 diff",且锚点写操作被一直锁住
+    const loadDiff = () => {
+      void window.duetlens.review
+        .diff(reviewId)
+        .then((d) => {
+          if (!alive) return;
+          setDiff(d);
+          setDiffReady(true);
+        })
+        .catch(() => alive && setDiffReady(true));
+    };
 
     void window.duetlens.review.get(reviewId).then((r) => {
       if (alive) {
@@ -98,7 +127,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     });
     void window.duetlens.review.findings(reviewId).then((f) => alive && setFindings(f));
     void window.duetlens.review.discussions(reviewId).then((d) => alive && setDiscussions(d));
-    void window.duetlens.review.diff(reviewId).then((d) => alive && setDiff(d));
+    loadDiff();
     void window.duetlens.review.rounds(reviewId).then((r) => alive && setRounds(r));
 
     // switch + 兜底哨兵:ReviewEvent 新增一支而这里漏处理,编译期即报错(见 assertExhaustive)
@@ -158,6 +187,15 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
             next[i] = r;
             return next;
           });
+          // 开新一轮(status=scanning 的 round 事件每轮只发一次):上一轮的 agent 运行态与 diff
+          // 都不再代表当前轮 —— 每轮换新 codex thread(上下文重新计)且后端已重拉 diff 落库,
+          // 不清掉的话新轮一起步就顶着旧 token/工具调用,进度会直接跳过"建立会话"阶段。
+          if (r.status === 'scanning') {
+            setTokenUsage(null);
+            setLastTool(null);
+            setDiffReady(false);
+            loadDiff();
+          }
           // 开新一轮会改 review.currentRound,重拉一次让轮次角标与后端一致
           void window.duetlens.review.get(reviewId).then((rv) => rv && setReview(rv));
           return;
@@ -195,6 +233,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     findings,
     discussions,
     diff,
+    diffReady,
     messages,
     status,
     rounds,

@@ -1,13 +1,7 @@
 import type { Finding, Severity } from '@shared/domain';
+import { deriveScanSteps } from './scan-progress';
 
 const SEV_LABEL: Record<Severity, string> = { high: 'High', medium: 'Med', low: 'Low' };
-
-type StepState = 'done' | 'active' | 'pending';
-interface Step {
-  label: string;
-  state: StepState;
-  meta?: string;
-}
 
 export interface ScanTimelineProps {
   findings: Finding[];
@@ -15,34 +9,25 @@ export interface ScanTimelineProps {
   diffReady: boolean;
   /** codex 会话已起、turn 在跑(有 token 用量 / 工具调用 / 已产出 finding) */
   sessionReady: boolean;
+  /** 复审轮次;首轮为 1 */
+  currentRound: number;
   onPickFinding: (f: Finding) => void;
 }
 
 /**
- * 首轮机审进度:阶段 timeline + 实时 findings 流。
+ * 机审进度:阶段 timeline + 实时 findings 流。
  * 阶段态由现有信号派生(diff 预取 / 会话就绪 / findings 数),不臆造后端没有的粒度。
  */
-export function ScanTimeline({ findings, diffReady, sessionReady, onPickFinding }: ScanTimelineProps) {
-  const steps: Step[] = [
-    { label: '拉取 diff 与源码树', state: diffReady ? 'done' : 'active' },
-    {
-      label: '注入 per-thread MCP · 建立会话',
-      state: sessionReady ? 'done' : diffReady ? 'active' : 'pending',
-    },
-    {
-      label: '通读改动,上报 findings',
-      state: sessionReady ? 'active' : 'pending',
-      meta: `${findings.length} findings`,
-    },
-    { label: '就绪 · 可自由追问 / 框选提问', state: 'pending' },
-  ];
+export function ScanTimeline({ findings, diffReady, sessionReady, currentRound, onPickFinding }: ScanTimelineProps) {
+  const steps = deriveScanSteps({ findingCount: findings.length, diffReady, sessionReady });
+  const roundLabel = currentRound > 1 ? `第 ${currentRound} 轮机审` : '首轮机审';
 
   return (
     <div className="scanview">
       <div className="scan-head">
         <span className="sglyph" />
         <div className="sh-t">
-          <b>首轮机审</b>
+          <b>{roundLabel}</b>
           <span className="sh-s">agent 正在通读改动</span>
         </div>
       </div>

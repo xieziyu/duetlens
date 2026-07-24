@@ -345,9 +345,14 @@ export function installPreviewApi(): void {
   };
   let uiSettings: UiSettings = { ...UI_SETTINGS };
   // 预置一个已看文件,证明启动即从后端恢复 per-review 进度(非组件默认空态)
+  // ?tab=findings|discussion|summary 强制初始右栏 tab(自查用,如在扫描期停在 Discussion 看进度头)
+  const forcedTab = params.get('tab');
   let reviewUiState: ReviewUiState = {
     viewedFiles: diff.length > 1 ? [diff[1].path] : diff.slice(0, 1).map((f) => f.path),
-    lastActiveTab: null,
+    lastActiveTab:
+      forcedTab === 'findings' || forcedTab === 'discussion' || forcedTab === 'summary'
+        ? forcedTab
+        : null,
   };
   const findings = asClean || asStream ? [] : FINDINGS.map((f) => ({ ...f }));
   const rounds: ReviewRound[] = asClean || asStream ? [] : ROUNDS.map((r) => ({ ...r }));
