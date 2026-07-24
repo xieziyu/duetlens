@@ -507,6 +507,8 @@
 .diff {
   --diff-bar-h: 30px;
   background: var(--bg);
+  /* 横滚只归各 .code-scroll;整栏可横滚会把文件头、hunk 头、内联卡片一起推出视口 */
+  overflow-x: hidden;
   /* 列头常驻顶部,所有 scrollIntoView 落点(file-header / off-diff 段)都要让开它 */
   scroll-padding-top: var(--diff-bar-h);
 }
@@ -514,8 +516,6 @@
 .diff-bar {
   position: sticky;
   top: 0;
-  /* 长代码行让 pane 横向可滚;不钉住 left 的话整条列头会跟着内容滑出视口 */
-  left: 0;
   z-index: 4;
   display: flex;
   align-items: center;
@@ -1010,6 +1010,20 @@
 .gap-rng {
   margin-left: auto;
   color: var(--text-faint);
+}
+/* 每张 code 表一个横滚容器;DiffPane 把同一份 diff 的多张表的 scrollLeft 同步 */
+.code-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.code-scroll::-webkit-scrollbar {
+  height: 9px;
+}
+.code-scroll::-webkit-scrollbar-thumb {
+  background: var(--scroll);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 .code {
   font-family: var(--mono);

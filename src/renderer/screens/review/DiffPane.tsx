@@ -214,6 +214,27 @@ export function DiffPane(props: DiffPaneProps) {
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [focusFindingId]);
 
+  // 长代码行只让 code 表自己横滚(文件头/hunk 头/内联卡片不跟着滑走);
+  // 一份 diff 被卡片切成多张表,共用同一横向偏移才不会读到一半错位。scroll 不冒泡,故用捕获。
+  useEffect(() => {
+    const pane = ref.current;
+    if (!pane) return;
+    let syncing = false;
+    const onScroll = (e: Event) => {
+      const src = e.target as HTMLElement | null;
+      if (syncing || !src?.classList?.contains('code-scroll')) return;
+      syncing = true;
+      for (const el of pane.querySelectorAll<HTMLElement>('.code-scroll')) {
+        if (el !== src && el.scrollLeft !== src.scrollLeft) el.scrollLeft = src.scrollLeft;
+      }
+      requestAnimationFrame(() => {
+        syncing = false;
+      });
+    };
+    pane.addEventListener('scroll', onScroll, true);
+    return () => pane.removeEventListener('scroll', onScroll, true);
+  }, []);
+
   // ---- 框选 → popover:解析选区新侧锚点 + 定位 ----
   const canStart = !!onStartDiscussion;
   const onMouseUp = useCallback(() => {
@@ -495,35 +516,39 @@ function ContextTable({
   onAnchorClick: (mark: AnchorMark) => void;
 }) {
   return view === 'split' ? (
-    <table className="code split">
-      <tbody>
-        {lines.map((l, j) => (
-          <SplitRow
-            key={j}
-            row={{ left: l, right: l }}
-            lang={lang}
-            onAddThread={onAddThread}
-            anchorByLine={anchorByLine}
-            onAnchorClick={onAnchorClick}
-          />
-        ))}
-      </tbody>
-    </table>
+    <div className="code-scroll">
+      <table className="code split">
+        <tbody>
+          {lines.map((l, j) => (
+            <SplitRow
+              key={j}
+              row={{ left: l, right: l }}
+              lang={lang}
+              onAddThread={onAddThread}
+              anchorByLine={anchorByLine}
+              onAnchorClick={onAnchorClick}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   ) : (
-    <table className="code unified">
-      <tbody>
-        {lines.map((l, j) => (
-          <LineRow
-            key={j}
-            line={l}
-            lang={lang}
-            onAddThread={onAddThread}
-            anchorByLine={anchorByLine}
-            onAnchorClick={onAnchorClick}
-          />
-        ))}
-      </tbody>
-    </table>
+    <div className="code-scroll">
+      <table className="code unified">
+        <tbody>
+          {lines.map((l, j) => (
+            <LineRow
+              key={j}
+              line={l}
+              lang={lang}
+              onAddThread={onAddThread}
+              anchorByLine={anchorByLine}
+              onAnchorClick={onAnchorClick}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -952,20 +977,22 @@ function HunkView({
             shouldBreak,
           ).map((seg, i) => (
             <div key={i}>
-              <table className="code split">
-                <tbody>
-                  {seg.rows.map((r, j) => (
-                    <SplitRow
-                      key={j}
-                      row={r}
-                      lang={lang}
-                      onAddThread={onAddThread}
-                      anchorByLine={anchorByLine}
-                      onAnchorClick={onAnchorClick}
-                    />
-                  ))}
-                </tbody>
-              </table>
+              <div className="code-scroll">
+                <table className="code split">
+                  <tbody>
+                    {seg.rows.map((r, j) => (
+                      <SplitRow
+                        key={j}
+                        row={r}
+                        lang={lang}
+                        onAddThread={onAddThread}
+                        anchorByLine={anchorByLine}
+                        onAnchorClick={onAnchorClick}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {cards(seg.endAnchor)}
               {seg.endAnchor === composeLine && composeNode}
             </div>
@@ -975,20 +1002,22 @@ function HunkView({
             shouldBreak,
           ).map((seg, i) => (
             <div key={i}>
-              <table className="code unified">
-                <tbody>
-                  {seg.rows.map((l, j) => (
-                    <LineRow
-                      key={j}
-                      line={l}
-                      lang={lang}
-                      onAddThread={onAddThread}
-                      anchorByLine={anchorByLine}
-                      onAnchorClick={onAnchorClick}
-                    />
-                  ))}
-                </tbody>
-              </table>
+              <div className="code-scroll">
+                <table className="code unified">
+                  <tbody>
+                    {seg.rows.map((l, j) => (
+                      <LineRow
+                        key={j}
+                        line={l}
+                        lang={lang}
+                        onAddThread={onAddThread}
+                        anchorByLine={anchorByLine}
+                        onAnchorClick={onAnchorClick}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {cards(seg.endAnchor)}
               {seg.endAnchor === composeLine && composeNode}
             </div>
