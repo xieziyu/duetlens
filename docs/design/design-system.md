@@ -25,7 +25,7 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 | Diff | `--add` `--del` 及 `-bg` / `-gutter` · `--code-hl` | 随 `data-theme` |
 | Syntax | `--code-text` `--k` `--fn` `--s` `--n` `--c` `--ty` `--mac` | 随 `data-theme` |
 
-## 应用图标
+## 品牌标记
 
 标记的含义是**镜片压在一页代码上**:镜外密排细行是上下文,镜内被放大的三行分别是灰(上下文)、天蓝(agent)、琥珀(human),配色沿用 tokens 的 `--agent` / `--human`。
 
@@ -40,6 +40,19 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 `build/icon.icns` 与 `build/icon.png` 是产物,由 `npm run icons:gen` 从上面三个 SVG 生成(套 macOS Big Sur 的 824/1024 底板栅格),已提交进仓库——打包机因此不需要 `rsvg-convert`,只有改图时才要装(`brew install librsvg`)。改完 SVG 记得重跑该命令。
 
 `electron-builder.yml` 显式指向 `build/icon.icns`,不让 electron-builder 从单张 png 自动缩——那样会丢掉分档美术。
+
+### 界面内的标记:`<LogoMark size>`
+
+界面里不另画一份几何,`components/LogoMark.tsx` 直接 `?raw` 读上面三个 SVG,只做两件事:把固定色板换成 `.dl-mark` 上的 `--mk-*` 变量(于是跟随明暗/配色),把 `defs` 的 id 按实例改写(多处同时挂载时 clip 不串)。改配色改 `App.css` 的 `.dl-mark`,改几何改 `build/logo/*.svg`(记得重跑 `icons:gen`)。
+
+分档阈值按 CSS px 折半(屏上是 2x 矢量渲染):≥64 用完整档,>20 用 small,其余 tiny。落位:
+
+| 位置 | 尺寸 | 搭配 |
+| --- | --- | --- |
+| 通用顶栏 / onboarding 顶栏 | 20 | `.brand` 里紧挨 wordmark |
+| review 顶栏 | 20 | 这条栏替掉了通用顶栏,同一枚 `.brand` + 分隔线要补在来源 chip 之前 |
+| entry hero | 64 | wordmark 之上 |
+| onboarding hero | 72 | wordmark 之上 |
 
 ## 可视化清单:`mockup/design-system.html`
 
