@@ -455,6 +455,7 @@ export function ReviewScreen({
             onJumpDiscussion={focusDiscussion}
             fetchFileContent={fetchFileContent}
             view={diffView}
+            onViewChange={setDiffView}
             viewed={viewed}
             collapsed={collapsed}
             onToggleViewed={onToggleViewed}
@@ -506,10 +507,6 @@ export function ReviewScreen({
         effort={review?.reasoningEffort ?? null}
         tokenUsage={tokenUsage}
         lastTool={lastTool}
-        view={diffView}
-        onViewChange={setDiffView}
-        fileCount={diff.length}
-        viewedCount={diff.filter((f) => viewed.has(f.path)).length}
         onOpenHelp={() => setHelpOpen(true)}
       />
     </div>

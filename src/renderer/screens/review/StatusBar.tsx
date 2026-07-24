@@ -1,6 +1,5 @@
 import type { ReviewStatus } from '@shared/domain';
 import type { TokenUsage } from '@shared/agent-events';
-import type { DiffView } from './DiffPane';
 
 const STATUS_LABEL: Record<ReviewStatus, string> = {
   scanning: '扫描中',
@@ -32,10 +31,6 @@ export function ReviewStatusBar({
   effort,
   tokenUsage,
   lastTool,
-  view,
-  onViewChange,
-  fileCount,
-  viewedCount,
   onOpenHelp,
 }: {
   status: ReviewStatus | null;
@@ -45,10 +40,6 @@ export function ReviewStatusBar({
   effort: string | null;
   tokenUsage: TokenUsage | null;
   lastTool: string | null;
-  view: DiffView;
-  onViewChange: (v: DiffView) => void;
-  fileCount: number;
-  viewedCount: number;
   onOpenHelp: () => void;
 }): React.JSX.Element {
   const st = status ?? 'scanning';
@@ -98,23 +89,6 @@ export function ReviewStatusBar({
 
       <span className="sb-spacer" />
 
-      {fileCount > 0 && (
-        <span className="sb-item mono" title="通读进度">
-          {fileCount} 文件 · {viewedCount} 已看
-        </span>
-      )}
-      <span className="sb-seg" role="group" aria-label="diff 视图">
-        {(['unified', 'split'] as DiffView[]).map((v) => (
-          <button
-            key={v}
-            className={view === v ? 'on' : ''}
-            onClick={() => onViewChange(v)}
-            aria-pressed={view === v}
-          >
-            {v === 'unified' ? 'Unified' : 'Split'}
-          </button>
-        ))}
-      </span>
       <button className="sb-item act" onClick={onOpenHelp} title="键盘快捷键 (?)">
         ⌘ 快捷键
       </button>

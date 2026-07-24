@@ -64,6 +64,39 @@ function AnchorDot({ mark, onClick }: { mark: AnchorMark; onClick: (m: AnchorMar
   );
 }
 
+/** diff 列头的视图切换:图标 + 文字,让「这是排版方式」一眼可辨(快捷键 u)。 */
+function ViewSwitch({ view, onChange }: { view: DiffView; onChange: (v: DiffView) => void }) {
+  return (
+    <span className="db-seg" role="group" aria-label="diff 视图">
+      {(['unified', 'split'] as DiffView[]).map((v) => (
+        <button
+          key={v}
+          className={view === v ? 'on' : ''}
+          onClick={() => onChange(v)}
+          aria-pressed={view === v}
+          title={`${v === 'unified' ? '单栏对照' : '左右分栏'} diff(快捷键 u 切换)`}
+        >
+          <ViewIcon view={v} />
+          {v === 'unified' ? 'Unified' : 'Split'}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+const ViewIcon = ({ view }: { view: DiffView }) =>
+  view === 'unified' ? (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+      <rect x="1" y="1.5" width="10" height="9" rx="1.5" />
+      <path d="M3.2 4.3h5.6M3.2 6h5.6M3.2 7.7h3.4" />
+    </svg>
+  ) : (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+      <rect x="1" y="1.5" width="10" height="9" rx="1.5" />
+      <path d="M6 1.5v9M2.7 4.6h1.9M2.7 6.6h1.9M7.4 4.6h1.9M7.4 6.6h1.9" />
+    </svg>
+  );
+
 export interface DiffPaneProps {
   files: DiffFile[];
   findings: Finding[];
@@ -91,8 +124,10 @@ export interface DiffPaneProps {
   onJumpDiscussion?: (discussionId: string) => void;
   /** 按需拉取文件新侧全文,用于展开 diff 外上下文;缺省则不显示展开控件(如预览)。 */
   fetchFileContent?: (path: string) => Promise<string | null>;
-  /** unified / split 视图(全局偏好,底部状态栏驱动) */
+  /** unified / split 视图(全局偏好) */
   view: DiffView;
+  /** 切换视图;缺省则列头不显示切换控件(如预览的只读场景) */
+  onViewChange?: (v: DiffView) => void;
   /** per-file 已看 / 折叠(本地态) */
   viewed: Set<string>;
   collapsed: Set<string>;
@@ -256,8 +291,22 @@ export function DiffPane(props: DiffPaneProps) {
     );
   }
 
+  // 改动总量:左栏是逐文件的,整份 diff 的体量只有这里给
+  const totals = files.reduce(
+    (acc, f) => ({ a: acc.a + f.additions, d: acc.d + f.deletions }),
+    { a: 0, d: 0 },
+  );
+
   return (
     <div className="diff pane" ref={ref} onMouseUp={onMouseUp}>
+      <div className="diff-bar">
+        <span className="db-stat mono" title="本次改动总量">
+          <span className="a">+{totals.a}</span>
+          <span className="d">−{totals.d}</span>
+        </span>
+        <span className="db-spacer" />
+        {props.onViewChange && <ViewSwitch view={props.view} onChange={props.onViewChange} />}
+      </div>
       {files.map((f) => (
         <DiffFileView
           key={f.path}

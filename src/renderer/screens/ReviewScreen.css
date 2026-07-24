@@ -501,7 +501,70 @@
 
 /* ---------- 中:diff ---------- */
 .diff {
+  --diff-bar-h: 30px;
   background: var(--bg);
+}
+/* diff 列头:改动总量 + 视图切换。随滚动常驻在中栏顶部,file-header 的 sticky 顶点让开它 */
+.diff-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--diff-bar-h);
+  padding: 0 10px 0 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.diff-bar .db-stat {
+  display: flex;
+  gap: 7px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.diff-bar .db-stat .a {
+  color: var(--add);
+}
+.diff-bar .db-stat .d {
+  color: var(--del);
+}
+.diff-bar .db-spacer {
+  flex: 1;
+}
+.diff-bar .db-seg {
+  display: flex;
+  gap: 2px;
+  padding: 1.5px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-3);
+}
+.diff-bar .db-seg button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.diff-bar .db-seg button svg {
+  opacity: 0.85;
+}
+.diff-bar .db-seg button:hover {
+  color: var(--text-dim);
+}
+.diff-bar .db-seg button.on {
+  background: var(--agent-soft);
+  color: var(--agent-2);
 }
 .diff-empty,
 .diff-note {
@@ -512,7 +575,9 @@
 /* 文件标识两行:文件名为主、目录路径为辅;右侧计量与操作分组,避免长路径把状态挤扁 */
 .file-header {
   position: sticky;
-  top: 0;
+  top: var(--diff-bar-h, 0px);
+  /* 左栏点击定位到本 header 时给列头让出高度,否则紧随其后的内容会被压在列头下 */
+  scroll-margin-top: var(--diff-bar-h, 0px);
   z-index: 3;
   display: flex;
   align-items: center;
@@ -3019,10 +3084,14 @@ kbd {
   .rev-main > :nth-child(2) {
     pointer-events: none; /* tree|diff 间的 resizer 收起后不接管指针 */
   }
-  /* 顶栏 / 状态栏减噪:标题与次要运行态收起,保留来源 chip、CTA、状态与视图切换 */
+  /* 顶栏 / 状态栏减噪:标题与次要运行态收起,保留来源 chip、CTA 与状态 */
   .rev-topbar .title,
-  .rev-statusbar .sb-item[title='reasoning effort'],
+  .rev-statusbar .sb-agent .sb-effort,
   .rev-statusbar .sb-sep {
+    display: none;
+  }
+  /* diff 列头只留视图切换 */
+  .diff-bar .db-stat {
     display: none;
   }
   .rev-statusbar .sb-item {
