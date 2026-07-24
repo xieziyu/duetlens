@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { EnvironmentReport } from '@shared/environment';
 import { Wordmark } from '../components/Wordmark';
+import { LogoMark } from '../components/LogoMark';
 import { ThemeControls } from '../components/ThemeControls';
 import './OnboardingScreen.css';
 
@@ -161,7 +162,10 @@ export function OnboardingScreen({
   return (
     <div className="onboarding">
       <header className="ob-topbar">
-        <Wordmark />
+        <span className="brand">
+          <LogoMark size={20} />
+          <Wordmark />
+        </span>
         <span className="ob-spacer" />
         <ThemeControls />
       </header>
@@ -169,6 +173,7 @@ export function OnboardingScreen({
       <div className="ob-stage">
         <div className="ob-card">
           <div className="ob-hero">
+            <LogoMark size={72} className="ob-logo" />
             <Wordmark className="ob-mk" />
             <div className="tag">人 + agent 协同式 code review</div>
             <div className="sub mono">首次启动 · 环境检查</div>

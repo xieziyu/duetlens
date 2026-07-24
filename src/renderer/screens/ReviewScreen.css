@@ -31,6 +31,16 @@
 .rev-topbar .submit-cta {
   -webkit-app-region: no-drag;
 }
+.rev-topbar .brand {
+  flex: none;
+  margin-right: -4px; /* 品牌与分隔线的间距按视觉收,不用 flex gap 的 12px */
+}
+.rev-topbar .tb-sep {
+  width: 1px;
+  height: 18px;
+  flex: none;
+  background: var(--border);
+}
 .rev-topbar .srcchip {
   display: flex;
   align-items: center;

@@ -44,6 +44,9 @@
   margin-bottom: 26px;
   animation: ob-rise 0.4s both;
 }
+.ob-hero .ob-logo {
+  margin: 0 auto 14px;
+}
 .ob-hero .ob-mk {
   font-size: 34px;
   font-weight: 600;

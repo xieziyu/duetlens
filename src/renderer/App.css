@@ -38,6 +38,28 @@
   color: var(--text-dim);
 }
 
+/* 应用内标记:几何来自 build/logo/*.svg,配色在这里接回主题变量(见 LogoMark.tsx) */
+.dl-mark {
+  --mk-code: color-mix(in oklab, var(--text-faint) 62%, transparent);
+  --mk-ctx: var(--text-faint);
+  --mk-agent: var(--agent-2);
+  --mk-human: var(--human);
+  --mk-ring: var(--text-dim);
+  --mk-gloss: #fff; /* 镜内高光:亮色模式下白色看不见,换成暗色 */
+  flex: none;
+  display: block;
+}
+:root[data-mode='light'] .dl-mark {
+  --mk-gloss: #1f2328;
+}
+
+/* 标记 + wordmark 成对出现时贴紧,与顶栏其余元素的 gap 区分开 */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* wordmark:duet(text) + lens(天蓝) + _(琥珀,闪烁) */
 .wordmark {
   display: inline-flex;

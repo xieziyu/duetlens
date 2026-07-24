@@ -8,6 +8,7 @@ import { OnboardingScreen } from './screens/OnboardingScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { Wordmark } from './components/Wordmark';
+import { LogoMark } from './components/LogoMark';
 import { AppRail, type RailScreen } from './components/AppRail';
 import { CompletionToast } from './components/CompletionToast';
 import './App.css';
@@ -99,7 +100,10 @@ export function App({
       {/* review 屏自带上下文顶栏;其余屏用这条通用栏(同时是窗口拖拽区 + 交通灯留白) */}
       {screen !== 'review' && (
         <header className="app-topbar">
-          <Wordmark />
+          <span className="brand">
+            <LogoMark size={20} />
+            <Wordmark />
+          </span>
           <span className="tb-sep" />
           <h1 className="tb-title">{SCREEN_TITLE[screen]}</h1>
         </header>

@@ -14,6 +14,8 @@ import { KbdHelp } from './review/KbdHelp';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
 import { RerunPanel } from './review/RerunPanel';
+import { LogoMark } from '../components/LogoMark';
+import { Wordmark } from '../components/Wordmark';
 import {
   currentResolution,
   isFixedThisRound,
@@ -363,6 +365,12 @@ export function ReviewScreen({
       style={{ ['--left-w' as string]: `${leftW}px`, ['--right-w' as string]: `${rightW}px` }}
     >
       <header className="rev-topbar">
+        {/* 这条栏替掉了外壳通用顶栏,品牌要补回来,否则 review 屏左上角与其余屏不一致 */}
+        <span className="brand">
+          <LogoMark size={20} />
+          <Wordmark />
+        </span>
+        <span className="tb-sep" />
         <div className="source">
           {/* github 来源整枚 chip 即「去 PR」的入口;外链图标只作可点提示,不再是唯一热区 */}
           {isGithub ? (

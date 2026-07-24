@@ -19,6 +19,7 @@ import type {
 import { useSettings } from '../settings/SettingsProvider';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './entry/icons';
 import { RecentReviews } from './entry/RecentReviews';
+import { LogoMark } from '../components/LogoMark';
 import './EntryScreen.css';
 
 const SOURCE_TABS: { value: SourceKind; label: string; icon: () => JSX.Element }[] = [
@@ -125,6 +126,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   return (
     <div className="entry-wrap">
       <div className="entry-hero">
+        <LogoMark size={64} className="entry-mark" />
         <div className="entry-logo mono">
           duet<i>lens</i>
           <span className="cur">_</span>
