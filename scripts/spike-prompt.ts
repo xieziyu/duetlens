@@ -17,6 +17,7 @@ import {
   serializeKeyedFields,
 } from '../src/shared/prompt';
 import {
+  BUILTIN_ADVERSARIAL,
   BUILTIN_PROTOCOL,
   BUILTIN_ROLE,
   loadBaseInstructions,
@@ -138,6 +139,18 @@ async function main() {
     assert.ok(base0.includes(cat), `锁定协议应列出 category 规范集 ${cat}`);
   }
   log('无层文件:锁定段首尾夹住 builtin 各节 + context 略去 ✓');
+
+  // ---- 审核强度:对抗档在角色段后追加对抗立场,标准档不含它 ----
+  assert.ok(!base0.includes(BUILTIN_ADVERSARIAL), '标准档不应注入对抗立场段');
+  const baseAdv = await loadBaseInstructions({ cwd: repo, homeDir: home, intensity: 'adversarial' });
+  assert.ok(baseAdv.includes(BUILTIN_ADVERSARIAL), '对抗档应注入对抗立场段');
+  assert.ok(baseAdv.startsWith(BUILTIN_ROLE), '对抗档仍以角色段打头');
+  assert.ok(baseAdv.endsWith(BUILTIN_PROTOCOL), '对抗档协议段仍在最末');
+  assert.ok(
+    baseAdv.indexOf(BUILTIN_ADVERSARIAL) < baseAdv.indexOf('## 审核重点'),
+    '对抗立场应排在用户可配置节之前(压不过它)',
+  );
+  log('审核强度:对抗档注入立场段、标准档不含、位置在角色后可配置节前 ✓');
 
   // ---- 锁定段不下发 renderer,也不被用户层覆盖 ----
   const view0 = await loadReviewPrompt({ cwd: repo, homeDir: home });

@@ -136,7 +136,13 @@ ALTER TABLE findings ADD COLUMN resolution_note TEXT;
 ALTER TABLE findings ADD COLUMN dismiss_reason TEXT;
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6];
+// 审核强度(标准 / 对抗);存量数据按 standard(默认值),无需回填。
+const V7 = `
+ALTER TABLE reviews ADD COLUMN intensity TEXT NOT NULL DEFAULT 'standard';
+ALTER TABLE ui_settings ADD COLUMN default_intensity TEXT NOT NULL DEFAULT 'standard';
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

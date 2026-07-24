@@ -13,6 +13,7 @@ import {
   type Discussion,
   type Finding,
   type Message,
+  type ReviewIntensity,
 } from '@shared/domain';
 import { findDuplicate } from '@shared/finding-dedupe';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
@@ -21,6 +22,15 @@ import { BUILTIN_BASE_INSTRUCTIONS } from '../prompt/review-prompt';
 
 /** 首轮机审的缺省指令(未附加用户上下文时使用)。 */
 export const DEFAULT_SCAN_PROMPT = '请审核本次改动,对每个问题调用 report_finding 上报。';
+
+/**
+ * 对抗强度:扫描/复审 turn 之后追加的自检轮指令。同一 codex thread 内跑,
+ * agent 仍记得本轮报过什么,故可就地补漏与给存疑结论降级(codex 侧无删除 finding 的工具)。
+ */
+export const ADVERSARIAL_SELFCHECK_PROMPT = `现在做一轮对抗式自检,站到刚才结论的对立面复核一遍:
+1. 回看你**已上报**的每条 finding:有没有哪条其实站不住(反例不成立 / 是可接受差异 / 属误报)?站不住的用 update_finding 降级严重度,或在 body 里明确标注不确定,不要留下过度自信的结论。
+2. 更重要的是审你**没报**的地方:哪个函数、边界或错误分支你只是扫过、并未真正构造反例去验证?对这些补一次证伪 —— 发现真实且可复现的新问题就用 report_finding 上报,已报过的不要重复。
+3. 给一句话小结:本轮自检补报了几条、降级/撤回了几条。`;
 
 /** 追问时重述的历史条数上限;够唤起线程脉络,又不至于把整条对话再喂一遍。 */
 const FOLLOWUP_RECAP = 6;
@@ -43,6 +53,8 @@ export interface StartReviewOptions {
   model?: string | null;
   /** reasoning effort(缺省 codex medium) */
   reasoningEffort?: string | null;
+  /** 审核强度;对抗档在扫描 turn 后追加一轮自检 */
+  intensity?: ReviewIntensity;
   /** 本次扫描属于第几轮;传入则把新建的 codex thread 记到该轮次上 */
   round?: number;
 }
@@ -135,6 +147,10 @@ export class ReviewSession {
       this.setStatus('failed');
       const label = opts.round && opts.round > 1 ? `第 ${opts.round} 轮复审` : '首轮扫描';
       throw new Error(`${label}失败: ${outcome.error}`);
+    }
+    // 对抗档:同一 thread 追加一轮自检。已有扫描结论,自检失败不推翻本轮 —— 吞掉错误保留成果。
+    if (opts.intensity === 'adversarial') {
+      await this.runTurn(ADVERSARIAL_SELFCHECK_PROMPT);
     }
     this.setStatus('reviewing');
     return this.store.listFindings(this.reviewId);

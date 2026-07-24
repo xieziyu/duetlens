@@ -72,6 +72,16 @@ export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'] a
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 export const DEFAULT_REASONING_EFFORT: ReasoningEffort = 'medium';
 
+/**
+ * 审核强度:审核方法论的深浅,与 reasoningEffort(模型自身推理深度)正交。
+ * - standard:单轮扫描,直接上报。
+ * - adversarial:注入证伪立场 + 扫描后追加一轮自检(补漏、给存疑结论降级),更准但 token 成倍。
+ * 只读约束不变;不写盘、不执行代码。
+ */
+export const REVIEW_INTENSITIES = ['standard', 'adversarial'] as const;
+export type ReviewIntensity = (typeof REVIEW_INTENSITIES)[number];
+export const DEFAULT_REVIEW_INTENSITY: ReviewIntensity = 'standard';
+
 // ---- MCP ingress schema(agent 经工具回传的字段;triage/submission 由用户侧决定,不在此)----
 export const reportFindingSchema = z.object({
   severity: z.enum(SEVERITIES),
@@ -117,6 +127,8 @@ export interface Review {
   model: string | null;
   /** 用户指定的 reasoning effort(null=codex 缺省 medium) */
   reasoningEffort: ReasoningEffort | null;
+  /** 审核强度(标准 / 对抗);续接会话与重跑复用同一档 */
+  intensity: ReviewIntensity;
   title: string | null;
   status: ReviewStatus;
   /** codex 生成、用户可编辑的总结正文(提交屏 review body 来源) */
@@ -220,6 +232,8 @@ export interface UiSettings {
   defaultModel: string;
   /** 发起表单预填的 reasoning effort */
   defaultEffort: ReasoningEffort;
+  /** 发起表单预填的审核强度 */
+  defaultIntensity: ReviewIntensity;
   /** 扫描完成 / 追问回复时是否提示(未聚焦弹原生通知,聚焦弹应用内轻提示) */
   notifyOnComplete: boolean;
   /** codex 可执行文件路径(空=用 PATH 中的 codex) */
@@ -240,6 +254,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   collapseViewedFiles: true,
   defaultModel: '',
   defaultEffort: DEFAULT_REASONING_EFFORT,
+  defaultIntensity: DEFAULT_REVIEW_INTENSITY,
   notifyOnComplete: true,
   codexPath: '',
   ghPath: '',

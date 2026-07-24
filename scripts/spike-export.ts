@@ -24,6 +24,7 @@ const review: Review = {
   codexThreadId: null,
   model: null,
   reasoningEffort: null,
+  intensity: 'standard',
   title: null,
   status: 'reviewing',
   summaryBody: '并发方向合理,需收口共享状态的线程安全。',

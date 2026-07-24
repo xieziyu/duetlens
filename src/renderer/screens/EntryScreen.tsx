@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   REASONING_EFFORTS,
+  REVIEW_INTENSITIES,
   type CodexModelInfo,
   type ReasoningEffort,
+  type ReviewIntensity,
   type SourceKind,
 } from '@shared/domain';
 import type { RecentReview, ReviewStartInput } from '@shared/ipc';
@@ -31,6 +33,17 @@ const EFFORT_LABELS: Record<ReasoningEffort, string> = {
   xhigh: 'xhigh · 最深',
 };
 
+const INTENSITY_LABELS: Record<ReviewIntensity, string> = {
+  standard: '标准',
+  adversarial: '对抗',
+};
+
+// 各档的代价/前提提示,随选择切换显示
+const INTENSITY_HINTS: Record<ReviewIntensity, string> = {
+  standard: '单轮扫描,直接上报 · 最快、最省 token',
+  adversarial: 'agent 以证伪立场构造反例,扫描后再自检一轮 · 更准,但 token 成倍、更慢',
+};
+
 // 三来源分段选择器 + 各 panel + 附加上下文 + 最近的审核
 export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => void }) {
   const { settings, update, loaded } = useSettings();
@@ -45,6 +58,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   // 审核配置
   const [model, setModel] = useState('');
   const [effort, setEffort] = useState<ReasoningEffort>('medium');
+  const [intensity, setIntensity] = useState<ReviewIntensity>('standard');
   const [context, setContext] = useState('');
   const [ctxOpen, setCtxOpen] = useState(false);
   const [models, setModels] = useState<CodexModelInfo[] | null>(null);
@@ -68,8 +82,9 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       setSource(settings.defaultSource);
       setModel(settings.defaultModel);
       setEffort(settings.defaultEffort);
+      setIntensity(settings.defaultIntensity);
     }
-  }, [loaded, settings.defaultSource, settings.defaultModel, settings.defaultEffort]);
+  }, [loaded, settings.defaultSource, settings.defaultModel, settings.defaultEffort, settings.defaultIntensity]);
 
   // 切来源时重置该来源无关的选择(仓库路径可跨来源沿用,便于三来源指同一仓库)
   const onSwitchSource = (next: SourceKind) => {
@@ -101,9 +116,10 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       baseRef: source === 'local-branch' ? baseRef.trim() || undefined : undefined,
       model: trimmedModel || undefined,
       reasoningEffort: effort,
+      intensity,
       context: context.trim() || undefined,
     };
-    update({ defaultModel: trimmedModel, defaultEffort: effort });
+    update({ defaultModel: trimmedModel, defaultEffort: effort, defaultIntensity: intensity });
     try {
       const review = await window.duetlens.review.start(input);
       onOpenReview(review.id);
@@ -202,6 +218,23 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
               <div className="ctxhint mono">随首轮机审注入,agent 全程可见 · 不改变 read-only sandbox</div>
             </div>
           )}
+
+          <div className="int-row">
+            <span className="int-label">审核强度</span>
+            <div className="int-seg">
+              {REVIEW_INTENSITIES.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  className={v === intensity ? 'on' : ''}
+                  onClick={() => setIntensity(v)}
+                >
+                  {INTENSITY_LABELS[v]}
+                </button>
+              ))}
+            </div>
+            <span className="int-hint">{INTENSITY_HINTS[intensity]}</span>
+          </div>
 
           <div className="cfg-row">
             <label className="cfg-field">

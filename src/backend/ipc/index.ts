@@ -59,6 +59,7 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
       baseRef: input.baseRef,
       model: input.model,
       reasoningEffort: input.reasoningEffort,
+      intensity: input.intensity,
       context: input.context,
     }),
   );

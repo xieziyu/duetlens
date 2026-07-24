@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppInfo } from '@shared/ipc';
 import type { CodexModelInfo, SourceKind, UiSettings } from '@shared/domain';
-import { DEFAULT_UI_SETTINGS, REASONING_EFFORTS } from '@shared/domain';
+import { DEFAULT_UI_SETTINGS, REASONING_EFFORTS, REVIEW_INTENSITIES } from '@shared/domain';
 import type { EnvironmentReport } from '@shared/environment';
 import { useSettings } from '../settings/SettingsProvider';
 import './SettingsScreen.css';
@@ -274,6 +274,17 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
               >
                 {REASONING_EFFORTS.map((eff) => (
                   <option key={eff} value={eff}>{eff}</option>
+                ))}
+              </select>
+            </Row>
+            <Row label="默认强度" hint="对抗档:agent 以证伪立场构造反例并自检一轮,更准但 token 成倍。">
+              <select
+                className="field"
+                value={settings.defaultIntensity}
+                onChange={(e) => update({ defaultIntensity: e.target.value as UiSettings['defaultIntensity'] })}
+              >
+                {REVIEW_INTENSITIES.map((v) => (
+                  <option key={v} value={v}>{v === 'adversarial' ? '对抗' : '标准'}</option>
                 ))}
               </select>
             </Row>

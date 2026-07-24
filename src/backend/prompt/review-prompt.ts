@@ -17,7 +17,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { FINDING_CATEGORIES, SEVERITIES } from '@shared/domain';
+import { FINDING_CATEGORIES, SEVERITIES, type ReviewIntensity } from '@shared/domain';
 import {
   BUILTIN_SECTIONS,
   mergeLayers,
@@ -35,6 +35,18 @@ export const BUILTIN_ROLE = `你是 Duetlens 的代码审核 agent。审核本�
 - 只审核、不修改代码。审完给一句话总结。
 - 先判断改动属于哪类代码(前端 UI / 后端服务 / 库 / CLI / 基础设施 / 脚本 等),按「审核重点」里与之相符的类别过一遍,不要生搬不适用的检查项。
 - 只报告需要修复的真实问题:把偏离分为有理由的改进 / 可接受的差异 / 有问题的偏离,只标最后一种。`;
+
+/**
+ * 对抗强度专用立场段(仅 adversarial 档注入,紧跟角色段之后)。
+ * 是审核**方法论**而非字段口径,故归属锁定的角色一侧、不进可配置分层 —— 避免被用户节 override 掉。
+ * 只读约束不变:不写盘、不执行代码,反例靠推理构造与手推。
+ */
+export const BUILTIN_ADVERSARIAL = `## 对抗式审核立场
+本次以对抗强度审核,默认假设这段代码在某个输入下是错的,你的任务是找到那个输入。
+- 不要满足于"看起来没问题" —— 那只说明你还没构造出反例。逐个函数/分支问:什么输入、什么并发时序、什么边界(空 / 越界 / 溢出 / null / 并发 / 部分失败)能让它出错?
+- 主动构造具体反例并手推执行路径,把推演过程写进 finding 的 body,而不是泛泛断言"可能有问题"。
+- 同时审"没写的代码":缺失的校验、未处理的错误分支、被静默吞掉的失败。
+- 找不到反例不必硬凑;宁可少报也不要报凑数的猜测。真实、可复现的问题才上报。`;
 
 /**
  * 锁定段之二:report_finding 的字段契约。注入在最末 —— 用户节若写了冲突口径,以本段为准。
@@ -109,10 +121,17 @@ function composeMergedRules(resolved: readonly ResolvedPromptSection[]): string 
     .join('\n\n');
 }
 
-/** 锁定角色段 + 可配置各节 + 锁定协议段 = 注入 codex 的 baseInstructions。 */
-export function composeBaseInstructions(resolved: readonly ResolvedPromptSection[]): string {
+/**
+ * 锁定角色段(+ 对抗立场段,仅对抗档)+ 可配置各节 + 锁定协议段 = 注入 codex 的 baseInstructions。
+ * 立场段紧跟角色、在用户可配置节之前,保证用户口径压不过它,也压不过末尾的字段协议。
+ */
+export function composeBaseInstructions(
+  resolved: readonly ResolvedPromptSection[],
+  intensity: ReviewIntensity = 'standard',
+): string {
   const rules = composeMergedRules(resolved);
-  return [BUILTIN_ROLE, rules, BUILTIN_PROTOCOL].filter((b) => b.trim()).join('\n\n');
+  const stance = intensity === 'adversarial' ? BUILTIN_ADVERSARIAL : '';
+  return [BUILTIN_ROLE, stance, rules, BUILTIN_PROTOCOL].filter((b) => b.trim()).join('\n\n');
 }
 
 /** 无任何层文件时的 baseInstructions(锁定段 + builtin 各节);直调 session 的兜底。 */
@@ -169,6 +188,8 @@ export interface LoadReviewPromptOptions {
   cwd?: string;
   /** 覆盖 home(测试隔离用);缺省 os.homedir()。 */
   homeDir?: string;
+  /** 审核强度;对抗档在 baseInstructions 里追加对抗立场段(编辑器视图不受影响)。 */
+  intensity?: ReviewIntensity;
 }
 
 async function resolvePrompt(
@@ -184,7 +205,7 @@ async function resolvePrompt(
   );
   return {
     view: { sections, projectPath, globalPath },
-    baseInstructions: composeBaseInstructions(resolved),
+    baseInstructions: composeBaseInstructions(resolved, opts.intensity),
   };
 }
 

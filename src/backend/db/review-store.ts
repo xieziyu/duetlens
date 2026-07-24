@@ -32,6 +32,7 @@ interface ReviewRow {
   codex_thread_id: string | null;
   model: string | null;
   reasoning_effort: string | null;
+  intensity: string;
   title: string | null;
   status: string;
   summary_body: string | null;
@@ -106,6 +107,7 @@ function toReview(r: ReviewRow): Review {
     codexThreadId: r.codex_thread_id,
     model: r.model,
     reasoningEffort: r.reasoning_effort as Review['reasoningEffort'],
+    intensity: r.intensity as Review['intensity'],
     title: r.title,
     status: r.status as ReviewStatus,
     summaryBody: r.summary_body,
@@ -195,6 +197,7 @@ export class ReviewStore {
     title?: string | null;
     model?: string | null;
     reasoningEffort?: string | null;
+    intensity?: Review['intensity'];
   }): Review {
     const ts = now();
     const row: ReviewRow = {
@@ -205,6 +208,7 @@ export class ReviewStore {
       codex_thread_id: null,
       model: input.model ?? null,
       reasoning_effort: input.reasoningEffort ?? null,
+      intensity: input.intensity ?? 'standard',
       title: input.title ?? null,
       status: 'scanning',
       summary_body: null,
@@ -214,8 +218,8 @@ export class ReviewStore {
     };
     this.db
       .prepare(
-        `INSERT INTO reviews (id, source, source_ref, repo_path, codex_thread_id, model, reasoning_effort, title, status, summary_body, current_round, created_at, updated_at)
-         VALUES (@id, @source, @source_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @title, @status, @summary_body, @current_round, @created_at, @updated_at)`,
+        `INSERT INTO reviews (id, source, source_ref, repo_path, codex_thread_id, model, reasoning_effort, intensity, title, status, summary_body, current_round, created_at, updated_at)
+         VALUES (@id, @source, @source_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @current_round, @created_at, @updated_at)`,
       )
       .run(row);
     return toReview(row);
@@ -661,6 +665,8 @@ export class ReviewStore {
         r.collapse_viewed == null ? DEFAULT_UI_SETTINGS.collapseViewedFiles : !!r.collapse_viewed,
       defaultModel: (r.default_model as string | null) ?? DEFAULT_UI_SETTINGS.defaultModel,
       defaultEffort: (r.default_effort as UiSettings['defaultEffort'] | null) ?? DEFAULT_UI_SETTINGS.defaultEffort,
+      defaultIntensity:
+        (r.default_intensity as UiSettings['defaultIntensity'] | null) ?? DEFAULT_UI_SETTINGS.defaultIntensity,
       notifyOnComplete:
         r.notify_on_complete == null ? DEFAULT_UI_SETTINGS.notifyOnComplete : !!r.notify_on_complete,
       codexPath: (r.codex_path as string | null) ?? DEFAULT_UI_SETTINGS.codexPath,
@@ -671,14 +677,14 @@ export class ReviewStore {
   saveUiSettings(s: UiSettings): void {
     this.db
       .prepare(
-        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_source, findings_grouping, collapse_viewed, default_model, default_effort, notify_on_complete, codex_path, gh_path)
-         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultSource, @findingsGrouping, @collapseViewedFiles, @defaultModel, @defaultEffort, @notifyOnComplete, @codexPath, @ghPath)
+        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_source, findings_grouping, collapse_viewed, default_model, default_effort, default_intensity, notify_on_complete, codex_path, gh_path)
+         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultSource, @findingsGrouping, @collapseViewedFiles, @defaultModel, @defaultEffort, @defaultIntensity, @notifyOnComplete, @codexPath, @ghPath)
          ON CONFLICT(id) DO UPDATE SET
            data_mode = @dataMode, data_theme = @dataTheme, left_width = @leftWidth,
            right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView,
            default_source = @defaultSource, findings_grouping = @findingsGrouping, collapse_viewed = @collapseViewedFiles,
-           default_model = @defaultModel, default_effort = @defaultEffort, notify_on_complete = @notifyOnComplete,
-           codex_path = @codexPath, gh_path = @ghPath`,
+           default_model = @defaultModel, default_effort = @defaultEffort, default_intensity = @defaultIntensity,
+           notify_on_complete = @notifyOnComplete, codex_path = @codexPath, gh_path = @ghPath`,
       )
       // SQLite 不能绑定 boolean:布尔字段转 0/1
       .run({

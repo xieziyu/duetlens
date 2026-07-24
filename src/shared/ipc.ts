@@ -9,6 +9,7 @@ import type {
   Message,
   ReasoningEffort,
   Review,
+  ReviewIntensity,
   ReviewRound,
   ReviewUiState,
   SourceKind,
@@ -87,6 +88,8 @@ export interface ReviewStartInput {
   model?: string;
   /** reasoning effort(缺省 codex medium) */
   reasoningEffort?: ReasoningEffort;
+  /** 审核强度(缺省 standard) */
+  intensity?: ReviewIntensity;
   /** 用户给 agent 的附加上下文,随首轮机审注入(可选) */
   context?: string;
 }

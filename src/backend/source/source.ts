@@ -1,4 +1,4 @@
-import type { SourceKind } from '@shared/domain';
+import type { ReviewIntensity, SourceKind } from '@shared/domain';
 
 /** 一次审核的目标定位(三种 source 共用)。 */
 export interface ReviewTarget {
@@ -13,6 +13,8 @@ export interface ReviewTarget {
   model?: string | null;
   /** reasoning effort(缺省 codex medium) */
   reasoningEffort?: string | null;
+  /** 审核强度(标准 / 对抗);仅审核配置,不影响 source 定位 */
+  intensity?: ReviewIntensity;
   /** 用户给 agent 的附加上下文,随首轮机审注入(可选);仅审核配置,不影响 source 定位 */
   context?: string;
 }
