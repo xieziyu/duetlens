@@ -1,4 +1,5 @@
 import type { ReviewStatus } from '@shared/domain';
+import type { TokenUsage } from '@shared/agent-events';
 import type { DiffView } from './DiffPane';
 
 const STATUS_LABEL: Record<ReviewStatus, string> = {
@@ -13,6 +14,11 @@ const STATUS_LABEL: Record<ReviewStatus, string> = {
  * review 屏底部状态栏:agent 运行态从顶栏下沉到此,
  * 顶栏只留导航与上下文。右侧放全局 diff 视图与通读进度。
  */
+function contextTitle({ used, cumulative, total }: TokenUsage): string {
+  const ctx = total ? `上下文 ${used.toLocaleString()} / ${total.toLocaleString()}` : `上下文 ${used.toLocaleString()}`;
+  return `${ctx} · 本次会话累计 ${cumulative.toLocaleString()} tok`;
+}
+
 export function ReviewStatusBar({
   status,
   round,
@@ -31,7 +37,7 @@ export function ReviewStatusBar({
   round: string | null;
   model: string | null;
   effort: string | null;
-  tokenUsage: { used: number; total?: number } | null;
+  tokenUsage: TokenUsage | null;
   lastTool: string | null;
   view: DiffView;
   onViewChange: (v: DiffView) => void;
@@ -41,7 +47,9 @@ export function ReviewStatusBar({
 }): React.JSX.Element {
   const st = status ?? 'scanning';
   const running = st === 'scanning' || st === 'reviewing';
-  const pct = tokenUsage?.total ? Math.round((tokenUsage.used / tokenUsage.total) * 100) : null;
+  const pct = tokenUsage?.total
+    ? Math.min(100, Math.round((tokenUsage.used / tokenUsage.total) * 100))
+    : null;
 
   return (
     <footer className="rev-statusbar">
@@ -66,7 +74,7 @@ export function ReviewStatusBar({
       {tokenUsage && (
         <>
           <span className="sb-sep" />
-          <span className="sb-item" title={pct !== null ? `上下文用量 ${pct}%` : '累计 token 用量'}>
+          <span className="sb-item" title={contextTitle(tokenUsage)}>
             {pct !== null && (
               <svg className="ring" viewBox="0 0 18 18" style={{ ['--ctx' as string]: (pct / 100).toString() }}>
                 <circle className="bg" cx="9" cy="9" r="7" />

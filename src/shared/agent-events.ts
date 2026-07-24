@@ -1,3 +1,13 @@
+/** codex 的 token 计量。占用率只能用 used/total;cumulative 是累计消耗,可远超窗口。 */
+export interface TokenUsage {
+  /** 当前上下文占用(codex tokenUsage.last.totalTokens) */
+  used: number;
+  /** 整个 thread 的累计消耗(codex tokenUsage.total.totalTokens) */
+  cumulative: number;
+  /** 模型上下文窗口;codex 未上报时为空 */
+  total?: number;
+}
+
 /**
  * 归一后的 agent 领域事件(codex turn/item/* 映射到这里)。
  * 放 shared:backend 产生、renderer 消费,经 IPC 透传。
@@ -6,7 +16,7 @@ export type AgentEvent =
   | { kind: 'turn-started'; turnId: string }
   | { kind: 'message-delta'; text: string }
   | { kind: 'tool-call'; server: string; tool: string; status: string; args?: unknown }
-  | { kind: 'token-usage'; used: number; total?: number }
+  | ({ kind: 'token-usage' } & TokenUsage)
   // 上下文压缩由 codex auto-compact 触发,我们只观测(compaction 只摘要 codex 历史,
   // 不碰我们 DB 里的锚点/finding;不主动 thread/compact/start)。
   | { kind: 'compaction'; phase: 'started' | 'completed' }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Discussion, Finding, Message, Review, ReviewRound } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
-import type { AgentEvent } from '@shared/agent-events';
+import type { AgentEvent, TokenUsage } from '@shared/agent-events';
 
 export interface ReviewStreamState {
   review: Review | null;
@@ -14,7 +14,7 @@ export interface ReviewStreamState {
   status: Review['status'] | null;
   /** 轮次履历(首轮 + 每次重跑);末条即当前轮 */
   rounds: ReviewRound[];
-  tokenUsage: { used: number; total?: number } | null;
+  tokenUsage: TokenUsage | null;
   lastTool: string | null;
   /** 懒加载一条 discussion 的历史消息(续接的旧 review);实时消息仍走事件流。 */
   ensureMessages: (discussionId: string) => void;
@@ -44,7 +44,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [status, setStatus] = useState<Review['status'] | null>(null);
   const [rounds, setRounds] = useState<ReviewRound[]>([]);
-  const [tokenUsage, setTokenUsage] = useState<{ used: number; total?: number } | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [lastTool, setLastTool] = useState<string | null>(null);
   // 已发起过历史拉取的 discussionId,避免重复 fetch(实时消息由事件流补充)
   const fetched = useRef<Set<string>>(new Set());
@@ -179,7 +179,8 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     });
 
     function applyAgentEvent(ev: AgentEvent): void {
-      if (ev.kind === 'token-usage') setTokenUsage({ used: ev.used, total: ev.total });
+      if (ev.kind === 'token-usage')
+        setTokenUsage({ used: ev.used, cumulative: ev.cumulative, total: ev.total });
       if (ev.kind === 'tool-call') setLastTool(`${ev.server}/${ev.tool} · ${ev.status}`);
     }
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type { Discussion, Finding, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
+import type { TokenUsage } from '@shared/agent-events';
 import { useSettings } from '../settings/SettingsProvider';
 import { useReviewStream } from '../review/useReviewStream';
 import { useReviewUiState } from '../review/useReviewUiState';
@@ -549,7 +550,7 @@ function RightPanel({
   scanning: boolean;
   currentRound: number;
   lastTool: string | null;
-  tokenUsage: { used: number; total?: number } | null;
+  tokenUsage: TokenUsage | null;
   onPickFinding: (f: Finding) => void;
   onTriage: (finding: Finding, triage: Triage, reason?: string | null) => void;
   activeDiscussionId: string | null;

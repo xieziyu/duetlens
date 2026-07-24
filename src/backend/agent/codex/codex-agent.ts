@@ -187,12 +187,19 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
         break;
       }
       case CodexNotification.tokenUsageUpdated: {
+        // last = 本轮真实占用的上下文;total 是全 thread 累计(含每轮重发的 cached input),
+        // 拿 total 比窗口会得到几百 % 的假数。
         const usage = p.tokenUsage as
-          | { total?: { totalTokens?: number }; modelContextWindow?: number | null }
+          | {
+              total?: { totalTokens?: number };
+              last?: { totalTokens?: number };
+              modelContextWindow?: number | null;
+            }
           | undefined;
         this.emitEvent({
           kind: 'token-usage',
-          used: usage?.total?.totalTokens ?? 0,
+          used: usage?.last?.totalTokens ?? 0,
+          cumulative: usage?.total?.totalTokens ?? 0,
           total: usage?.modelContextWindow ?? undefined,
         });
         break;
