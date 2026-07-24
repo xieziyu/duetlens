@@ -13,6 +13,7 @@
     "dist": "npm run build && electron-builder",
     "preview:ui": "vite --config vite.renderer.config.ts --port 5177 --strictPort",
     "db:snapshot": "bash scripts/db-snapshot.sh",
+    "icons:gen": "tsx scripts/gen-icons.ts",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3",
     "typecheck": "tsc --noEmit",

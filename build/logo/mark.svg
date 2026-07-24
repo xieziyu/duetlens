@@ -1,0 +1,32 @@
+<!-- Duetlens 主标记:镜片压在一页代码上,镜内三行被放大(灰=上下文 / 蓝=agent / 琥珀=human)。
+     颜色取自 src/renderer/theme/tokens.css 的 --agent / --human。
+     128px 以下改用 mark-small.svg / mark-tiny.svg(分档见 scripts/gen-icons.ts)。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <clipPath id="dl-lens"><circle cx="48" cy="48" r="29"/></clipPath>
+    <mask id="dl-outside">
+      <rect width="96" height="96" fill="#fff"/>
+      <circle cx="48" cy="48" r="30.5" fill="#000"/>
+    </mask>
+  </defs>
+
+  <g mask="url(#dl-outside)" fill="#4a5261">
+    <rect x="10" y="11.3" width="32" height="3.4" rx="1.7"/><rect x="48" y="11.3" width="22" height="3.4" rx="1.7"/>
+    <rect x="10" y="21.3" width="24" height="3.4" rx="1.7"/><rect x="40" y="21.3" width="42" height="3.4" rx="1.7"/>
+    <rect x="10" y="31.3" width="46" height="3.4" rx="1.7"/><rect x="62" y="31.3" width="24" height="3.4" rx="1.7"/>
+    <rect x="10" y="41.3" width="28" height="3.4" rx="1.7"/><rect x="44" y="41.3" width="40" height="3.4" rx="1.7"/>
+    <rect x="10" y="51.3" width="52" height="3.4" rx="1.7"/><rect x="68" y="51.3" width="18" height="3.4" rx="1.7"/>
+    <rect x="10" y="61.3" width="26" height="3.4" rx="1.7"/><rect x="42" y="61.3" width="38" height="3.4" rx="1.7"/>
+    <rect x="10" y="71.3" width="44" height="3.4" rx="1.7"/><rect x="60" y="71.3" width="26" height="3.4" rx="1.7"/>
+    <rect x="10" y="81.3" width="32" height="3.4" rx="1.7"/><rect x="48" y="81.3" width="34" height="3.4" rx="1.7"/>
+  </g>
+
+  <circle cx="48" cy="48" r="29" fill="#58a6f7" opacity=".13"/>
+  <g clip-path="url(#dl-lens)">
+    <rect x="30" y="33" width="25" height="6.5" rx="3.25" fill="#7a8698"/>
+    <rect x="26" y="44.75" width="40" height="6.5" rx="3.25" fill="#58a6f7"/>
+    <rect x="30" y="56.5" width="29" height="6.5" rx="3.25" fill="#e8a24d"/>
+  </g>
+  <circle cx="48" cy="48" r="24.5" fill="none" stroke="#fff" stroke-width="1.5" opacity=".2"/>
+  <circle cx="48" cy="48" r="29" fill="none" stroke="#8b98aa" stroke-width="5.5"/>
+</svg>

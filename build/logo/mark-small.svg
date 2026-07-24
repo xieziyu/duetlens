@@ -1,0 +1,16 @@
+<!-- Duetlens 小尺寸标记:与 mark.svg 同一轮廓(镜圈 + 内圈 + 三行),
+     去掉镜外密排代码——那些 3.4pt 的细行在 64px 以下会糊成噪点。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <defs>
+    <clipPath id="dl-lens-sm"><circle cx="48" cy="48" r="33"/></clipPath>
+  </defs>
+
+  <circle cx="48" cy="48" r="33" fill="#58a6f7" opacity=".13"/>
+  <g clip-path="url(#dl-lens-sm)">
+    <rect x="31" y="30" width="27" height="7" rx="3.5" fill="#7a8698"/>
+    <rect x="26" y="44.5" width="44" height="7" rx="3.5" fill="#58a6f7"/>
+    <rect x="31" y="59" width="31" height="7" rx="3.5" fill="#e8a24d"/>
+  </g>
+  <circle cx="48" cy="48" r="27.5" fill="none" stroke="#fff" stroke-width="1.8" opacity=".22"/>
+  <circle cx="48" cy="48" r="33" fill="none" stroke="#8b98aa" stroke-width="6"/>
+</svg>

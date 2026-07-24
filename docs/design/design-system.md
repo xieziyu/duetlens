@@ -25,6 +25,22 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 | Diff | `--add` `--del` 及 `-bg` / `-gutter` · `--code-hl` | 随 `data-theme` |
 | Syntax | `--code-text` `--k` `--fn` `--s` `--n` `--c` `--ty` `--mac` | 随 `data-theme` |
 
+## 应用图标
+
+标记的含义是**镜片压在一页代码上**:镜外密排细行是上下文,镜内被放大的三行分别是灰(上下文)、天蓝(agent)、琥珀(human),配色沿用 tokens 的 `--agent` / `--human`。
+
+手写 SVG 是单一来源,按渲染尺寸分三档美术,`build/logo/` 下:
+
+| 文件 | 用于 | 差别 |
+| --- | --- | --- |
+| `mark.svg` | ≥128px | 完整:镜外密排代码 + 镜内三行 |
+| `mark-small.svg` | 32–64px | 去掉镜外细行(3.4pt 的行到这个尺寸会糊成噪点) |
+| `mark-tiny.svg` | 16px | 再去掉内圈与灰行,只留镜圈 + agent/human 两行 |
+
+`build/icon.icns` 与 `build/icon.png` 是产物,由 `npm run icons:gen` 从上面三个 SVG 生成(套 macOS Big Sur 的 824/1024 底板栅格),已提交进仓库——打包机因此不需要 `rsvg-convert`,只有改图时才要装(`brew install librsvg`)。改完 SVG 记得重跑该命令。
+
+`electron-builder.yml` 显式指向 `build/icon.icns`,不让 electron-builder 从单张 png 自动缩——那样会丢掉分档美术。
+
 ## 可视化清单:`mockup/design-system.html`
 
 自包含的 style guide,链接 `tokens.css`,右上角可实时切换 `data-mode × data-theme` 四种组合。含:色板(从 tokens 自动渲染并显示 resolved 值)、字阶(IBM Plex Sans + Mono,去手写体)、radius / elevation、以及组件样例(buttons / chips·tags·status / segmented·tabs / inputs / cards 四态 / popover / 文件树行 / gutter 锚点)。
