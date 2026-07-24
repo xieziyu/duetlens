@@ -507,11 +507,15 @@
 .diff {
   --diff-bar-h: 30px;
   background: var(--bg);
+  /* 列头常驻顶部,所有 scrollIntoView 落点(file-header / off-diff 段)都要让开它 */
+  scroll-padding-top: var(--diff-bar-h);
 }
 /* diff 列头:改动总量 + 视图切换。随滚动常驻在中栏顶部,file-header 的 sticky 顶点让开它 */
 .diff-bar {
   position: sticky;
   top: 0;
+  /* 长代码行让 pane 横向可滚;不钉住 left 的话整条列头会跟着内容滑出视口 */
+  left: 0;
   z-index: 4;
   display: flex;
   align-items: center;
@@ -580,8 +584,6 @@
 .file-header {
   position: sticky;
   top: var(--diff-bar-h, 0px);
-  /* 左栏点击定位到本 header 时给列头让出高度,否则紧随其后的内容会被压在列头下 */
-  scroll-margin-top: var(--diff-bar-h, 0px);
   z-index: 3;
   display: flex;
   align-items: center;
