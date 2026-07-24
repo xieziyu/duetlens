@@ -32,6 +32,8 @@ export interface ResumeConversationOptions extends StartConversationOptions {
 export interface ConversationHandle {
   /** codex threadId(用于续接/持久化) */
   readonly conversationId: string;
+  /** agent 侧最终生效的模型;未指定模型时这是唯一能知道跑的是谁的途径 */
+  readonly model?: string;
 }
 
 export interface ConversationalAgent {

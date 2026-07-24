@@ -60,6 +60,7 @@ function buildScanPrompt(context?: string): string | undefined {
 const SESSION_FORWARDERS: {
   [K in keyof ReviewSessionEvents]: (reviewId: string, payload: ReviewSessionEvents[K]) => ReviewEvent;
 } = {
+  review: (reviewId, payload) => ({ reviewId, type: 'review', payload }),
   finding: (reviewId, payload) => ({ reviewId, type: 'finding', payload }),
   discussion: (reviewId, payload) => ({ reviewId, type: 'discussion', payload }),
   message: (reviewId, payload) => ({ reviewId, type: 'message', payload }),

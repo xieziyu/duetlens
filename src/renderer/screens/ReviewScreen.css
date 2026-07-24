@@ -162,6 +162,22 @@
   background: var(--surface-3);
   color: var(--text);
 }
+/* agent 身份合成一枚:codex · 模型 · effort(effort 只留值,标签在 title 里) */
+.rev-statusbar .sb-agent {
+  gap: 5px;
+}
+.rev-statusbar .sb-agent .sb-model {
+  color: var(--text);
+}
+.rev-statusbar .sb-agent .sb-model::before,
+.rev-statusbar .sb-agent .sb-effort::before {
+  content: '·';
+  margin-right: 5px;
+  color: var(--text-faint);
+}
+.rev-statusbar .sb-agent .sb-effort {
+  color: var(--text-faint);
+}
 .rev-statusbar .glyph {
   flex: none;
   width: 12px;

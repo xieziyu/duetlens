@@ -282,6 +282,13 @@ export class ReviewStore {
       .run(threadId, now(), reviewId);
   }
 
+  /** 记下 agent 侧实际生效的模型(用户未指定时由 thread 起会话后回填)。 */
+  setReviewModel(reviewId: string, model: string): void {
+    this.db
+      .prepare('UPDATE reviews SET model = ?, updated_at = ? WHERE id = ?')
+      .run(model, now(), reviewId);
+  }
+
   setReviewStatus(reviewId: string, status: ReviewStatus): void {
     this.db
       .prepare('UPDATE reviews SET status = ?, updated_at = ? WHERE id = ?')

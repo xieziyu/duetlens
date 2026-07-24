@@ -11,9 +11,15 @@ const STATUS_LABEL: Record<ReviewStatus, string> = {
 };
 
 /**
- * review 屏底部状态栏:agent 运行态从顶栏下沉到此,
- * 顶栏只留导航与上下文。右侧放全局 diff 视图与通读进度。
+ * review 屏底部状态栏:agent 运行态从顶栏下沉到此,顶栏只留导航与上下文。
+ * diff 视图切换与通读进度归中栏列头(.diff-bar),此处不再重复。
  */
+function agentTitle(model: string | null, effort: string | null): string {
+  const parts = ['审阅 agent:codex', `模型 ${model ?? '账号默认'}`];
+  if (effort) parts.push(`reasoning effort ${effort}`);
+  return parts.join(' · ');
+}
+
 function contextTitle({ used, cumulative, total }: TokenUsage): string {
   const ctx = total ? `上下文 ${used.toLocaleString()} / ${total.toLocaleString()}` : `上下文 ${used.toLocaleString()}`;
   return `${ctx} · 本次会话累计 ${cumulative.toLocaleString()} tok`;
@@ -62,15 +68,12 @@ export function ReviewStatusBar({
           ↻ {round}
         </span>
       )}
-      <span className="sb-item" title="审阅 agent">
+      <span className="sb-item sb-agent" title={agentTitle(model, effort)}>
         <span className="glyph" />
-        codex{model ? ` · ${model}` : ''}
+        codex
+        <span className="sb-model mono">{model ?? '默认模型'}</span>
+        {effort && <span className="sb-effort mono">{effort}</span>}
       </span>
-      {effort && (
-        <span className="sb-item mono" title="reasoning effort">
-          effort {effort}
-        </span>
-      )}
       {tokenUsage && (
         <>
           <span className="sb-sep" />

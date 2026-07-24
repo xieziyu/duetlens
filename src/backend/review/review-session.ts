@@ -14,6 +14,7 @@ import {
   type Discussion,
   type Finding,
   type Message,
+  type Review,
   type ReviewIntensity,
 } from '@shared/domain';
 import { findDuplicate } from '@shared/finding-dedupe';
@@ -66,6 +67,8 @@ export interface StartReviewOptions {
  * 在这里加一条事件而忘了转发给 renderer,编译期就会报错(见 review-manager 的 SESSION_FORWARDERS)。
  */
 export interface ReviewSessionEvents {
+  /** review 记录本身有更新(如回填实际生效的模型) */
+  review: Review;
   /** 已落库的 finding */
   finding: Finding;
   /** finding 的承载 discussion(与 finding 同事务建出,须成对外发) */
@@ -141,6 +144,7 @@ export class ReviewSession {
     this.conversationId = handle.conversationId;
     this.store.setCodexThreadId(this.reviewId, handle.conversationId);
     if (opts.round) this.store.setRoundThreadId(this.reviewId, opts.round, handle.conversationId);
+    this.recordModel(handle.model);
     this.setStatus('scanning');
 
     const outcome = await this.runTurn(opts.scanPrompt ?? DEFAULT_SCAN_PROMPT);
@@ -177,7 +181,21 @@ export class ReviewSession {
       reasoningEffort: opts.reasoningEffort,
     });
     this.conversationId = handle.conversationId;
+    this.recordModel(handle.model);
     return this.store.listFindings(this.reviewId);
+  }
+
+  /**
+   * 回填 agent 侧实际生效的模型:用户可以不指定模型(走账号默认),
+   * 那时只有起会话的应答里带着真名,不落库 UI 就永远只能显示「codex」。
+   */
+  private recordModel(model: string | undefined): void {
+    if (!model) return;
+    const review = this.store.getReview(this.reviewId);
+    if (!review || review.model === model) return;
+    this.store.setReviewModel(this.reviewId, model);
+    const updated = this.store.getReview(this.reviewId);
+    if (updated) this.emit('review', updated);
   }
 
   /**

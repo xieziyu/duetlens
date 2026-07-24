@@ -94,7 +94,7 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
       model: opts.model || undefined,
       config: this.threadConfig(opts),
     });
-    return { conversationId: res.thread.id };
+    return { conversationId: res.thread.id, model: res.model || undefined };
   }
 
   async resumeConversation(opts: ResumeConversationOptions): Promise<ConversationHandle> {
@@ -108,7 +108,7 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
       model: opts.model || undefined,
       config: this.threadConfig(opts),
     });
-    return { conversationId: res.thread.id };
+    return { conversationId: res.thread.id, model: res.model || undefined };
   }
 
   /** 起子进程(带 MCP 令牌 env)并握手。 */
