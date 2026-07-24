@@ -74,7 +74,7 @@
 ### review 右栏三 tab
 
 - **Discussion**:当前锚点的对话线程(追问 codex / 框选发起),含 composer。
-- **Findings**:运行时 triage 列表 —— 按严重度分组(可切按文件)+ tally;每行 sev·category / 标题 / `file:line` / origin(◆ agent vs ● 你·提升) / `◇ suggestion` 标记 / triage:保留(天蓝左条)· 剔除(虚线 + 删除线 + 恢复) / submitted passive(绿左条,锁定不可改);底部「＋ 手动新增 finding」。点行跳 diff / 开 discussion。
+- **Findings**:运行时 triage 列表 —— 按严重度分组(可切按文件)+ tally;每行 sev·category / 标题 / `file:line` / origin(◆ agent vs ● 你·提升) / `◇ suggestion` 标记 / triage:保留(天蓝左条)· 剔除(虚线 + 删除线 + 恢复) / submitted passive(绿左条,锁定不可改);底部「＋ 手动新增 finding」。点行跳 diff / 开 discussion。**文件整个不在改动内的 finding 抽成末尾专组**(`◇ 文件不在改动内`,列在各严重度/文件组之后),使列表顺序贴合它们在 diff 底部 off-diff 区的物理位置,逐条点下去不再在改动处与底部之间来回弹。
 - **Summary**:codex 审核总结 —— 结论卡(codex 建议的 review event,标注「仅建议 · 最终 event 在提交时确认」)+ 统计条(high/med/low + 保留/已提交/讨论)+ **可就地编辑的 codex 生成正文**(即提交屏 review body 的来源;`✎ 编辑` 展开 Markdown textarea,`⌘↵` 保存 / `Esc` 取消,保存后轻量渲染段落 / `**粗**` / `` `代码` ``,byline 标「你已编辑」)+ 关注主题(按 category 聚合,点击筛 findings)+ 覆盖度行 + 「提交 review →」直达 [findings-submit](findings-submit.md)。
 
 ### finding 就地编辑器(`mockup/diff-review.html` 内联 finding 卡)
@@ -100,7 +100,9 @@
 ### diff 导航与覆盖(`mockup/diff-review.html`)
 
 - **per-file Viewed ✓**:文件树每行右侧有 viewed tick(悬停显影),标记已看后该行删除线 + 变灰 + 绿 ✓;文件树头显示「N 改动 · M 已看」进度。diff 主区 file-header 的 ✓ 按钮 = 标记当前文件已看**并折叠**内容为一条「已折叠 · 点击展开」bar;`⌄` 只折叠不改 viewed。(实现项:viewed 状态按用户/PR 持久化。)
-- **off-diff findings 区**:锚点不在当前 diff 新侧的 finding(被删除行 / 无行锚点的 PR 级 / 未展开文件),集中在 diff 顶部一条可折叠的琥珀 banner(`⚑ N 条 finding 不在当前 diff 视图内`),每条显示 sev·category / 标题 / 「为何 off-diff」原因 + origin,点击打开对应 discussion。避免这类 finding 因无处内联而被忽略。
+- **off-diff findings 分两类承载**:锚点不在当前 diff 新侧的 finding,按「文件在不在改动内」分开落位,都保留完整卡片(triage/编辑/追问),避免因无处内联被忽略。
+  - **行 off-diff**(文件在改动内、锚点行不在新侧 hunk:被删除行 / 未展开区 / 无行锚点的 PR 级):归入**该文件区顶部**的 off-diff 段(`◇ N 条 off-diff finding(锚点不在当前改动新侧)`)。
+  - **文件 off-diff**(文件整个不在本次 diff —— agent 允许顺 import 读到被引用文件并 off-diff 提出):无对应文件区承载,单列到 diff 主区**底部**、按文件成组(`◇ 文件不在本次改动内 · path`),并挂 `fileAnchorId` 锚点。**这枚锚点是必须的**:否则点该卡时 `setActivePath`/`focusFindingId` 找不到 DOM 目标,滚动静默失败(实机踩过,见 `#3912`)。
 - **split vs unified**:底部状态栏右端的 `Unified | Split` segmented 切换(全局偏好,不再逐文件重复)。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
 
 ### 键盘快捷键(`mockup/diff-review.html`)
