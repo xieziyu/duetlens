@@ -53,26 +53,35 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 非 github 来源没有外链按钮,补回右侧内边距 */
+/* 非 github 来源没有外链图标,补回右侧内边距 */
 .rev-topbar .srcchip:not(:has(.ext)) {
   padding-right: 10px;
+}
+/* github 来源:整枚 chip 是按钮,悬停连图标一起亮起,提示点哪儿都能跳 */
+.rev-topbar button.srcchip {
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+.rev-topbar button.srcchip:hover {
+  background: var(--agent-soft);
+  border-color: var(--agent-line);
 }
 .rev-topbar .srcchip .ext {
   display: grid;
   place-items: center;
   width: 20px;
   height: 20px;
-  border: 0;
   border-radius: 999px;
-  background: transparent;
   color: var(--text-faint);
-  cursor: pointer;
   transition:
     background 0.16s ease,
     color 0.16s ease;
 }
-.rev-topbar .srcchip .ext:hover {
-  background: var(--agent-soft);
+.rev-topbar button.srcchip:hover .ext {
+  background: var(--agent-line);
   color: var(--agent-2);
 }
 .rev-topbar .submit-cta {

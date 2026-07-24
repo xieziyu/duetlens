@@ -364,15 +364,21 @@ export function ReviewScreen({
     >
       <header className="rev-topbar">
         <div className="source">
-          <span className="srcchip">
-            <SourceIcon source={review?.source} />
-            <span className="mono ref">{sourceLabel}</span>
-            {isGithub && (
-              <button className="ext" onClick={openInBrowser} title="在浏览器中打开 PR">
+          {/* github 来源整枚 chip 即「去 PR」的入口;外链图标只作可点提示,不再是唯一热区 */}
+          {isGithub ? (
+            <button className="srcchip link" onClick={openInBrowser} title="在浏览器中打开 PR">
+              <SourceIcon source={review?.source} />
+              <span className="mono ref">{sourceLabel}</span>
+              <span className="ext" aria-hidden>
                 <ExternalIcon />
-              </button>
-            )}
-          </span>
+              </span>
+            </button>
+          ) : (
+            <span className="srcchip">
+              <SourceIcon source={review?.source} />
+              <span className="mono ref">{sourceLabel}</span>
+            </span>
+          )}
           <span className="title">{review?.title ?? '加载中…'}</span>
           {pr?.nwo && <span className="mono nwo">{pr.nwo}</span>}
         </div>
