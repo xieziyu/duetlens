@@ -359,6 +359,10 @@
   border: 2px solid transparent;
   background-clip: content-box;
 }
+/* 两条滚动条交汇的直角:webkit 缺省刷成白色,深色下是一枚扎眼的白方块 */
+.pane::-webkit-scrollbar-corner {
+  background: transparent;
+}
 
 /* ---------- 左:文件树 ---------- */
 .tree {
