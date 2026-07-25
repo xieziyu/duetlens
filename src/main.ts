@@ -83,6 +83,9 @@ app.whenReady().then(() => {
   const db = openDatabase(path.join(app.getPath('userData'), 'duetlens.db'));
   manager = new ReviewManager(new ReviewStore(db));
 
+  // 过期历史在建窗前清一次:此刻还没有活跃会话,删库不会抽走运行中会话的行。
+  manager.pruneExpiredReviews();
+
   const broadcast = (channel: string, payload: unknown) => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
   };

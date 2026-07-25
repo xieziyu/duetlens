@@ -46,6 +46,9 @@ import type {
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
 import { AgentTurnError, DEFAULT_SCAN_PROMPT, ReviewSession, type ReviewSessionEvents } from './review-session';
 
+/** 审核历史保留窗口:最后更新早于此时长的会话在启动时清掉,不看状态(未完成/未提交同样过期)。 */
+export const REVIEW_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** 首轮扫描指令:有附加上下文时拼在缺省指令之后一并注入,否则用缺省。 */
 function buildScanPrompt(context?: string): string | undefined {
   const ctx = context?.trim();
@@ -396,6 +399,14 @@ export class ReviewManager extends EventEmitter {
   async deleteReview(reviewId: string): Promise<void> {
     await this.teardown(reviewId);
     this.store.deleteReview(reviewId);
+  }
+
+  /**
+   * 清理超出保留窗口的历史,返回删掉的条数。只在启动、尚无活跃会话时调用 ——
+   * 直接删库不经 teardown,运行中调用会把子进程/MCP 指向的行抽走。
+   */
+  pruneExpiredReviews(nowMs = Date.now()): number {
+    return this.store.pruneReviewsBefore(nowMs - REVIEW_RETENTION_MS);
   }
 
   /** 显式续接一个非活跃 review 的会话(app 重启后);已活跃则原样返回。 */

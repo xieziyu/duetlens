@@ -114,6 +114,38 @@ function main() {
   assert.equal(store.getUiSettings().notifyOnComplete, false);
   log('ui_settings 默认 + 往返 ok(含 model/effort/notify)');
 
+  // 保留窗口:按 updated_at 裁剪,边界(正好等于 cutoff)保留
+  const stale = store.createReview({ source: 'local-branch', sourceRef: 'feat/old' });
+  const fresh = store.createReview({ source: 'local-branch', sourceRef: 'feat/new' });
+  const cutoff = 1_000_000;
+  const backdate = (id: string, ts: number) =>
+    db.prepare('UPDATE reviews SET updated_at = ? WHERE id = ?').run(ts, id);
+  backdate(stale.id, cutoff - 1);
+  backdate(fresh.id, cutoff);
+
+  // 子表活动要冒泡到父 review,否则旧扫描 + 昨天的追问会被当成过期删掉
+  const revived = store.createReview({ source: 'local-branch', sourceRef: 'feat/revived' });
+  const revivedFinding = store.addFinding(revived.id, {
+    severity: 'low',
+    title: '命名',
+    body: '',
+    file: 'src/a.ts',
+    line: 1,
+  });
+  backdate(revived.id, cutoff - 1);
+  store.addMessage(revivedFinding.discussionId, 'user', '这个还在吗?');
+  assert.ok(store.getReview(revived.id)!.updatedAt >= cutoff, '追问应把父 review 推到当下');
+  backdate(revived.id, cutoff - 1);
+  store.setTriage(revivedFinding.id, 'dismiss', '误报');
+  assert.ok(store.getReview(revived.id)!.updatedAt >= cutoff, 'triage 应把父 review 推到当下');
+
+  assert.equal(store.pruneReviewsBefore(cutoff), 1);
+  assert.equal(store.getReview(stale.id), null);
+  assert.ok(store.getReview(fresh.id));
+  assert.ok(store.getReview(revived.id));
+  db.prepare('DELETE FROM reviews WHERE id IN (?, ?)').run(fresh.id, revived.id);
+  log('pruneReviewsBefore 按 updated_at 裁剪 + 子表活动冒泡 ok');
+
   // 级联删除:删 review 应清空其 findings/discussions/messages
   db.prepare('DELETE FROM reviews WHERE id = ?').run(review.id);
   assert.equal(store.listFindings(review.id).length, 0);

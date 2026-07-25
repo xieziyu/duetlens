@@ -20,6 +20,8 @@ Review (一次审核会话)
 - **一轮一个 codex thread,轮内全局视野。** 同一轮内只开一个 thread,所有 discussion 的追问都在这个会话里通过引用锚点进行,而不是每个 discussion 各开独立 thread。理由:让 agent 始终拥有整个 PR 的全局上下文,同时节省 token(不必给每个 discussion 重复喂 diff)。**跨轮则换新会话** —— 复用会话会让新旧两份 diff 的行号在同一上下文里互相污染,故上一轮的结论改由结构化 prompt 注入,详见 [rerun](rerun.md)。若某个讨论确需隔离上下文,codex 原生的 `thread/fork` 是已知备选手段,但默认不用。
 - **findings 通过 MCP 工具回传,不再 watch 文件。** Duetlens 作为 app 向 codex 暴露一个 **MCP server**,提供 `report_finding` / `update_finding` / `get_file` / `get_diff` 之类工具。agent 通过调用这些工具实时、结构化地上报 findings,并可在对话中随时补充或修正(`update_finding` 用于对话打磨后回写)。这取代了 1.0 用 chokidar 盯 `findings.json` 的做法——数据实时、有明确 schema、天然契合多轮对话。**已端到端验证**,机制见 [codex-integration](codex-integration.md)。
 
+- **历史保留 30 天,按最后更新时间算,启动时清一次。** 过期判据是 `updated_at` 而非 `created_at` —— 一次审核只要还在被追问/复审就一直续命。这要求**子表活动冒泡到父 review**:消息、finding 的编辑/裁决/提交写的都是子表,不把 `reviews.updated_at` 一并推上去,一条昨天刚追问过的旧审核就会按「最后一次改状态」的时间被删(冒泡与子表写入同事务,见 `ReviewStore.withReviewTouch`)。**不看状态**:未完成、未提交的会话同样过期,否则一次失败的扫描会永久占位。清理放在建窗前(此时无活跃会话),删 review 经 FK 级联带走 discussions / findings / messages / ui_state / diffs / rounds。
+
 ## finding 的状态与字段
 
 finding 是一类 discussion,但同时是一条**可提交到 GitHub 的记录**,带两组独立状态:

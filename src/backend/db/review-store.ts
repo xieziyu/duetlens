@@ -295,6 +295,42 @@ export class ReviewStore {
     this.db.prepare('DELETE FROM reviews WHERE id = ?').run(id);
   }
 
+  /** 按最后更新时间删除过期审核(级联同 deleteReview);返回删掉的条数。 */
+  pruneReviewsBefore(cutoff: number): number {
+    return this.db.prepare('DELETE FROM reviews WHERE updated_at < ?').run(cutoff).changes;
+  }
+
+  /** 把父 review 的 updated_at 推到 ts;调用方须已在事务内(见 withReviewTouch)。 */
+  private touchReview(reviewId: string, ts: number): void {
+    this.db.prepare('UPDATE reviews SET updated_at = ? WHERE id = ?').run(ts, reviewId);
+  }
+
+  /**
+   * 子表写入 + 父 review 的 updated_at 冒泡,同一事务内完成。
+   *
+   * 保留窗口与历史排序都只读 `reviews.updated_at`,而消息/finding 写的是子表 ——
+   * 不冒泡的话,一条昨天刚被追问过的旧审核会因为「最后一次改状态」在 30 天前而被清掉。
+   */
+  private withReviewTouch<T>(
+    scope: { review: string } | { finding: string } | { discussion: string },
+    write: (ts: number) => T,
+  ): T {
+    const ts = now();
+    return this.db.transaction(() => {
+      const written = write(ts);
+      if ('review' in scope) this.touchReview(scope.review, ts);
+      else if ('finding' in scope)
+        this.db
+          .prepare('UPDATE reviews SET updated_at = ? WHERE id = (SELECT review_id FROM findings WHERE id = ?)')
+          .run(ts, scope.finding);
+      else
+        this.db
+          .prepare('UPDATE reviews SET updated_at = ? WHERE id = (SELECT review_id FROM discussions WHERE id = ?)')
+          .run(ts, scope.discussion);
+      return written;
+    })();
+  }
+
   setCodexThreadId(reviewId: string, threadId: string): void {
     this.db
       .prepare('UPDATE reviews SET codex_thread_id = ?, updated_at = ? WHERE id = ?')
@@ -512,6 +548,7 @@ export class ReviewStore {
           ts,
           ts,
         );
+      this.touchReview(reviewId, ts);
     });
     insert();
     return this.getFinding(findingId)!;
@@ -558,11 +595,13 @@ export class ReviewStore {
       body: input.body ?? existing.body,
       suggestion: input.suggestion === undefined ? existing.suggestion : input.suggestion,
     };
-    this.db
-      .prepare(
-        `UPDATE findings SET severity = ?, category = ?, title = ?, body = ?, suggestion = ?, updated_at = ? WHERE id = ?`,
-      )
-      .run(next.severity, next.category, next.title, next.body, next.suggestion, now(), input.findingId);
+    this.withReviewTouch({ finding: input.findingId }, (ts) => {
+      this.db
+        .prepare(
+          `UPDATE findings SET severity = ?, category = ?, title = ?, body = ?, suggestion = ?, updated_at = ? WHERE id = ?`,
+        )
+        .run(next.severity, next.category, next.title, next.body, next.suggestion, ts, input.findingId);
+    });
     return this.getFinding(input.findingId);
   }
 
@@ -572,9 +611,11 @@ export class ReviewStore {
    */
   setTriage(findingId: string, triage: Triage, reason?: string | null): void {
     const dismissReason = triage === 'dismiss' ? (reason?.trim() || null) : null;
-    this.db
-      .prepare('UPDATE findings SET triage = ?, dismiss_reason = ?, updated_at = ? WHERE id = ?')
-      .run(triage, dismissReason, now(), findingId);
+    this.withReviewTouch({ finding: findingId }, (ts) => {
+      this.db
+        .prepare('UPDATE findings SET triage = ?, dismiss_reason = ?, updated_at = ? WHERE id = ?')
+        .run(triage, dismissReason, ts, findingId);
+    });
   }
 
   /**
@@ -592,24 +633,26 @@ export class ReviewStore {
     note?: string | null,
   ): void {
     const autoDismiss = resolution === 'fixed' ? 1 : 0;
-    this.db
-      .prepare(
-        `UPDATE findings
-            SET resolution = ?, resolution_note = ?, last_seen_round = ?, updated_at = ?,
-                triage = CASE WHEN ? = 1 AND triage = 'open' THEN 'dismiss' ELSE triage END,
-                dismiss_reason = CASE WHEN ? = 1 AND triage = 'open' THEN ? ELSE dismiss_reason END
-          WHERE id = ?`,
-      )
-      .run(
-        resolution,
-        note?.trim() || null,
-        round,
-        now(),
-        autoDismiss,
-        autoDismiss,
-        `第 ${round} 轮复核判定已修复`,
-        findingId,
-      );
+    this.withReviewTouch({ finding: findingId }, (ts) => {
+      this.db
+        .prepare(
+          `UPDATE findings
+              SET resolution = ?, resolution_note = ?, last_seen_round = ?, updated_at = ?,
+                  triage = CASE WHEN ? = 1 AND triage = 'open' THEN 'dismiss' ELSE triage END,
+                  dismiss_reason = CASE WHEN ? = 1 AND triage = 'open' THEN ? ELSE dismiss_reason END
+            WHERE id = ?`,
+        )
+        .run(
+          resolution,
+          note?.trim() || null,
+          round,
+          ts,
+          autoDismiss,
+          autoDismiss,
+          `第 ${round} 轮复核判定已修复`,
+          findingId,
+        );
+    });
   }
 
   /**
@@ -626,16 +669,18 @@ export class ReviewStore {
   }
 
   setSubmission(findingId: string, submission: Submission, url: string | null = null): void {
-    this.db
-      .prepare('UPDATE findings SET submission = ?, submitted_url = ?, updated_at = ? WHERE id = ?')
-      .run(submission, url, now(), findingId);
+    this.withReviewTouch({ finding: findingId }, (ts) => {
+      this.db
+        .prepare('UPDATE findings SET submission = ?, submitted_url = ?, updated_at = ? WHERE id = ?')
+        .run(submission, url, ts, findingId);
+    });
   }
 
   /** 改锚点行(提交屏修锚点 / 降级为摘要):line=0 表示脱锚,归入 review 摘要。 */
   setFindingAnchor(findingId: string, line: number): void {
-    this.db
-      .prepare('UPDATE findings SET line = ?, updated_at = ? WHERE id = ?')
-      .run(line, now(), findingId);
+    this.withReviewTouch({ finding: findingId }, (ts) => {
+      this.db.prepare('UPDATE findings SET line = ?, updated_at = ? WHERE id = ?').run(line, ts, findingId);
+    });
   }
 
   // ---- discussions / messages ----
@@ -643,14 +688,16 @@ export class ReviewStore {
     reviewId: string,
     anchor: { file: string; line: number; lineEnd?: number | null },
   ): Discussion {
-    const ts = now();
     const id = randomUUID();
-    this.db
-      .prepare(
-        `INSERT INTO discussions (id, review_id, kind, origin, file, line, line_end, created_at)
-         VALUES (?, ?, 'user', 'manual', ?, ?, ?, ?)`,
-      )
-      .run(id, reviewId, anchor.file, anchor.line, anchor.lineEnd ?? null, ts);
+    const ts = this.withReviewTouch({ review: reviewId }, (writeTs) => {
+      this.db
+        .prepare(
+          `INSERT INTO discussions (id, review_id, kind, origin, file, line, line_end, created_at)
+           VALUES (?, ?, 'user', 'manual', ?, ?, ?, ?)`,
+        )
+        .run(id, reviewId, anchor.file, anchor.line, anchor.lineEnd ?? null, writeTs);
+      return writeTs;
+    });
     return {
       id,
       reviewId,
@@ -706,6 +753,7 @@ export class ReviewStore {
           ts,
           ts,
         );
+      this.touchReview(disc.reviewId, ts);
     });
     run();
     return this.getFinding(findingId)!;
@@ -726,11 +774,13 @@ export class ReviewStore {
   }
 
   addMessage(discussionId: string, role: MessageRole, text: string): Message {
-    const ts = now();
     const id = randomUUID();
-    this.db
-      .prepare('INSERT INTO messages (id, discussion_id, role, text, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(id, discussionId, role, text, ts);
+    const ts = this.withReviewTouch({ discussion: discussionId }, (writeTs) => {
+      this.db
+        .prepare('INSERT INTO messages (id, discussion_id, role, text, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(id, discussionId, role, text, writeTs);
+      return writeTs;
+    });
     return { id, discussionId, role, text, createdAt: ts };
   }
 
@@ -743,7 +793,9 @@ export class ReviewStore {
 
   /** 清空一条 discussion 的往来消息(discussion / finding 锚点保留),用于重开讨论。 */
   clearMessages(discussionId: string): void {
-    this.db.prepare('DELETE FROM messages WHERE discussion_id = ?').run(discussionId);
+    this.withReviewTouch({ discussion: discussionId }, () => {
+      this.db.prepare('DELETE FROM messages WHERE discussion_id = ?').run(discussionId);
+    });
   }
 
   // ---- UI 状态 ----
