@@ -49,6 +49,15 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA「提�
 
 口径与 review 屏一致:只有**表态轮次 === 当前轮次**才算本轮结论(见 `recheckNote()`),上一轮的旧表态不顶正文。`wont_fix` 不走这条 —— 那条说明是作者的原话,不是对问题的重新描述。
 
+### 已提交的条目要追发一条复核评论
+
+最常见的复审流是「首轮提交 → 作者改了一版 → 重跑复核仍存在」。若照增量提交那条"submitted 即锁定"办,这条复核结论只留在本地,author 永远收不到 —— 等于白复核。因此 `submitted` **不是绝对终态**:上一轮已提交、本轮复核判定 `still_present` 且 agent 给了说明的条目,回到待提交集,就同一处 `file:line` 追发一条评论(`needsRecheckFollowUp()`)。
+
+- **不重复追发**靠 `findings.submitted_round`:提交时记下发生在第几轮,只有"提交轮次 < 当前轮次"才算欠一条。同一轮里连点两次提交不会发出两条一样的评论。
+- **追评自报身份**:正文首行 `> ↻ 第 N 轮复核追评 · 同一处此前已提过`,否则 author 看到的是同一行冒出第二条评论,像重复上报。
+- **仍可剔除**:追评项在 submit 屏不是锁定态,勾选框可用 —— 追不追这一条是 reviewer 的决定。
+- 没给说明的 `still_present` 不追评:那条评论与上一轮一字不差,发出去只是噪音。
+
 ## 提交结果与异常态(原子提交 · 增量)
 
 演示见 `mockup/submit-to-github.html` 顶栏「提交态」切换器(ready / submitting / success / invalid / failed / incremental)。
@@ -73,7 +82,7 @@ GitHub 的 422 只说整份被拒,**不告知是哪条**,得由我们自己指�
 
 **不写库是刻意的**:审核时的 diff 快照是 findings 锚点与 diff 屏渲染的共同基准,推进它是**复审(rerun)**的职责;这里只借最新 diff 做一次判定与修锚。
 
-**增量提交(二次)**:一次 review 可多轮提交。已 `submitted` 的 finding **锁定不重发**;上次提交后新增或改动的 finding 组成 **delta**,再进 submit 屏只提交 delta,每次 submit = **追加一份新的 PR review**(info banner 标「上次已提交 N 条,本次 M 条新增」)。这与 finding 的 `submission` 状态(见上「finding 生命周期」)一致 —— submitted 是终态、只读。
+**增量提交(二次)**:一次 review 可多轮提交。已 `submitted` 的 finding **锁定不重发**;上次提交后新增或改动的 finding 组成 **delta**,再进 submit 屏只提交 delta,每次 submit = **追加一份新的 PR review**(info banner 标「上次已提交 N 条,本次 M 条新增」)。**唯一例外是复核追评**(见下节):submitted 因此不再是绝对终态。
 
 ## 非 GitHub source — 导出为 Markdown
 
