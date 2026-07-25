@@ -29,7 +29,7 @@
 1. 键位表不可配置(帮助层为只读 cheatsheet)。
 2. 运行时/异常态(turn 中断 / 反向审批 / turn 失败 / 连接断 / 压缩)只有设计,未落地 —— 设计见 `mockup/review-runtime.html`。`mockup/` 整体已冻结,但这一份是该功能目前**唯一**的设计参照,落地前别丢。
 
-> 入口页丰富流程已接 mockup(见「前端屏」):三来源分段选择器、GitHub PR 粘贴+实时预览卡+remote 校验、默认折叠的 open PR 列表(展开才拉)、gh 未登录引导、本地分支选择器(commits ahead + base)、GitButler workspace 检测+虚拟分支列表、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / detect-gitbutler）+ `review:list-recent`（附计数）。
+> 入口页丰富流程已接 mockup(见「前端屏」):三来源分段选择器、GitHub PR 粘贴+实时预览卡+remote 校验、默认折叠的 open PR 列表(展开才拉)、gh 未登录引导、本地分支选择器(commits ahead + base)、GitButler workspace 检测+虚拟分支列表、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / detect-gitbutler）+ `review:list-recent`（附计数）。发起后到进屏之间由**启动等待浮层**接管（`screens/entry/StartOverlay.tsx`，阶段走 `review:start-progress` 事件；设计见 [ui](ui.md#启动等待浮层点开始审核到进屏之间)）。
 
 ## 分层落地情况
 
