@@ -10,6 +10,8 @@ export interface ReviewUiStateHandle {
   activeTab: string | null;
   onToggleViewed: (path: string) => void;
   onToggleCollapsed: (path: string) => void;
+  /** 只展开、不折叠:跳转前用来保证目标文件的内容确实在 DOM 里。 */
+  expandFile: (path: string) => void;
   setActiveTab: (tab: string) => void;
 }
 
@@ -80,6 +82,10 @@ export function useReviewUiState(
     setCollapsed((prev) => toggle(prev, path, !prev.has(path)));
   }, []);
 
+  const expandFile = useCallback((path: string) => {
+    setCollapsed((prev) => (prev.has(path) ? toggle(prev, path, false) : prev));
+  }, []);
+
   // 标记已看同时折叠;取消已看则展开
   const onToggleViewed = useCallback(
     (path: string) => {
@@ -104,5 +110,5 @@ export function useReviewUiState(
     [flush],
   );
 
-  return { viewed, collapsed, activeTab, onToggleViewed, onToggleCollapsed, setActiveTab };
+  return { viewed, collapsed, activeTab, onToggleViewed, onToggleCollapsed, expandFile, setActiveTab };
 }

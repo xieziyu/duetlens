@@ -219,10 +219,13 @@ export function DiffPane(props: DiffPaneProps) {
     pane.scrollTo({ top, behavior });
   }, []);
 
+  // 折叠态一并入依赖:跳到已是 activePath 的那个文件时,同值的 setActivePath 不触发重渲染,
+  // 光靠 activePath 补不上这次定位(锚在其上的又恰好没有 finding 可走下面那条 effect 时尤其明显)。
+  const activeCollapsed = activePath != null && props.collapsed.has(activePath);
   useEffect(() => {
     if (!activePath) return;
     scrollToFile(activePath);
-  }, [activePath, scrollToFile]);
+  }, [activePath, activeCollapsed, scrollToFile]);
 
   // 标记已看会把当前文件折叠掉,滚动位置不变则视口塌进下一个文件的中段;
   // 记下落点,等折叠提交后再把它的文件头顶上来。取消已看不跳。
@@ -248,11 +251,16 @@ export function DiffPane(props: DiffPaneProps) {
     props.onSelectFile?.(path); // 左栏高亮跟着走
   }, [props.viewed]);
 
+  // 折叠态一并入依赖:目标文件刚被展开时卡片才进 DOM,此刻要补一次滚动。
+  // 只看被聚焦那条所在的文件,免得折叠别处也把视口拽回来。
+  const focusCollapsed =
+    focusFindingId != null &&
+    props.collapsed.has(findings.find((f) => f.id === focusFindingId)?.file ?? '');
   useEffect(() => {
     if (!focusFindingId || !ref.current) return;
     const el = ref.current.querySelector(`#${CSS.escape(`finding-${focusFindingId}`)}`);
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [focusFindingId]);
+  }, [focusFindingId, focusCollapsed]);
 
   // 长代码行只让 code 表自己横滚(文件头/hunk 头/内联卡片不跟着滑走);
   // 一份 diff 被卡片切成多张表,共用同一横向偏移才不会读到一半错位。scroll 不冒泡,故用捕获。

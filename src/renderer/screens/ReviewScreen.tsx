@@ -89,14 +89,21 @@ export function ReviewScreen({
   const diffView = settings.defaultDiffView;
   const setDiffView = (v: DiffView) => update({ defaultDiffView: v });
   // per-file 已看/折叠 + 最近 tab:per-review 持久化态(后端 review_ui_state),挂载拉取 + 去抖写回
-  const { viewed, collapsed, activeTab, onToggleViewed, onToggleCollapsed, setActiveTab } =
+  const { viewed, collapsed, activeTab, onToggleViewed, onToggleCollapsed, expandFile, setActiveTab } =
     useReviewUiState(reviewId, settings.collapseViewedFiles);
   // tab 优先用该 review 记住的;无记忆时回落到全局默认偏好。切 tab 只写 per-review。
   const tab: RightTab = isRightTab(activeTab) ? activeTab : settings.defaultTab;
   const setTab = (t: RightTab) => setActiveTab(t);
 
+  // 折叠的文件整段内容都不在 DOM 里,内联卡自然也没有 —— 任何跳到代码的动作都得先把它放出来,
+  // 否则滚动落空、中栏停在上一处。展开与两处状态更新同批提交,effect 跑时卡片已经在了。
+  const revealFile = (path: string) => {
+    setActivePath(path);
+    expandFile(path);
+  };
+
   const focusFinding = (f: Finding) => {
-    setActivePath(f.file);
+    revealFile(f.file);
     setFocusFindingId(f.id);
     // 点 finding 亦选中其讨论线程,切到 Discussion 栏即见对话(不强制换 tab)
     setActiveDiscussionId(f.discussionId);
@@ -105,6 +112,7 @@ export function ReviewScreen({
   // 内联卡「追问」:选中该 finding 的承载线程并切到 Discussion 栏,composer 即刻可用。
   // 与 focusFinding 的区别只在强制换 tab —— 后者是定位,这里是明确要开聊。
   const discussFinding = (f: Finding) => {
+    expandFile(f.file);
     setFocusFindingId(f.id);
     setActiveDiscussionId(f.discussionId);
     setPendingRef(null);
@@ -116,7 +124,7 @@ export function ReviewScreen({
     setTab('discussion');
     // 选中不同 discussion 时同步把 diff 跳到其锚点代码(点 finding 卡走 focusFinding,此处覆盖列表选择)
     const d = discussions.find((x) => x.id === id);
-    if (d?.file) setActivePath(d.file);
+    if (d?.file) revealFile(d.file);
     const f = findings.find((x) => x.discussionId === id);
     if (f) setFocusFindingId(f.id);
   };
@@ -162,10 +170,11 @@ export function ReviewScreen({
         ...draft,
       });
       setActivePath(f.file);
+      expandFile(f.file);
       setFocusFindingId(f.id);
       setTab('findings');
     },
-    [reviewId, diffReady],
+    [reviewId, diffReady, expandFile],
   );
 
   // 框选「追问 codex」:把选区作为待发引用带进 Discussion 栏 composer(发送时再建 discussion)。
@@ -222,7 +231,7 @@ export function ReviewScreen({
   };
 
   const jumpToCode = (d: Discussion) => {
-    if (d.file) setActivePath(d.file);
+    if (d.file) revealFile(d.file);
     const f = findings.find((x) => x.discussionId === d.id);
     if (f) setFocusFindingId(f.id);
   };
@@ -233,9 +242,10 @@ export function ReviewScreen({
       if (!reviewId) return;
       const f = await window.duetlens.review.promoteDiscussion(reviewId, discussionId);
       setActivePath(f.file);
+      expandFile(f.file);
       setFocusFindingId(f.id);
     },
-    [reviewId],
+    [reviewId, expandFile],
   );
 
   // 写路径:落库后经 review:event 回推刷新(useReviewStream upsert),前端不本地臆造。
