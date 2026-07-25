@@ -62,11 +62,12 @@ diff --git a/styles/app.css b/styles/app.css
 index 4444444..5555555 100644
 --- a/styles/app.css
 +++ b/styles/app.css
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,6 @@
  .btn {
 -  color: red;
 +  color: var(--accent);
 +  padding: 4px 8px;
++  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 0 0 1px color-mix(in oklab, var(--accent) 24%, transparent); /* 够长的一行,用来自查横滚下行号与行内 ＋ 是否还够得着 */
  }
 diff --git a/src/legacy.ts b/src/legacy.ts
 deleted file mode 100644

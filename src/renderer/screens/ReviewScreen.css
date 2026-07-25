@@ -1134,7 +1134,11 @@
   padding: 0;
 }
 .ln {
+  /* 三处一致才锁得住:长行把表撑出容器时 auto 布局会把行号/gutter 压到近乎为零,
+     只写 width 拦不住 */
   width: 48px;
+  min-width: 48px;
+  max-width: 48px;
   text-align: right;
   padding: 0 10px 0 8px;
   color: var(--text-faint);
@@ -1142,13 +1146,32 @@
   user-select: none;
   border-right: 1px solid var(--border-soft);
   vertical-align: top;
+  /* 定位基准:hover 的「发起 discussion」＋ 覆在这一格上 */
+  position: relative;
 }
 .gutter {
   width: 22px;
+  min-width: 22px;
+  max-width: 22px;
   text-align: center;
   color: var(--text-faint);
   user-select: none;
   position: relative;
+}
+/* 长行让 code 表整体横滚,行号与 gutter 必须钉在左侧 —— 跟着滑走就既读不到行号、
+   也够不着挂在行号格上的 ＋。split 表是 fixed 布局不横滚,不需要。
+   放在 .row.add/.del 的着色规则之前:同特异度,让后者赢得 gutter 背景。 */
+.code.unified .ln,
+.code.unified .gutter {
+  position: sticky;
+  z-index: 1;
+  background: var(--bg);
+}
+.code.unified .ln {
+  left: 0;
+}
+.code.unified .gutter {
+  left: 48px;
 }
 /* gutter 锚点圆点:有 finding / 讨论的行(agent 天蓝 · human 琥珀),点击跳转。
    限定在 .code 内,避免泄漏到同名 class 的文本锚点(如 FindingRow 的 .fr-foot .anchor)。 */
@@ -1193,15 +1216,17 @@
 .row.add .src {
   background: var(--add-bg);
 }
+/* gutter 在 unified 里是钉住的,底色必须不透明;两个 -gutter token 都是半透明,
+   故垫一层实底再让色调叠上去,否则横滚时代码从格子底下透出来。 */
 .row.add .gutter {
-  background: var(--add-gutter);
+  background: linear-gradient(var(--add-gutter), var(--add-gutter)), var(--bg);
   color: var(--add);
 }
 .row.del .src {
   background: var(--del-bg);
 }
 .row.del .gutter {
-  background: var(--del-gutter);
+  background: linear-gradient(var(--del-gutter), var(--del-gutter)), var(--bg);
   color: var(--del);
 }
 
@@ -2276,6 +2301,8 @@
 }
 .code.split .ln {
   width: 44px;
+  min-width: 44px;
+  max-width: 44px;
   border-right: 1px solid var(--border-soft);
 }
 .code.split .ln.new {
@@ -2315,20 +2342,15 @@
 }
 
 /* ---------- 行内「发起 discussion」＋(hover 显影)---------- */
-.src {
-  position: relative;
-}
+/* 整格覆在行号上:代码格随长行横滚,贴其右缘的按钮要滑到行尾才够得着。
+   背景须不透明 —— 底下压着行号。 */
 .add-thread {
   position: absolute;
-  top: 50%;
-  right: 6px;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
+  inset: 1px;
   padding: 0;
   border: 1px solid var(--human-line);
-  border-radius: 5px;
-  background: var(--human-soft);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--human) 15%, var(--bg));
   color: var(--human);
   font-size: 12px;
   line-height: 1;
@@ -2340,7 +2362,11 @@
   opacity: 1;
 }
 .add-thread:hover {
-  filter: brightness(1.08);
+  background: color-mix(in oklab, var(--human) 26%, var(--bg));
+}
+/* split 的新侧行号格还压着锚点圆点,按钮让开左侧那一枚 */
+.code.split .ln.new .add-thread {
+  left: 15px;
 }
 
 /* ---------- 框选 → 动作条 ---------- */

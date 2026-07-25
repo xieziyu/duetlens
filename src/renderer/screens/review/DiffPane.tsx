@@ -1128,7 +1128,10 @@ function toSplitRows(lines: DiffLine[]): SplitPair[] {
   return rows;
 }
 
-/** hover 才显影的行内「发起 discussion」＋(仅新侧行) */
+/**
+ * hover 才显影的行内「发起 discussion」＋(仅新侧行)。挂在行号格里:代码格会随长行横滚,
+ * 贴在其右缘的按钮要滑到行尾才够得着。
+ */
 function AddThread({ line, text, onAddThread }: { line: number; text: string; onAddThread?: (line: number, snippet: string) => void }) {
   if (!onAddThread) return null;
   return (
@@ -1168,13 +1171,15 @@ function LineRow({
       className={`row${line.kind === 'add' ? ' add' : line.kind === 'del' ? ' del' : ''}`}
       data-new-line={line.newLine ?? undefined}
     >
-      <td className="ln">{lineNo}</td>
+      <td className="ln">
+        {lineNo}
+        {line.newLine != null && <AddThread line={line.newLine} text={line.text} onAddThread={onAddThread} />}
+      </td>
       <td className="gutter">
         {mark ? <AnchorDot mark={mark} onClick={onAnchorClick} /> : gutter}
       </td>
       <td className="src">
         <span dangerouslySetInnerHTML={{ __html: html }} />
-        {line.newLine != null && <AddThread line={line.newLine} text={line.text} onAddThread={onAddThread} />}
       </td>
     </tr>
   );
@@ -1213,12 +1218,12 @@ function SplitCell({
       <td className={`${lnBase}${mod}${mark ? ' has-anchor' : ''}`}>
         {mark && onAnchorClick && <AnchorDot mark={mark} onClick={onAnchorClick} />}
         {lineNo}
-      </td>
-      <td className={srcBase + mod}>
-        <span dangerouslySetInnerHTML={{ __html: html }} />
         {side === 'new' && line.newLine != null && (
           <AddThread line={line.newLine} text={line.text} onAddThread={onAddThread} />
         )}
+      </td>
+      <td className={srcBase + mod}>
+        <span dangerouslySetInnerHTML={{ __html: html }} />
       </td>
     </>
   );
