@@ -29,7 +29,7 @@ function compactTokens(n: number): string {
 
 function contextTitle({ used, cumulative, total }: TokenUsage): string {
   const ctx = total ? `上下文 ${used.toLocaleString()} / ${total.toLocaleString()}` : `上下文 ${used.toLocaleString()}`;
-  return `${ctx} · 本次会话累计 ${cumulative.toLocaleString()} tok`;
+  return `${ctx} · 本次会话累计 ${cumulative.toLocaleString()} tokens`;
 }
 
 export function ReviewStatusBar({
@@ -100,7 +100,7 @@ export function ReviewStatusBar({
               </svg>
             )}
             <span className="mono">
-              {compactTokens(tokenUsage.used)} tok{pct !== null ? ` · ${pct}%` : ''}
+              {compactTokens(tokenUsage.used)}{pct !== null ? ` · ${pct}%` : ''}
             </span>
           </span>
         </>
