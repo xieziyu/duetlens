@@ -721,7 +721,8 @@ textarea.summary:focus {
 }
 .submit.retry {
   background: var(--sev-high);
-  color: var(--on-solid);
+  /* 同 .scanbar .se-act button.primary:浅红填充上不能用白字 */
+  color: var(--on-accent);
 }
 .foot-note {
   margin-top: 9px;

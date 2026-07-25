@@ -1724,7 +1724,9 @@
 .scanbar .se-act button.primary {
   border-color: transparent;
   background: var(--sev-high);
-  color: var(--on-solid);
+  /* --sev-high 深色下是浅红(本是给文字用的),白字压上去只有 2.7:1;
+     --on-accent 随模式翻转(深色近黑 / 浅色纯白),两边都过 */
+  color: var(--on-accent);
 }
 .scanbar .se-act button.primary:hover:not(:disabled) {
   background: color-mix(in oklab, var(--sev-high) 85%, black);
