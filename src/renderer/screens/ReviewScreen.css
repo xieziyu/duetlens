@@ -2385,7 +2385,8 @@
 .sel-pop::after {
   content: '';
   position: absolute;
-  left: var(--cx, 50%);
+  /* 动作条恒定贴代码区左缘,箭头随之固定,不再跟选区中点走 */
+  left: 22px;
   bottom: -5px;
   width: 9px;
   height: 9px;
@@ -2422,17 +2423,11 @@
 .sel-pop .sp-disc:hover {
   background: var(--human-soft);
 }
-.sel-pop .sp-ask {
+.sel-pop .sp-finding {
   color: var(--agent-2);
 }
-.sel-pop .sp-ask:hover {
-  background: var(--agent-soft);
-}
-.sel-pop .sp-finding {
-  color: var(--text);
-}
 .sel-pop .sp-finding:hover {
-  background: var(--hover);
+  background: var(--agent-soft);
 }
 
 /* ---------- 内联新建 discussion composer ---------- */
@@ -2757,36 +2752,6 @@
 }
 .composer .box:focus-within {
   border-color: var(--agent-line);
-}
-.composer .refchip {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 9px;
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-left: 2px solid var(--human);
-  border-radius: 8px;
-  background: var(--surface-3);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-dim);
-}
-.composer .refchip .lnref {
-  color: var(--human);
-}
-.composer .refchip .x {
-  margin-left: auto;
-  cursor: pointer;
-  color: var(--text-faint);
-  font-size: 11px;
-  border: 0;
-  background: none;
-  padding: 0;
-  line-height: 1;
-}
-.composer .refchip .x:hover {
-  color: var(--del);
 }
 .composer-input {
   width: 100%;

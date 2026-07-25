@@ -73,9 +73,8 @@ export function ReviewScreen({
   // 左栏文件检索:纯导航态不持久化;由屏持有才能在换 review 时清掉,并让 `/` 把焦点甩进输入框
   const [fileQuery, setFileQuery] = useState('');
   const fileQueryRef = useRef<HTMLInputElement>(null);
-  // discussion 协同态:活跃线程 / 待发引用(框选追问带入)/ 正在等 agent 回复
+  // discussion 协同态:活跃线程 / 正在等 agent 回复
   const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
-  const [pendingRef, setPendingRef] = useState<{ anchor: DiscussionAnchor; label: string } | null>(null);
   const [awaitingReply, setAwaitingReply] = useState<string | null>(null);
   // Summary 关注主题 → 筛 Findings tab
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -115,7 +114,6 @@ export function ReviewScreen({
     expandFile(f.file);
     setFocusFindingId(f.id);
     setActiveDiscussionId(f.discussionId);
-    setPendingRef(null);
     setTab('discussion');
   };
 
@@ -177,35 +175,13 @@ export function ReviewScreen({
     [reviewId, diffReady, expandFile],
   );
 
-  // 框选「追问 codex」:把选区作为待发引用带进 Discussion 栏 composer(发送时再建 discussion)。
-  const onAskCodex = useCallback(
-    (anchor: DiscussionAnchor, label: string) => {
-      // 与另两条锚点写路径同一门控:diff 重拉未落定时中栏还是上一轮内容,
-      // 此刻暂存的引用会在发送时(见 onComposerSend)写成新轮次的锚点。
-      if (!diffReady) return;
-      setPendingRef({ anchor, label });
-      setActiveDiscussionId(null);
-      setTab('discussion');
-    },
-    [diffReady, setTab],
-  );
-
-  // Discussion 栏 composer 发送:有活跃线程则追问,否则从待发引用新建。
+  // Discussion 栏 composer 发送:只追问活跃线程;新讨论一律经中栏框选 / 行内 ＋ 就地发起。
   const onComposerSend = useCallback(
-    async (text: string) => {
-      if (!reviewId) return;
-      if (activeDiscussionId) {
-        void runSend(activeDiscussionId, text);
-        return;
-      }
-      if (pendingRef) {
-        const d = await window.duetlens.review.addDiscussion(reviewId, pendingRef.anchor);
-        setActiveDiscussionId(d.id);
-        setPendingRef(null);
-        void runSend(d.id, text);
-      }
+    (text: string) => {
+      if (!activeDiscussionId) return;
+      void runSend(activeDiscussionId, text);
     },
-    [reviewId, activeDiscussionId, pendingRef, runSend],
+    [activeDiscussionId, runSend],
   );
 
   const onEditSummary = useCallback(
@@ -281,11 +257,9 @@ export function ReviewScreen({
   );
 
   // 切 review:reviewId 可在组件不卸载时变(点另一条 review 的完成通知 → App 只换 prop),
-  // 屏内这些本地态全是锚在「上一条 review」上的,不清就会跨库写 —— 尤以 pendingRef 为甚:
-  // 它持有 A 的 file/line,切到 B 后一发送就 addDiscussion(B, A 的 anchor)。
+  // 屏内这些本地态全是锚在「上一条 review」上的,不清就会跨库写。
   // 放在 focusRequest effect 之前:通知带 discussionId 时由后者补回聚焦,不被这里清掉。
   useEffect(() => {
-    setPendingRef(null);
     setActiveDiscussionId(null);
     setFocusFindingId(null);
     setActivePath(null);
@@ -293,12 +267,6 @@ export function ReviewScreen({
     setCategoryFilter(null);
     setAwaitingReply(null);
   }, [reviewId]);
-
-  // 换轮次:diff 已整份重拉,待发引用锚定的是上一轮的行号,跨轮不再成立。
-  // 其余选中态(文件 / 线程)跨轮仍有效,故只作废 pendingRef。
-  useEffect(() => {
-    setPendingRef(null);
-  }, [currentRound]);
 
   // diff 到达后默认选中首个文件
   useEffect(() => {
@@ -477,7 +445,6 @@ export function ReviewScreen({
             onTriage={onTriage}
             onUpdate={onUpdate}
             onStartDiscussion={onStartDiscussion}
-            onAskCodex={onAskCodex}
             onAddFinding={onAddFinding}
             onDiscussFinding={discussFinding}
             onJumpFinding={focusFinding}
@@ -515,8 +482,6 @@ export function ReviewScreen({
             onTriage={onTriage}
             activeDiscussionId={activeDiscussionId}
             onSelectDiscussion={focusDiscussion}
-            pendingRef={pendingRef}
-            onClearRef={() => setPendingRef(null)}
             awaitingReply={awaitingReply}
             onComposerSend={onComposerSend}
             onJumpToCode={jumpToCode}
@@ -602,8 +567,6 @@ function RightPanel({
   onTriage,
   activeDiscussionId,
   onSelectDiscussion,
-  pendingRef,
-  onClearRef,
   awaitingReply,
   onComposerSend,
   onJumpToCode,
@@ -629,8 +592,6 @@ function RightPanel({
   onTriage: (finding: Finding, triage: Triage, reason?: string | null) => void;
   activeDiscussionId: string | null;
   onSelectDiscussion: (id: string) => void;
-  pendingRef: { anchor: DiscussionAnchor; label: string } | null;
-  onClearRef: () => void;
   awaitingReply: string | null;
   onComposerSend: (text: string) => void;
   onJumpToCode: (d: Discussion) => void;
@@ -755,7 +716,7 @@ function RightPanel({
                   </div>
                 )}
                 <div className="fc-hint">
-                  仍可框选左侧代码「＋ 记为 finding」手动新增,或在 Discussion 追问 agent。
+                  仍可框选左侧代码发起 discussion,或「＋ 记为 finding」手动新增。
                 </div>
               </div>
             ))}
@@ -817,8 +778,6 @@ function RightPanel({
           messages={messages}
           activeId={activeDiscussionId}
           onSelect={onSelectDiscussion}
-          pendingRef={pendingRef ? { label: pendingRef.label } : null}
-          onClearRef={onClearRef}
           awaitingReply={awaitingReply}
           scanning={scanning}
           onSend={onComposerSend}

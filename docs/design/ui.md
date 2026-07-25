@@ -85,7 +85,7 @@
 
 ### review 右栏三 tab
 
-- **Discussion**:当前锚点的对话线程(追问 codex / 框选发起),含 composer。agent 的每条回答在名字行右端带一枚**一键复制**(hover 该条才显影,复制的是 **markdown 原文**而非渲染后的富文本 —— 贴回编辑器 / PR 评论要的是源码;复制成功短暂回显 `✓ 已复制`,剪贴板不可用则静默)。reviewer 自己写的不给 —— 原文就在手边。
+- **Discussion**:当前锚点的对话线程(finding 承载 / 框选发起),含只能追问该线程的 composer。agent 的每条回答在名字行右端带一枚**一键复制**(hover 该条才显影,复制的是 **markdown 原文**而非渲染后的富文本 —— 贴回编辑器 / PR 评论要的是源码;复制成功短暂回显 `✓ 已复制`,剪贴板不可用则静默)。reviewer 自己写的不给 —— 原文就在手边。
 - **Findings**:运行时 triage 列表 —— 按严重度分组(可切按文件)+ tally;每行 sev·category / 标题 / `file:line` / origin(◆ agent vs ● 你·提升) / `◇ suggestion` 标记 / triage:保留(天蓝左条)· 剔除(虚线 + 删除线 + 恢复) / submitted passive(绿左条,锁定不可改);底部「＋ 手动新增 finding」。点行跳 diff / 开 discussion。**文件整个不在改动内的 finding 抽成末尾专组**(`◇ 文件不在改动内`,列在各严重度/文件组之后),使列表顺序贴合它们在 diff 底部 off-diff 区的物理位置,逐条点下去不再在改动处与底部之间来回弹。
 - **Summary**:codex 审核总结 —— 结论卡(codex 建议的 review event,标注「仅建议 · 最终 event 在提交时确认」)+ 统计条(high/med/low + 保留/已提交/讨论)+ **可就地编辑的 codex 生成正文**(即提交屏 review body 的来源;`✎ 编辑` 展开 Markdown textarea,`⌘↵` 保存 / `Esc` 取消,保存后轻量渲染段落 / `**粗**` / `` `代码` ``,byline 标「你已编辑」)+ 关注主题(按 category 聚合,点击筛 findings)+ 覆盖度行 + 「提交 review →」直达 [findings-submit](findings-submit.md)。
 
@@ -100,14 +100,15 @@
 - **submitted(已提交)· 只读**:绿左条 + `✓ 已提交 · #NNN` 徽标,内容锁定(仅保留 `↳ 追问` —— 提交后仍该能接着聊);footer 提示需在 GitHub 更新或撤回后重提。
 - **dismissed(剔除)· diff 内呈现**:整卡折叠为虚线细条(`✕ 已剔除 · 标题`,删除线)+ `↩ 恢复`,不占视觉重量但可召回。
 
-### 框选发起 discussion + composer 引用(`mockup/diff-review.html`)
+### 框选发起 discussion(`mockup/diff-review.html`)
 
 "在 diff 上对话"的核心入口。在 diff 主区框选任意代码 → 浮出操作条(popover):
 
-- **popover**:显示选区 `file:行范围` + 两个动作 —— `⬆ 发起 discussion`(human/琥珀)与 `◆ 追问 codex`(agent/天蓝)。定位在选区上方,贴边自动翻转到下方;点击别处 / 滚动即消失。
+- **popover**:显示选区 `file:行范围` + 两个动作 —— `⬆ 发起 discussion`(human/琥珀)与 `＋ 记为 finding`。定位在选区首行上方,贴顶则翻转到选区下方;点击别处 / 滚动即消失。
+- **横向恒定贴代码区左缘**(箭头随之固定),不跟选区中点走:那样位置会随所选代码的长度忽左忽右,长行更会把动作条甩到视野之外。
+- **曾有第三个动作 `◆ 追问 codex`(切右栏 + 把选区作为引用 chip 附到 composer),已删**:它与 `发起 discussion` 产出完全一致(同锚点、同一条新 user discussion、同一次首问),差别只是在哪里打字,不值得让用户在弹层里做这个选择;就地那条离代码更近,且与行内 `＋` 同流程。**新讨论因此只有中栏一条发起路径**,右栏 composer 退化为纯追问活跃线程。
 - **发起 discussion**:在选中行下方就地插入一张 human composer 卡(选中行标琥珀左条),含选区引用块 + textarea + `发送`(`⌘↵`)/ `取消`;发送后原地变成一条「你的 discussion」卡(带「转为 finding / 继续对话」)。每行悬停的 `＋` 复用同一条单行流程。
 - **行内 `＋` 落在新侧行号格上,不在代码格右缘**:代码格随长行横滚,贴其右缘的按钮要一路滑到行尾才够得着(unified 下行号格是钉住的,见「diff 导航与覆盖」)。按钮整格覆盖行号(hover 才显影、背景不透明),点击热区因此与行号同宽;split 里让开左侧那枚 anchor dot。
-- **追问 codex**:切到右栏 Discussion tab,并把选区作为可移除的引用 chip(`↳ file:行`)附到 composer;composer 的 `↳ 引用选区` chip 行为相同。
 - **composer `@file`**:弹出文件菜单(按 diff 文件列表),选中即把 `@path` 引用写入输入区。
 
 ### diff 导航与覆盖(`mockup/diff-review.html`)

@@ -1,14 +1,11 @@
 import { useState } from 'react';
 
 /**
- * Discussion 栏底部输入区:可移除的引用选区 chip + textarea + 发送。
- * 引用 chip 由框选「追问 codex」带入;发送把文本交回上层(追问活跃 discussion 或从锚点新建)。
+ * Discussion 栏底部输入区:textarea + 发送,只用于追问活跃 discussion。
+ * 新讨论一律从中栏就地发起(锚定模型下必须先有锚点)。
  */
 export interface ComposerProps {
-  /** 引用选区 chip 文案(如 pipeline.ts:20);null 则不显示 */
-  refLabel: string | null;
-  onRemoveRef: () => void;
-  /** 无活跃 discussion 且无引用时禁用(锚定模型下必须先有锚点) */
+  /** 无活跃 discussion 时禁用 */
   disabled: boolean;
   placeholder: string;
   /** 底部作用域说明(全局会话 · 已锚定 … · read-only sandbox) */
@@ -16,7 +13,7 @@ export interface ComposerProps {
   onSend: (text: string) => void;
 }
 
-export function Composer({ refLabel, onRemoveRef, disabled, placeholder, scope, onSend }: ComposerProps) {
+export function Composer({ disabled, placeholder, scope, onSend }: ComposerProps) {
   const [text, setText] = useState('');
 
   const submit = () => {
@@ -29,14 +26,6 @@ export function Composer({ refLabel, onRemoveRef, disabled, placeholder, scope, 
   return (
     <div className="composer">
       <div className="box">
-        {refLabel && (
-          <div className="refchip">
-            ↳ <span className="lnref">{refLabel}</span>
-            <button type="button" className="x" title="移除引用" aria-label="移除引用" onClick={onRemoveRef}>
-              ✕
-            </button>
-          </div>
-        )}
         <textarea
           className="composer-input"
           placeholder={disabled ? '框选左侧代码或点 finding,开始讨论…' : placeholder}

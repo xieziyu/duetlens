@@ -113,8 +113,6 @@ export interface DiffPaneProps {
   onUpdate?: (input: FindingEditInput) => void;
   /** 框选 / hover ＋ 发起 discussion:创建 user discussion 并发出首问 */
   onStartDiscussion?: (anchor: DiscussionAnchor, text: string) => void;
-  /** 追问 codex:把选区作为引用带进 Discussion 栏 composer */
-  onAskCodex?: (anchor: DiscussionAnchor, label: string) => void;
   /** 框选「记为 finding」:在锚点处填写后新增一条 manual finding */
   onAddFinding?: (anchor: DiscussionAnchor, draft: NewFindingDraft) => void;
   /** 内联 finding 卡「追问」:切 Discussion 栏并选中该 finding 的承载线程 */
@@ -152,13 +150,12 @@ export function DiffPane(props: DiffPaneProps) {
     activePath,
     focusFindingId,
     onStartDiscussion,
-    onAskCodex,
     onAddFinding,
     onJumpFinding,
     onJumpDiscussion,
   } = props;
   const ref = useRef<HTMLDivElement>(null);
-  const [sel, setSel] = useState<{ pick: AnchorPick; top: number; left: number; cx: number } | null>(null);
+  const [sel, setSel] = useState<{ pick: AnchorPick; top: number; left: number } | null>(null);
   const [composeAt, setComposeAt] = useState<Compose | null>(null);
 
   // 按文件聚合 findings,便于每个 DiffFileView 只拿自己的
@@ -321,14 +318,15 @@ export function DiffPane(props: DiffPaneProps) {
         label,
         snippet,
       };
+      // 横向锚在代码区左缘而非选区中点:跟着选区走会随行长忽左忽右,长行更会被甩出视野。
+      // 纵向仍贴选区首行上方,贴到顶栏则翻到选区下方。
+      const codeBox = (rows[0].closest('.code-scroll') as HTMLElement | null) ?? pane;
+      const pw = 260; // 动作条估算宽度,仅用于右边界收敛
+      const left = Math.max(8, Math.min(window.innerWidth - pw - 8, codeBox.getBoundingClientRect().left + 10));
       const rect = selection.getRangeAt(0).getBoundingClientRect();
-      const pw = 340; // 三动作按钮的估算宽度(定位/箭头居中用)
-      let left = rect.left + rect.width / 2 - pw / 2;
-      left = Math.max(8, Math.min(window.innerWidth - pw - 8, left));
-      let top = rect.top - 44;
+      let top = rows[0].getBoundingClientRect().top - 44;
       if (top < 58) top = rect.bottom + 9;
-      const cx = Math.max(14, Math.min(pw - 14, rect.left + rect.width / 2 - left));
-      setSel({ pick, top, left, cx });
+      setSel({ pick, top, left });
     }, 0);
   }, [canStart]);
 
@@ -445,13 +443,7 @@ export function DiffPane(props: DiffPaneProps) {
           label={sel.pick.label}
           top={sel.top}
           left={sel.left}
-          cx={sel.cx}
           onDiscussion={() => startCompose(sel.pick, 'discussion')}
-          onAsk={() => {
-            onAskCodex?.(sel.pick.anchor, sel.pick.label);
-            setSel(null);
-            window.getSelection()?.removeAllRanges();
-          }}
           onFinding={() => startCompose(sel.pick, 'finding')}
         />
       )}

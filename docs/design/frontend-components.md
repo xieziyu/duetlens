@@ -44,12 +44,13 @@
 │  │  │  ├─ <CodeTable variant>            .code-scroll > .code.unified | .code.split (横滚只归这层, 各表 scrollLeft 同步)
 │  │  │  ├─ <Expander>                     展开未改动代码
 │  │  │  ├─ <InlineCard>                   .card.agent | .card.human (view/edit/submitted/dismissed)
-│  │  │  │  ├─ <FindingEditor>             .c-edit (sev/cat/标题/正文/suggestion)
-│  │  │  │  └─ <DiscussionComposer>        追问 + @file + 引用选区
-│  │  │  └─ <SelectionPopover>             .sel-pop 框选发起 discussion / 追问
+│  │  │  │  └─ <FindingEditor>             .c-edit (sev/cat/标题/正文/suggestion)
+│  │  │  ├─ <InlineComposer>               .card.human.new-disc 锚点处新建 discussion:选区引用 + textarea
+│  │  │  ├─ <NewFindingComposer>           同处的「记为 finding」草稿表单
+│  │  │  └─ <SelectionPopover>             .sel-pop 框选发起 discussion / 记为 finding
 │  │  └─ …
 │  ├─ <RightPanel>                         .tabs 三 tab 互斥
-│  │  ├─ <DiscussionTab>                   讨论线程 + <Composer>
+│  │  ├─ <DiscussionTab>                   讨论线程 + <Composer>(只追问活跃线程)
 │  │  ├─ <FindingsTab>                     运行时 triage 列表 (.frow 分组 + tally)
 │  │  └─ <SummaryTab>                      结论卡 + 统计 + <SummaryEditor> 可编辑正文
 │  └─ <ReviewStatusBar>                    .rev-statusbar 底部整幅

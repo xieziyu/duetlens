@@ -20,9 +20,6 @@ export interface DiscussionTabProps {
   messages: Record<string, Message[]>;
   activeId: string | null;
   onSelect: (id: string) => void;
-  /** 框选「追问 codex」带入的待发引用(新建 discussion 用) */
-  pendingRef: { label: string } | null;
-  onClearRef: () => void;
   /** 正在等 agent 回复的 discussionId(显示打字指示) */
   awaitingReply: string | null;
   scanning: boolean;
@@ -66,7 +63,7 @@ export function DiscussionTab(props: DiscussionTabProps) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [activeId, activeMsgCount, awaitingReply]);
 
-  if (discussions.length === 0 && !props.pendingRef) {
+  if (discussions.length === 0) {
     return (
       <div className="tab-body">
         <p className="empty-note">
@@ -181,18 +178,12 @@ export function DiscussionTab(props: DiscussionTabProps) {
         </>
       ) : (
         <div className="thread thread-empty">
-          <p className="empty-note">
-            {props.pendingRef
-              ? '已引用选区,输入你的问题向 agent 发起讨论。'
-              : '从上方选择一条讨论查看对话。'}
-          </p>
+          <p className="empty-note">从上方选择一条讨论查看对话。</p>
         </div>
       )}
 
       <Composer
-        refLabel={props.pendingRef?.label ?? null}
-        onRemoveRef={props.onClearRef}
-        disabled={!active && !props.pendingRef}
+        disabled={!active}
         placeholder="追问 agent…"
         scope="◆ read-only sandbox · agent 仅阅读代码,不会改动"
         onSend={props.onSend}

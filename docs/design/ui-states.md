@@ -148,7 +148,7 @@ stateDiagram-v2
     Findings --> Summary : ● tab / 键 3
     Summary --> Discussion : ● tab / 键 1
     Summary --> Findings : ● tab / 键 2
-    Findings --> Discussion : ● 追问选区 (切回 + 附引用 chip)
+    Findings --> Discussion : ● ↳ 追问 (切回 + 选中承载线程)
 ```
 
 ## finding:两组正交状态
@@ -277,22 +277,22 @@ stateDiagram-v2
 
 ## 框选发起 discussion
 
-diff 主区框选代码后浮出 popover,再决定发起 discussion(琥珀)或追问 codex(天蓝)。
+diff 主区框选代码后浮出 popover,再决定就地发起 discussion(琥珀)或记为 finding。
 
 ```mermaid
 stateDiagram-v2
     [*] --> NoSel
     NoSel --> Selecting : ● 框选代码
-    Selecting --> Popover : ● 松开 (popover 定位选区上方, 贴边翻转)
+    Selecting --> Popover : ● 松开 (popover 贴代码区左缘, 首行上方, 贴顶翻转)
     Popover --> NoSel : ● 点击别处 / 滚动
     Popover --> Composer : ● ⬆ 发起 discussion (选中行下方插 human composer)
-    Popover --> AskCodex : ● ◆ 追问 codex (切 Discussion tab + 附引用 chip)
+    Popover --> FindingDraft : ● ＋ 记为 finding (同处插 finding 编辑器)
     Composer --> Posted : ● 发送 ↵ (原地变「你的 discussion」卡)
     Composer --> NoSel : ● 取消
     Posted --> [*]
 ```
 
-composer 的 `↳ 引用选区` chip 可移除;`@file` 弹文件菜单写入 `@path`(菜单本身是瞬态,选中即关)。
+新讨论只有这一条发起路径(行内 `＋` 是它的单行版本);右栏 composer 只追问已选中的线程。`@file` 弹文件菜单写入 `@path`(菜单本身是瞬态,选中即关)。
 
 ## 提交到 GitHub(结果 / 异常 / 增量)
 

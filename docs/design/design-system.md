@@ -72,12 +72,12 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 | Diff | unified / split 代码 + 展开未改动 | `.code.unified .code.split .expander` | unified / split / collapsed |
 | Inline card | 内联 finding / discussion | `.card.agent .card.human` | view / edit / submitted / dismissed |
 | Finding editor | 就地编辑 sev/cat/标题/正文/suggestion | `.c-edit .fe-sev .fe-input .fe-textarea` | editing |
-| Selection popover | 框选发起 discussion / 追问 | `.sel-pop .sp-disc .sp-ask` | show |
+| Selection popover | 框选发起 discussion / 记为 finding | `.sel-pop .sp-disc .sp-finding` | show |
 | off-diff 区 | 非改动行锚点的 finding 集合 | `.offdiff .odf` | open |
 | Right tabs | Discussion / Findings / Summary | `.tabs .tab .findings-panel .summary-panel` | active |
 | Findings list | 运行时 triage 列表 | `.frow .triage .fg-head` | kept / dismissed / submitted |
 | Summary | 结论卡 + 统计 + 可编辑正文 | `.sum-verdict .sum-stats .sb-editor` | view / editing |
-| Composer | 追问 + @file + 引用选区 | `.composer .refchip .file-menu` | — |
+| Composer | 追问活跃 discussion + @file | `.composer .file-menu` | — |
 | Scan progress bar | 机审进度:整幅横条 + 展开的竖排时间线 | `.scanbar .sb-step .timeline .tl` | done / active / pending |
 
 ## 收敛 TODO(实现项)
