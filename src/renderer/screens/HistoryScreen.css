@@ -102,7 +102,7 @@
   background: var(--agent);
 }
 .hist-filter .sd.done {
-  background: var(--text-faint);
+  background: var(--text-deco);
 }
 .hist-filter .sd.submitted {
   background: var(--add);
@@ -193,7 +193,7 @@
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--text-deco);
 }
 .hist-rev .meta .find {
   color: var(--sev-high);

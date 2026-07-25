@@ -182,7 +182,7 @@
   color: var(--text-faint);
 }
 .onboarding .chip.wait .d {
-  background: var(--text-faint);
+  background: var(--text-deco);
 }
 .onboarding .chip.checking {
   color: var(--agent-2);

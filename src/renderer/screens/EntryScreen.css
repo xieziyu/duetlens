@@ -443,8 +443,8 @@
   width: 8px;
   height: 8px;
   flex: none;
-  border-right: 1.6px solid var(--text-faint);
-  border-bottom: 1.6px solid var(--text-faint);
+  border-right: 1.6px solid var(--text-deco);
+  border-bottom: 1.6px solid var(--text-deco);
   transform: translateY(-2px) rotate(45deg);
 }
 .bpick.open .bp-trig .chev { border-color: var(--agent-2); transform: translateY(1px) rotate(-135deg); }
@@ -864,7 +864,7 @@
   gap: 9px;
   flex-wrap: wrap;
 }
-.recent-rev .meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-faint); }
+.recent-rev .meta .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-deco); }
 .recent-rev .meta .find { color: var(--sev-high); }
 .recent-rev .meta .find.zero { color: var(--text-faint); }
 .recent-rev .meta .sub { color: var(--add); }

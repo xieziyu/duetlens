@@ -299,7 +299,7 @@
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--text-deco);
   transition: 0.15s;
 }
 .opt.on {
@@ -377,7 +377,7 @@
   width: 16px;
   height: 16px;
   border-radius: 5px;
-  border: 1.5px solid var(--text-faint);
+  border: 1.5px solid var(--text-deco);
   display: inline-flex;
   align-items: center;
   justify-content: center;

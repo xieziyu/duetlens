@@ -43,7 +43,7 @@
 .lz.global { color: var(--human); border-color: var(--human-line); background: var(--human-soft); }
 .lz.global .d { background: var(--human); }
 .lz.builtin { color: var(--text-faint); }
-.lz.builtin .d { background: var(--text-faint); }
+.lz.builtin .d { background: var(--text-deco); }
 .pr-ribbon .arw { color: var(--text-faint); }
 .pr-ribbon .note { margin-left: auto; color: var(--text-faint); font-size: 11px; }
 .pr-ribbon .note code { font-family: var(--mono); color: var(--text-dim); }
@@ -108,11 +108,13 @@
   margin-top: 5px;
   word-break: break-all;
 }
+/* 选中层的底色被 --agent-soft 抬亮,faint 在上面掉到 4.25:1;选中态本就该更显眼,一并提档 */
+.pr-layer.on .path { color: var(--text-dim); }
 .pr-layer .cnt { font-size: 11px; color: var(--text-dim); margin-top: 5px; }
 .pr-tag { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .pr-tag.project { background: var(--agent); }
 .pr-tag.global { background: var(--human); }
-.pr-tag.builtin { background: var(--text-faint); }
+.pr-tag.builtin { background: var(--text-deco); }
 
 /* editor */
 .pr-editor { overflow: auto; padding: 18px 22px 60px; }
@@ -214,7 +216,7 @@
   padding: 1px 7px 1px 6px;
   white-space: nowrap;
 }
-.pr-inherit .tag .d { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--text-faint); }
+.pr-inherit .tag .d { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--text-deco); }
 .pr-inherit .tag .d.project { background: var(--agent); }
 .pr-inherit .tag .d.global { background: var(--human); }
 .pr-inherit .txt.body { color: var(--text-dim); }
@@ -316,7 +318,7 @@
 .pr-mblock { margin-bottom: 16px; padding-left: 11px; border-left: 2px solid var(--border); }
 .pr-mblock.project { border-color: var(--agent); }
 .pr-mblock.global { border-color: var(--human); }
-.pr-mblock.builtin { border-color: var(--text-faint); }
+.pr-mblock.builtin { border-color: var(--text-deco); }
 .pr-mblock .mt {
   display: flex;
   align-items: center;
@@ -339,7 +341,7 @@
 .pr-mblock .mlvl { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; }
 .pr-mblock .mlvl .lv { flex: 1; min-width: 0; }
 /* 逐档 provenance:整节徽标看不出「只改了 high」,故每档再标一个点 */
-.pr-mblock .mlvl .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--text-faint); }
+.pr-mblock .mlvl .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--text-deco); }
 .pr-mblock .mlvl .dot.project { background: var(--agent); }
 .pr-mblock .mlvl .dot.global { background: var(--human); }
 .pr-mg-legend {

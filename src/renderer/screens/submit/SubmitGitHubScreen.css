@@ -303,13 +303,13 @@
 }
 .finding.dismissed .f-title {
   text-decoration: line-through;
-  color: var(--text-faint);
+  color: var(--text-deco);
 }
 .chk {
   width: 16px;
   height: 16px;
   border-radius: 5px;
-  border: 1.5px solid var(--text-faint);
+  border: 1.5px solid var(--text-deco);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -651,7 +651,7 @@ textarea.summary:focus {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  border: 1.5px solid var(--text-faint);
+  border: 1.5px solid var(--text-deco);
   flex: none;
   margin-top: 1px;
   position: relative;
@@ -677,6 +677,10 @@ textarea.summary:focus {
   color: var(--text-faint);
   font-size: 11.5px;
   margin-top: 1px;
+}
+/* 选中项底色被 --agent-soft 抬亮,faint 在上面掉到 4.25:1;选中态本就该更显眼 */
+.event.on .ed {
+  color: var(--text-dim);
 }
 .finish-foot {
   border-top: 1px solid var(--border);

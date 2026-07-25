@@ -23,7 +23,10 @@
      必须靠填充差,于是 --card 亮于 --surface。组件因此一律写 --card,不必分模式。 */
   --card:#12151d;
   --border:#232834; --border-soft:#1b2028;
-  --text:#e7eaf1; --text-dim:#9aa3b2; --text-faint:#5f6877;
+  /* 四档中性色。--text-faint 是最低的一档**文字**(提示 / 说明 / 小标签 / 未选中项),必须过 4.5:1;
+     真正的装饰(分隔点、轨道、行号、删除线)走 --text-deco,它低于正文阈值是有意的。
+     两者曾是同一个值,于是所有提示文案被装饰的亮度按住,深色下几乎读不出来。 */
+  --text:#e7eaf1; --text-dim:#9aa3b2; --text-faint:#828b9c; --text-deco:#5f6877;
   /* 天蓝 accent(对齐 better-review brand · oklch hue 245) */
   --agent:oklch(.72 .14 245); --agent-2:oklch(.82 .11 240); --agent-soft:color-mix(in oklab,var(--agent) 14%,transparent); --agent-line:color-mix(in oklab,var(--agent) 38%,transparent);
   --accent-solid:oklch(.585 .16 245); --on-solid:#fff;   /* 实心按钮:深一档天蓝 + 白字 */
@@ -34,7 +37,8 @@
   --glow1:color-mix(in oklab,var(--agent) 9%,transparent); --glow2:rgba(232,162,77,.045);
   /* ===== COLOR THEME (data-theme) — Duetlens · dark ===== */
   --code-text:#cfd6e4;
-  --k:#c3b0ff; --fn:#7fd6ff; --s:#8ee6a8; --n:#f2b57a; --c:#5f6877; --ty:#e6c07b; --mac:#f19bd0;
+  /* --c(注释)不再与 --text-deco 同值:注释常是意图的唯一记录,不该是屏上最难读的字 */
+  --k:#c3b0ff; --fn:#7fd6ff; --s:#8ee6a8; --n:#f2b57a; --c:#7d8697; --ty:#e6c07b; --mac:#f19bd0;
   --add:#57e39a; --del:#ff7085;
   --add-bg:rgba(64,196,132,.10); --del-bg:rgba(255,90,110,.09);
   --add-gutter:rgba(64,196,132,.22); --del-gutter:rgba(255,90,110,.22);
@@ -50,7 +54,7 @@
   --bg:oklch(94.6% .003 250); --surface:oklch(97.8% .002 250); --card:#ffffff;
   --surface-2:oklch(96.4% .003 250); --surface-3:oklch(93.4% .004 250);
   --border:oklch(82.5% .007 250); --border-soft:oklch(89.6% .005 250);
-  --text:oklch(22% .008 258); --text-dim:oklch(45% .010 256); --text-faint:oklch(60% .009 254);
+  --text:oklch(22% .008 258); --text-dim:oklch(45% .010 256); --text-faint:oklch(52% .011 254); --text-deco:oklch(60% .009 254);
   --agent:oklch(.50 .145 252); --agent-2:oklch(.43 .155 254); --agent-soft:color-mix(in oklab,var(--agent) 9%,transparent); --agent-line:color-mix(in oklab,var(--agent) 28%,transparent);
   --accent-solid:oklch(.49 .16 253); --on-solid:#fff;
   --human:oklch(.56 .145 50); --human-soft:color-mix(in oklab,var(--human) 11%,transparent); --human-line:color-mix(in oklab,var(--human) 32%,transparent);
@@ -66,7 +70,7 @@
    不再借 --del-bg / --human-soft / --agent-soft(见 ReviewScreen.css 的 .sev)。 */
 :root[data-mode="light"][data-theme="duetlens"]{
   --code-text:oklch(22% .008 258);
-  --k:oklch(46% .2 298); --fn:oklch(46% .145 243); --s:oklch(43% .12 157); --n:oklch(47% .13 54); --c:oklch(60% .009 254); --ty:oklch(47% .11 74); --mac:oklch(47% .19 336);
+  --k:oklch(46% .2 298); --fn:oklch(46% .145 243); --s:oklch(43% .12 157); --n:oklch(47% .13 54); --c:oklch(53% .010 254); --ty:oklch(47% .11 74); --mac:oklch(47% .19 336);
   --add:oklch(46% .13 153); --del:oklch(49% .17 26);
   --add-bg:oklch(96.4% .034 153); --del-bg:oklch(95.8% .036 26);
   --add-gutter:color-mix(in oklab,var(--add) 26%,transparent); --del-gutter:color-mix(in oklab,var(--del) 24%,transparent);

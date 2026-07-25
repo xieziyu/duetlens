@@ -1043,7 +1043,7 @@
 }
 /* 整文件不在 diff 内:比行级 off-diff 再弱一档,path 折行不撑破容器 */
 .offdiff.absent {
-  background: color-mix(in oklab, var(--text-faint) 5%, transparent);
+  background: color-mix(in oklab, var(--text-deco) 5%, transparent);
 }
 .offdiff.absent .offdiff-head {
   color: var(--text-faint);
@@ -1064,7 +1064,8 @@
   border-bottom: 1px solid var(--border-soft);
 }
 .hunk-label .ctx {
-  color: var(--text-faint);
+  /* 所在函数/类是定位信息,不是注脚;这条带底色被 --agent-soft 抬过,faint 在上面掉到 4.2:1 */
+  color: var(--text-dim);
   margin-left: 14px;
 }
 /* diff 外上下文展开条:虚线贯穿整行、中间浮一颗可点药丸;整行可点 */
@@ -1933,7 +1934,7 @@
 }
 .frow.dismissed .fr-title {
   text-decoration: line-through;
-  color: var(--text-faint);
+  color: var(--text-deco);
 }
 .fr-top {
   display: flex;
@@ -2170,6 +2171,8 @@
   flex: none;
 }
 .c-dismissed .dm-t {
+  /* 标题已被划掉,退到装饰档,别和还活着的 finding 抢注意力;理由(.dm-reason)是要读的,留在 --text-faint */
+  color: var(--text-deco);
   text-decoration: line-through;
   flex: 1;
   min-width: 0;
@@ -2323,7 +2326,7 @@
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--text-deco);
   transition: 0.18s;
 }
 .c-edit.has-sugg .fe-sugg-tog .sw {
@@ -2422,7 +2425,7 @@
 }
 .file:hover .vtick {
   border-color: var(--agent-line);
-  color: var(--text-faint);
+  color: var(--text-deco);
 }
 .file.viewed .vtick {
   background: var(--add-bg);
@@ -2430,7 +2433,7 @@
   color: var(--add);
 }
 .file.viewed .name {
-  color: var(--text-faint);
+  color: var(--text-deco);
   text-decoration: line-through;
   text-decoration-color: var(--border-soft);
 }
@@ -2498,7 +2501,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--text-faint);
+  border: 1px solid var(--text-deco);
   border-radius: 3px;
   background: var(--surface);
 }
@@ -2570,7 +2573,7 @@
 }
 .code.split .src.blank,
 .code.split .ln.blank {
-  background: color-mix(in oklab, var(--text-faint) 7%, transparent);
+  background: color-mix(in oklab, var(--text-deco) 7%, transparent);
 }
 .code.split .row:hover .src:not(.blank) {
   background: var(--hover);

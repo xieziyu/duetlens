@@ -55,7 +55,7 @@
 .art-row {
   height: 6px;
   border-radius: 3px;
-  background: color-mix(in oklab, var(--text-faint) 42%, transparent);
+  background: color-mix(in oklab, var(--text-deco) 42%, transparent);
   transition: background 0.5s ease;
 }
 .art-row.add { background: color-mix(in oklab, var(--add) 26%, transparent); }

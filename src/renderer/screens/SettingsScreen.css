@@ -188,7 +188,7 @@
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--text-deco);
   transition: 0.15s;
 }
 .settings .sw.on {
@@ -293,7 +293,7 @@
 }
 .settings .stat.lock .d,
 .settings .stat.checking .d {
-  background: var(--text-faint);
+  background: var(--text-deco);
 }
 
 /* about */
