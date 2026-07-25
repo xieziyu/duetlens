@@ -613,9 +613,11 @@ function GapExpander({
 
   const bar = (
     <div className="gap-bar" title="展开未改动代码" onClick={loading ? undefined : onExpand}>
-      <span className="gap-ic">↕</span>
-      <span className="gap-label">{loading ? '载入中…' : gapLabel(gap.side, remaining)}</span>
-      {rng && <span className="gap-rng">{rng}</span>}
+      <span className="gap-pill">
+        <span className="gap-ic">↕</span>
+        <span className="gap-label">{loading ? '载入中…' : gapLabel(gap.side, remaining)}</span>
+        {rng && <span className="gap-rng">{rng}</span>}
+      </span>
     </div>
   );
 

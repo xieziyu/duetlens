@@ -987,38 +987,46 @@
   color: var(--text-faint);
   margin-left: 14px;
 }
-/* diff 外上下文展开条:整行可点,左侧图标框 + 文案 + 右侧行号范围 */
+/* diff 外上下文展开条:虚线贯穿整行、中间浮一颗可点药丸;整行可点 */
 .gap-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 16px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--text-faint);
-  background: color-mix(in oklab, var(--agent) 4%, var(--surface));
-  border-bottom: 1px solid var(--border-soft);
+  gap: 12px;
+  padding: 12px 16px;
   cursor: pointer;
 }
-.gap-bar:hover {
+.gap-bar::before,
+.gap-bar::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--border);
+}
+.gap-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.gap-bar:hover .gap-pill {
   color: var(--agent-2);
+  border-color: var(--agent-line);
   background: var(--agent-soft);
 }
-.gap-ic {
-  display: inline-flex;
-  width: 18px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--agent-2);
-}
-.gap-bar:hover .gap-ic {
+.gap-bar:hover::before,
+.gap-bar:hover::after {
   border-color: var(--agent-line);
 }
+.gap-ic {
+  color: var(--agent-2);
+}
 .gap-rng {
-  margin-left: auto;
   color: var(--text-faint);
 }
 /* 每张 code 表一个横滚容器;DiffPane 把同一份 diff 的多张表的 scrollLeft 同步 */
