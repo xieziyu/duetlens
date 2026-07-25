@@ -75,6 +75,7 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewRerun, (_e, reviewId: string, input?: RerunInput) =>
     manager.rerunReview(reviewId, input ?? {}),
   );
+  ipcMain.handle(IpcChannels.reviewRetryRound, (_e, reviewId: string) => manager.retryRound(reviewId));
   ipcMain.handle(IpcChannels.reviewRounds, (_e, reviewId: string) => manager.getRounds(reviewId));
   ipcMain.handle(IpcChannels.reviewResume, (_e, reviewId: string) => manager.resumeReview(reviewId));
   ipcMain.handle(IpcChannels.reviewRelease, (_e, reviewId: string) => manager.disposeReview(reviewId));

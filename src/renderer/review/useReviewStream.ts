@@ -21,6 +21,11 @@ export interface ReviewStreamState {
   rounds: ReviewRound[];
   tokenUsage: TokenUsage | null;
   lastTool: string | null;
+  /**
+   * agent 正在自行退避重试(codex 内部重试,可静默耗掉几十秒)。count 是本轮数到的次数;
+   * 一轮结束(round 事件)即清空。
+   */
+  retrying: { count: number; error: string } | null;
   /** 懒加载一条 discussion 的历史消息(续接的旧 review);实时消息仍走事件流。 */
   ensureMessages: (discussionId: string) => void;
   /** 乐观插入一条本地 user 消息(立即上屏),权威 message 事件到达时按文本去重替换;返回临时 id。 */
@@ -52,6 +57,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [rounds, setRounds] = useState<ReviewRound[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [lastTool, setLastTool] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<ReviewStreamState['retrying']>(null);
   // 已发起过历史拉取的 discussionId,避免重复 fetch(实时消息由事件流补充)
   const fetched = useRef<Set<string>>(new Set());
 
@@ -102,6 +108,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     setRounds([]);
     setTokenUsage(null);
     setLastTool(null);
+    setRetrying(null);
     setMessages({});
     setDiff([]);
     setDiffReady(false);
@@ -193,9 +200,12 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
           if (r.status === 'scanning') {
             setTokenUsage(null);
             setLastTool(null);
+            setRetrying(null);
             setDiffReady(false);
             loadDiff();
           }
+          // 收轮(成功或失败)也要清重试提示:那是"正在挣扎"的态,轮次已落定就不该再挂着
+          if (r.status !== 'scanning') setRetrying(null);
           // 开新一轮会改 review.currentRound,重拉一次让轮次角标与后端一致
           void window.duetlens.review.get(reviewId).then((rv) => rv && setReview(rv));
           return;
@@ -220,6 +230,10 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
       if (ev.kind === 'token-usage')
         setTokenUsage({ used: ev.used, cumulative: ev.cumulative, total: ev.total });
       if (ev.kind === 'tool-call') setLastTool(`${ev.server}/${ev.tool} · ${ev.status}`);
+      // codex 不上报第几次重试,只说"还会再试";次数由我们数事件得出
+      if (ev.kind === 'turn-retrying')
+        setRetrying((prev) => ({ count: (prev?.count ?? 0) + 1, error: ev.error }));
+      if (ev.kind === 'turn-completed' || ev.kind === 'turn-failed') setRetrying(null);
     }
 
     return () => {
@@ -239,6 +253,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     rounds,
     tokenUsage,
     lastTool,
+    retrying,
     ensureMessages,
     addPendingMessage,
     dropMessage,

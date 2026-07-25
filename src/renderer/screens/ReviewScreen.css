@@ -1513,6 +1513,190 @@
   color: var(--agent-2);
 }
 
+/* 失败态:整条转红并留在原位 —— 断在哪一步、为什么断,都只有这里放得下 */
+.scanbar.failed {
+  background: linear-gradient(180deg, var(--del-bg), var(--surface));
+  border-bottom-color: color-mix(in oklab, var(--sev-high) 35%, var(--border));
+}
+.scanbar.failed .sb-row:hover {
+  background: color-mix(in oklab, var(--sev-high) 7%, transparent);
+}
+.scanbar.failed .sb-glyph {
+  background: var(--sev-high);
+  box-shadow: none;
+}
+.scanbar.failed .sb-glyph::after {
+  animation: none;
+}
+.scanbar.failed .sb-round {
+  color: var(--sev-high);
+}
+.scanbar.failed .sb-row:hover .sb-chev {
+  color: var(--sev-high);
+}
+.scanbar.flash {
+  animation: scanbar-flash 0.9s ease;
+}
+@keyframes scanbar-flash {
+  0%,
+  100% {
+    box-shadow: none;
+  }
+  25% {
+    box-shadow: inset 0 0 0 2px var(--sev-high);
+  }
+}
+
+/* stepper / 时间线的失败点:实心红 + ✕,与 done 的实心蓝勾成对 */
+.scanbar .sb-step.failed {
+  color: var(--sev-high);
+  font-weight: 600;
+}
+.scanbar .sb-step.failed .sb-dot,
+.tl.failed .dot {
+  background: var(--sev-high);
+  border-color: var(--sev-high);
+  animation: none;
+}
+.scanbar .sb-step.failed .sb-dot::after,
+.tl.failed .dot::after {
+  content: '✕';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  color: var(--on-solid);
+}
+.tl.failed .tl-l {
+  color: var(--sev-high);
+}
+
+/* agent 内部退避重试:这几十秒本来是纯黑盒,给它一个明确的"在挣扎"信号 */
+.scanbar .sb-retry {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--sev-med);
+  background: color-mix(in oklab, var(--sev-med) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--sev-med) 35%, transparent);
+  border-radius: 5px;
+  padding: 1px 7px;
+}
+
+/* 失败详情卡:结论 → 建议 → 原文 → 重试,一条竖线走完 */
+.scanbar .sb-err {
+  flex: 1 1 460px;
+  min-width: 280px;
+  margin: 12px 0 0;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in oklab, var(--sev-high) 35%, transparent);
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--sev-high) 5%, transparent);
+}
+.scanbar .se-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--sev-high);
+}
+.scanbar .se-head .ic {
+  font-size: 11px;
+}
+.scanbar .se-advice,
+.scanbar .se-keep {
+  margin: 7px 0 0;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text-dim);
+}
+.scanbar .se-keep {
+  color: var(--text-faint);
+}
+.scanbar .se-raw {
+  margin-top: 9px;
+  font-size: 11px;
+}
+.scanbar .se-raw summary {
+  cursor: pointer;
+  color: var(--text-faint);
+}
+.scanbar .se-raw summary:hover {
+  color: var(--text-dim);
+}
+.scanbar .se-raw pre {
+  margin: 7px 0 0;
+  padding: 9px 10px;
+  max-height: 180px;
+  overflow: auto;
+  border-radius: 7px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+.scanbar .se-retry-err {
+  margin: 9px 0 0;
+  font-size: 11px;
+  color: var(--sev-high);
+}
+.scanbar .se-act {
+  margin-top: 11px;
+}
+.scanbar .se-act button {
+  padding: 5px 13px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.scanbar .se-act button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.scanbar .se-act button.primary {
+  border-color: transparent;
+  background: var(--sev-high);
+  color: var(--on-solid);
+}
+.scanbar .se-act button.primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--sev-high) 85%, black);
+  color: var(--on-solid);
+}
+.scanbar .se-act button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* 状态栏失败胶囊:失败时它只是指路牌,原因在进度条的卡里 */
+.rev-statusbar .sb-status.act {
+  border: 0;
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.rev-statusbar .sb-status.act:hover {
+  background: color-mix(in oklab, var(--sev-high) 18%, transparent);
+}
+.rev-statusbar .sb-why {
+  font-size: 10.5px;
+  opacity: 0.8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* 窄窗口:阶段短标签只留当前阶段,点位仍在,避免横条换行 */
 @media (max-width: 1180px) {
   .scanbar .sb-step:not(.active) .sb-lbl {

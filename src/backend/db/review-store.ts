@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { AgentErrorKind } from '@shared/agent-events';
 import type { RecentReview } from '@shared/ipc';
 import type { DB } from './database';
 import {
@@ -51,6 +52,10 @@ interface RoundRow {
   new_findings: number;
   fixed_count: number;
   suppressed_count: number;
+  error_message: string | null;
+  error_kind: string | null;
+  changed_files: string;
+  code_changed: number;
   started_at: number;
   ended_at: number | null;
 }
@@ -128,9 +133,23 @@ function toRound(r: RoundRow): ReviewRound {
     newFindings: r.new_findings,
     fixedCount: r.fixed_count,
     suppressedCount: r.suppressed_count,
+    errorMessage: r.error_message,
+    errorKind: (r.error_kind as ReviewRound['errorKind']) ?? null,
+    changedFiles: parseChangedFiles(r.changed_files),
+    codeChanged: r.code_changed === 1,
     startedAt: r.started_at,
     endedAt: r.ended_at,
   };
+}
+
+/** 手改过库或旧版本写坏都不该让整屏轮次读不出来,坏值退化成空列表。 */
+function parseChangedFiles(raw: string): string[] {
+  try {
+    const v = JSON.parse(raw || '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 function toFinding(r: FindingRow): Finding {
@@ -328,10 +347,19 @@ export class ReviewStore {
   // ---- 轮次(首轮 + 每次重跑各一条;轮次号只增不退,失败轮次留在历史里)----
 
   /** 开一轮:写轮次记录并把 review 的当前轮推到该轮。round 由调用方从 currentRound+1 推得。 */
+  /**
+   * 开一轮。**同一轮号可重开** —— 失败的那一轮重试时沿用原轮号覆盖本行,否则「第 N 轮」
+   * 会退化成重试次数。重开即把上次的失败痕迹与统计一并清零。
+   */
   startRound(
     reviewId: string,
     round: number,
-    input: { headSha?: string | null; note?: string | null } = {},
+    input: {
+      headSha?: string | null;
+      note?: string | null;
+      changedFiles?: readonly string[];
+      codeChanged?: boolean;
+    } = {},
   ): ReviewRound {
     const ts = now();
     const row: RoundRow = {
@@ -344,14 +372,29 @@ export class ReviewStore {
       new_findings: 0,
       fixed_count: 0,
       suppressed_count: 0,
+      error_message: null,
+      error_kind: null,
+      changed_files: JSON.stringify(input.changedFiles ?? []),
+      code_changed: input.codeChanged ? 1 : 0,
       started_at: ts,
       ended_at: null,
     };
     this.db.transaction(() => {
       this.db
         .prepare(
-          `INSERT INTO review_rounds (review_id, round, codex_thread_id, head_sha, status, note, new_findings, fixed_count, suppressed_count, started_at, ended_at)
-           VALUES (@review_id, @round, @codex_thread_id, @head_sha, @status, @note, @new_findings, @fixed_count, @suppressed_count, @started_at, @ended_at)`,
+          `INSERT INTO review_rounds (review_id, round, codex_thread_id, head_sha, status, note, new_findings, fixed_count, suppressed_count, error_message, error_kind, changed_files, code_changed, started_at, ended_at)
+           VALUES (@review_id, @round, @codex_thread_id, @head_sha, @status, @note, @new_findings, @fixed_count, @suppressed_count, @error_message, @error_kind, @changed_files, @code_changed, @started_at, @ended_at)
+           ON CONFLICT(review_id, round) DO UPDATE SET
+             codex_thread_id = excluded.codex_thread_id,
+             head_sha = excluded.head_sha,
+             status = excluded.status,
+             note = excluded.note,
+             new_findings = 0, fixed_count = 0, suppressed_count = 0,
+             error_message = NULL, error_kind = NULL,
+             changed_files = excluded.changed_files,
+             code_changed = excluded.code_changed,
+             started_at = excluded.started_at,
+             ended_at = NULL`,
         )
         .run(row);
       this.db
@@ -367,12 +410,18 @@ export class ReviewStore {
       .run(threadId, reviewId, round);
   }
 
-  /** 收一轮:统计由调用方在轮次结束时算好一并写入。 */
+  /** 收一轮:统计由调用方在轮次结束时算好一并写入;失败时连原因一起留下(UI 与重启后都靠它)。 */
   finishRound(
     reviewId: string,
     round: number,
     status: RoundStatus,
-    counts: { newFindings?: number; fixedCount?: number; suppressedCount?: number } = {},
+    counts: {
+      newFindings?: number;
+      fixedCount?: number;
+      suppressedCount?: number;
+      errorMessage?: string | null;
+      errorKind?: AgentErrorKind | null;
+    } = {},
   ): ReviewRound | null {
     this.db
       .prepare(
@@ -380,7 +429,8 @@ export class ReviewStore {
             SET status = ?, ended_at = ?,
                 new_findings = COALESCE(?, new_findings),
                 fixed_count = COALESCE(?, fixed_count),
-                suppressed_count = COALESCE(?, suppressed_count)
+                suppressed_count = COALESCE(?, suppressed_count),
+                error_message = ?, error_kind = ?
           WHERE review_id = ? AND round = ?`,
       )
       .run(
@@ -389,6 +439,8 @@ export class ReviewStore {
         counts.newFindings ?? null,
         counts.fixedCount ?? null,
         counts.suppressedCount ?? null,
+        counts.errorMessage ?? null,
+        counts.errorKind ?? null,
         reviewId,
         round,
       );

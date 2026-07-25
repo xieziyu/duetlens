@@ -39,6 +39,8 @@ export function ReviewStatusBar({
   effort,
   tokenUsage,
   lastTool,
+  failureHint,
+  onShowFailure,
   onOpenHelp,
 }: {
   status: ReviewStatus | null;
@@ -48,6 +50,9 @@ export function ReviewStatusBar({
   effort: string | null;
   tokenUsage: TokenUsage | null;
   lastTool: string | null;
+  /** 失败结论一句话;这枚胶囊只是指路牌,完整原因在进度条的失败卡里 */
+  failureHint: string | null;
+  onShowFailure: () => void;
   onOpenHelp: () => void;
 }): React.JSX.Element {
   const st = status ?? 'scanning';
@@ -58,10 +63,21 @@ export function ReviewStatusBar({
 
   return (
     <footer className="rev-statusbar">
-      <span className={`sb-status s-${st}`}>
-        {running && <span className="pulse" />}
-        {STATUS_LABEL[st]}
-      </span>
+      {failureHint ? (
+        <button
+          className={`sb-status s-${st} act`}
+          onClick={onShowFailure}
+          title={`${failureHint} — 点击查看原因与重试`}
+        >
+          {STATUS_LABEL[st]}
+          <span className="sb-why">查看原因</span>
+        </button>
+      ) : (
+        <span className={`sb-status s-${st}`}>
+          {running && <span className="pulse" />}
+          {STATUS_LABEL[st]}
+        </span>
+      )}
       {round && (
         <span className="sb-item sb-round" title="复审轮次与本轮统计">
           ↻ {round}

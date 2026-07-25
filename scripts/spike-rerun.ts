@@ -346,10 +346,53 @@ function main() {
   assert.match(p3NoOpen, /## 一、往轮已确认修复/);
   log('第 3 轮 prompt:结案节与剔除节分开,回归留出口,段号随内容编排');
 
+  // ---- 6.6 轮次失败留证 + 同轮重开(失败重试)----
+  // 失败必须连原因一起落库:只记一个 'failed' 状态,用户就只能看到一句"失败"而无从追问。
+  const failed3 = store.startRound(review.id, 3, {
+    headSha: 'eeee3333ffff',
+    note: '重点复核重试路径',
+    changedFiles: ['src/pipeline.ts'],
+    codeChanged: true,
+  });
+  assert.equal(failed3.errorMessage, null, '开轮时不该带失败痕迹');
+  assert.deepEqual(failed3.changedFiles, ['src/pipeline.ts']);
+  const settled = store.finishRound(review.id, 3, 'failed', {
+    newFindings: 0,
+    errorMessage: 'unexpected status 503 Service Unavailable',
+    errorKind: 'server-overloaded',
+  })!;
+  assert.equal(settled.status, 'failed');
+  assert.equal(settled.errorKind, 'server-overloaded');
+  assert.match(settled.errorMessage!, /503/);
+  assert.equal(
+    store.listRounds(review.id).find((r) => r.round === 3)!.errorMessage,
+    settled.errorMessage,
+    '失败原因要能被重新读出来 —— 重启后查得到才算留证',
+  );
+
+  // 重试沿用同一轮号覆盖本行:失败那次没有产出,再给它一个轮号只会让「第 N 轮」变成重试计数
+  const retried = store.startRound(review.id, 3, {
+    headSha: 'eeee3333ffff',
+    note: failed3.note,
+    changedFiles: failed3.changedFiles,
+    codeChanged: failed3.codeChanged,
+  });
+  assert.equal(retried.status, 'scanning');
+  assert.equal(retried.errorMessage, null, '重开一轮要清掉上次的失败痕迹');
+  assert.equal(retried.errorKind, null);
+  assert.equal(retried.endedAt, null);
+  assert.equal(retried.note, '重点复核重试路径', '重试沿用原说明');
+  assert.deepEqual(retried.changedFiles, ['src/pipeline.ts'], '变更文件基线要沿用,否则重试会算成"无改动"');
+  assert.equal(store.listRounds(review.id).length, 3, '重试不该多出一轮');
+  assert.equal(store.getReview(review.id)!.currentRound, 3);
+  store.finishRound(review.id, 3, 'done', { newFindings: 0 });
+  assert.equal(store.getRound(review.id, 3)!.errorMessage, null, '重试成功后不该留着上次的失败原因');
+  log('轮次失败留证 + 同轮重开(重试不新增轮次、沿用说明与变更基线、清掉失败痕迹)');
+
   // ---- 7. 轮次履历与级联删除 ----
   const rounds = store.listRounds(review.id);
-  assert.equal(rounds.length, 2);
-  assert.deepEqual(rounds.map((r) => r.round), [1, 2]);
+  assert.equal(rounds.length, 3);
+  assert.deepEqual(rounds.map((r) => r.round), [1, 2, 3]);
   assert.equal(rounds[1].note, '作者说已修了并发那条');
   assert.equal(rounds[0].headSha, 'aaaa1111bbbb');
 

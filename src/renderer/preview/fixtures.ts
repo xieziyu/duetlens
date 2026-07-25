@@ -233,14 +233,29 @@ const ROUNDS: ReviewRound[] = [
   {
     reviewId: 'demo', round: 1, codexThreadId: 'thread-demo-1', headSha: '3f9a1c2e5b7d',
     status: 'done', note: null, newFindings: 3, fixedCount: 0, suppressedCount: 0,
+    errorMessage: null, errorKind: null, changedFiles: [], codeChanged: false,
     startedAt: now - 3 * 3600_000, endedAt: now - 3 * 3600_000 + 210_000,
   },
   {
     reviewId: 'demo', round: 2, codexThreadId: 'thread-demo-2', headSha: 'a41d80b6cc02',
     status: 'done', note: '作者说已修了并发那条,重点复核。', newFindings: 1, fixedCount: 1, suppressedCount: 2,
+    errorMessage: null, errorKind: null,
+    changedFiles: ['src/renderer/screens/EntryScreen.tsx'], codeChanged: true,
     startedAt: now - 25 * 60_000, endedAt: now - 21 * 60_000,
   },
 ];
+
+/** `?round=failed` 的收尾态:复现"上游 503,codex 自行重试 5 次仍失败"这类最常见的失败。 */
+const FAILED_ROUND: ReviewRound = {
+  ...ROUNDS[1],
+  status: 'failed',
+  newFindings: 0,
+  fixedCount: 0,
+  errorMessage:
+    'unexpected status 503 Service Unavailable: Service Unavailable, url: https://chatgpt.com/backend-api/codex/responses, cf-ray: a20a2f1fcec6ce22-SIN, auth error: 503, auth error code: biscuit_baker_service_me_circuit_open',
+  errorKind: 'server-overloaded',
+  endedAt: now - 21 * 60_000,
+};
 
 const DISCUSSIONS: Discussion[] = [
   ...FINDINGS.map((f) => ({
@@ -355,11 +370,17 @@ export function installPreviewApi(): void {
   const asClean = params.has('clean');
   // ?stream findings 逐条经事件流到达(复现流式插入内联卡时的重绘行为)
   const asStream = params.has('stream');
+  // ?round=failed 让当前轮停在失败态,自查进度条的失败卡与状态栏指路
+  const asRoundFailed = params.get('round') === 'failed';
+  // ?scan&round=retrying 模拟 agent 自行退避重试(那几十秒原本没有任何信号)
+  const asRetrying = params.get('round') === 'retrying';
+  let retrySimulated = false;
   // 可变:重跑 stub 会改 currentRound / status,模拟后端回推后的新值
   let review: Review = {
     ...REVIEW,
     ...(asGithub ? { source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null } : {}),
     ...(asScanning ? { status: 'scanning' as const } : {}),
+    ...(asRoundFailed ? { status: 'failed' as const } : {}),
   };
   // entry-state=pick 清掉记住的仓库,自查本地仓库档的选目录空态
   let uiSettings: UiSettings = {
@@ -377,7 +398,8 @@ export function installPreviewApi(): void {
         : null,
   };
   const findings = asClean || asStream ? [] : FINDINGS.map((f) => ({ ...f }));
-  const rounds: ReviewRound[] = asClean || asStream ? [] : ROUNDS.map((r) => ({ ...r }));
+  const rounds: ReviewRound[] =
+    asClean || asStream ? [] : asRoundFailed ? [{ ...ROUNDS[0] }, { ...FAILED_ROUND }] : ROUNDS.map((r) => ({ ...r }));
   const discussions = asClean || asStream ? [] : DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const listeners = new Set<(e: ReviewEvent) => void>();
@@ -491,6 +513,10 @@ export function installPreviewApi(): void {
           newFindings: 0,
           fixedCount: 0,
           suppressedCount: 0,
+          errorMessage: null,
+          errorKind: null,
+          changedFiles: [],
+          codeChanged: true,
           startedAt: Date.now(),
           endedAt: null,
         };
@@ -505,6 +531,30 @@ export function installPreviewApi(): void {
           fire({ reviewId: 'demo', type: 'round', payload: done });
           fire({ reviewId: 'demo', type: 'status', payload: 'reviewing' });
         }, 4000);
+        return round;
+      },
+      // 重试:沿用同一轮号覆盖失败记录,3s 后收轮 —— 与后端 startRound 的 upsert 语义一致
+      retryRound: async () => {
+        const failed = rounds[rounds.length - 1];
+        const round: ReviewRound = {
+          ...failed,
+          status: 'scanning',
+          errorMessage: null,
+          errorKind: null,
+          startedAt: Date.now(),
+          endedAt: null,
+        };
+        rounds[rounds.length - 1] = round;
+        review = { ...review, status: 'scanning' };
+        fire({ reviewId: 'demo', type: 'round', payload: round });
+        fire({ reviewId: 'demo', type: 'status', payload: 'scanning' });
+        setTimeout(() => {
+          const done: ReviewRound = { ...round, status: 'done', newFindings: 1, endedAt: Date.now() };
+          rounds[rounds.length - 1] = done;
+          review = { ...review, status: 'reviewing' };
+          fire({ reviewId: 'demo', type: 'round', payload: done });
+          fire({ reviewId: 'demo', type: 'status', payload: 'reviewing' });
+        }, 3000);
         return round;
       },
       resume: async () => review,
@@ -693,6 +743,26 @@ export function installPreviewApi(): void {
       },
       onEvent: (handler) => {
         listeners.add(handler);
+        // ?scan&round=retrying:扫描期插一串 agent 退避重试事件,自查进度条的重试提示。
+        // 只排一次 —— StrictMode 双挂载会订阅两次,不设闸门次数就会翻倍。
+        if (asRetrying && !retrySimulated) {
+          retrySimulated = true;
+          for (const n of [1, 2, 3])
+            setTimeout(
+              () =>
+                fire({
+                  reviewId: 'demo',
+                  type: 'agent',
+                  payload: {
+                    kind: 'turn-retrying',
+                    turnId: 't1',
+                    error: 'stream disconnected: 503 Service Unavailable',
+                    errorKind: 'server-overloaded',
+                  },
+                }),
+              n * 900,
+            );
+        }
         return () => listeners.delete(handler);
       },
       onStartProgress: (handler) => {

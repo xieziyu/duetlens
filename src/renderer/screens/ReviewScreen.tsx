@@ -13,6 +13,7 @@ import { ScanProgressBar } from './review/ScanProgressBar';
 import { KbdHelp } from '../components/KbdHelp';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
+import { describeRoundError } from './review/round-error';
 import { RerunPanel } from './review/RerunPanel';
 import { LogoMark } from '../components/LogoMark';
 import { Wordmark } from '../components/Wordmark';
@@ -60,6 +61,7 @@ export function ReviewScreen({
     rounds,
     tokenUsage,
     lastTool,
+    retrying,
     ensureMessages,
     addPendingMessage,
     dropMessage,
@@ -82,6 +84,8 @@ export function ReviewScreen({
   const [helpOpen, setHelpOpen] = useState(false);
   // 重跑确认面板
   const [rerunOpen, setRerunOpen] = useState(false);
+  // 状态栏「查看原因」→ 让进度条的失败卡展开并闪一下(递增即触发)
+  const [revealFailure, setRevealFailure] = useState(0);
   // 栏宽 + diff 视图:持久化偏好,拖拽 / 切换即写回(去抖)
   const leftW = settings.leftWidth;
   const rightW = settings.rightWidth;
@@ -240,6 +244,11 @@ export function ReviewScreen({
     },
     [reviewId],
   );
+  // 重试失败的当前轮:沿用同一轮号,不新增轮次;失败原因由进度条就地展示
+  const onRetryRound = useCallback(async () => {
+    if (!reviewId) return;
+    await window.duetlens.review.retryRound(reviewId);
+  }, [reviewId]);
   const onUpdate = useCallback(
     (input: FindingEditInput) => {
       if (!reviewId) return;
@@ -324,6 +333,13 @@ export function ReviewScreen({
   }, [helpOpen, diffView, update, setActiveTab]);
 
   const scanning = status === 'scanning' || !status;
+  // 本轮失败的轮次记录 —— 进度条靠它显示断点与原因。只认当前轮:更早的失败轮已被后续轮次接手。
+  const failedRound = useMemo(
+    () => rounds.find((r) => r.round === currentRound && r.status === 'failed') ?? null,
+    [rounds, currentRound],
+  );
+  // 失败后进度条**不卸载**:它是唯一能承载"断在哪、为什么断、怎么重试"的位置
+  const showScanbar = scanning || failedRound !== null;
   // 进度信号必须按轮次隔离:findings 是整个 review 的累积集,拿全量当"本轮实时产出"会把
   // 上一轮的旧意见算进第 N 轮的计数里。本轮新报出的 = round === currentRound。
   const roundFindings = useMemo(
@@ -412,13 +428,17 @@ export function ReviewScreen({
       )}
 
       <div className="rev-host">
-        {scanning && (
+        {showScanbar && (
           <ScanProgressBar
             findingCount={roundFindings.length}
             diffReady={diffReady}
             sessionReady={sessionReady}
             currentRound={currentRound}
             model={review?.model ?? null}
+            failedRound={failedRound}
+            retrying={retrying}
+            onRetry={onRetryRound}
+            revealNonce={revealFailure}
           />
         )}
         <div className="rev-main">
@@ -509,6 +529,8 @@ export function ReviewScreen({
         effort={review?.reasoningEffort ?? null}
         tokenUsage={tokenUsage}
         lastTool={lastTool}
+        failureHint={failedRound ? describeRoundError(failedRound.errorKind).title : null}
+        onShowFailure={() => setRevealFailure((n) => n + 1)}
         onOpenHelp={() => setHelpOpen(true)}
       />
     </div>

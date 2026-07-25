@@ -147,7 +147,15 @@ const V8 = `
 ALTER TABLE ui_settings ADD COLUMN last_repo_path TEXT NOT NULL DEFAULT '';
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8];
+// 轮次失败留证 + 本轮变更文件快照。存量轮次没有这些信息,留空即可(失败原因无法追溯回填)。
+const V9 = `
+ALTER TABLE review_rounds ADD COLUMN error_message TEXT;
+ALTER TABLE review_rounds ADD COLUMN error_kind TEXT;
+ALTER TABLE review_rounds ADD COLUMN changed_files TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE review_rounds ADD COLUMN code_changed INTEGER NOT NULL DEFAULT 0;
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

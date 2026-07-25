@@ -18,12 +18,29 @@ import {
   type ReviewIntensity,
 } from '@shared/domain';
 import { findDuplicate } from '@shared/finding-dedupe';
+import type { AgentErrorKind } from '@shared/agent-events';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
 import type { ReviewStore } from '../db/review-store';
 import { BUILTIN_BASE_INSTRUCTIONS } from '../prompt/review-prompt';
 
 /** 首轮机审的缺省指令(未附加用户上下文时使用)。 */
 export const DEFAULT_SCAN_PROMPT = '请审核本次改动,对每个问题调用 report_finding 上报。';
+
+/**
+ * 一轮机审因 agent 侧 turn 失败而中止。带上归因是为了让上层能落库、让 UI 能给出处置建议 ——
+ * 退化成普通 Error 就只剩一句无从追问的红字。
+ */
+export class AgentTurnError extends Error {
+  constructor(
+    message: string,
+    readonly errorKind: AgentErrorKind,
+    /** agent 给的原文(不含我们加的轮次前缀),展开详情里原样呈现 */
+    readonly detail: string,
+  ) {
+    super(message);
+    this.name = 'AgentTurnError';
+  }
+}
 
 /**
  * 对抗强度:扫描/复审 turn 之后追加的自检轮指令。同一 codex thread 内跑,
@@ -33,6 +50,10 @@ export const ADVERSARIAL_SELFCHECK_PROMPT = `现在做一轮对抗式自检,站�
 1. 回看你**已上报**的每条 finding:有没有哪条其实站不住(反例不成立 / 是可接受差异 / 属误报)?站不住的用 update_finding 降级严重度,或在 body 里明确标注不确定,不要留下过度自信的结论。
 2. 更重要的是审你**没报**的地方:哪个函数、边界或错误分支你只是扫过、并未真正构造反例去验证?对这些补一次证伪 —— 发现真实且可复现的新问题就用 report_finding 上报,已报过的不要重复。
 3. 给一句话小结:本轮自检补报了几条、降级/撤回了几条。`;
+
+type TurnOutcome =
+  | { ok: true; reply: string }
+  | { ok: false; error: string; errorKind: AgentErrorKind };
 
 /** 追问时重述的历史条数上限;够唤起线程脉络,又不至于把整条对话再喂一遍。 */
 const FOLLOWUP_RECAP = 6;
@@ -151,7 +172,7 @@ export class ReviewSession {
     if (!outcome.ok) {
       this.setStatus('failed');
       const label = opts.round && opts.round > 1 ? `第 ${opts.round} 轮复审` : '首轮扫描';
-      throw new Error(`${label}失败: ${outcome.error}`);
+      throw new AgentTurnError(`${label}失败: ${outcome.error}`, outcome.errorKind, outcome.error);
     }
     // 对抗档:同一 thread 追加一轮自检。已有扫描结论,自检失败不推翻本轮 —— 吞掉错误保留成果。
     if (opts.intensity === 'adversarial') {
@@ -213,7 +234,7 @@ export class ReviewSession {
     this.emit('message', userMsg);
 
     const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text, history));
-    if (!outcome.ok) throw new Error(`追问失败: ${outcome.error}`);
+    if (!outcome.ok) throw new AgentTurnError(`追问失败: ${outcome.error}`, outcome.errorKind, outcome.error);
 
     const reply = outcome.reply.trim();
     if (!reply) return userMsg;
@@ -322,8 +343,8 @@ export class ReviewSession {
    * 跑一轮 turn(串行入队):累积 message-delta 作为 agent 回复文本,resolve 于 turn 结束。
    * 前一轮失败不阻断后续轮(链上 catch)。
    */
-  private runTurn(text: string): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
-    const run = async (): Promise<{ ok: true; reply: string } | { ok: false; error: string }> => {
+  private runTurn(text: string): Promise<TurnOutcome> {
+    const run = async (): Promise<TurnOutcome> => {
       const conversationId = this.conversationId!;
       let reply = '';
       const offDelta = this.agent.streamEvents((e) => {
@@ -333,7 +354,8 @@ export class ReviewSession {
       try {
         await this.agent.sendMessage(conversationId, text);
         const outcome = await turnDone;
-        if (outcome.kind === 'turn-failed') return { ok: false, error: outcome.error };
+        if (outcome.kind === 'turn-failed')
+          return { ok: false, error: outcome.error, errorKind: outcome.errorKind };
         return { ok: true, reply };
       } finally {
         offDelta();

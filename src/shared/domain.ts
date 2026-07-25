@@ -4,6 +4,7 @@
  * zod schema 用于 MCP ingress 校验(report_finding/update_finding);存储实体用 interface。
  */
 import { z } from 'zod';
+import type { AgentErrorKind } from './agent-events';
 
 // ---- 枚举 ----
 export const SOURCE_KINDS = ['github-pr', 'local-branch', 'gitbutler-vbranch'] as const;
@@ -177,6 +178,14 @@ export interface ReviewRound {
   fixedCount: number;
   /** 命中已剔除项、被抑制未落库的重复上报数 */
   suppressedCount: number;
+  /** 失败原因原文(agent 侧错误);仅 status='failed' 时有值 —— 失败必须留证,否则重启就查无此事 */
+  errorMessage: string | null;
+  /** 失败归因(见 AGENT_ERROR_KINDS);决定 UI 给什么处置建议 */
+  errorKind: AgentErrorKind | null;
+  /** 本轮相对上一轮变动的文件;重试同一轮时沿用,不能因失败那次已覆盖 diff 快照就算成"无改动" */
+  changedFiles: string[];
+  /** 本轮开跑时代码相对上一轮有无变化 */
+  codeChanged: boolean;
   startedAt: number;
   endedAt: number | null;
 }

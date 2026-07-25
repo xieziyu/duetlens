@@ -4,6 +4,7 @@
  *   `codex app-server generate-ts --out <DIR>`(见 npm script `codex:gen-types`)
  * 重导比对。协议标 experimental,升级 codex 后应重新导出回归。
  */
+import type { AgentErrorKind } from '@shared/agent-events';
 
 // ---- 枚举(与 v2/SandboxMode、v2/AskForApproval 一致)----
 export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
@@ -101,6 +102,52 @@ export interface TurnStartResponse {
   turn: { id: string; status: string; [k: string]: unknown };
 }
 
+/**
+ * turn 失败的载荷:`turn/completed`(status=failed)与 `error` 通知共用同一形状。
+ * `codexErrorInfo` 是 codex 对失败的归因,取值可能是裸字符串,也可能是带 httpStatusCode
+ * 的单键对象 —— 归一见 {@link codexErrorKind}。
+ */
+export interface CodexTurnError {
+  message: string;
+  codexErrorInfo?: string | Record<string, unknown> | null;
+  additionalDetails?: string | null;
+}
+
+/** `error` 通知:codex 自己还会重试时 willRetry=true,之后才会有终局的 turn/completed。 */
+export interface CodexErrorNotification {
+  error: CodexTurnError;
+  willRetry: boolean;
+  threadId: string;
+  turnId: string;
+}
+
+/** codexErrorInfo → 我们的中立归因;未知一律 'other',不臆造分类。 */
+export function codexErrorKind(info: CodexTurnError['codexErrorInfo']): AgentErrorKind {
+  const tag = typeof info === 'string' ? info : info ? Object.keys(info)[0] : '';
+  switch (tag) {
+    case 'usageLimitExceeded':
+    case 'sessionBudgetExceeded':
+      return 'usage-limit';
+    case 'contextWindowExceeded':
+      return 'context-exceeded';
+    case 'serverOverloaded':
+    case 'internalServerError':
+    case 'responseTooManyFailedAttempts':
+      return 'server-overloaded';
+    case 'httpConnectionFailed':
+    case 'responseStreamConnectionFailed':
+    case 'responseStreamDisconnected':
+      return 'connection';
+    case 'unauthorized':
+      return 'unauthorized';
+    case 'badRequest':
+    case 'cyberPolicy':
+      return 'bad-request';
+    default:
+      return 'other';
+  }
+}
+
 // ---- 反向请求:MCP 工具调用前的 elicitation(必须应答否则 turn 卡死)----
 export interface McpServerElicitationRequestParams {
   threadId: string;
@@ -143,6 +190,7 @@ export const CodexServerRequest = {
 
 /** server→client 单向通知(流事件) */
 export const CodexNotification = {
+  error: 'error',
   turnStarted: 'turn/started',
   turnCompleted: 'turn/completed',
   itemStarted: 'item/started',

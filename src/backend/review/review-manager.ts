@@ -5,11 +5,13 @@ import type {
   Finding,
   Message,
   Review,
+  ReviewIntensity,
   ReviewRound,
   ReviewUiState,
   Triage,
   UiSettings,
 } from '@shared/domain';
+import type { AgentErrorKind } from '@shared/agent-events';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, FindingEditInput, LatestDiffResult, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
@@ -42,7 +44,7 @@ import type {
   RepoRemoteInfo,
 } from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
-import { DEFAULT_SCAN_PROMPT, ReviewSession, type ReviewSessionEvents } from './review-session';
+import { AgentTurnError, DEFAULT_SCAN_PROMPT, ReviewSession, type ReviewSessionEvents } from './review-session';
 
 /** 首轮扫描指令:有附加上下文时拼在缺省指令之后一并注入,否则用缺省。 */
 function buildScanPrompt(context?: string): string | undefined {
@@ -67,6 +69,16 @@ const SESSION_FORWARDERS: {
   status: (reviewId, payload) => ({ reviewId, type: 'status', payload }),
   'agent-event': (reviewId, payload) => ({ reviewId, type: 'agent', payload }),
 };
+
+/**
+ * 轮次失败的落库形态。turn 失败带得到 agent 归因;编排层自己抛的(source/网络/gh)只有原文,
+ * 归到 'other' —— 宁可不分类,也不按 message 猜。
+ */
+function describeRoundFailure(cause: unknown): { errorMessage: string; errorKind: AgentErrorKind } {
+  if (cause instanceof AgentTurnError) return { errorMessage: cause.detail, errorKind: cause.errorKind };
+  const message = cause instanceof Error ? cause.message : String(cause ?? '');
+  return { errorMessage: message || '未知错误', errorKind: 'other' };
+}
 
 /**
  * main 侧 review 编排入口:持久化 + 活跃 ReviewSession,把领域事件归一成 IPC ReviewEvent 外发。
@@ -480,8 +492,8 @@ export class ReviewManager extends EventEmitter {
   async rerunReview(reviewId: string, input: RerunInput = {}): Promise<ReviewRound> {
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
-    const prevRound = this.store.getRound(reviewId, review.currentRound);
-    if (prevRound?.status === 'scanning') {
+    const current = this.store.getRound(reviewId, review.currentRound);
+    if (current?.status === 'scanning') {
       throw new Error('上一轮扫描尚未结束,不能重跑');
     }
 
@@ -490,6 +502,50 @@ export class ReviewManager extends EventEmitter {
     if (input.intensity && input.intensity !== review.intensity) {
       this.store.setReviewIntensity(reviewId, input.intensity);
     }
+
+    return this.launchRound(review, {
+      round: review.currentRound + 1,
+      note: input.note ?? null,
+      intensity,
+    });
+  }
+
+  /**
+   * 重试失败的当前轮:沿用**同一轮号**与原说明重跑,不新开一轮 ——
+   * 失败那次没有任何产出,再给它一个轮号只会让「第 N 轮」变成重试计数。
+   */
+  async retryRound(reviewId: string): Promise<ReviewRound> {
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    const current = this.store.getRound(reviewId, review.currentRound);
+    if (!current) throw new Error('该 review 无轮次记录,无法重试');
+    if (current.status !== 'failed') throw new Error('当前轮次不是失败态,无需重试');
+
+    return this.launchRound(review, {
+      round: current.round,
+      note: current.note,
+      intensity: review.intensity,
+      // 失败那次已经把最新 diff 写进快照,再比一次只会得出"无改动";变更文件沿用该轮已记的。
+      priorChanged: current,
+    });
+  }
+
+  /**
+   * 起一轮机审(重跑与失败重试共用)。重新拉最新 diff 做全量重扫,上一轮的产出与 reviewer 的
+   * 处置靠结构化 prompt 带过来(见 prompt/rerun-prompt.ts);首轮重试则回到扫描指令。
+   */
+  private async launchRound(
+    review: Review,
+    opts: {
+      round: number;
+      note: string | null;
+      intensity: ReviewIntensity;
+      /** 重试同一轮时,该轮首次开跑记下的变更文件基线 */
+      priorChanged?: ReviewRound;
+    },
+  ): Promise<ReviewRound> {
+    const reviewId = review.id;
+    const prevRound = opts.round > 1 ? this.store.getRound(reviewId, opts.round - 1) : null;
 
     // 每轮新 thread:先彻底释放上一轮的会话、MCP 与 source,再重建。
     await this.teardown(reviewId);
@@ -502,14 +558,16 @@ export class ReviewManager extends EventEmitter {
     let round: ReviewRound;
     let prepared: Awaited<ReturnType<typeof source.prepare>>;
     let rawDiff: string;
-    let prompt: string;
+    let prompt: string | undefined;
     let baseInstructions: string;
     try {
       prepared = await source.prepare();
       rawDiff = await source.getDiff();
       const prevDiff = this.store.getRawDiff(reviewId);
-      const changedFiles = changedFilesBetween(prevDiff, rawDiff);
-      const codeChanged = prevDiff !== rawDiff;
+      const changedFiles = [
+        ...new Set([...(opts.priorChanged?.changedFiles ?? []), ...changedFilesBetween(prevDiff, rawDiff)]),
+      ].sort();
+      const codeChanged = Boolean(opts.priorChanged?.codeChanged) || prevDiff !== rawDiff;
       this.store.setDiff(reviewId, rawDiff);
 
       // gh 拉不到就是空上下文,不阻断复审(见 fetchPrContextForReview)
@@ -524,27 +582,34 @@ export class ReviewManager extends EventEmitter {
         if (msgs.length) messagesByDiscussion[f.discussionId] = msgs;
       }
 
-      round = this.store.startRound(reviewId, review.currentRound + 1, {
+      round = this.store.startRound(reviewId, opts.round, {
         headSha: prepared.headSha,
-        note: input.note,
-      });
-      prompt = buildRerunPrompt({
-        round: round.round,
-        prevRound,
-        headSha: prepared.headSha ?? null,
+        note: opts.note,
         changedFiles,
         codeChanged,
-        openFindings,
-        dismissedFindings,
-        messagesByDiscussion,
-        pr: pr && pr.fetchedAt ? pr : null,
-        note: input.note,
       });
-      baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity });
+      prompt =
+        round.round === 1
+          ? // 首轮重试:那轮的 note 就是入口填的附加上下文
+            buildScanPrompt(opts.note ?? undefined)
+          : buildRerunPrompt({
+              round: round.round,
+              prevRound,
+              headSha: prepared.headSha ?? null,
+              changedFiles,
+              codeChanged,
+              openFindings,
+              dismissedFindings,
+              messagesByDiscussion,
+              pr: pr && pr.fetchedAt ? pr : null,
+              note: opts.note,
+            });
+      baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: opts.intensity });
     } catch (e) {
       await source.dispose();
       throw e;
     }
+    const intensity = opts.intensity;
 
     this.launch(
       { ...review, currentRound: round.round, intensity },
@@ -585,19 +650,23 @@ export class ReviewManager extends EventEmitter {
       })
       .then(
         () => this.settleRound(review.id, round, 'done'),
-        () => {
-          this.settleRound(review.id, round, 'failed');
+        (e: unknown) => {
+          this.settleRound(review.id, round, 'failed', e);
           this.forward({ reviewId: review.id, type: 'status', payload: 'failed' });
         },
       );
   }
 
-  /** 收一轮:统计本轮新增/判定已修复的条数落库(抑制数在命中时已累加),并外发轮次事件。 */
-  private settleRound(reviewId: string, round: number, status: 'done' | 'failed'): void {
+  /**
+   * 收一轮:统计本轮新增/判定已修复的条数落库(抑制数在命中时已累加),并外发轮次事件。
+   * 失败必须连原因一起落库 —— 只记一个 'failed' 状态,用户就只能看到一句「失败」而无从追问。
+   */
+  private settleRound(reviewId: string, round: number, status: 'done' | 'failed', cause?: unknown): void {
     const findings = this.store.listFindings(reviewId);
     const finished = this.store.finishRound(reviewId, round, status, {
       newFindings: findings.filter((f) => f.round === round).length,
       fixedCount: findings.filter((f) => f.lastSeenRound === round && f.resolution === 'fixed').length,
+      ...(status === 'failed' ? describeRoundFailure(cause) : {}),
     });
     if (finished) this.forward({ reviewId, type: 'round', payload: finished });
   }

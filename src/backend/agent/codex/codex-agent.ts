@@ -3,7 +3,10 @@ import { CodexAppServer } from './codex-app-server';
 import {
   CodexItemType,
   CodexNotification,
+  codexErrorKind,
+  type CodexErrorNotification,
   type CodexModel,
+  type CodexTurnError,
   type McpServerElicitationAction,
   type McpServerElicitationRequestParams,
   type McpToolCallItem,
@@ -204,13 +207,27 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
         });
         break;
       }
+      // codex 内部退避重试期间的中途失败。只在它还会再试时外发 —— 不再试的那次紧跟着
+      // turn/completed(failed),两边都发会把同一次失败报两遍。
+      case CodexNotification.error: {
+        const n = p as unknown as CodexErrorNotification;
+        if (!n.willRetry) break;
+        this.emitEvent({
+          kind: 'turn-retrying',
+          turnId: n.turnId ?? '',
+          error: n.error?.message ?? 'turn error',
+          errorKind: codexErrorKind(n.error?.codexErrorInfo),
+        });
+        break;
+      }
       case CodexNotification.turnCompleted: {
-        const turn = p.turn as { id?: string; status?: string; error?: { message?: string } } | undefined;
+        const turn = p.turn as { id?: string; status?: string; error?: CodexTurnError } | undefined;
         if (turn?.status === 'failed') {
           this.emitEvent({
             kind: 'turn-failed',
             turnId: turn.id ?? '',
-            error: turn.error?.message ?? 'turn failed',
+            error: turnErrorText(turn.error),
+            errorKind: codexErrorKind(turn.error?.codexErrorInfo),
           });
         } else {
           this.emitEvent({ kind: 'turn-completed', turnId: turn?.id ?? '' });
@@ -219,6 +236,14 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
       }
     }
   }
+}
+
+/** 失败原文:additionalDetails 常常才是可诊断的那半(HTTP 状态、上游错误码),别丢。 */
+function turnErrorText(e: CodexTurnError | undefined): string {
+  const message = e?.message?.trim();
+  const details = e?.additionalDetails?.trim();
+  if (!message) return details || 'turn failed';
+  return details && !message.includes(details) ? `${message}\n${details}` : message;
 }
 
 function turnId(p: Record<string, unknown>): string {
