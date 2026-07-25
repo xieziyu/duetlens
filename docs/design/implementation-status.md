@@ -27,7 +27,7 @@
 
 ### 尚缺
 1. 键位表不可配置(帮助层为只读 cheatsheet)。
-2. 运行时/异常态(turn 中断 / 反向审批 / turn 失败 / 连接断 / 压缩)只有设计,未落地 —— 设计见 `mockup/review-runtime.html`。`mockup/` 整体已冻结,但这一份是该功能目前**唯一**的设计参照,落地前别丢。
+2. 运行时/异常态里,**整轮机审失败**已落地(失败留证 + 进度条失败卡 + 原地重试,见「关键决策」);turn 中断 / 反向审批 / **追问** turn 失败 / 连接断 / 压缩仍只有设计 —— 见 `mockup/review-runtime.html`。`mockup/` 整体已冻结,但这一份是这些态目前**唯一**的设计参照,落地前别丢。
 
 > 入口页丰富流程已接 mockup(见「前端屏」):**两档**来源分段选择器(GitHub PR / 本地仓库)、GitHub PR 粘贴+实时预览卡+remote 校验、默认折叠的 open PR 列表(展开才拉)、gh 未登录引导、本地仓库面板(选目录后一次探测定模式:workspace → 虚拟分支 / 普通 git → 分支;分支走带筛选的下拉选择器 + 默认选中 + 选中摘要,可手动改按普通分支)、最近仓库快选、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / inspect-repo / list-repo-paths）+ `review:list-recent`（附计数）。发起后到进屏之间由**启动等待浮层**接管（`screens/entry/StartOverlay.tsx`，阶段走 `review:start-progress` 事件；设计见 [ui](ui.md#启动等待浮层点开始审核到进屏之间)）。
 
@@ -72,7 +72,7 @@
 | `submit` | GitHub 提交:payload 组装 + submitReview 的 success/增量/invalid/failed/非 github 守卫 + 锚点预判 + 现拉最新 diff(不覆盖快照 / headMoved / 失败不抛) |
 | `add-finding` | 手动新增 finding(origin=manual)+ 建承载 discussion + 同 triage 管线 |
 | `notify` | 完成通知决策:偏好门控 + 扫描完成去重 + 追问回复 + 失焦/聚焦分派;纯函数 |
-| `rerun` | 多轮复审:轮次落库/级联删 + 变更文件比对 + 复审 prompt 六类内容与外部数据围栏 + thread↔finding 匹配 + 去重命中/不误吞 + 表态回写与抑制计数 |
+| `rerun` | 多轮复审:轮次落库/级联删 + 变更文件比对 + 复审 prompt 六类内容与外部数据围栏 + thread↔finding 匹配 + 去重命中/不误吞 + 表态回写与抑制计数 + **失败留证与同轮重开** |
 
 `npm start` 实机验证过:Electron 启动、`better-sqlite3` Electron ABI 加载、六表迁移、IPC 注册无崩溃。
 
@@ -91,6 +91,7 @@
 - **复审表态是三态而非两态**:`resolve_finding` 除 `fixed` / `still_present` 外必须有 `wont_fix`(作者已回应说明不改)。实机踩过:作者在 PR 上回「纯联调,手动调试脚本,可忽略」后代码原样未变,只有两格时 agent 只能答 `still_present`,同一条每轮重报 —— 它没答错,是**我们问错了问题**。thread 回复一直都注入到了 prompt,缺的是**表达结论的词**与**要求它先读作者回复的指令**。判定顺序因此把「作者怎么说」排在「代码变没变」之前。`wont_fix` **不自动剔除**:作者一句"可忽略"不该自动关掉一条真实的安全问题,采纳与否是 reviewer 的决定(卡上给一键采纳,把作者原话存为剔除理由)。
 - **`fixed` 反过来自动剔除**:复核判定已修复 = 代码里已经没有,不该继续占着待提交清单等人逐条手点。与 `wont_fix` 的差别是语义而非力度("问题没了" vs "作者说不改")。自动结案的条目不进去重黑名单 —— 同一处再被报出来算**回归**,恢复保留而非静默抑制;复审 prompt 里也因此与 reviewer 剔除项分节交代。判据 `isAutoClosedFixed` 收在 `shared/domain.ts`。
 - **导航快捷键一律带 `⌘`,帮助层只有一份**:`1/2/3`、`u`、`/` 这类裸键在一屏全是输入框的 review 上要么误触、要么打字时被迫失效,改为 `⌘1/⌘2/⌘3`、`⌘U`、`⌘⇧F`(裸键只留 `?` 与 `Esc`),修饰键在输入框内照常生效。设置屏原先手抄一份「常用摘录」,已漂移出 `e` 编辑、`⌘.` 中断、`⌘⇧↵` 提交三条从未实现的键位 —— 现在改为一个按钮复用 `components/KbdHelp` 同一浮层(键位只读,无第二份表可抄错)。
+- **一轮机审失败必须留证,且归进度条不归状态栏**:失败原因在 agent 侧只存在一瞬(`turn/completed` 的 `turn.error`),编排层的 reject 回调此前连参数都没接 —— 原因当场蒸发,用户只剩状态栏一枚红字「失败」,重启后连出处都没有。现在 `settleRound` 把原文与归因写进轮次行(schema V9),UI 落点定在横跨三栏的 `.scanbar`:失败后**不卸载**、停在断点、展开即失败卡(结论 / 建议 / 原文 / 重试)。归因是 provider 中立的 `AGENT_ERROR_KINDS`,按「用户能做什么」分档而非按 codex 错误码分档。**不做自己的自动重试**(codex 内部已退避重试 5 次),但把 `willRetry` 的中途失败映射成 `turn-retrying` 外发,免得那几十秒是黑盒。重试沿用**同一轮号**(`startRound` upsert),否则「第 N 轮」会退化成重试计数;变更文件基线因此也落在轮次行上 —— 失败那次已覆盖 diff 快照,重试再比一次会得出"无改动"。详见 [rerun](rerun.md) 与 [ui](ui.md#一轮机审失败归进度条不归状态栏2026-07-25)。
 - **右栏 tab 持久化**:全局 `ui_settings.default_tab` 为「无记忆时的初始默认」,per-review `review_ui_state.last_active_tab` 覆盖。
 - **领域事件面全程编译期收敛**:`ReviewSessionEvents` 是事件名→载荷的单一来源;ReviewSession **组合**(非继承)EventEmitter,`on/off` 收窄、`emit` 私有;ReviewManager 用 `keyof` 映射的转发表;renderer `useReviewStream` 用 `switch` + never 哨兵(运行时只告警不抛,容忍 main 比 renderer 新)。三处任一漏接新事件都编译失败 —— 起因是 agent finding 的承载 discussion 曾只落库未外发,整个 Discussion 栏为空却无人报错。
 - codex 版本以 **0.144.1** 实测为准,**0.144.6 经 `generate-ts` 全量 diff 确认协议逐字节无变化**(详见 [codex-integration](codex-integration.md));协议子集手写在 `protocol.ts`。

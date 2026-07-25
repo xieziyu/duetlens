@@ -61,6 +61,7 @@ codex 通过 **server→client 反向请求** 要求授权,client 必须应答,�
 - **elicitation 应答**:`{ action:"accept"|"decline"|"cancel", content:null, _meta:null }`;实测 `approvalPolicy:"never"` + `read-only` 下每次工具调用前仍发,自动 accept 必需(坐实架构决策)。
 - **exec/applyPatch 审批**应答 `{ decision: ReviewDecision }`(review-only 一律 `denied`;只读 sandbox 未触发)。反向审批(elicitation + exec/applyPatch/fileChange/permissions)现统一归一成 `approval` 领域事件:受信 accept 标 `expected=true`,其余 denied 且 `expected=false` 上浮。
 - **上下文压缩靠 codex auto-compact**(默认开启、turn 内触发);完成经 `contextCompaction` item(`item/started`+`item/completed`)观测,归一成 `compaction` 领域事件。**不主动 `thread/compact/start`**——手动只能插在 turn 间,覆盖不到单 turn 撑爆的场景。压缩只摘要 codex 内部历史,不碰我们 DB 里的锚点/finding。
+- **失败归因有两条通道,都要接**:`turn/completed` 的 `turn.error`(`{ message, codexErrorInfo, additionalDetails }`,仅 `status="failed"` 时有值)是终局;另有 `error` 通知 `{ error, willRetry, turnId }` 报中途失败 —— `willRetry=true` 时 codex 会自行退避重试(实测 5 次),这期间没有任何 item 事件,不接就是几十秒黑盒。我们只在 `willRetry` 时外发 `turn-retrying`(不再试的那次紧跟终局 `turn/completed`,两边都发会把同一次失败报两遍)。`codexErrorInfo` 取值可能是裸字符串,也可能是带 `httpStatusCode` 的单键对象,归一见 `codexErrorKind`;`additionalDetails` 常常才是可诊断的那半,不要只取 `message`。
 - codex 对同一 MCP server **多次 initialize**(startup starting/ready 各数次)→ HTTP transport + 每会话独立 Server 是对的。
 - Duetlens 只手写最小协议子集 `src/backend/agent/codex/protocol.ts`,`npm run codex:gen-types` 全量重导比对。
 

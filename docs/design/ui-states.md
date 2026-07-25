@@ -103,6 +103,21 @@ stateDiagram-v2
 
 自建受信 MCP 工具**自动 accept**、不进 `Approval`(见 [codex-integration](codex-integration.md));只有白名单外的反向请求才冒出审批卡。
 
+上面这条讲的是**追问** turn。整轮机审的 turn 失败是另一条线:它没有可挂靠的对话线程,状态落在**轮次**上(`ReviewRound.status`),呈现在机审进度条而非右栏底部(已落地,见 [rerun](rerun.md#一轮失败留证--原地重试)):
+
+```mermaid
+stateDiagram-v2
+    [*] --> RoundScanning : ● 发起审核 / ↻ 重跑
+    RoundScanning --> RoundRetrying : ⚙ error(willRetry) — agent 自行退避重试
+    RoundRetrying --> RoundScanning : ⚙ 重试成功,turn 继续
+    RoundRetrying --> RoundFailed : ⚙ turn/completed(failed) — 重试耗尽
+    RoundScanning --> RoundDone : ⚙ turn 完成
+    RoundFailed --> RoundScanning : ● 重试第 N 轮(同轮号覆盖)
+    RoundFailed --> RoundScanning : ● 重跑(新轮号)
+```
+
+`RoundFailed` 是**可停留**的终态:进度条留在原位显示断点与原因,diff 阅读、triage、追问都不受影响 —— 失败的是这一轮机审,不是整个 review。
+
 ### 连接(app-server / MCP / network)
 
 review 期的连接健康度独立于 turn;断连时右栏底部禁用追问,但 diff 阅读与 triage 不受影响。
