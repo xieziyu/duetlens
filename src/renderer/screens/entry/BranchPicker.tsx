@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { GitButlerIcon, LocalBranchIcon } from './icons';
 
 /** 一个可审核目标(普通 git 分支或 GitButler 虚拟分支)在选择器里的展示形态。 */
@@ -35,7 +35,9 @@ export function BranchPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const [place, setPlace] = useState<{ up: boolean; rowsMax: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   const selected = options.find((o) => o.name === value) ?? null;
   const disabled = loading || options.length === 0;
@@ -49,6 +51,24 @@ export function BranchPicker({
   useEffect(() => {
     if (disabled) setOpen(false);
   }, [disabled]);
+
+  // 浮层落在会裁切的祖先(入口卡片 overflow:hidden)里,按可用空间定高、必要时上翻
+  useLayoutEffect(() => {
+    if (!open || !boxRef.current) {
+      setPlace(null);
+      return;
+    }
+    const trig = boxRef.current.getBoundingClientRect();
+    const clip = clipBounds(boxRef.current);
+    const filterH = filterRef.current?.offsetHeight ?? 0;
+    const room = (edge: number) => Math.floor(edge - MENU_GAP - ROWS_PAD - EDGE_INSET - filterH);
+    const below = room(clip.bottom - trig.bottom);
+    const above = room(trig.top - clip.top);
+    // 下方不够舒展才上翻;两边都挤时按实际空间收,不硬撑出边界之外
+    const up = below < ROWS_COMFORT && above > below;
+    const space = up ? above : below;
+    setPlace({ up, rowsMax: Math.min(ROWS_MAX, Math.max(ROWS_FLOOR, space)) });
+  }, [open, options.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -121,8 +141,11 @@ export function BranchPicker({
       </button>
 
       {open && (
-        <div className="bp-menu">
-          <div className="bp-filter">
+        <div
+          className={place?.up ? 'bp-menu up' : 'bp-menu'}
+          style={place ? ({ '--bp-rows-max': `${place.rowsMax}px` } as React.CSSProperties) : undefined}
+        >
+          <div className="bp-filter" ref={filterRef}>
             <input
               value={query}
               spellCheck={false}
@@ -188,6 +211,31 @@ export function BranchSummary({ option, base }: { option: BranchOption; base?: s
       {option.updatedAt ? <span className="ago">{relTime(option.updatedAt)}</span> : null}
     </div>
   );
+}
+
+/** 浮层与触发器的间距(与 CSS 里的 6px 一致)、列表自身的上下内边距、离裁切边留白、列表高度上下限。 */
+const MENU_GAP = 6;
+const ROWS_PAD = 10;
+const EDGE_INSET = 10;
+/** 低于这个高度就考虑上翻;真的两边都不够时不再低于 ROWS_FLOOR(列表自己能滚)。 */
+const ROWS_COMFORT = 108;
+const ROWS_FLOOR = 72;
+const ROWS_MAX = 232;
+
+/** 会裁切内容的各层祖先与视口的交集;取不到边界时不设限(交给 ROWS_MAX 收口)。 */
+function clipBounds(el: HTMLElement): { top: number; bottom: number } {
+  let top = 0;
+  let bottom = window.innerHeight || document.documentElement.clientHeight || Number.POSITIVE_INFINITY;
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const { overflowX, overflowY } = getComputedStyle(p);
+    if (!/hidden|auto|scroll|clip/.test(overflowY) && !/hidden|auto|scroll|clip/.test(overflowX)) continue;
+    const r = p.getBoundingClientRect();
+    // display:contents 之类的壳没有自己的盒子,拿它当边界会把浮层挤成 0 高
+    if (r.height === 0) continue;
+    top = Math.max(top, r.top);
+    bottom = Math.min(bottom, r.bottom);
+  }
+  return { top, bottom };
 }
 
 function BranchIcon({ kind }: { kind: BranchOption['kind'] }) {

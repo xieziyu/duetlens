@@ -748,24 +748,33 @@ export function installPreviewApi(): void {
       getRepoRemote: async () => ({
         nwo: params.get('entry-state') === 'path-mismatch' ? 'xieziyu/other-service' : 'xieziyu/podcast-go',
       }),
-      // entry-state=no-branches 演示没有领先 base 的分支(选择器禁用)
+      // entry-state:no-branches 演示没有领先 base 的分支(选择器禁用);many-branches 演示长列表(浮层定高/上翻)
       // 留一点延迟:列举中途切走仓库/模式的竞态,只有异步才复现得出来
-      listLocalBranches: async () => {
+      listLocalBranches: async (_repoPath, base) => {
         await new Promise((r) => setTimeout(r, 400));
+        const state = params.get('entry-state');
+        const branches = [
+          { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
+          { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
+          ...(state === 'many-branches'
+            ? Array.from({ length: 14 }, (_, i) => ({
+                name: `chore/cleanup-${i + 1}`,
+                isHead: false,
+                ahead: (i % 5) + 1,
+                updatedAt: Date.now() - (i + 1) * 7 * 3600_000,
+                subject: `drop dead code in module ${i + 1}`,
+              }))
+            : []),
+        ];
         return {
-          base: 'main',
+          base: base ?? 'main',
           baseCandidates: ['main', 'develop', 'release/2.0'],
-          branches:
-            params.get('entry-state') === 'no-branches'
-              ? []
-              : [
-                  { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
-                  { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
-                ],
+          branches: state === 'no-branches' ? [] : branches,
         };
       },
       // entry-state=no-gb 演示普通 git 分支模式;gb-degraded 演示 HEAD 在 workspace 但 but 不可用
       inspectRepo: async (repoPath) => {
+        await new Promise((r) => setTimeout(r, 250));
         const state = params.get('entry-state');
         const gitbutler = {
           isWorkspace: true,
@@ -776,7 +785,7 @@ export function installPreviewApi(): void {
           ],
         };
         const base = { repoPath, repoName: 'podcast-go', isGit: true, gitbutler: null, degraded: null } as const;
-        if (state === 'no-gb' || state === 'no-branches')
+        if (state === 'no-gb' || state === 'no-branches' || state === 'many-branches')
           return { ...base, head: 'feat/stream-transcode', mode: 'local' };
         if (state === 'gb-degraded')
           return { ...base, head: 'gitbutler/workspace', mode: 'local', degraded: 'but-missing' };

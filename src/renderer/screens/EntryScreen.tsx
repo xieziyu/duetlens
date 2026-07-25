@@ -729,13 +729,22 @@ function RepoPanel({
   baseRef: string;
   setBaseRef: (v: string) => void;
 }) {
-  const [list, setList] = useState<LocalBranchList | null>(null);
+  // 列表连同它属于哪次请求一起存:换仓库/换 base 后,旧结果在下一次结果到手前一律作废
+  const [list, setList] = useState<{ key: string; value: LocalBranchList } | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   // 普通 git 分支模式才列分支;vbranch 列表随探测一并回来,无需再拉
   const isGit = inspection?.isGit ?? false;
   const listing = mode === 'local' && isGit;
+  const listKey = `${repoPath.trim()}\u0000${baseRef.trim()}`;
+  const branchList = list?.key === listKey ? list.value : null;
+  // 探测结果同理:inspect 回的是归一后的仓库路径,和当前路径对不上就是上一个仓库的
+  const insp = !inspecting && inspection?.repoPath === repoPath.trim() ? inspection : null;
+  const gbBranches = insp?.gitbutler?.branches;
+  // 候选还没到手(探测中 / 列举中 / 结果已作废)—— 此时不给默认值,也不该让人发起审核
+  const pending = listing ? loading || !branchList : !insp;
+
   useEffect(() => {
     const p = repoPath.trim();
     if (!p || !listing) {
@@ -748,11 +757,12 @@ function RepoPanel({
     let alive = true;
     setLoading(true);
     setErr(null);
+    const key = listKey;
     window.duetlens.source
       .listLocalBranches(p, baseRef.trim() || undefined)
       .then((l) => {
         if (!alive) return;
-        setList(l);
+        setList({ key, value: l });
         if (!baseRef) setBaseRef(l.base);
       })
       .catch((e: Error) => alive && setErr(e.message ?? String(e)))
@@ -762,7 +772,6 @@ function RepoPanel({
     };
   }, [repoPath, baseRef, listing]);
 
-  const gbBranches = inspection?.gitbutler?.branches;
   const options = useMemo<BranchOption[]>(() => {
     if (mode === 'gitbutler') {
       return (gbBranches ?? []).map((b) => ({
@@ -775,21 +784,20 @@ function RepoPanel({
           .join(' · '),
       }));
     }
-    return (list?.branches ?? []).map((b) => ({
+    return (branchList?.branches ?? []).map((b) => ({
       name: b.name,
       kind: 'git',
       isHead: b.isHead,
-      tag: `← ${list!.base}`,
+      tag: `← ${branchList!.base}`,
       meta: `${b.ahead} commits ahead`,
       detail: b.subject,
       updatedAt: b.updatedAt,
     }));
-  }, [mode, gbBranches, list]);
+  }, [mode, gbBranches, branchList]);
 
   // 默认选中:普通 git 取 HEAD 所在分支,虚拟分支取第一条 —— 进屏即有目标,底部 CTA 不再是灰的
   useEffect(() => {
-    // 只有普通 git 这档要等列举;虚拟分支随探测一并到手,不受 loading 影响
-    if (listing && loading) return;
+    if (pending) return;
     if (!options.length) {
       if (selected) setSelected('');
       return;
@@ -797,7 +805,7 @@ function RepoPanel({
     if (!options.some((o) => o.name === selected)) {
       setSelected((options.find((o) => o.isHead) ?? options[0]).name);
     }
-  }, [options, listing, loading, selected, setSelected]);
+  }, [options, pending, selected, setSelected]);
 
   const current = options.find((o) => o.name === selected) ?? null;
 
@@ -823,7 +831,7 @@ function RepoPanel({
     );
   }
 
-  const gb = inspection?.gitbutler;
+  const gb = insp?.gitbutler;
   return (
     <div className="src-panel">
       <div className="local-head">
@@ -835,16 +843,16 @@ function RepoPanel({
           切换…
         </button>
         {/* 模式是自动判定的,普通分支这档也要说出来,否则「为什么不是虚拟分支」无处可查 */}
-        {listing && !inspection?.degraded && (
-          <span className="mode-chip mono" title={inspection?.head ? `HEAD: ${inspection.head}` : undefined}>
+        {listing && insp && !insp.degraded && (
+          <span className="mode-chip mono" title={insp.head ? `HEAD: ${insp.head}` : undefined}>
             git 分支
           </span>
         )}
       </div>
 
-      {inspecting && !inspection && <div className="list-loading mono">探测仓库…</div>}
+      {!insp && <div className="list-loading mono">探测仓库…</div>}
 
-      {inspection && !inspection.isGit && (
+      {insp && !insp.isGit && (
         <div className="gb-hint warn">
           ⌂ <b>{repoPath}</b> 不是 git 仓库 ·{' '}
           <button type="button" className="link-btn" onClick={pickDir}>
@@ -853,10 +861,10 @@ function RepoPanel({
         </div>
       )}
 
-      {inspection?.degraded && (
+      {insp?.degraded && (
         <div className="gb-hint warn">
           ⎇ 当前在 <code className="mono">gitbutler/workspace</code> 分支,但
-          {inspection.degraded === 'but-missing' ? '未找到 but CLI' : '该目录不是 GitButler 项目(未 setup)'} ·
+          {insp.degraded === 'but-missing' ? '未找到 but CLI' : '该目录不是 GitButler 项目(未 setup)'} ·
           已按普通 git 分支审核
         </div>
       )}
@@ -869,7 +877,7 @@ function RepoPanel({
           </button>
         </div>
       )}
-      {forceLocal && inspection?.mode === 'gitbutler' && (
+      {forceLocal && insp?.mode === 'gitbutler' && (
         <div className="gb-hint">
           ⎇ 已改按普通 git 分支审核 ·{' '}
           <button type="button" className="link-btn" onClick={() => setForceLocal(false)}>
@@ -878,7 +886,7 @@ function RepoPanel({
         </div>
       )}
 
-      {(listing || mode === 'gitbutler') && (
+      {insp && (listing || mode === 'gitbutler') && (
         <>
           <div className="picker-row">
             <span className="lbl">审核分支</span>
@@ -886,16 +894,16 @@ function RepoPanel({
               options={options}
               value={selected}
               onChange={setSelected}
-              loading={listing && loading}
+              loading={pending}
               emptyHint={
-                listing ? `没有相对 ${list?.base ?? baseRef} 领先的分支` : '该 workspace 暂无 applied 虚拟分支'
+                listing ? `没有相对 ${branchList?.base ?? baseRef} 领先的分支` : '该 workspace 暂无 applied 虚拟分支'
               }
             />
             {listing && (
               <>
                 <span className="lbl base-lbl">对比 base</span>
                 <select className="mono" value={baseRef} onChange={(e) => setBaseRef(e.target.value)}>
-                  {(list?.baseCandidates ?? [baseRef].filter(Boolean)).map((b) => (
+                  {(branchList?.baseCandidates ?? [baseRef].filter(Boolean)).map((b) => (
                     <option key={b} value={b}>
                       {b}
                     </option>
@@ -904,7 +912,7 @@ function RepoPanel({
               </>
             )}
           </div>
-          {current && <BranchSummary option={current} base={listing ? list?.base : undefined} />}
+          {current && <BranchSummary option={current} base={listing ? branchList?.base : undefined} />}
           {err && <div className="start-error">{err}</div>}
         </>
       )}

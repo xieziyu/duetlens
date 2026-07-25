@@ -498,7 +498,9 @@
   font-size: 12px;
 }
 .bp-filter input:focus { border-color: var(--agent-line); }
-.bp-rows { max-height: 232px; overflow: auto; padding: 5px; }
+.bp-menu.up { top: auto; bottom: calc(100% + 6px); }
+/* 高度由组件按可用空间算(卡片 overflow:hidden 会裁掉溢出的部分) */
+.bp-rows { max-height: var(--bp-rows-max, 232px); overflow: auto; padding: 5px; }
 .bp-none { padding: 10px 9px; font-size: 12px; color: var(--text-faint); }
 
 .bp-row {
