@@ -26,6 +26,7 @@
 │  │  ├─ <ExtraContext>                    可折叠附加上下文 textarea
 │  │  └─ <StartButton>                     单一「开始审核」CTA
 │  ├─ <StartOverlay>                       发起后到进屏之间的阻断浮层 (真实阶段 · 失败原地重试)
+│  │  └─ <LensScanArt>                     镜片扫描动画 (共享;review 扫描空态同用)
 │  └─ <RecentReviews>                      最近的审核 (点击=恢复会话)
 │
 ├─ <ReviewScreen>                          mockup/diff-review.html
@@ -52,6 +53,7 @@
 │  ├─ <RightPanel>                         .tabs 三 tab 互斥
 │  │  ├─ <DiscussionTab>                   讨论线程 + <Composer>(只追问活跃线程)
 │  │  ├─ <FindingsTab>                     运行时 triage 列表 (.frow 分组 + tally)
+│  │  │  └─ <LensScanArt>                  .fscan 扫描期零 finding 空态 (同启动浮层那幅动画)
 │  │  └─ <SummaryTab>                      结论卡 + 统计 + <SummaryEditor> 可编辑正文
 │  └─ <ReviewStatusBar>                    .rev-statusbar 底部整幅
 │     ├─ 状态胶囊 · codex · 模型 · effort · ctx 环+token · 最近工具调用
