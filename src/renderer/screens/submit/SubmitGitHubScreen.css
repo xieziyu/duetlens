@@ -410,6 +410,13 @@
 .f-body p {
   margin: 0 0 7px;
 }
+/* 复核说明顶上去后,首轮正文的分隔小标题 */
+.f-prior-lbl {
+  margin: 9px 0 5px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-deco);
+}
 .f-body p:last-child {
   margin-bottom: 0;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Finding, Review } from '@shared/domain';
+import { PRIOR_BODY_LABEL, recheckNote, type Finding, type Review } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { SubmitReviewResult } from '@shared/ipc';
 import {
@@ -247,6 +247,9 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
             const isDismissed = f.triage === 'dismiss';
             // GitHub 422 不告知是哪条锚点失效 → 本地据最新 diff 预判并逐条标红。
             const isStale = staleIds.has(f.id);
+            // 卡片正文按实际提交的排法预览:本轮复核说明在前,首轮正文降为背景
+            const note = recheckNote(f, review.currentRound);
+            const prior = f.body.trim();
             const canReAnchor = isStale && nearestLiveLine(f.file, f.line, diff) != null;
             const cls =
               'finding' +
@@ -278,8 +281,12 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                       {f.origin === 'agent' ? 'agent' : '你 · ' + (f.origin === 'promoted' ? '由 discussion 提升' : '手动新增')}
                     </span>
                   </div>
-                  {!isDismissed && f.body.trim() && (
-                    <div className="f-body">{renderMarkdown(f.body)}</div>
+                  {!isDismissed && (note || prior) && (
+                    <div className="f-body">
+                      {note && renderMarkdown(note)}
+                      {note && prior && <div className="f-prior-lbl">{PRIOR_BODY_LABEL}</div>}
+                      {prior && renderMarkdown(prior)}
+                    </div>
                   )}
                   {!isDismissed && f.suggestion?.trim() && (
                     <div className="f-sugg">

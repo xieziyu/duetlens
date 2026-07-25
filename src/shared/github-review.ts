@@ -2,7 +2,7 @@
  * 把保留且未提交的 findings 组装成一次 GitHub PR review 的请求体(原子提交)。
  * 纯函数:不碰网络,便于单测与「按钮标签=实际提交内容」一致。见 docs/design/findings-submit.md。
  */
-import { SEVERITY_EMOJI, type Finding, type Review } from './domain';
+import { PRIOR_BODY_LABEL, SEVERITY_EMOJI, recheckNote, type Finding, type Review } from './domain';
 import type { DiffFile } from './diff';
 
 /** UI 侧 event 值 → GitHub `POST .../reviews` 的 event 枚举。 */
@@ -39,10 +39,17 @@ function headline(f: Finding): string {
   return `${SEVERITY_EMOJI[f.severity]} **[${f.severity}${cat}] ${f.title}**`;
 }
 
-/** 一条 finding → inline 评论正文:标题 + 正文 + 可选 suggestion 块。 */
-function commentBody(f: Finding): string {
+/**
+ * 一条 finding → inline 评论正文:标题 + 正文 + 可选 suggestion 块。
+ * 本轮复核判定仍存在的,以复核说明作正文主体 —— 那是针对作者这次改动写的,首轮正文已经过时;
+ * 但首轮正文仍带上(降为背景),否则 author 只看到"仍不安全"而不知问题本身是什么。
+ */
+function commentBody(f: Finding, currentRound: number): string {
+  const note = recheckNote(f, currentRound);
+  const prior = f.body.trim();
   let body = headline(f);
-  if (f.body.trim()) body += `\n\n${f.body.trim()}`;
+  if (note) body += `\n\n${note}`;
+  if (prior) body += note ? `\n\n<sub>${PRIOR_BODY_LABEL}</sub>\n\n${prior}` : `\n\n${prior}`;
   if (f.suggestion?.trim()) body += '\n\n```suggestion\n' + f.suggestion.trim() + '\n```';
   return body;
 }
@@ -63,13 +70,18 @@ export function buildPrReviewPayload(
     path: f.file,
     line: f.line,
     side: 'RIGHT',
-    body: commentBody(f),
+    body: commentBody(f, review.currentRound),
   }));
 
   const parts: string[] = [];
   if (review.summaryBody?.trim()) parts.push(review.summaryBody.trim());
   if (unanchored.length) {
-    const lines = unanchored.map((f) => `- ${headline(f)} — ${f.body.trim()}`);
+    const lines = unanchored.map((f) => {
+      const note = recheckNote(f, review.currentRound);
+      const prior = f.body.trim();
+      const head = `- ${headline(f)} — ${note || prior}`;
+      return note && prior ? `${head}\n  ${PRIOR_BODY_LABEL}:${prior}` : head;
+    });
     parts.push(`### 整体意见\n\n${lines.join('\n')}`);
   }
 

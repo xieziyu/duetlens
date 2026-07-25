@@ -250,6 +250,19 @@ export interface Finding {
 export const isAutoClosedFixed = (f: Finding): boolean =>
   f.triage === 'dismiss' && f.resolution === 'fixed';
 
+/**
+ * 本轮复核判定「仍存在」时 agent 给出的说明。它是看过作者的修改尝试之后写的,
+ * 比首次报出的正文更新,故提交/导出时充当评论正文主体(首轮正文降为背景)。
+ * 与 UI 同一口径:只有表态轮次 === 当前轮次才代表本轮结论。
+ */
+export function recheckNote(f: Finding, currentRound: number): string | null {
+  if (f.lastSeenRound !== currentRound || f.resolution !== 'still_present') return null;
+  return f.resolutionNote?.trim() || null;
+}
+
+/** 复核说明顶上去后,首轮正文的小标题(GitHub 评论与导出报告共用文案)。 */
+export const PRIOR_BODY_LABEL = '首次报出时的说明';
+
 export interface Message {
   id: string;
   discussionId: string;
