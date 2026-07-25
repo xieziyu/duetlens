@@ -31,7 +31,8 @@
   --text:#e7eaf1; --text-dim:#9aa3b2; --text-faint:#828b9c; --text-deco:#5f6877;
   /* 天蓝 accent(对齐 better-review brand · oklch hue 245) */
   --agent:oklch(.72 .14 245); --agent-2:oklch(.82 .11 240); --agent-soft:color-mix(in oklab,var(--agent) 14%,transparent); --agent-line:color-mix(in oklab,var(--agent) 38%,transparent);
-  --accent-solid:oklch(.585 .16 245); --on-solid:#fff;   /* 实心按钮:深一档天蓝 + 白字 */
+  /* 实心按钮:深一档天蓝 + 白字。曾是 .585 —— 白字只有 4.11:1,且按钮上再叠半透明层就更低 */
+  --accent-solid:oklch(.54 .165 246); --on-solid:#fff;
   --human:#e8a24d; --human-soft:rgba(232,162,77,.13); --human-line:rgba(232,162,77,.4);
   --on-accent:#07141d; --hover:rgba(255,255,255,.02);
   --sel:color-mix(in oklab,var(--agent) 28%,transparent); --scroll:#262c38; --scroll-h:#323a48;
