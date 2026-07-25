@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Finding, Review } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { SubmitReviewResult } from '@shared/ipc';
@@ -25,6 +25,18 @@ const EVENT_META: Record<GhReviewEvent, { glyph: string; label: string; desc: st
 
 type SubState = 'ready' | 'submitting' | 'success' | 'invalid' | 'failed';
 
+/**
+ * 锚点判定所依据的 diff 有多新。审核时的 diff 快照可能已落后于 GitHub —— 那正是 422 的成因,
+ * 此时按快照预判会「一条失效锚点都找不到」,用户无从下手。故要能现拉最新 diff 重判。
+ */
+type Freshness =
+  | { state: 'snapshot' }
+  | { state: 'checking' }
+  | { state: 'synced'; headMoved: boolean; headSha: string | null }
+  | { state: 'error'; message: string };
+
+const shortSha = (sha: string | null) => (sha ? sha.slice(0, 7) : '');
+
 interface Props {
   review: Review;
   findings: Finding[];
@@ -39,12 +51,28 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   const [result, setResult] = useState<SubmitReviewResult | null>(null);
   const [summary, setSummary] = useState(review.summaryBody ?? '');
   const [diff, setDiff] = useState<DiffFile[]>([]);
+  const [fresh, setFresh] = useState<Freshness>({ state: 'snapshot' });
+  /** 上次被 422 拒后、按最新 diff 定位到的失效锚点条数(null=尚未定位/拉取失败)。 */
+  const [rejectStale, setRejectStale] = useState<number | null>(null);
 
   // review body 若被别处(diff 屏 Summary tab)改动,同步进草稿(未编辑时)
   useEffect(() => setSummary(review.summaryBody ?? ''), [review.summaryBody]);
-  // 拉最新 diff 以本地预判哪条 finding 行锚点已失效(GitHub 422 不告知是哪条)
+  // 先用审核时的 diff 快照即时预判哪条行锚点已失效(GitHub 422 不告知是哪条)
   useEffect(() => {
     void window.duetlens.review.diff(reviewId).then(setDiff);
+  }, [reviewId]);
+
+  /** 现拉 PR 最新 diff 并据此重判锚点;返回最新 diff(拉取失败返回 null)。 */
+  const syncLatest = useCallback(async () => {
+    setFresh({ state: 'checking' });
+    const res = await window.duetlens.review.latestDiff(reviewId);
+    if (!res.ok) {
+      setFresh({ state: 'error', message: res.message });
+      return null;
+    }
+    setDiff(res.diff);
+    setFresh({ state: 'synced', headMoved: res.headMoved, headSha: res.headSha });
+    return res.diff;
   }, [reviewId]);
 
   const pending = useMemo(() => findings.filter(isSubmittable), [findings]);
@@ -56,6 +84,16 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   );
   const inlineCount = pending.filter(hasAnchor).length;
   const keptCount = findings.filter((f) => f.triage !== 'dismiss').length;
+  const staleList = useMemo(() => findings.filter((f) => staleIds.has(f.id)), [findings, staleIds]);
+  const reAnchorableCount = staleList.filter((f) => nearestLiveLine(f.file, f.line, diff) != null).length;
+
+  // 进屏即在后台核对一次 PR 最新状态:失效锚点应在提交被拒之前就摆到用户面前。
+  const checkedOnce = useRef(false);
+  useEffect(() => {
+    if (checkedOnce.current || inlineCount === 0) return;
+    checkedOnce.current = true;
+    void syncLatest();
+  }, [inlineCount, syncLatest]);
 
   // suggestion diff 的「原行」文本:按 file+新侧行号从最新 diff 取,取不到则只渲染增行。
   const originalLineOf = useMemo(() => {
@@ -71,6 +109,10 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     const line = nearestLiveLine(f.file, f.line, diff);
     if (line != null) void window.duetlens.review.setFindingAnchor(reviewId, f.id, line);
   };
+  const reAnchorAll = () => staleList.forEach(reAnchor);
+  const degradeAllStale = () => staleList.forEach(degradeToSummary);
+  /** 兜底:把待提交的行评论全部并入摘要 —— 没有 inline 锚点的 review 不可能再被 422 拒。 */
+  const degradeAllInline = () => pending.filter(hasAnchor).forEach(degradeToSummary);
 
   const toggleKeep = (f: Finding) => {
     if (f.submission === 'submitted') return; // 已提交锁定
@@ -93,7 +135,30 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     const res = await window.duetlens.review.submit(reviewId, { event, summaryBody: summary });
     setResult(res);
     setSub(res.status);
+    // 被 422 拒说明本地依据的 diff 已过期 —— 现拉最新的重判,把「是哪条」指出来。
+    if (res.status !== 'invalid') return;
+    const latest = await syncLatest();
+    // 记下拒稿当下定位到几条:后续用户处理完 staleIds 会归零,banner 不能因此改口说「没定位到」。
+    setRejectStale(latest ? findings.filter((f) => isStaleAnchor(f, latest)).length : null);
   };
+
+  // 锚点判定依据了哪份 diff、结论如何 —— 用户据此知道红框可不可信。
+  const freshNote = (() => {
+    if (fresh.state === 'checking') return { ic: '⟳', txt: '正在核对 PR 最新状态…' };
+    if (fresh.state === 'snapshot') return { ic: '·', txt: '行锚点按审核时的 diff 快照预判。' };
+    if (fresh.state === 'error')
+      return {
+        ic: '⚠',
+        txt: `未能读取 PR 最新状态(${fresh.message}) —— 锚点仍按审核时的 diff 快照预判,可能不准。`,
+      };
+    const head = fresh.headSha ? ` · head ${shortSha(fresh.headSha)}` : '';
+    if (staleIds.size > 0)
+      return {
+        ic: '⛔',
+        txt: `${fresh.headMoved ? '审核后 PR 又有新提交' : '已核对 PR 最新状态'}${head} —— ${staleIds.size} 条行锚点不在最新改动上(红框),照此提交会被 422 整份拒。`,
+      };
+    return { ic: '✓', txt: `已核对 PR 最新状态${head} · ${inlineCount} 条行锚点均有效。` };
+  })();
 
   const btnLabel = (() => {
     const parts: string[] = [];
@@ -139,6 +204,36 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
 
           {submitted.length > 0 && (
             <div className="incbar">↻ 上次已提交 {submitted.length} 条 · 已锁定,不重发</div>
+          )}
+
+          {inlineCount > 0 && (
+            <div
+              className={
+                'freshbar' +
+                (staleIds.size > 0 ? ' bad' : fresh.state === 'error' ? ' warn' : '') +
+                (fresh.state === 'checking' ? ' busy' : '')
+              }
+            >
+              <div className="fb-line">
+                <span className="fb-ic">{freshNote.ic}</span>
+                <span className="fb-txt">{freshNote.txt}</span>
+                <button
+                  className="fb-act"
+                  onClick={() => void syncLatest()}
+                  disabled={fresh.state === 'checking'}
+                >
+                  ↻ 重新拉取
+                </button>
+              </div>
+              {staleIds.size > 0 && fresh.state !== 'checking' && (
+                <div className="fb-fix">
+                  {reAnchorableCount > 0 && (
+                    <span onClick={reAnchorAll}>全部改锚到最近改动行({reAnchorableCount})</span>
+                  )}
+                  <span onClick={degradeAllStale}>全部降级为摘要评论({staleIds.size})</span>
+                </div>
+              )}
+            </div>
           )}
 
           {findings.length === 0 && (
@@ -264,9 +359,25 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
               <span className="bi">⛔</span>
               <div className="bt">
                 <b>提交被 GitHub 拒绝(422)</b> ——{' '}
-                {staleIds.size > 0
-                  ? `已在左侧定位 ${staleIds.size} 条失效锚点(红框),逐条处理(改锚点 / 降级为摘要 / 剔除)后整份重提。`
-                  : `${result.message} PR review 是原子提交,须先处理失效锚点再整份重提。`}
+                {fresh.state === 'checking' ? (
+                  '正在重新拉取 PR 最新状态,定位是哪条行锚点失效…'
+                ) : rejectStale === null ? (
+                  `无法读取 PR 最新状态${fresh.state === 'error' ? `(${fresh.message})` : ''}。请确认 gh 已登录、PR 未关闭,再 ↻ 重新拉取以定位失效锚点。`
+                ) : rejectStale === 0 ? (
+                  '已按 PR 最新状态重判,但本地未能定位到失效锚点 —— 评论可能落在 diff 之外的文件或行上。把行评论并入摘要即可安全重提。'
+                ) : (
+                  `已按 PR 最新状态定位到 ${rejectStale} 条失效锚点(左侧红框)${fresh.state === 'synced' && fresh.headMoved ? ',审核后 PR 又有新提交' : ''}。` +
+                  (staleIds.size > 0
+                    ? `尚余 ${staleIds.size} 条待处理(改锚点 / 降级为摘要 / 剔除),处理完整份重提。`
+                    : '已全部处理,可整份重提。')
+                )}
+                {/* 定位不到是哪条(拉取失败 / 锚在 diff 之外)时给出必定可提交的退路 */}
+                {fresh.state !== 'checking' && !rejectStale && inlineCount > 0 && (
+                  <div className="bfix">
+                    <span onClick={degradeAllInline}>把 {inlineCount} 条行评论全部降级为摘要</span>
+                    <span onClick={() => void syncLatest()}>↻ 重新拉取 PR 状态</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -331,17 +442,25 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
             ) : (
               <>
                 <button
-                  className={'submit' + (sub === 'failed' ? ' retry' : '')}
+                  className={'submit' + (sub === 'failed' || sub === 'invalid' ? ' retry' : '')}
                   onClick={submit}
                   disabled={blocked !== null}
                 >
-                  {sub === 'failed' ? '↻ 重试提交' : blocked ? '需要填写 Review 意见' : btnLabel}
+                  {sub === 'failed'
+                    ? '↻ 重试提交'
+                    : blocked
+                      ? '需要填写 Review 意见'
+                      : sub === 'invalid'
+                        ? `↻ 重新${btnLabel}`
+                        : btnLabel}
                 </button>
                 {!blocked && (sub === 'invalid' || staleIds.size > 0) && (
                   <div className="foot-note">
-                    {sub === 'invalid'
-                      ? '修正红框那条后再整份提交'
-                      : `⛔ ${staleIds.size} 条锚点已失效(红框),提交会被 422 拒 —— 建议先处理`}
+                    {staleIds.size > 0
+                      ? `⛔ ${staleIds.size} 条锚点不在最新改动上,整份会被 422 拒 —— 先处理红框`
+                      : fresh.state === 'synced'
+                        ? '✓ 按 PR 最新状态已无失效锚点,可整份重提'
+                        : '处理失效锚点后可整份重提'}
                   </div>
                 )}
               </>

@@ -210,8 +210,53 @@ async function main() {
     log('行锚点预判 + 降级为摘要 + 改锚点 ok');
   }
 
+  // ---- 现拉最新 diff(422 后定位失效锚点的依据;走 local-git source 免网络)----
+  {
+    const db = openDatabase(':memory:');
+    const store = new ReviewStore(db);
+    const manager = new ReviewManager(store, undefined, {
+      submitter: new FakeSubmitter({ status: 'success', url: 'u', submittedCount: 0 }),
+    });
+
+    const review = store.createReview({
+      source: 'local-branch',
+      sourceRef: '',
+      repoPath: process.cwd(),
+      title: 't',
+    });
+    store.setDiff(review.id, 'SNAPSHOT');
+    // 轮次记的 headSha 与实际 head 不同 → headMoved,即「审核后代码又推进过」
+    store.startRound(review.id, 1, { headSha: 'deadbeefdeadbeef' });
+
+    const moved = await manager.getLatestDiff(review.id);
+    assert.equal(moved.ok, true, '本地仓库能现拉最新 diff');
+    if (moved.ok) {
+      assert.equal(moved.headMoved, true, 'head 与轮次记录不同 → headMoved');
+      assert.ok(moved.headSha && moved.headSha.length > 0, '带回最新 head sha');
+    }
+    assert.equal(store.getRawDiff(review.id), 'SNAPSHOT', '现拉不覆盖审核时的 diff 快照');
+
+    // 同一 head 记进轮次 → 不再算 moved
+    if (moved.ok && moved.headSha) {
+      store.startRound(review.id, 2, { headSha: moved.headSha });
+      const same = await manager.getLatestDiff(review.id);
+      assert.equal(same.ok && same.headMoved, false, 'head 未变 → headMoved 为 false');
+    }
+
+    // 拉不到时返回失败结果而非抛错:提交屏据此提示「无法定位」并给退路
+    const broken = store.createReview({
+      source: 'local-branch',
+      sourceRef: '',
+      repoPath: '/nonexistent-repo-for-spike',
+      title: 't',
+    });
+    const failed = await manager.getLatestDiff(broken.id);
+    assert.equal(failed.ok, false, '拉不到时 ok=false');
+    log('现拉最新 diff:不覆盖快照 + headMoved 判定 + 失败不抛 ok');
+  }
+
   log('────────────────────────');
-  log('✅ PASS — 提交:payload/成功锁定/增量/被拒不改态/source 守卫/锚点预判全通过');
+  log('✅ PASS — 提交:payload/成功锁定/增量/被拒不改态/source 守卫/锚点预判/现拉最新 diff 全通过');
 }
 
 main().then(

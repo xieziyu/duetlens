@@ -87,6 +87,12 @@ index 0000000..7777777
 Binary files /dev/null and b/assets/logo.png differ
 `;
 
+/**
+ * 「PR 在审核后又推进过」的最新 diff:pipeline.ts 的 hunk 整体下移,原先 16/19/20 行的锚点
+ * 全部落空 —— 提交屏现拉最新 diff 才能定位到这些失效锚点(照快照判会以为一切正常)。
+ */
+const RAW_DIFF_MOVED = RAW_DIFF.replace('@@ -14,9 +14,11 @@', '@@ -30,9 +30,11 @@');
+
 const now = Date.now();
 
 const REVIEW: Review = {
@@ -427,6 +433,19 @@ export function installPreviewApi(): void {
       get: async () => review,
       findings: async () => findings,
       diff: async () => diff,
+      // ?submit=invalid 时最新 diff 已推进(锚点落空),?latest=error 模拟 gh 读不到
+      latestDiff: async () => {
+        await new Promise((r) => setTimeout(r, 600));
+        if (params.get('latest') === 'error')
+          return { ok: false, message: 'gh: Could not resolve to a PullRequest with the number of 482.' };
+        const moved = forceSubmit === 'invalid';
+        return {
+          ok: true,
+          diff: moved ? parseUnifiedDiff(RAW_DIFF_MOVED) : diff,
+          headSha: moved ? 'c7d19ab4e102' : 'bb17e4f0a993',
+          headMoved: moved,
+        };
+      },
       fileContent: async (_r, path) => (path === 'src/pipeline.ts' ? PIPELINE_SRC : null),
       discussions: async () => discussions,
       messages: async (discussionId) => msgStore[discussionId] ?? [],

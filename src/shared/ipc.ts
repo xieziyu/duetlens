@@ -38,6 +38,7 @@ export const IpcChannels = {
   reviewGet: 'review:get',
   reviewFindings: 'review:findings',
   reviewDiff: 'review:diff',
+  reviewLatestDiff: 'review:latest-diff',
   reviewFileContent: 'review:file-content',
   reviewStart: 'review:start',
   reviewRerun: 'review:rerun',
@@ -166,6 +167,21 @@ export interface SubmitReviewInput {
   summaryBody?: string;
 }
 
+/**
+ * 现拉一次 source 的最新 diff(不写库,不动审核时的快照)。
+ * 提交屏据此判定哪条行锚点已不在最新 diff 上 —— GitHub 的 422 不告知是哪条。
+ */
+export type LatestDiffResult =
+  | {
+      ok: true;
+      diff: DiffFile[];
+      /** 最新 head commit;无稳定 commit 概念的 source 为 null */
+      headSha: string | null;
+      /** 最新 head 与本轮审核所依据的 head 不同(即代码在审核后又推进过) */
+      headMoved: boolean;
+    }
+  | { ok: false; message: string };
+
 /** 提交结果:PR review 原子提交,故只有整体成功 / 行锚点失效(422)/ 整体失败。 */
 export type SubmitReviewResult =
   | { status: 'success'; url: string; submittedCount: number }
@@ -226,6 +242,8 @@ export interface DuetlensApi {
     findings(reviewId: string): Promise<Finding[]>;
     /** 本次改动的结构化 diff(DiffPane 渲染);未缓存返回空数组。 */
     diff(reviewId: string): Promise<DiffFile[]>;
+    /** 现拉最新 diff(不写库):提交屏用它判定行锚点是否还在最新改动上。 */
+    latestDiff(reviewId: string): Promise<LatestDiffResult>;
     /** 读被审文件新侧完整内容(供 DiffPane 展开 diff 外上下文);读不到返回 null。 */
     fileContent(reviewId: string, path: string): Promise<string | null>;
     discussions(reviewId: string): Promise<Discussion[]>;

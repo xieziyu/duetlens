@@ -11,7 +11,7 @@ import type {
   UiSettings,
 } from '@shared/domain';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { AddFindingInput, FindingEditInput, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, FindingEditInput, LatestDiffResult, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
@@ -165,6 +165,37 @@ export class ReviewManager extends EventEmitter {
   getDiff(reviewId: string): DiffFile[] {
     const raw = this.store.getRawDiff(reviewId);
     return raw ? parseUnifiedDiff(raw) : [];
+  }
+
+  /**
+   * 现拉一次最新 diff 并与本轮审核的 head 比对。**不写库** —— 审核时的 diff 快照是
+   * findings 锚点与 diff 屏的共同基准,推进它是复审(rerun)的职责;这里只为提交屏
+   * 判定「哪条行锚点已不在最新改动上」(GitHub 的 422 不告知是哪条)提供实时依据。
+   */
+  async getLatestDiff(reviewId: string): Promise<LatestDiffResult> {
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    const source = createSource({
+      source: review.source,
+      ref: review.sourceRef,
+      repoPath: review.repoPath ?? '',
+    });
+    try {
+      const prepared = await source.prepare();
+      const raw = await source.getDiff();
+      const headSha = prepared.headSha ?? null;
+      const roundSha = this.store.getRound(reviewId, review.currentRound)?.headSha ?? null;
+      return {
+        ok: true,
+        diff: parseUnifiedDiff(raw),
+        headSha,
+        headMoved: Boolean(headSha && roundSha && headSha !== roundSha),
+      };
+    } catch (e) {
+      return { ok: false, message: (e as Error).message };
+    } finally {
+      await source.dispose();
+    }
   }
 
   /**
