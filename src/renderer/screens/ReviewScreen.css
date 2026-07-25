@@ -1295,6 +1295,38 @@
   max-width: 270px;
   line-height: 1.6;
 }
+/* 扫描期零 finding:复用启动浮层的镜片扫描动画(components/LensScanArt),
+   这一屏空着最久,一行短提示既撑不住等待,也容易被读成「干净通过」的结论。 */
+.fscan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 30px 20px 0;
+}
+.fscan-art {
+  width: 100%;
+  max-width: 292px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 100% at 50% 0%, var(--glow1), transparent 70%),
+    var(--surface-2);
+}
+.fscan-title {
+  margin-top: 15px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.fscan-sub {
+  margin: 6px 0 0;
+  max-width: 280px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
 .scan-note {
   display: flex;
   align-items: center;

@@ -11,7 +11,9 @@ import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
 import { SummaryTab } from './review/SummaryTab';
 import { ScanProgressBar } from './review/ScanProgressBar';
+import { deriveScanSteps } from './review/scan-progress';
 import { KbdHelp } from '../components/KbdHelp';
+import { LensScanArt } from '../components/LensScanArt';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
 import { describeRoundError } from './review/round-error';
@@ -349,6 +351,17 @@ export function ReviewScreen({
   );
   // 同理 sessionReady 只看本轮信号(lastTool/tokenUsage 已在开轮时清空,见 useReviewStream)
   const sessionReady = lastTool != null || tokenUsage != null || roundFindings.length > 0;
+  // 右栏扫描空态的镜片动画点亮几行 —— 与进度条同一份阶段派生,免得两处对"跑到哪一步"各说一套
+  const scanLit = useMemo(
+    () =>
+      deriveScanSteps({
+        findingCount: roundFindings.length,
+        diffReady,
+        sessionReady,
+        failed: failedRound !== null,
+      }).filter((s) => s.state === 'done').length,
+    [roundFindings.length, diffReady, sessionReady, failedRound],
+  );
   // 常驻 CTA:github-pr → 提交 review(徽标=待提交数);其余 → 导出 review(徽标=保留数)
   const isGithub = review?.source === 'github-pr';
   const ctaCount = isGithub
@@ -505,6 +518,7 @@ export function ReviewScreen({
             review={review}
             diff={diff}
             scanning={scanning}
+            scanLit={scanLit}
             currentRound={currentRound}
             onPickFinding={focusFinding}
             onTriage={onTriage}
@@ -592,6 +606,7 @@ function RightPanel({
   review,
   diff,
   scanning,
+  scanLit,
   currentRound,
   onPickFinding,
   onTriage,
@@ -617,6 +632,8 @@ function RightPanel({
   review: Review | null;
   diff: DiffFile[];
   scanning: boolean;
+  /** 扫描空态动画点亮的行数 = 已完成的阶段数 */
+  scanLit: number;
   currentRound: number;
   onPickFinding: (f: Finding) => void;
   onTriage: (finding: Finding, triage: Triage, reason?: string | null) => void;
@@ -730,9 +747,14 @@ function RightPanel({
             (categoryFilter ? (
               <p className="empty-note">无 {categoryFilter} 分类的 findings。</p>
             ) : scanning ? (
-              // 扫描期零 finding 只是「还没报出来」,不能给干净通过的结论
-              <div className="scan-note">
-                <span className="pulse" /> agent 通读改动中,发现即刻出现在此。
+              // 扫描期零 finding 只是「还没报出来」,不能给干净通过的结论。这一屏空着最久,
+              // 用启动浮层同一套镜片扫描画面把「还在读」画出来,而不是一行容易被当成结论的短提示。
+              <div className="fscan">
+                <LensScanArt className="fscan-art" lit={scanLit} />
+                <div className="fscan-title">agent 通读改动中</div>
+                <p className="fscan-sub">
+                  发现即刻出现在此。不必等它跑完 —— 左侧 diff 全程可读,框选代码就能直接提问。
+                </p>
               </div>
             ) : (
               // 扫描已结束且零 finding = 干净通过:给正向结论 + 覆盖度 + 手动新增引导
