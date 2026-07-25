@@ -740,6 +740,9 @@ function RepoPanel({
     const p = repoPath.trim();
     if (!p || !listing) {
       setList(null);
+      // 上一次列举可能被切仓库/切模式打断(finally 只在 alive 时收尾),这里兜住残留的 loading
+      setLoading(false);
+      setErr(null);
       return;
     }
     let alive = true;
@@ -785,7 +788,8 @@ function RepoPanel({
 
   // 默认选中:普通 git 取 HEAD 所在分支,虚拟分支取第一条 —— 进屏即有目标,底部 CTA 不再是灰的
   useEffect(() => {
-    if (loading) return;
+    // 只有普通 git 这档要等列举;虚拟分支随探测一并到手,不受 loading 影响
+    if (listing && loading) return;
     if (!options.length) {
       if (selected) setSelected('');
       return;
@@ -793,7 +797,7 @@ function RepoPanel({
     if (!options.some((o) => o.name === selected)) {
       setSelected((options.find((o) => o.isHead) ?? options[0]).name);
     }
-  }, [options, loading, selected, setSelected]);
+  }, [options, listing, loading, selected, setSelected]);
 
   const current = options.find((o) => o.name === selected) ?? null;
 

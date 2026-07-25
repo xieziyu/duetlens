@@ -749,17 +749,21 @@ export function installPreviewApi(): void {
         nwo: params.get('entry-state') === 'path-mismatch' ? 'xieziyu/other-service' : 'xieziyu/podcast-go',
       }),
       // entry-state=no-branches 演示没有领先 base 的分支(选择器禁用)
-      listLocalBranches: async () => ({
-        base: 'main',
-        baseCandidates: ['main', 'develop', 'release/2.0'],
-        branches:
-          params.get('entry-state') === 'no-branches'
-            ? []
-            : [
-                { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
-                { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
-              ],
-      }),
+      // 留一点延迟:列举中途切走仓库/模式的竞态,只有异步才复现得出来
+      listLocalBranches: async () => {
+        await new Promise((r) => setTimeout(r, 400));
+        return {
+          base: 'main',
+          baseCandidates: ['main', 'develop', 'release/2.0'],
+          branches:
+            params.get('entry-state') === 'no-branches'
+              ? []
+              : [
+                  { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
+                  { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
+                ],
+        };
+      },
       // entry-state=no-gb 演示普通 git 分支模式;gb-degraded 演示 HEAD 在 workspace 但 but 不可用
       inspectRepo: async (repoPath) => {
         const state = params.get('entry-state');
