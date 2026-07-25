@@ -78,7 +78,7 @@
 .hist-filter button {
   border: 0;
   background: transparent;
-  color: var(--text-faint);
+  color: var(--text-dim);
   border-radius: 7px;
   cursor: pointer;
   font-size: 12px;

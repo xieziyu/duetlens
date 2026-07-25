@@ -1251,7 +1251,7 @@
   padding: 7px 12px 9px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-faint);
+  color: var(--text-dim);
   cursor: pointer;
   border: 0;
   background: transparent;
@@ -2452,7 +2452,7 @@
 .view-seg button {
   border: 0;
   background: transparent;
-  color: var(--text-faint);
+  color: var(--text-dim);
   border-radius: 5px;
   cursor: pointer;
   font-size: 11px;

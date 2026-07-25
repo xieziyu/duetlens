@@ -143,7 +143,7 @@
   flex: 1;
 }
 
-/* segmented choice */
+/* segmented choice —— 未选中项走 --text-dim:它是可点的另一半,不是失效项 */
 .settings .choice {
   display: flex;
   background: var(--surface-3);
@@ -154,7 +154,7 @@
 .settings .choice button {
   border: 0;
   background: transparent;
-  color: var(--text-faint);
+  color: var(--text-dim);
   border-radius: 7px;
   cursor: pointer;
   font-size: 12px;
