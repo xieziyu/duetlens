@@ -23,6 +23,7 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 | Brand · 双声道 | `--agent` `--agent-2/-soft/-line` `--accent-solid` `--on-solid` `--human` `--human-soft/-line` `--on-accent` | agent=天蓝、human=琥珀;实心 CTA 用 `--accent-solid` + 白字 |
 | Severity | `--sev-high/-med/-low` | 随 `data-theme` |
 | Diff | `--add` `--del` 及 `-bg` / `-gutter` · `--code-hl` | 随 `data-theme` |
+| 检索命中 | `--find-hl`(全部命中) `--find-hl-on` / `--find-hl-fg`(当前项) | 随 `data-theme`;独占靛紫色相,不借用 agent 蓝 / human 琥珀 / diff 绿红 |
 | Syntax | `--code-text` `--k` `--fn` `--s` `--n` `--c` `--ty` `--mac` | 随 `data-theme` |
 
 ### 表面阶梯:`--bg` → `--surface` → `--card`

@@ -17,6 +17,15 @@ const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
     rows: [{ label: 'Unified / Split 切换', keys: ['⌘', 'U'] }],
   },
   {
+    title: 'diff 内容检索',
+    rows: [
+      { label: '打开检索(选中即预填)', keys: ['⌘', 'F'] },
+      { label: '下一处 / 上一处', keys: ['↵', '⇧↵'] },
+      { label: '下一处 / 上一处(焦点不在检索框)', keys: ['⌘G', '⌘⇧G'] },
+      { label: '关闭检索', keys: ['Esc'] },
+    ],
+  },
+  {
     title: '文件过滤',
     rows: [
       { label: '聚焦文件过滤框', keys: ['⌘', '⇧', 'F'] },
