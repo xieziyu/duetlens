@@ -15,6 +15,15 @@ const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
     rows: [{ label: 'Unified / Split 切换', keys: ['u'] }],
   },
   {
+    title: '文件过滤',
+    rows: [
+      { label: '聚焦文件过滤框', keys: ['/'] },
+      { label: '跳到第一条命中', keys: ['↵'] },
+      { label: '在命中间上下移动', keys: ['↑', '↓'] },
+      { label: '清空过滤 · 再按退焦', keys: ['Esc'] },
+    ],
+  },
+  {
     title: 'Finding / 总结编辑',
     rows: [
       { label: '保存编辑', keys: ['⌘', '↵'] },

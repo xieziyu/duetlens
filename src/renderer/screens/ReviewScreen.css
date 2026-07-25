@@ -379,15 +379,18 @@
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
+/* 标题行与检索框同属常驻头:列表滚动时过滤框不能跟着跑出视口 */
+.tree-top {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 2;
+}
 .tree .head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px 8px;
-  position: sticky;
-  top: 0;
-  background: var(--surface);
-  z-index: 2;
 }
 .tree .head h3 {
   font-family: var(--mono);
@@ -400,6 +403,75 @@
 .tree .head .count {
   font-family: var(--mono);
   font-size: 11px;
+  color: var(--text-faint);
+}
+.tree .ffind {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 10px 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+}
+.tree .ffind:focus-within {
+  border-color: var(--agent-line);
+  box-shadow: 0 0 0 3px var(--agent-soft);
+}
+.tree .ffind > svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-faint);
+  flex: none;
+}
+.tree .ffind input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.tree .ffind input::placeholder {
+  font-family: var(--sans);
+  color: var(--text-faint);
+}
+.tree .ffind .fx {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.tree .ffind .fx:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+/* 过滤态把未命中的字符压暗:12px 上单靠 --code-hl 那层底色读不出命中在哪,靠对比才跳得出来 */
+.tree.filtering .file:not(.viewed) .name,
+.tree.filtering .dir .dir-path {
+  color: var(--text-dim);
+}
+.tree mark {
+  background: var(--code-hl);
+  color: var(--text);
+  font-weight: 600;
+  border-radius: 2px;
+}
+/* 已看行整条压暗,高亮不该把它拉回前景 */
+.file.viewed .name mark {
+  color: var(--text-faint);
+}
+.tree-empty {
+  padding: 16px 14px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 .tree .group {
@@ -2056,6 +2128,9 @@
 /* ---------- diff 导航:per-file viewed / 折叠 / split 视图 ---------- */
 .tree .head .count .vn {
   color: var(--add);
+}
+.tree .head .count .mn {
+  color: var(--text);
 }
 .file .vtick {
   margin-left: 4px;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Discussion, Finding, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
@@ -70,6 +70,9 @@ export function ReviewScreen({
   const { settings, update } = useSettings();
   const [activePath, setActivePath] = useState<string | null>(null);
   const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
+  // 左栏文件检索:纯导航态不持久化;由屏持有才能在换 review 时清掉,并让 `/` 把焦点甩进输入框
+  const [fileQuery, setFileQuery] = useState('');
+  const fileQueryRef = useRef<HTMLInputElement>(null);
   // discussion 协同态:活跃线程 / 待发引用(框选追问带入)/ 正在等 agent 回复
   const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
   const [pendingRef, setPendingRef] = useState<{ anchor: DiscussionAnchor; label: string } | null>(null);
@@ -276,6 +279,7 @@ export function ReviewScreen({
     setActiveDiscussionId(null);
     setFocusFindingId(null);
     setActivePath(null);
+    setFileQuery('');
     setCategoryFilter(null);
     setAwaitingReply(null);
   }, [reviewId]);
@@ -325,6 +329,10 @@ export function ReviewScreen({
       } else if (e.key === 'u') {
         e.preventDefault();
         update({ defaultDiffView: diffView === 'unified' ? 'split' : 'unified' });
+      } else if (e.key === '/') {
+        e.preventDefault(); // 否则 `/` 会跟着落进刚聚焦的输入框
+        fileQueryRef.current?.focus();
+        fileQueryRef.current?.select();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -437,6 +445,9 @@ export function ReviewScreen({
             onSelect={setActivePath}
             viewed={viewed}
             onToggleViewed={onToggleViewed}
+            query={fileQuery}
+            onQueryChange={setFileQuery}
+            inputRef={fileQueryRef}
           />
           <Resizer
             cssVar="--left-w"
