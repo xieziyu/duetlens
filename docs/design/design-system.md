@@ -19,11 +19,30 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 
 | 组 | 变量 | 说明 |
 | --- | --- | --- |
-| Chrome | `--bg` `--surface(-2/-3)` `--border(-soft)` `--text(-dim/-faint)` `--hover` `--sel` `--shadow` `--glow1/2` | 明暗外壳,随 `data-mode` |
+| Chrome | `--bg` `--surface(-2/-3)` `--card` `--border(-soft)` `--text(-dim/-faint)` `--hover` `--sel` `--shadow` `--glow1/2` | 明暗外壳,随 `data-mode` |
 | Brand · 双声道 | `--agent` `--agent-2/-soft/-line` `--accent-solid` `--on-solid` `--human` `--human-soft/-line` `--on-accent` | agent=天蓝、human=琥珀;实心 CTA 用 `--accent-solid` + 白字 |
 | Severity | `--sev-high/-med/-low` | 随 `data-theme` |
 | Diff | `--add` `--del` 及 `-bg` / `-gutter` · `--code-hl` | 随 `data-theme` |
 | Syntax | `--code-text` `--k` `--fn` `--s` `--n` `--c` `--ty` `--mac` | 随 `data-theme` |
+
+### 表面阶梯:`--bg` → `--surface` → `--card`
+
+`--bg` 是最"远"的画布(外壳缝隙、中栏代码井),`--surface` 抬起成面板(三栏、rail、顶栏),`--card` 是卡片与列表行 —— **`--card` 永远是三者里更亮的那个**。浅色曾把这条阶梯写反(`--bg:#fff` 最亮、`--surface` 更暗),卡片于是陷进面板里,三栏糊成一片。
+
+深色下 `--card` 与 `--surface` **同值**:深底上一根 `--border` 就够读出抬起。浅色近白面上边线会糊,只能靠填充差,`--card` 才拉到纯白。组件因此一律写 `--card`,不必分模式判断。`--surface-2/-3` 表示卡片**内部**的凹陷(引用块 / 输入框 / chip),两个模式都朝远离 `--card` 的方向走。
+
+### 四条语义轴不共用色相
+
+界面上同时有四套含义在用颜色,必须各自独占,否则一个颜色有多个意思:
+
+| 轴 | 归它的表达 |
+| --- | --- |
+| Severity | `--sev-high/-med/-low` 三个色相;chip 的底色与边线由 `.sev` 规则从本档 `--sev-*` 现推 |
+| 双声道 | agent 蓝 / human 琥珀,只落在卡片左脊与署名 |
+| 轮次状态 | 全中性(`--text`/`--text-dim`/`--text-faint` + `--surface-2`),靠字重排序;只有「已修复」用绿 |
+| Diff | `--add`/`--del`,只做行底色与 gutter,不做 chip 填充 |
+
+曾经的耦合:`.sev-high` 借 `--del-bg`、`.sev-medium` 借 `--human-soft`、`.sev-low` 借 `--agent-soft`,`.round-tag.still` 又是红、`.new` 与 `.wontfix` 又都是蓝 —— 没有一个颜色只有一个意思。加 severity 档位或轮次状态时,先确认新值不落进别的轴。
 
 ## 品牌标记
 
