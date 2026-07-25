@@ -2,9 +2,16 @@
  * GitButler source 验证(不烧 token):
  *   (1) 确定性:合成 but 结构化 diff → toUnifiedDiff → 断言重建成标准 unified(改/增/删)。
  *   (2) 实仓 smoke:对本仓某虚拟分支跑 GitButlerSource.getDiff/getFile,断言 diff 标记与文件内容。
+ *   (3) 路径穿越:越界读盘被拒。
+ *   (4) 入口模式探测:inspectRepo 对 workspace 仓 / 普通仓 / 非 git 目录的判定。
  * 运行:npm run spike:gitbutler [虚拟分支名，默认 feat/dev]
  */
 import { strict as assert } from 'node:assert';
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { run } from '../src/backend/source/exec';
+import { inspectRepo } from '../src/backend/source/source-discovery';
 import { GitButlerSource, toUnifiedDiff } from '../src/backend/source/gitbutler-source';
 
 const log = (m: string) => process.stdout.write(`[gitbutler] ${m}\n`);
@@ -95,9 +102,41 @@ async function testTraversal() {
   log('✅ (3) 路径穿越:越界 ../、绝对路径被拒,仓内路径放行');
 }
 
+/** 入口模式探测:本仓(workspace 分支)按虚拟分支审,临时普通仓与非 git 目录都落到 local。 */
+async function testInspect() {
+  const here = await inspectRepo(process.cwd());
+  assert.ok(here.isGit, '本仓应识别为 git 仓库');
+  if (here.head === 'gitbutler/workspace' && !here.degraded) {
+    assert.equal(here.mode, 'gitbutler', 'workspace 分支应判为虚拟分支模式');
+    assert.ok(here.gitbutler?.isWorkspace, 'gitbutler 模式应带回 workspace 状态');
+  } else {
+    log(`⚠ (4) 本仓不在 workspace 分支(HEAD=${here.head ?? 'detached'}),跳过 gitbutler 模式断言`);
+  }
+
+  const tmp = await mkdtemp(path.join(tmpdir(), 'duetlens-inspect-'));
+  try {
+    // 子目录传入也要归一到 git 顶层(realpath 抹平 macOS 的 /var → /private/var)
+    const plain = await realpath(tmp);
+    await run('git', ['-C', plain, 'init', '-q']);
+    await run('git', ['-C', plain, 'commit', '-q', '--allow-empty', '-m', 'init']);
+    await mkdir(path.join(plain, 'sub'), { recursive: true });
+    const fromSub = await inspectRepo(path.join(plain, 'sub'));
+    assert.equal(fromSub.mode, 'local', '普通 git 仓库应判为普通分支模式');
+    assert.equal(fromSub.repoPath, plain, '子目录应归一到 git 顶层');
+    assert.equal(fromSub.gitbutler, null, 'local 模式不带 vbranch 列表');
+
+    const nonGit = await inspectRepo(tmpdir());
+    assert.equal(nonGit.isGit && nonGit.mode !== 'local', false, '非 git 目录不应判为可审');
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+  log('✅ (4) 模式探测:workspace → vbranch,普通仓/子目录 → local(路径归一),非 git 目录不误判');
+}
+
 async function main() {
   testReconstruction();
   await testTraversal();
+  await testInspect();
   await testLive(process.argv[2] ?? 'feat/dev');
   log('✅ PASS — GitButler source 就位');
 }

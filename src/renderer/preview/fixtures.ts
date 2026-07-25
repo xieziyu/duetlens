@@ -274,6 +274,7 @@ const UI_SETTINGS: UiSettings = {
   defaultTab: 'findings',
   defaultDiffView: 'unified',
   defaultSource: 'github-pr',
+  lastRepoPath: '/Users/dev/podcast-go',
   findingsGrouping: 'severity',
   collapseViewedFiles: true,
   defaultModel: '',
@@ -359,7 +360,11 @@ export function installPreviewApi(): void {
     ...(asGithub ? { source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null } : {}),
     ...(asScanning ? { status: 'scanning' as const } : {}),
   };
-  let uiSettings: UiSettings = { ...UI_SETTINGS };
+  // entry-state=pick 清掉记住的仓库,自查本地仓库档的选目录空态
+  let uiSettings: UiSettings = {
+    ...UI_SETTINGS,
+    ...(params.get('entry-state') === 'pick' ? { lastRepoPath: '' } : {}),
+  };
   // 预置一个已看文件,证明启动即从后端恢复 per-review 进度(非组件默认空态)
   // ?tab=findings|discussion|summary 强制初始右栏 tab(自查用,如在扫描期停在 Discussion 看进度头)
   const forcedTab = params.get('tab');
@@ -750,14 +755,24 @@ export function installPreviewApi(): void {
           { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
         ],
       }),
-      detectGitButler: async () => ({
-        isWorkspace: params.get('entry-state') !== 'no-gb',
-        repoName: 'podcast-go',
-        branches: [
-          { name: 'virtual/streaming', fileCount: 7, commitCount: 2, hasUncommitted: true },
-          { name: 'virtual/api-cleanup', fileCount: 3, commitCount: 0, hasUncommitted: true },
-        ],
-      }),
+      // entry-state=no-gb 演示普通 git 分支模式;gb-degraded 演示 HEAD 在 workspace 但 but 不可用
+      inspectRepo: async (repoPath) => {
+        const state = params.get('entry-state');
+        const gitbutler = {
+          isWorkspace: true,
+          repoName: 'podcast-go',
+          branches: [
+            { name: 'virtual/streaming', fileCount: 7, commitCount: 2, hasUncommitted: true },
+            { name: 'virtual/api-cleanup', fileCount: 3, commitCount: 0, hasUncommitted: true },
+          ],
+        };
+        const base = { repoPath, repoName: 'podcast-go', isGit: true, gitbutler: null, degraded: null } as const;
+        if (state === 'no-gb') return { ...base, head: 'feat/stream-transcode', mode: 'local' };
+        if (state === 'gb-degraded')
+          return { ...base, head: 'gitbutler/workspace', mode: 'local', degraded: 'but-missing' };
+        return { ...base, head: 'gitbutler/workspace', mode: 'gitbutler', gitbutler };
+      },
+      listRepoPaths: async () => ['/Users/dev/podcast-go', '/Users/dev/duetlens'],
     },
     prompt: {
       get: async (cwd) => buildPromptView(cwd),

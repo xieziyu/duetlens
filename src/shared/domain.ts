@@ -247,8 +247,10 @@ export interface UiSettings {
   rightWidth: number;
   defaultTab: 'discussion' | 'findings' | 'summary';
   defaultDiffView: 'unified' | 'split';
-  /** 发起表单预填的默认来源 */
+  /** 发起表单预填的默认来源(入口只分 github-pr / 本地仓库两档,本地档统一存 local-branch) */
   defaultSource: SourceKind;
+  /** 本地仓库来源上次用过的仓库路径(发起表单预填) */
+  lastRepoPath: string;
   /** findings 右栏的默认分组方式 */
   findingsGrouping: 'severity' | 'file';
   /** 标记「已看」后是否自动折叠该文件的 diff */
@@ -275,6 +277,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   defaultTab: 'findings',
   defaultDiffView: 'unified',
   defaultSource: 'github-pr',
+  lastRepoPath: '',
   findingsGrouping: 'severity',
   collapseViewedFiles: true,
   defaultModel: '',

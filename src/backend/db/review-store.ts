@@ -708,6 +708,7 @@ export class ReviewStore {
       defaultTab: r.default_tab as UiSettings['defaultTab'],
       defaultDiffView: r.default_diff_view as UiSettings['defaultDiffView'],
       defaultSource: (r.default_source as UiSettings['defaultSource'] | null) ?? DEFAULT_UI_SETTINGS.defaultSource,
+      lastRepoPath: (r.last_repo_path as string | null) ?? DEFAULT_UI_SETTINGS.lastRepoPath,
       findingsGrouping:
         (r.findings_grouping as UiSettings['findingsGrouping'] | null) ?? DEFAULT_UI_SETTINGS.findingsGrouping,
       collapseViewedFiles:
@@ -726,12 +727,13 @@ export class ReviewStore {
   saveUiSettings(s: UiSettings): void {
     this.db
       .prepare(
-        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_source, findings_grouping, collapse_viewed, default_model, default_effort, default_intensity, notify_on_complete, codex_path, gh_path)
-         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultSource, @findingsGrouping, @collapseViewedFiles, @defaultModel, @defaultEffort, @defaultIntensity, @notifyOnComplete, @codexPath, @ghPath)
+        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, default_source, last_repo_path, findings_grouping, collapse_viewed, default_model, default_effort, default_intensity, notify_on_complete, codex_path, gh_path)
+         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @defaultSource, @lastRepoPath, @findingsGrouping, @collapseViewedFiles, @defaultModel, @defaultEffort, @defaultIntensity, @notifyOnComplete, @codexPath, @ghPath)
          ON CONFLICT(id) DO UPDATE SET
            data_mode = @dataMode, data_theme = @dataTheme, left_width = @leftWidth,
            right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView,
-           default_source = @defaultSource, findings_grouping = @findingsGrouping, collapse_viewed = @collapseViewedFiles,
+           default_source = @defaultSource, last_repo_path = @lastRepoPath,
+           findings_grouping = @findingsGrouping, collapse_viewed = @collapseViewedFiles,
            default_model = @defaultModel, default_effort = @defaultEffort, default_intensity = @defaultIntensity,
            notify_on_complete = @notifyOnComplete, codex_path = @codexPath, gh_path = @ghPath`,
       )

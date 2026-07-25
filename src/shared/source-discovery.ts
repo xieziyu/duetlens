@@ -63,6 +63,30 @@ export interface GitButlerStatus {
   branches: VbranchSummary[];
 }
 
+/** 本地仓库按哪条 source 实现审核。 */
+export type RepoMode = 'gitbutler' | 'local';
+
+/** HEAD 落在 workspace 分支、却仍降级为普通分支审核的原因。 */
+export type RepoDegradeReason = 'but-missing' | 'not-setup';
+
+/**
+ * 选定本地仓库后的一次性探测:入口据此决定是按 GitButler 虚拟分支还是普通 git 分支审核。
+ * 判据以 HEAD 分支名为主(不依赖 but),`but status` 只作可用性副判据。
+ */
+export interface RepoInspection {
+  /** 归一到 git 顶层目录的路径(选到子目录时回写);非 git 仓库时为传入原值 */
+  repoPath: string;
+  repoName: string;
+  isGit: boolean;
+  /** 当前分支名;detached HEAD 为 null */
+  head: string | null;
+  mode: RepoMode;
+  /** mode=gitbutler 时的虚拟分支列表 */
+  gitbutler: GitButlerStatus | null;
+  /** 非空表示 HEAD 在 workspace 分支但 GitButler 不可用,已降级为 local */
+  degraded: RepoDegradeReason | null;
+}
+
 /** 某本地目录的 remote 归属(用于 PR 本地路径的 remote-匹配校验)。 */
 export interface RepoRemoteInfo {
   /** nameWithOwner,取不到返回 null(非 git 仓库 / 无 gh) */

@@ -90,7 +90,8 @@ const api: DuetlensApi = {
     inferLocalRepo: (nwo) => ipcRenderer.invoke(IpcChannels.sourceInferLocalRepo, nwo),
     listLocalBranches: (repoPath, baseRef) =>
       ipcRenderer.invoke(IpcChannels.sourceListLocalBranches, repoPath, baseRef),
-    detectGitButler: (repoPath) => ipcRenderer.invoke(IpcChannels.sourceDetectGitButler, repoPath),
+    inspectRepo: (repoPath) => ipcRenderer.invoke(IpcChannels.sourceInspectRepo, repoPath),
+    listRepoPaths: () => ipcRenderer.invoke(IpcChannels.sourceListRepoPaths),
   },
   prompt: {
     get: (cwd) => ipcRenderer.invoke(IpcChannels.promptGet, cwd),

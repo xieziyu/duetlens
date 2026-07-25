@@ -152,9 +152,10 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.sourceListLocalBranches, (_e, repoPath: string, baseRef?: string) =>
     manager.listLocalBranches(repoPath, baseRef),
   );
-  ipcMain.handle(IpcChannels.sourceDetectGitButler, (_e, repoPath: string) =>
-    manager.detectGitButler(repoPath),
+  ipcMain.handle(IpcChannels.sourceInspectRepo, (_e, repoPath: string) =>
+    manager.inspectRepo(repoPath),
   );
+  ipcMain.handle(IpcChannels.sourceListRepoPaths, () => manager.listRepoPaths());
 
   ipcMain.handle(IpcChannels.promptGet, (_e, cwd?: string) => manager.getReviewPrompt(cwd));
   ipcMain.handle(IpcChannels.promptSave, (_e, input: PromptSaveInput) => manager.saveReviewPrompt(input));

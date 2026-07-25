@@ -22,10 +22,10 @@ import type { GhReviewEvent } from './github-review';
 import type { PromptSaveInput, ReviewPromptView } from './prompt';
 import type { EnvCheckOptions, EnvironmentReport } from './environment';
 import type {
-  GitButlerStatus,
   LocalBranchList,
   PrPreview,
   PrSummary,
+  RepoInspection,
   RepoRemoteInfo,
 } from './source-discovery';
 
@@ -70,7 +70,8 @@ export const IpcChannels = {
   sourceGetRepoRemote: 'source:get-repo-remote',
   sourceInferLocalRepo: 'source:infer-local-repo',
   sourceListLocalBranches: 'source:list-local-branches',
-  sourceDetectGitButler: 'source:detect-gitbutler',
+  sourceInspectRepo: 'source:inspect-repo',
+  sourceListRepoPaths: 'source:list-repo-paths',
   promptGet: 'prompt:get',
   promptSave: 'prompt:save',
   dialogPickDirectory: 'dialog:pick-directory',
@@ -325,8 +326,10 @@ export interface DuetlensApi {
     inferLocalRepo(nwo: string): Promise<string | null>;
     /** 列举本地分支(相对 base 领先若干 commit)+ base 候选。 */
     listLocalBranches(repoPath: string, baseRef?: string): Promise<LocalBranchList>;
-    /** 探测目录是否 GitButler workspace 并列举其虚拟分支。 */
-    detectGitButler(repoPath: string): Promise<GitButlerStatus>;
+    /** 探测本地仓库该按虚拟分支还是普通 git 分支审核(gitbutler 模式一并带回虚拟分支列表)。 */
+    inspectRepo(repoPath: string): Promise<RepoInspection>;
+    /** 历史审核用过的本地仓库路径(去重、最近在前),供入口空态快选。 */
+    listRepoPaths(): Promise<string[]>;
   };
   prompt: {
     /** 读三层审核规则(project 需仓库 cwd,缺省则只有 global+builtin)。 */

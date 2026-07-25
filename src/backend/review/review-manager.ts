@@ -27,18 +27,18 @@ import { setToolPath } from '../config/tool-paths';
 import type { ReviewTarget } from '../source/source';
 import {
   checkGhAuth,
-  detectGitButler,
   getRepoRemote,
   inferLocalRepo,
+  inspectRepo,
   listLocalBranches,
   listOpenPrs,
   previewPr,
 } from '../source/source-discovery';
 import type {
-  GitButlerStatus,
   LocalBranchList,
   PrPreview,
   PrSummary,
+  RepoInspection,
   RepoRemoteInfo,
 } from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
@@ -141,8 +141,12 @@ export class ReviewManager extends EventEmitter {
     return listLocalBranches(repoPath, baseRef);
   }
 
-  detectGitButler(repoPath: string): Promise<GitButlerStatus> {
-    return detectGitButler(repoPath);
+  inspectRepo(repoPath: string): Promise<RepoInspection> {
+    return inspectRepo(repoPath);
+  }
+
+  listRepoPaths(limit?: number): string[] {
+    return this.store.listRepoPaths(limit);
   }
 
   getReview(id: string): Review | null {

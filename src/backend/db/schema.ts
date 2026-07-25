@@ -142,7 +142,12 @@ ALTER TABLE reviews ADD COLUMN intensity TEXT NOT NULL DEFAULT 'standard';
 ALTER TABLE ui_settings ADD COLUMN default_intensity TEXT NOT NULL DEFAULT 'standard';
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7];
+// 入口本地仓库来源的上次选择:统一入口后选目录是必经第一步,预填省掉每次重开的重选。
+const V8 = `
+ALTER TABLE ui_settings ADD COLUMN last_repo_path TEXT NOT NULL DEFAULT '';
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

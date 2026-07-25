@@ -37,11 +37,11 @@ const NAV: { group: string; items: { id: SectionId; icon: string; label: string 
 type SectionId = 'appearance' | 'review' | 'shortcuts' | 'codex' | 'github' | 'rules' | 'about';
 const SECTION_IDS: SectionId[] = ['appearance', 'review', 'shortcuts', 'codex', 'github', 'rules', 'about'];
 
-const SOURCE_LABEL: Record<SourceKind, string> = {
-  'github-pr': 'GitHub PR',
-  'local-branch': '本地分支',
-  'gitbutler-vbranch': 'GitButler',
-};
+// 入口只有两档;本地这档统一存 local-branch,普通分支还是虚拟分支由发起时的仓库探测决定
+const SOURCE_CHOICES: { v: SourceKind; label: string }[] = [
+  { v: 'github-pr', label: 'GitHub PR' },
+  { v: 'local-branch', label: '本地仓库' },
+];
 
 const SHORTCUTS: { label: string; keys: string[] }[] = [
   { label: '打开/关闭帮助层', keys: ['?'] },
@@ -170,8 +170,8 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
             <div className="desc">发起与进入审核时的默认选择;单次审核内的临时改动不写回这里。</div>
             <Row label="默认来源">
               <Choice
-                value={settings.defaultSource}
-                options={(Object.keys(SOURCE_LABEL) as SourceKind[]).map((s) => ({ v: s, label: SOURCE_LABEL[s] }))}
+                value={settings.defaultSource === 'github-pr' ? 'github-pr' : 'local-branch'}
+                options={SOURCE_CHOICES.map((s) => ({ v: s.v, label: s.label }))}
                 onPick={(v) => update({ defaultSource: v as SourceKind })}
               />
             </Row>

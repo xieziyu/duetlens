@@ -1,6 +1,6 @@
 /**
- * 入口发起页的来源发现:三来源的轻量只读查询(gh 登录检测、PR 预览/列举、
- * 本地分支列举、GitButler workspace 探测、目录 remote 归属)。
+ * 入口发起页的来源发现:轻量只读查询(gh 登录检测、PR 预览/列举、
+ * 本地仓库模式探测与分支列举、目录 remote 归属)。
  * 不进入 Source 的 prepare/diff 生命周期,仅为发起前的选择器供数据。
  */
 import { readFile } from 'node:fs/promises';
@@ -12,6 +12,7 @@ import type {
   LocalBranchSummary,
   PrPreview,
   PrSummary,
+  RepoInspection,
   RepoRemoteInfo,
   VbranchSummary,
 } from '@shared/source-discovery';
@@ -191,6 +192,63 @@ export async function listLocalBranches(
   }
   const baseCandidates = await existingBaseCandidates(repoPath, base);
   return { base, baseCandidates, branches };
+}
+
+/** GitButler 把整个 workspace 的改动挂在这条分支上;HEAD 在它上面即说明该按虚拟分支审核。 */
+const WORKSPACE_BRANCH = 'gitbutler/workspace';
+
+/**
+ * 选定本地仓库后的模式探测:HEAD 在 workspace 分支且 GitButler 可用 → 按虚拟分支审,其余按普通 git 分支审。
+ * 主判据用 `git symbolic-ref`(不依赖 but、detached HEAD 自然落到 local),
+ * `but status` 只在主判据命中后跑一次,兼作可用性检查 —— 不可用则降级并说明原因。
+ */
+export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
+  const root = await gitToplevel(repoPath);
+  const resolved = root ?? repoPath;
+  const base: RepoInspection = {
+    repoPath: resolved,
+    repoName: path.basename(path.resolve(resolved)),
+    isGit: !!root,
+    head: null,
+    mode: 'local',
+    gitbutler: null,
+    degraded: null,
+  };
+  if (!root) return base;
+
+  const head = await headBranch(root);
+  if (head !== WORKSPACE_BRANCH) return { ...base, head };
+
+  const gitbutler = await detectGitButler(root);
+  if (gitbutler.isWorkspace) return { ...base, head, mode: 'gitbutler', gitbutler };
+  return { ...base, head, degraded: (await butInstalled()) ? 'not-setup' : 'but-missing' };
+}
+
+/** git 顶层目录;非 git 仓库返回 null。 */
+async function gitToplevel(dir: string): Promise<string | null> {
+  try {
+    return (await run('git', ['-C', dir, 'rev-parse', '--show-toplevel'])).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** 当前分支名;detached HEAD 返回 null。 */
+async function headBranch(repoPath: string): Promise<string | null> {
+  try {
+    return (await run('git', ['-C', repoPath, 'symbolic-ref', '--quiet', '--short', 'HEAD'])).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function butInstalled(): Promise<boolean> {
+  try {
+    await run('but', ['--version']);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** 探测目录是否 GitButler workspace,并列举其 applied 虚拟分支。 */

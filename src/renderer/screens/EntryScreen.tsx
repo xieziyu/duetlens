@@ -11,10 +11,11 @@ import {
 } from '@shared/domain';
 import type { RecentReview, ReviewStartInput, ReviewStartStage } from '@shared/ipc';
 import type {
-  GitButlerStatus,
   LocalBranchList,
   PrPreview,
   PrSummary,
+  RepoInspection,
+  RepoMode,
 } from '@shared/source-discovery';
 import { useSettings } from '../settings/SettingsProvider';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './entry/icons';
@@ -23,10 +24,15 @@ import { StartOverlay } from './entry/StartOverlay';
 import { LogoMark } from '../components/LogoMark';
 import './EntryScreen.css';
 
-const SOURCE_TABS: { value: SourceKind; label: string; icon: () => JSX.Element }[] = [
+/**
+ * 入口只分两档:本地仓库这一档下按普通 git 分支还是 GitButler 虚拟分支审,
+ * 由选定仓库后的探测结果(见 inspectRepo)决定,不再让用户先记住仓库此刻的状态。
+ */
+type EntryTab = 'github-pr' | 'repo';
+
+const SOURCE_TABS: { value: EntryTab; label: string; icon: () => JSX.Element }[] = [
   { value: 'github-pr', label: 'GitHub PR', icon: GhIcon },
-  { value: 'local-branch', label: '本地分支', icon: LocalBranchIcon },
-  { value: 'gitbutler-vbranch', label: 'GitButler', icon: GitButlerIcon },
+  { value: 'repo', label: '本地仓库', icon: LocalBranchIcon },
 ];
 
 const EFFORT_LABELS: Record<ReasoningEffort, string> = {
@@ -42,12 +48,18 @@ const EFFORT_LABELS: Record<ReasoningEffort, string> = {
 export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => void }) {
   const { settings, update, loaded } = useSettings();
   const [reviews, setReviews] = useState<RecentReview[]>([]);
-  const [source, setSource] = useState<SourceKind>('github-pr');
+  const [tab, setTab] = useState<EntryTab>('github-pr');
 
-  // 三来源共享:选定的 ref(PR 引用 / 分支名 / vbranch 名)与仓库路径
+  // 两档共享:选定的 ref(PR 引用 / 分支名 / vbranch 名)与仓库路径
   const [ref, setRef] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const [baseRef, setBaseRef] = useState('');
+
+  // 本地仓库档:探测结果定模式;forceLocal 是 workspace 仓库上「改按普通 git 分支审核」的手动覆盖
+  const [inspection, setInspection] = useState<RepoInspection | null>(null);
+  const [inspecting, setInspecting] = useState(false);
+  const [forceLocal, setForceLocal] = useState(false);
+  const [recentRepos, setRecentRepos] = useState<string[]>([]);
 
   // 审核配置
   const [model, setModel] = useState('');
@@ -72,6 +84,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   useEffect(() => {
     void refreshRecent();
     window.duetlens.agent.listModels().then(setModels).catch(() => setModels([]));
+    window.duetlens.source.listRepoPaths().then(setRecentRepos).catch(() => setRecentRepos([]));
   }, []);
 
   // 阶段推进只认当前这次发起的 startId,重试后旧的一路事件不会再往浮层里灌
@@ -83,36 +96,76 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     [],
   );
 
-  // settings 落地后预填默认来源/模型/effort 一次(不覆盖用户随后编辑)
+  // settings 落地后预填默认来源/仓库/模型/effort 一次(不覆盖用户随后编辑)
   const prefilled = useRef(false);
   useEffect(() => {
     if (loaded && !prefilled.current) {
       prefilled.current = true;
-      setSource(settings.defaultSource);
+      const repoTab = settings.defaultSource !== 'github-pr';
+      setTab(repoTab ? 'repo' : 'github-pr');
+      if (repoTab) setRepoPath(settings.lastRepoPath);
       setModel(settings.defaultModel);
       setEffort(settings.defaultEffort);
       setIntensity(settings.defaultIntensity);
     }
-  }, [loaded, settings.defaultSource, settings.defaultModel, settings.defaultEffort, settings.defaultIntensity]);
+  }, [loaded, settings.defaultSource, settings.lastRepoPath, settings.defaultModel, settings.defaultEffort, settings.defaultIntensity]);
 
-  // 切来源时重置该来源无关的选择(仓库路径可跨来源沿用,便于三来源指同一仓库)
-  const onSwitchSource = (next: SourceKind) => {
-    if (next === source) return;
-    setSource(next);
+  // 切来源时重置该来源无关的选择(仓库路径可跨来源沿用,便于两档指同一仓库)
+  const onSwitchTab = (next: EntryTab) => {
+    if (next === tab) return;
+    setTab(next);
     setRef('');
     setError(null);
+    if (next === 'repo' && !repoPath.trim()) setRepoPath(settings.lastRepoPath);
+  };
+
+  // 换仓库即换审核对象:已选分支、base、模式覆盖都不该跟着走
+  const pickRepo = (dir: string) => {
+    if (dir === repoPath) return;
+    setRepoPath(dir);
+    setRef('');
+    setBaseRef('');
+    setForceLocal(false);
   };
 
   const pickDir = async () => {
     const dir = await window.duetlens.dialog.pickDirectory();
-    if (dir) setRepoPath(dir);
+    if (dir) pickRepo(dir);
   };
+
+  // 选定仓库后一次探测定模式;失败按普通 git 分支兜底
+  useEffect(() => {
+    const p = repoPath.trim();
+    if (tab !== 'repo' || !p) {
+      setInspection(null);
+      return;
+    }
+    let alive = true;
+    setInspecting(true);
+    window.duetlens.source
+      .inspectRepo(p)
+      .then((r) => {
+        if (!alive) return;
+        setInspection(r);
+        // 选到子目录时归一到 git 顶层(本 effect 会以顶层路径再跑一次,结果相同)
+        if (r.repoPath !== p) pickRepo(r.repoPath);
+      })
+      .catch(() => alive && setInspection(null))
+      .finally(() => alive && setInspecting(false));
+    return () => {
+      alive = false;
+    };
+  }, [tab, repoPath]);
+
+  const repoMode: RepoMode = forceLocal ? 'local' : inspection?.mode ?? 'local';
+  const source: SourceKind =
+    tab === 'github-pr' ? 'github-pr' : repoMode === 'gitbutler' ? 'gitbutler-vbranch' : 'local-branch';
 
   const target = useTargetLabel(source, ref);
   const canStart =
     !busy &&
     !!ref.trim() &&
-    (source === 'github-pr' ? ghReady : !!repoPath.trim());
+    (tab === 'github-pr' ? ghReady : !!repoPath.trim());
 
   const start = async () => {
     const startId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
@@ -133,7 +186,12 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       context: context.trim() || undefined,
       startId,
     };
-    update({ defaultModel: trimmedModel, defaultEffort: effort, defaultIntensity: intensity });
+    update({
+      defaultModel: trimmedModel,
+      defaultEffort: effort,
+      defaultIntensity: intensity,
+      ...(tab === 'repo' && repoPath.trim() ? { lastRepoPath: repoPath.trim() } : {}),
+    });
     // 只有慢启动才升浮层:本地分支常几百毫秒就回来,闪一下比不闪更吵
     const rise = window.setTimeout(() => {
       shownAt.current = performance.now();
@@ -188,8 +246,8 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
               <button
                 key={t.value}
                 type="button"
-                className={t.value === source ? 'on' : ''}
-                onClick={() => onSwitchSource(t.value)}
+                className={t.value === tab ? 'on' : ''}
+                onClick={() => onSwitchTab(t.value)}
               >
                 <t.icon />
                 {t.label}
@@ -198,7 +256,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
           </div>
         </div>
 
-        {source === 'github-pr' && (
+        {tab === 'github-pr' ? (
           <GitHubPanel
             prRef={ref}
             setPrRef={setRef}
@@ -208,24 +266,21 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
             busy={busy}
             onReady={setGhReady}
           />
-        )}
-        {source === 'local-branch' && (
-          <LocalPanel
+        ) : (
+          <RepoPanel
             repoPath={repoPath}
             pickDir={pickDir}
+            pickRepo={pickRepo}
+            recentRepos={recentRepos}
+            inspection={inspection}
+            inspecting={inspecting}
+            mode={repoMode}
+            forceLocal={forceLocal}
+            setForceLocal={setForceLocal}
             selected={ref}
             setSelected={setRef}
             baseRef={baseRef}
             setBaseRef={setBaseRef}
-          />
-        )}
-        {source === 'gitbutler-vbranch' && (
-          <GitButlerPanel
-            repoPath={repoPath}
-            setRepoPath={setRepoPath}
-            pickDir={pickDir}
-            selected={ref}
-            setSelected={setRef}
           />
         )}
 
@@ -643,10 +698,17 @@ function GitHubPanel({
   );
 }
 
-// ---------- Local branch panel ----------
-function LocalPanel({
+// ---------- 本地仓库 panel(模式由探测结果决定:虚拟分支 / 普通 git 分支)----------
+function RepoPanel({
   repoPath,
   pickDir,
+  pickRepo,
+  recentRepos,
+  inspection,
+  inspecting,
+  mode,
+  forceLocal,
+  setForceLocal,
   selected,
   setSelected,
   baseRef,
@@ -654,6 +716,13 @@ function LocalPanel({
 }: {
   repoPath: string;
   pickDir: () => void;
+  pickRepo: (v: string) => void;
+  recentRepos: string[];
+  inspection: RepoInspection | null;
+  inspecting: boolean;
+  mode: RepoMode;
+  forceLocal: boolean;
+  setForceLocal: (v: boolean) => void;
   selected: string;
   setSelected: (v: string) => void;
   baseRef: string;
@@ -663,9 +732,12 @@ function LocalPanel({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // 普通 git 分支模式才列分支;vbranch 列表随探测一并回来,无需再拉
+  const isGit = inspection?.isGit ?? false;
+  const listing = mode === 'local' && isGit;
   useEffect(() => {
     const p = repoPath.trim();
-    if (!p) {
+    if (!p || !listing) {
       setList(null);
       return;
     }
@@ -684,16 +756,31 @@ function LocalPanel({
     return () => {
       alive = false;
     };
-  }, [repoPath, baseRef]);
+  }, [repoPath, baseRef, listing]);
 
   if (!repoPath.trim()) {
     return (
       <div className="src-panel">
-        <PickRepoEmpty pickDir={pickDir} hint="选择一个本地 git 仓库,列出其分支" />
+        <PickRepoEmpty
+          pickDir={pickDir}
+          hint="选择一个本地 git 仓库;在 gitbutler/workspace 分支上将按虚拟分支审核"
+        />
+        {recentRepos.length > 0 && (
+          <div className="recent-repos">
+            <span className="rr-lbl">最近用过</span>
+            {recentRepos.slice(0, 5).map((p) => (
+              <button key={p} type="button" className="rr-item" title={p} onClick={() => pickRepo(p)}>
+                <span className="rr-name mono">{baseName(p)}</span>
+                <span className="rr-dir mono">{parentDir(p)}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
 
+  const gb = inspection?.gitbutler;
   return (
     <div className="src-panel">
       <div className="local-head">
@@ -704,115 +791,70 @@ function LocalPanel({
         <button type="button" className="pf-pick" onClick={pickDir}>
           切换…
         </button>
-        <span className="lbl base-lbl">对比 base</span>
-        <select className="mono" value={baseRef} onChange={(e) => setBaseRef(e.target.value)}>
-          {(list?.baseCandidates ?? [baseRef].filter(Boolean)).map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {loading && <div className="list-loading mono">列举分支…</div>}
-      {err && <div className="start-error">{err}</div>}
-      {list && list.branches.length === 0 && !loading && (
-        <div className="list-empty">没有相对 {list.base} 领先的分支。</div>
-      )}
-      {list?.branches.map((b) => (
-        <div
-          key={b.name}
-          className={selected === b.name ? 'branchrow sel' : 'branchrow'}
-          onClick={() => setSelected(b.name)}
-        >
-          <span className="ic b">
-            <LocalBranchIcon />
+        {/* 模式是自动判定的,普通分支这档也要说出来,否则「为什么不是虚拟分支」无处可查 */}
+        {listing && !inspection?.degraded && (
+          <span className="mode-chip mono" title={inspection?.head ? `HEAD: ${inspection.head}` : undefined}>
+            git 分支
           </span>
-          <div className="m">
-            <div className="bn mono">{b.name}</div>
-            <div className="bd">
-              {b.isHead ? 'HEAD · ' : ''}
-              {b.ahead} commits ahead · {b.subject}
-            </div>
-          </div>
-          <span className="cmp mono">← {list.base}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ---------- GitButler panel ----------
-function GitButlerPanel({
-  repoPath,
-  setRepoPath,
-  pickDir,
-  selected,
-  setSelected,
-}: {
-  repoPath: string;
-  setRepoPath: (v: string) => void;
-  pickDir: () => void;
-  selected: string;
-  setSelected: (v: string) => void;
-}) {
-  const [status, setStatus] = useState<GitButlerStatus | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const p = repoPath.trim();
-    if (!p) {
-      setStatus(null);
-      return;
-    }
-    let alive = true;
-    setLoading(true);
-    window.duetlens.source
-      .detectGitButler(p)
-      .then((s) => alive && setStatus(s))
-      .catch(() => alive && setStatus({ isWorkspace: false, repoName: '', branches: [] }))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
-  }, [repoPath]);
-
-  if (!repoPath.trim()) {
-    return (
-      <div className="src-panel">
-        <PickRepoEmpty pickDir={pickDir} hint="选择一个 GitButler 项目目录,检测其虚拟分支" />
+        )}
+        {listing && (
+          <>
+            <span className="lbl base-lbl">对比 base</span>
+            <select className="mono" value={baseRef} onChange={(e) => setBaseRef(e.target.value)}>
+              {(list?.baseCandidates ?? [baseRef].filter(Boolean)).map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
       </div>
-    );
-  }
 
-  return (
-    <div className="src-panel">
-      {loading && <div className="list-loading mono">检测 workspace…</div>}
-      {status && !status.isWorkspace && !loading && (
+      {inspecting && !inspection && <div className="list-loading mono">探测仓库…</div>}
+
+      {inspection && !inspection.isGit && (
         <div className="gb-hint warn">
-          ⎇ <b>{repoPath}</b> 不是 GitButler workspace ·{' '}
+          ⌂ <b>{repoPath}</b> 不是 git 仓库 ·{' '}
           <button type="button" className="link-btn" onClick={pickDir}>
             换个目录
           </button>
         </div>
       )}
-      {status?.isWorkspace && (
+
+      {inspection?.degraded && (
+        <div className="gb-hint warn">
+          ⎇ 当前在 <code className="mono">gitbutler/workspace</code> 分支,但
+          {inspection.degraded === 'but-missing' ? '未找到 but CLI' : '该目录不是 GitButler 项目(未 setup)'} ·
+          已按普通 git 分支审核
+        </div>
+      )}
+
+      {mode === 'gitbutler' && gb && (
+        <div className="gb-hint">
+          ⎇ GitButler workspace · <b>{gb.repoName}</b> · {gb.branches.length} 个 virtual branch ·{' '}
+          <button type="button" className="link-btn" onClick={() => setForceLocal(true)}>
+            改按普通 git 分支审核
+          </button>
+        </div>
+      )}
+      {forceLocal && inspection?.mode === 'gitbutler' && (
+        <div className="gb-hint">
+          ⎇ 已改按普通 git 分支审核 ·{' '}
+          <button type="button" className="link-btn" onClick={() => setForceLocal(false)}>
+            回到虚拟分支
+          </button>
+        </div>
+      )}
+
+      {mode === 'gitbutler' && gb && (
         <>
-          <div className="gb-hint">
-            ⎇ 检测到 GitButler workspace · <b>{status.repoName}</b> · {status.branches.length} 个 virtual branch ·{' '}
-            <button type="button" className="link-btn" onClick={pickDir}>
-              切换…
-            </button>
-          </div>
-          {status.branches.length === 0 && <div className="list-empty">该 workspace 暂无 applied 虚拟分支。</div>}
-          {status.branches.map((b) => (
+          {gb.branches.length === 0 && <div className="list-empty">该 workspace 暂无 applied 虚拟分支。</div>}
+          {gb.branches.map((b) => (
             <div
               key={b.name}
               className={selected === b.name ? 'branchrow sel' : 'branchrow'}
-              onClick={() => {
-                setSelected(b.name);
-                setRepoPath(repoPath);
-              }}
+              onClick={() => setSelected(b.name)}
             >
               <span className="ic v">
                 <GitButlerIcon />
@@ -825,6 +867,35 @@ function GitButlerPanel({
                 </div>
               </div>
               <span className="cmp mono">vbranch</span>
+            </div>
+          ))}
+        </>
+      )}
+
+      {listing && (
+        <>
+          {loading && <div className="list-loading mono">列举分支…</div>}
+          {err && <div className="start-error">{err}</div>}
+          {list && list.branches.length === 0 && !loading && (
+            <div className="list-empty">没有相对 {list.base} 领先的分支。</div>
+          )}
+          {list?.branches.map((b) => (
+            <div
+              key={b.name}
+              className={selected === b.name ? 'branchrow sel' : 'branchrow'}
+              onClick={() => setSelected(b.name)}
+            >
+              <span className="ic b">
+                <LocalBranchIcon />
+              </span>
+              <div className="m">
+                <div className="bn mono">{b.name}</div>
+                <div className="bd">
+                  {b.isHead ? 'HEAD · ' : ''}
+                  {b.ahead} commits ahead · {b.subject}
+                </div>
+              </div>
+              <span className="cmp mono">← {list.base}</span>
             </div>
           ))}
         </>
@@ -843,6 +914,9 @@ function PickRepoEmpty({ pickDir, hint }: { pickDir: () => void; hint: string })
     </div>
   );
 }
+
+const baseName = (p: string) => p.replace(/\/+$/, '').split('/').pop() || p;
+const parentDir = (p: string) => p.replace(/\/+$/, '').split('/').slice(0, -1).join('/');
 
 /** 底部 CTA 的目标标签(来源 + 已选 ref)。 */
 function useTargetLabel(source: SourceKind, ref: string): string {
