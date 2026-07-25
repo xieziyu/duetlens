@@ -876,7 +876,7 @@
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 .recent-rev .stat.scanning, .recent-rev .stat.review { color: var(--agent-2); }
-.recent-rev .stat.done { color: var(--text-faint); }
+.recent-rev .stat.done { color: var(--text-dim); }
 .recent-rev .stat.submitted { color: var(--add); }
 .recent-rev .stat.failed { color: var(--sev-high); }
 .recent-rev .arrow { color: var(--text-faint); font-size: 16px; flex: none; }

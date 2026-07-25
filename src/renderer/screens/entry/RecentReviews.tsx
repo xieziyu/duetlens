@@ -90,7 +90,7 @@ const STATUS_META: Record<ReviewStatus, { cls: string; label: string; pulse?: bo
   reviewing: { cls: 'review', label: '审核中', pulse: true },
   submitted: { cls: 'submitted', label: '✓ 已提交' },
   exported: { cls: 'done', label: '已完成' },
-  failed: { cls: 'failed', label: '失败' },
+  failed: { cls: 'failed', label: '✕ 失败' },
 };
 
 function StatusChip({ status }: { status: ReviewStatus }) {

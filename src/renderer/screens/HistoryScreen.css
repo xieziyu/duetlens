@@ -222,10 +222,13 @@
   color: var(--agent-2);
 }
 .hist-rev .stat.done {
-  color: var(--text-faint);
+  color: var(--text-dim);
 }
 .hist-rev .stat.submitted {
   color: var(--add);
+}
+.hist-rev .stat.failed {
+  color: var(--sev-high);
 }
 .hist-rev .del {
   opacity: 0;

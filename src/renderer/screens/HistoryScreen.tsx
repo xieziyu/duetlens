@@ -279,7 +279,8 @@ const STATUS_META: Record<ReviewStatus, { cls: string; label: string; pulse?: bo
   reviewing: { cls: 'review', label: '审核中', pulse: true },
   submitted: { cls: 'submitted', label: '✓ 已提交' },
   exported: { cls: 'done', label: '已完成' },
-  failed: { cls: 'done', label: '失败' },
+  // 失败与已完成不共用 done:两者都是终态,但失败要你回头看。字形前缀保证不只靠颜色区分
+  failed: { cls: 'failed', label: '✕ 失败' },
 };
 
 function StatusChip({ status }: { status: ReviewStatus }): React.JSX.Element {
