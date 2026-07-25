@@ -80,7 +80,15 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
     const c = contentRef.current;
     if (!c) return;
     // 用 viewport 坐标比较,避免 offsetParent 差异导致的错位
-    const threshold = c.getBoundingClientRect().top + 80;
+    const cTop = c.getBoundingClientRect().top;
+    const threshold = cTop + 80;
+    // 触底后滚动被夹断,尾部分节的顶边永远越不过判定线,spy 只能算出它上面那节 ——
+    // 于是点击尾部导航刚设的高亮会被这次 scroll 抢走(要点第二次才留得住)。
+    // 此时只要当前高亮分节的标题还在视口里,就认它,不改。
+    if (c.scrollTop + c.clientHeight >= c.scrollHeight - 1) {
+      const cur = secEl(active);
+      if (cur && cur.getBoundingClientRect().top >= cTop) return;
+    }
     let cur: SectionId = SECTION_IDS[0];
     for (const id of SECTION_IDS) {
       const el = secEl(id);
