@@ -28,7 +28,9 @@ mockup/entry.html          mockup/diff-review.html         mockup/submit-to-gith
 ```mermaid
 stateDiagram-v2
     [*] --> Entry
-    Entry --> Review : ● 开始审核 (source + target 就绪)
+    Entry --> Starting : ● 开始审核 (source + target 就绪)
+    Starting --> Review : ⚙ 拉取完成 · 会话已起
+    Starting --> Entry : ● 启动失败 → 返回修改
     Review --> SubmitGitHub : ● 提交 review (source=github-pr)
     Review --> ExportMarkdown : ● 导出报告 (source=local/vbranch)
     SubmitGitHub --> Review : ● 返回
@@ -40,9 +42,11 @@ stateDiagram-v2
 
 「最近的审核」直接把历史会话恢复进 review 屏(不单开历史页),因此 `Entry → Review` 有两条入边:新建与恢复。
 
+`Starting` 是**阻断浮层**(见 [ui](ui.md#启动等待浮层点开始审核到进屏之间)):review 记录尚未建立、review 屏无从渲染,浮层按后端 `review:start-progress` 的四档真实阶段推进,失败原地转错误态。恢复历史会话不经过它。
+
 ## Review 生命周期:scan → reviewing
 
-进入 review 屏后先跑**首轮机审**(scan),扫描态即右栏初始态(否决 overlay),扫完自动切到 Discussion/Findings。scan 期间左侧 diff 全程可读、可点 finding、可框选提问。
+进入 review 屏后先跑**首轮机审**(scan),扫描态即右栏初始态(否决 overlay —— 这条只管进屏之后;进屏之前的等待见上面的 `Starting`),扫完自动切到 Discussion/Findings。scan 期间左侧 diff 全程可读、可点 finding、可框选提问。
 
 ```mermaid
 stateDiagram-v2

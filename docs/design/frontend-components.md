@@ -23,6 +23,7 @@
 │  │  ├─ <RecentOpenPrList>                从 open PR 选择 · 默认折叠,展开才拉
 │  │  ├─ <ExtraContext>                    可折叠附加上下文 textarea
 │  │  └─ <StartButton>                     单一「开始审核」CTA
+│  ├─ <StartOverlay>                       发起后到进屏之间的阻断浮层 (真实阶段 · 失败原地重试)
 │  └─ <RecentReviews>                      最近的审核 (点击=恢复会话)
 │
 ├─ <ReviewScreen>                          mockup/diff-review.html
