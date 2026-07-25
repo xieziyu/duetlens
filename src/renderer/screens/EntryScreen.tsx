@@ -18,7 +18,8 @@ import type {
   RepoMode,
 } from '@shared/source-discovery';
 import { useSettings } from '../settings/SettingsProvider';
-import { GhIcon, GitButlerIcon, LocalBranchIcon } from './entry/icons';
+import { BranchPicker, BranchSummary, type BranchOption } from './entry/BranchPicker';
+import { GhIcon, LocalBranchIcon } from './entry/icons';
 import { RecentReviews } from './entry/RecentReviews';
 import { StartOverlay } from './entry/StartOverlay';
 import { LogoMark } from '../components/LogoMark';
@@ -758,6 +759,44 @@ function RepoPanel({
     };
   }, [repoPath, baseRef, listing]);
 
+  const gbBranches = inspection?.gitbutler?.branches;
+  const options = useMemo<BranchOption[]>(() => {
+    if (mode === 'gitbutler') {
+      return (gbBranches ?? []).map((b) => ({
+        name: b.name,
+        kind: 'vbranch',
+        tag: 'vbranch',
+        meta: `${b.fileCount} files`,
+        detail: [b.hasUncommitted ? '未提交改动' : '', b.commitCount > 0 ? `归属 ${b.commitCount} 个 commit` : '']
+          .filter(Boolean)
+          .join(' · '),
+      }));
+    }
+    return (list?.branches ?? []).map((b) => ({
+      name: b.name,
+      kind: 'git',
+      isHead: b.isHead,
+      tag: `← ${list!.base}`,
+      meta: `${b.ahead} commits ahead`,
+      detail: b.subject,
+      updatedAt: b.updatedAt,
+    }));
+  }, [mode, gbBranches, list]);
+
+  // 默认选中:普通 git 取 HEAD 所在分支,虚拟分支取第一条 —— 进屏即有目标,底部 CTA 不再是灰的
+  useEffect(() => {
+    if (loading) return;
+    if (!options.length) {
+      if (selected) setSelected('');
+      return;
+    }
+    if (!options.some((o) => o.name === selected)) {
+      setSelected((options.find((o) => o.isHead) ?? options[0]).name);
+    }
+  }, [options, loading, selected, setSelected]);
+
+  const current = options.find((o) => o.name === selected) ?? null;
+
   if (!repoPath.trim()) {
     return (
       <div className="src-panel">
@@ -797,18 +836,6 @@ function RepoPanel({
             git 分支
           </span>
         )}
-        {listing && (
-          <>
-            <span className="lbl base-lbl">对比 base</span>
-            <select className="mono" value={baseRef} onChange={(e) => setBaseRef(e.target.value)}>
-              {(list?.baseCandidates ?? [baseRef].filter(Boolean)).map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
       </div>
 
       {inspecting && !inspection && <div className="list-loading mono">探测仓库…</div>}
@@ -847,57 +874,34 @@ function RepoPanel({
         </div>
       )}
 
-      {mode === 'gitbutler' && gb && (
+      {(listing || mode === 'gitbutler') && (
         <>
-          {gb.branches.length === 0 && <div className="list-empty">该 workspace 暂无 applied 虚拟分支。</div>}
-          {gb.branches.map((b) => (
-            <div
-              key={b.name}
-              className={selected === b.name ? 'branchrow sel' : 'branchrow'}
-              onClick={() => setSelected(b.name)}
-            >
-              <span className="ic v">
-                <GitButlerIcon />
-              </span>
-              <div className="m">
-                <div className="bn mono">{b.name}</div>
-                <div className="bd">
-                  {b.fileCount} files{b.hasUncommitted ? ' · 未提交改动' : ''}
-                  {b.commitCount > 0 ? ` · 归属 ${b.commitCount} 个 commit` : ''}
-                </div>
-              </div>
-              <span className="cmp mono">vbranch</span>
-            </div>
-          ))}
-        </>
-      )}
-
-      {listing && (
-        <>
-          {loading && <div className="list-loading mono">列举分支…</div>}
+          <div className="picker-row">
+            <span className="lbl">审核分支</span>
+            <BranchPicker
+              options={options}
+              value={selected}
+              onChange={setSelected}
+              loading={listing && loading}
+              emptyHint={
+                listing ? `没有相对 ${list?.base ?? baseRef} 领先的分支` : '该 workspace 暂无 applied 虚拟分支'
+              }
+            />
+            {listing && (
+              <>
+                <span className="lbl base-lbl">对比 base</span>
+                <select className="mono" value={baseRef} onChange={(e) => setBaseRef(e.target.value)}>
+                  {(list?.baseCandidates ?? [baseRef].filter(Boolean)).map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
+          {current && <BranchSummary option={current} base={listing ? list?.base : undefined} />}
           {err && <div className="start-error">{err}</div>}
-          {list && list.branches.length === 0 && !loading && (
-            <div className="list-empty">没有相对 {list.base} 领先的分支。</div>
-          )}
-          {list?.branches.map((b) => (
-            <div
-              key={b.name}
-              className={selected === b.name ? 'branchrow sel' : 'branchrow'}
-              onClick={() => setSelected(b.name)}
-            >
-              <span className="ic b">
-                <LocalBranchIcon />
-              </span>
-              <div className="m">
-                <div className="bn mono">{b.name}</div>
-                <div className="bd">
-                  {b.isHead ? 'HEAD · ' : ''}
-                  {b.ahead} commits ahead · {b.subject}
-                </div>
-              </div>
-              <span className="cmp mono">← {list.base}</span>
-            </div>
-          ))}
         </>
       )}
     </div>

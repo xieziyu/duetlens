@@ -748,13 +748,17 @@ export function installPreviewApi(): void {
       getRepoRemote: async () => ({
         nwo: params.get('entry-state') === 'path-mismatch' ? 'xieziyu/other-service' : 'xieziyu/podcast-go',
       }),
+      // entry-state=no-branches 演示没有领先 base 的分支(选择器禁用)
       listLocalBranches: async () => ({
         base: 'main',
         baseCandidates: ['main', 'develop', 'release/2.0'],
-        branches: [
-          { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
-          { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
-        ],
+        branches:
+          params.get('entry-state') === 'no-branches'
+            ? []
+            : [
+                { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
+                { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
+              ],
       }),
       // entry-state=no-gb 演示普通 git 分支模式;gb-degraded 演示 HEAD 在 workspace 但 but 不可用
       inspectRepo: async (repoPath) => {
@@ -768,7 +772,8 @@ export function installPreviewApi(): void {
           ],
         };
         const base = { repoPath, repoName: 'podcast-go', isGit: true, gitbutler: null, degraded: null } as const;
-        if (state === 'no-gb') return { ...base, head: 'feat/stream-transcode', mode: 'local' };
+        if (state === 'no-gb' || state === 'no-branches')
+          return { ...base, head: 'feat/stream-transcode', mode: 'local' };
         if (state === 'gb-degraded')
           return { ...base, head: 'gitbutler/workspace', mode: 'local', degraded: 'but-missing' };
         return { ...base, head: 'gitbutler/workspace', mode: 'gitbutler', gitbutler };
