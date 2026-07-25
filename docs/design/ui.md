@@ -85,7 +85,7 @@
 
 ### review 右栏三 tab
 
-- **Discussion**:当前锚点的对话线程(追问 codex / 框选发起),含 composer。
+- **Discussion**:当前锚点的对话线程(追问 codex / 框选发起),含 composer。agent 的每条回答在名字行右端带一枚**一键复制**(hover 该条才显影,复制的是 **markdown 原文**而非渲染后的富文本 —— 贴回编辑器 / PR 评论要的是源码;复制成功短暂回显 `✓ 已复制`,剪贴板不可用则静默)。reviewer 自己写的不给 —— 原文就在手边。
 - **Findings**:运行时 triage 列表 —— 按严重度分组(可切按文件)+ tally;每行 sev·category / 标题 / `file:line` / origin(◆ agent vs ● 你·提升) / `◇ suggestion` 标记 / triage:保留(天蓝左条)· 剔除(虚线 + 删除线 + 恢复) / submitted passive(绿左条,锁定不可改);底部「＋ 手动新增 finding」。点行跳 diff / 开 discussion。**文件整个不在改动内的 finding 抽成末尾专组**(`◇ 文件不在改动内`,列在各严重度/文件组之后),使列表顺序贴合它们在 diff 底部 off-diff 区的物理位置,逐条点下去不再在改动处与底部之间来回弹。
 - **Summary**:codex 审核总结 —— 结论卡(codex 建议的 review event,标注「仅建议 · 最终 event 在提交时确认」)+ 统计条(high/med/low + 保留/已提交/讨论)+ **可就地编辑的 codex 生成正文**(即提交屏 review body 的来源;`✎ 编辑` 展开 Markdown textarea,`⌘↵` 保存 / `Esc` 取消,保存后轻量渲染段落 / `**粗**` / `` `代码` ``,byline 标「你已编辑」)+ 关注主题(按 category 聚合,点击筛 findings)+ 覆盖度行 + 「提交 review →」直达 [findings-submit](findings-submit.md)。
 
@@ -106,6 +106,7 @@
 
 - **popover**:显示选区 `file:行范围` + 两个动作 —— `⬆ 发起 discussion`(human/琥珀)与 `◆ 追问 codex`(agent/天蓝)。定位在选区上方,贴边自动翻转到下方;点击别处 / 滚动即消失。
 - **发起 discussion**:在选中行下方就地插入一张 human composer 卡(选中行标琥珀左条),含选区引用块 + textarea + `发送`(`⌘↵`)/ `取消`;发送后原地变成一条「你的 discussion」卡(带「转为 finding / 继续对话」)。每行悬停的 `＋` 复用同一条单行流程。
+- **行内 `＋` 落在新侧行号格上,不在代码格右缘**:代码格随长行横滚,贴其右缘的按钮要一路滑到行尾才够得着(unified 下行号格是钉住的,见「diff 导航与覆盖」)。按钮整格覆盖行号(hover 才显影、背景不透明),点击热区因此与行号同宽;split 里让开左侧那枚 anchor dot。
 - **追问 codex**:切到右栏 Discussion tab,并把选区作为可移除的引用 chip(`↳ file:行`)附到 composer;composer 的 `↳ 引用选区` chip 行为相同。
 - **composer `@file`**:弹出文件菜单(按 diff 文件列表),选中即把 `@path` 引用写入输入区。
 
@@ -116,10 +117,13 @@
   - **两枚都带文案**,纯图标读不出功能:已看是**勾选框语义**(未看空框、已看填色打勾,文案恒为「已看」,状态不靠文案变化表达,免得点一下按钮宽度就跳);折叠按钮反过来,`− 折叠` / `+ 展开` 给的是**点下去会发生什么**。tooltip 按 viewed × 「标记已看即折叠」偏好四种组合分别措辞——同一枚按钮在四种状态下做的事不同。
   - **标记已看后自动推进到下一个未看文件**(把它的文件头顶到列头下沿,左栏选中同步跟随):折叠只是把当前文件的高度抽走、滚动位置不变,视口会塌进下一个文件的中段。仅在「标记已看即折叠」开启时推进(不折叠就没有塌陷,此时用户多半想接着读);取消已看不推进;后面没有未看文件则回到自己的文件头。
   - **落点必须自己算 `scrollTop`,不能用 `scrollIntoView`**:file-header 是 sticky,目标文件头一旦已被吸在列头下方,`scrollIntoView` 会认定它「已在视口起点」而一步不滚——表现就是折叠完视口原地不动、顶上停着的还是上一个文件。改为按非 sticky 的 `.diff-file` 区块算偏移(padding 读 `scroll-padding-top`,不重复硬编码列头高度)。左栏点选跳转同一个坑,共用这条路径。
+  - **跳到代码前先展开目标文件**:折叠态下整段 diff 与内联卡都不在 DOM 里,滚动会静默落空、中栏停在原处 —— 右栏点 finding、点 discussion、锚点行跳转、提升为 finding、手动新增 finding 全走这条。展开只展开、不改 viewed(读过的记录不该因为回头看一眼就被抹掉),也不改左栏树的点选(那只是导航,折叠条自带「点击展开」)。展开与选中态同批提交,effect 跑时卡片已在 DOM;聚焦滚动的依赖里带上「被聚焦那条所在文件是否折叠」,好让展开后补一次滚动,又不至于折叠别处也把视口拽回来。
 - **off-diff findings 分两类承载**:锚点不在当前 diff 新侧的 finding,按「文件在不在改动内」分开落位,都保留完整卡片(triage/编辑/追问),避免因无处内联被忽略。
   - **行 off-diff**(文件在改动内、锚点行不在新侧 hunk:被删除行 / 未展开区 / 无行锚点的 PR 级):归入**该文件区顶部**的 off-diff 段(`◇ N 条 off-diff finding(锚点不在当前改动新侧)`)。
   - **文件 off-diff**(文件整个不在本次 diff —— agent 允许顺 import 读到被引用文件并 off-diff 提出):无对应文件区承载,单列到 diff 主区**底部**、按文件成组(`◇ 文件不在本次改动内 · path`),并挂 `fileAnchorId` 锚点。**这枚锚点是必须的**:否则点该卡时 `setActivePath`/`focusFindingId` 找不到 DOM 目标,滚动静默失败(实机踩过,见 `#3912`)。
 - **横向滚动只归 code 表**:长代码行的横滚容器是每张 `.code` 表外的 `.code-scroll`,diff 栏本身 `overflow-x:hidden`。整栏可横滚时,file-header、hunk 头、gap bar、内联卡片会跟着长行一起被推出视口(它们只有一屏宽,右侧还会露出空白底)。一份 diff 被内联卡片切成多张表,`DiffPane` 用一个捕获期 scroll 监听把各表 `scrollLeft` 同步,读长行时不会段与段错位。
+  - **行号列与 gutter 在 unified 下钉住左缘**(`position:sticky`):横滚的是整张表,不钉住则滑出去就既读不到行号、也够不着挂在行号格上的 ＋。钉住的格子背景必须**不透明**,`--add-gutter` / `--del-gutter` 是半透明 token,故垫一层实底再叠色调,否则代码从格子底下透出来。split 表是 `table-layout:fixed`、不横滚,不需要。
+  - **三处宽度(`width` / `min-width` / `max-width`)要一起写**:长行把表撑出容器时,auto 表布局会把只写了 `width` 的行号列压到几乎为零 —— 行号挤成一条,＋ 也无处落脚。
 - **split vs unified**:中栏列头(`.diff-bar`)右端的 `Unified | Split` segmented 切换(全局偏好,不再逐文件重复)。**同一 hunk 的 unified / split 两张 `.code` 表切换,内联 discussion/finding 卡共享**(不复制),因此 finding 编辑器、追问、框选 popover、行内 ＋ 在两种视图下都可用;split 的行锚点取新侧行号。split 为并排双列(旧 / 新,新增行左侧留空占位、删除行右侧留空),保留 anchor dot 与新侧 ＋。
 
 ### 键盘快捷键(`mockup/diff-review.html`)

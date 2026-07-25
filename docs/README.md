@@ -49,3 +49,5 @@ codex app-server 把"一次常驻会话"本身称作 `thread`。为避免冲突,
 12. **文件树的检索过滤只收窄树**:匹配完整路径(空格分词 AND、≥3 字才允许子序列),**中栏 diff 保持全量、结果不按相关度重排** —— 裁 diff 会让人误判改动规模且右栏计数对不上,重排会让树的顺序与 diff 堆叠顺序错位。→ [ui](design/ui.md#diff-导航与覆盖mockupdiff-reviewhtml)
 13. **提示词分「可配置口径」与「锁定契约」**:描述 MCP 工具契约的段落(角色与工具流程、`report_finding` 字段协议)不进分层模型、不下发 renderer、设置页不可见,并首尾夹住用户内容;严重度是 structured 节,`high/medium/low` 档位名锁死、只开放每档判定标准。→ [ui](design/ui.md#审核规则提示词--三层编辑器mockupprompt-ruleshtml)
 14. **标记已看 = 折叠 + 推进到下一个未看文件**:file-header 两枚操作都带文案(已看是勾选框语义、折叠按钮文案给动作),推进只在「标记已看即折叠」开启时发生;落点自己算 `scrollTop` —— file-header 是 sticky,`scrollIntoView` 对已吸顶的目标一步不滚。→ [ui](design/ui.md#diff-导航与覆盖mockupdiff-reviewhtml)
+15. **跳到代码前先展开目标文件**:折叠态下 diff 与内联卡都不在 DOM 里,滚动会静默落空;展开只展开、不动 viewed,也不牵连左栏树的点选。→ [ui](design/ui.md#diff-导航与覆盖mockupdiff-reviewhtml)
+16. **行内 `＋` 挂在钉住的行号格上**:代码格随长行横滚,贴其右缘的按钮要滑到行尾才够得着;unified 下行号列与 gutter `sticky` 钉左缘(背景须不透明),且宽度三处一起写,否则被 auto 表布局压没。→ [ui](design/ui.md#框选发起-discussion--composer-引用mockupdiff-reviewhtml)
