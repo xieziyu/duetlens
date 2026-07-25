@@ -34,7 +34,8 @@
 │  │  └─ <SubmitCta>                       提交 review / 导出报告 (随 source)
 │  ├─ <ScanProgressBar>                    .scanbar 横跨三栏 (scan 期);点开向下展开竖排 .timeline
 │  ├─ <FileTree>                           .tree
-│  │  └─ <FileRow>                         .file (.badge finding 徽标 · .vtick viewed)
+│  │  ├─ <FileFilter>                      .tree-top > .ffind 常驻检索框 (完整路径匹配 · `/` 聚焦 · 只收窄树不裁 diff)
+│  │  └─ <FileRow>                         .file (.badge finding 徽标 · .vtick viewed · <mark> 命中高亮)
 │  ├─ <DiffPane>                           左侧主场
 │  │  ├─ <DiffBar>                        .diff-bar sticky 列头:改动总量 +A −D · <ViewSwitch> unified/split
 │  │  ├─ <OffDiffBanner>                   .offdiff 非改动行锚点 finding 集合

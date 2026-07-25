@@ -10,7 +10,7 @@
 
 真实链路(非 demo)已端到端打通并合入 main:
 
-> 入口发起(本地分支 / GitHub PR / GitButler 三 source)→ **真实 codex 首轮扫描** → findings 经 MCP 流入 → 三栏 diff review(unified/split · 语法高亮 · viewed/折叠 · 拖栏宽)→ triage(保留/剔除+可选理由/就地编辑)→ 框选/行内发起 discussion + **追问 codex**(多轮 · 重启后 `thread/resume` 续接)→ **↻ 重跑复审**(每轮新 thread · 重拉 diff · agent 对旧 findings 表态 · 剔除项抑制 · 同步 PR 评论)→ Summary(结论/统计/可编辑总结)→ 终点:**GitHub PR review 原子提交**(真实 `gh api`,进屏与 422 后均**现拉最新 diff**定位失效锚点,支持逐条/成批修锚)或 **导出 Markdown**。
+> 入口发起(本地分支 / GitHub PR / GitButler 三 source)→ **真实 codex 首轮扫描** → findings 经 MCP 流入 → 三栏 diff review(unified/split · 语法高亮 · viewed/折叠 · 拖栏宽 · 文件检索过滤)→ triage(保留/剔除+可选理由/就地编辑)→ 框选/行内发起 discussion + **追问 codex**(多轮 · 重启后 `thread/resume` 续接)→ **↻ 重跑复审**(每轮新 thread · 重拉 diff · agent 对旧 findings 表态 · 剔除项抑制 · 同步 PR 评论)→ Summary(结论/统计/可编辑总结)→ 终点:**GitHub PR review 原子提交**(真实 `gh api`,进屏与 422 后均**现拉最新 diff**定位失效锚点,支持逐条/成批修锚)或 **导出 Markdown**。
 
 外加:模型/effort 选择(动态下拉 + 手填兜底)、完成通知(失焦原生 / 聚焦应用内)、审核规则三层编辑(可配置口径与锁定契约分离,见下「关键决策」)、键盘快捷键、持久化(全局偏好 + per-review viewed/tab)。
 
