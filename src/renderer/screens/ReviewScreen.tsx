@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Discussion, Finding, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
+import { DEFAULT_UI_SETTINGS } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
@@ -459,6 +460,7 @@ export function ReviewScreen({
             min={LEFT_MIN}
             max={LEFT_MAX}
             sign={1}
+            defaultWidth={DEFAULT_UI_SETTINGS.leftWidth}
             onCommit={(w) => update({ leftWidth: w })}
           />
           <DiffPane
@@ -491,6 +493,7 @@ export function ReviewScreen({
             min={RIGHT_MIN}
             max={RIGHT_MAX}
             sign={-1}
+            defaultWidth={DEFAULT_UI_SETTINGS.rightWidth}
             onCommit={(w) => update({ rightWidth: w })}
           />
           <RightPanel
