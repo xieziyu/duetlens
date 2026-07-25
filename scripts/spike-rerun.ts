@@ -363,6 +363,37 @@ function main() {
   assert.match(p3NoOpen, /## 一、往轮已确认修复/);
   log('第 3 轮 prompt:结案节与剔除节分开,回归留出口,段号随内容编排');
 
+  // ---- 6.55 回归的另一条路:agent 不重报,而是直接对结案条目表态「仍存在」----
+  // prompt 让回归走 report_finding(由 absorbDuplicate 恢复),但 agent 照样会直接 resolve 旧 id。
+  // 那条路也必须恢复:结案的前提「代码里已经没有了」已被本轮推翻,继续挂着剔除等于把回归咽掉。
+  store.setFindingResolution(naming.id, 3, 'still_present', '改名后又被回退成 counter。');
+  const regressed = store.getFinding(naming.id)!;
+  assert.equal(regressed.triage, 'open', '结案条目被判仍存在 → 必须恢复保留');
+  assert.equal(regressed.dismissReason, null, '恢复后旧的自动剔除理由要清掉');
+  assert.equal(isAutoClosedFixed(regressed), false);
+  // 恢复回来的条目要重新回到待表态区,否则下一轮 agent 又看不到它
+  assert.ok(
+    store.listFindings(review.id).filter((f) => f.triage !== 'dismiss').some((f) => f.id === naming.id),
+  );
+  store.setFindingResolution(naming.id, 3, 'fixed', '又改回 completedCount。');
+  assert.equal(store.getFinding(naming.id)!.triage, 'dismiss', '再判已修复 → 照常自动结案');
+
+  // 恢复只认自动结案那条标记 —— reviewer 亲自剔除过的不能被下一轮表态推翻,否则他明确
+  // 排除掉的条目会自己爬回保留清单。两条可达路径都要挡住:
+  // (a) 结案后他「↩ 恢复」再重新剔除(卡上两个按钮点下来就是)
+  store.setTriage(naming.id, 'open');
+  store.setTriage(naming.id, 'dismiss', '这个命名就按现在的来,别再提。');
+  store.setFindingResolution(naming.id, 4, 'still_present', '又回退成 counter 了。');
+  const reDismissed = store.getFinding(naming.id)!;
+  assert.equal(reDismissed.triage, 'dismiss', 'reviewer 手动剔除后不该被表态恢复');
+  assert.match(reDismissed.dismissReason!, /别再提/, 'reviewer 填的理由要原样留着');
+  // (b) 他先剔除、agent 之后才判已修复(legacy 在上面就是这个状态)
+  store.setFindingResolution(legacy.id, 4, 'still_present', '又被谁加回来了。');
+  const legacyAfter = store.getFinding(legacy.id)!;
+  assert.equal(legacyAfter.triage, 'dismiss', '先剔除再表态的条目同样不该被恢复');
+  assert.equal(legacyAfter.dismissReason, '留给下个 PR 一起清。');
+  log('回归恢复:结案条目被判仍存在即恢复保留;reviewer 自己剔除的两条路径都不被推翻');
+
   // ---- 6.6 轮次失败留证 + 同轮重开(失败重试)----
   // 失败必须连原因一起落库:只记一个 'failed' 状态,用户就只能看到一句"失败"而无从追问。
   const failed3 = store.startRound(review.id, 3, {

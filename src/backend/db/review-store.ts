@@ -25,6 +25,16 @@ import {
 
 const now = () => Date.now();
 
+/**
+ * 复核判定已修复时自动写下的剔除理由。它同时是「这条剔除出自复核、不是 reviewer 的判断」的
+ * 唯一凭据(见 setFindingResolution 的恢复分支)—— 改这行文案就是改判定口径,存量行会退回
+ * 「不自动恢复」的老行为。真正干净的做法是给 finding 存一个显式的结案来源字段,值得单独一次
+ * schema 变更;在那之前,这条标记由本模块独家读写。
+ */
+const AUTO_CLOSE_REASON = (round: number): string => `第 ${round} 轮复核判定已修复`;
+const isAutoCloseReason = (reason: string | null): boolean =>
+  reason != null && /^第 \d+ 轮复核判定已修复$/.test(reason);
+
 interface ReviewRow {
   id: string;
   source: string;
@@ -626,7 +636,15 @@ export class ReviewStore {
    * `fixed` 顺带自动剔除:代码里已经没有的问题不该继续占着待提交清单,让用户逐条手点纯属体力活。
    * 判错了有出口 —— 卡上的「↩ 恢复」照常可用,下一轮回归重报也会自动恢复(见 isAutoClosedFixed)。
    * `wont_fix` 则不自动剔除:作者一句"可忽略"不该关掉一条真实问题,采纳与否是 reviewer 的决定。
-   * 用户已自行剔除的不动,免得覆盖掉他填的理由(CASE 里读的是本行更新前的 triage)。
+   *
+   * 反向也要走通:自动结案的条目在后续轮次被判「仍存在 / 作者已回应」时立即恢复保留 ——
+   * 结案的前提("代码里已经没有了")已被本轮推翻,继续挂着剔除等于把回归悄悄咽掉。
+   * 重报走 report_finding 的回归路径由 ReviewSession.absorbDuplicate 兜底,这里管的是 agent
+   * 直接对旧 id 表态的那条路。
+   *
+   * 恢复只认 AUTO_CLOSE_REASON 这条我们自己写下的标记,不能用「剔除 + fixed」去推 ——
+   * reviewer 亲自剔除过的条目照样可能挂着 fixed(他先剔除、agent 之后才表态;或结案后
+   * 他「↩ 恢复」再重新剔除),那是他的判断,不该被下一轮的表态推翻。
    */
   setFindingResolution(
     findingId: string,
@@ -634,26 +652,26 @@ export class ReviewStore {
     resolution: FindingResolution,
     note?: string | null,
   ): void {
-    const autoDismiss = resolution === 'fixed' ? 1 : 0;
+    const prior = this.getFinding(findingId);
+    if (!prior) return;
+    const autoDismiss = resolution === 'fixed' && prior.triage === 'open';
+    const restore =
+      resolution !== 'fixed' && prior.triage === 'dismiss' && isAutoCloseReason(prior.dismissReason);
+    const triage: Triage = autoDismiss ? 'dismiss' : restore ? 'open' : prior.triage;
+    const dismissReason = autoDismiss
+      ? AUTO_CLOSE_REASON(round)
+      : restore
+        ? null
+        : prior.dismissReason;
     this.withReviewTouch({ finding: findingId }, (ts) => {
       this.db
         .prepare(
           `UPDATE findings
               SET resolution = ?, resolution_note = ?, last_seen_round = ?, updated_at = ?,
-                  triage = CASE WHEN ? = 1 AND triage = 'open' THEN 'dismiss' ELSE triage END,
-                  dismiss_reason = CASE WHEN ? = 1 AND triage = 'open' THEN ? ELSE dismiss_reason END
+                  triage = ?, dismiss_reason = ?
             WHERE id = ?`,
         )
-        .run(
-          resolution,
-          note?.trim() || null,
-          round,
-          ts,
-          autoDismiss,
-          autoDismiss,
-          `第 ${round} 轮复核判定已修复`,
-          findingId,
-        );
+        .run(resolution, note?.trim() || null, round, ts, triage, dismissReason, findingId);
     });
   }
 
