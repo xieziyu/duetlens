@@ -43,6 +43,12 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA「提�
 3. 经 `gh` 提交(`gh api` / `gh pr review`);只读 sandbox 不影响提交(提交是 app 侧用 gh,不经 codex 工具)。
 4. 提交后 finding 标 `submitted`(passive 标注,沿用 1.0 「不做 unsubmitted-changes 徽标」的约定)。
 
+## 复核过的 finding:复核说明作正文主体
+
+重跑后被判定 `still_present` 的条目,提交到 GitHub / 导出报告时**正文主体是 agent 本轮的复核说明**,首轮正文降为背景(GitHub 评论里作 `<sub>首次报出时的说明</sub>` 小标题,导出报告里作粗体小标题)。复核说明是看过作者这次改动之后写的("改成了 RefCell,跨线程仍不安全"),首轮正文是改动之前写的 —— 把旧的摆在前面,author 读到的是一段已经对不上代码的描述。首轮正文仍带上:只说"仍不安全"而不交代问题本身,author 无从下手。
+
+口径与 review 屏一致:只有**表态轮次 === 当前轮次**才算本轮结论(见 `recheckNote()`),上一轮的旧表态不顶正文。`wont_fix` 不走这条 —— 那条说明是作者的原话,不是对问题的重新描述。
+
 ## 提交结果与异常态(原子提交 · 增量)
 
 演示见 `mockup/submit-to-github.html` 顶栏「提交态」切换器(ready / submitting / success / invalid / failed / incremental)。
