@@ -69,8 +69,18 @@ export type DiscussionKind = (typeof DISCUSSION_KINDS)[number];
 export const MESSAGE_ROLES = ['agent', 'user'] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
 
-export const REVIEW_STATUSES = ['scanning', 'reviewing', 'submitted', 'exported', 'failed'] as const;
+export const REVIEW_STATUSES = ['scanning', 'reviewing', 'completed', 'submitted', 'failed'] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
+
+/**
+ * 首轮/每轮机审跑完后落到哪个状态 —— 由 source 决定,因为只有 github-pr 还有一步真正的终点动作
+ * (提交 review 到 PR),在那之前停在 `reviewing` 是有意义的待办。
+ * 本地分支 / vbranch 没有这一步:导出与否、之后还追不追问都不改变「机审已出结论」这件事,
+ * 若也停在 `reviewing`,这类 review 永远闭不了环。
+ */
+export function scanDoneStatus(source: SourceKind): 'reviewing' | 'completed' {
+  return source === 'github-pr' ? 'reviewing' : 'completed';
+}
 
 /**
  * codex reasoning effort(透传 config.toml 的 model_reasoning_effort)。

@@ -10,6 +10,7 @@ import {
   isAutoClosedFixed,
   reportFindingSchema,
   resolveFindingSchema,
+  scanDoneStatus,
   updateFindingSchema,
   type Discussion,
   type Finding,
@@ -98,7 +99,7 @@ export interface ReviewSessionEvents {
   message: Message;
   /** 归一后的 agent 流事件(原样转发) */
   'agent-event': AgentEvent;
-  status: 'scanning' | 'reviewing' | 'failed';
+  status: 'scanning' | 'reviewing' | 'completed' | 'failed';
 }
 
 /**
@@ -178,7 +179,8 @@ export class ReviewSession {
     if (opts.intensity === 'adversarial') {
       await this.runTurn(ADVERSARIAL_SELFCHECK_PROMPT);
     }
-    this.setStatus('reviewing');
+    const source = this.store.getReview(this.reviewId)?.source;
+    this.setStatus(source ? scanDoneStatus(source) : 'reviewing');
     return this.store.listFindings(this.reviewId);
   }
 
@@ -366,7 +368,7 @@ export class ReviewSession {
     return result;
   }
 
-  private setStatus(status: 'scanning' | 'reviewing' | 'failed'): void {
+  private setStatus(status: 'scanning' | 'reviewing' | 'completed' | 'failed'): void {
     this.store.setReviewStatus(this.reviewId, status);
     this.emit('status', status);
   }

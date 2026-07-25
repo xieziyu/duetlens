@@ -5,7 +5,8 @@ import type { CompletionNotice, ReviewEvent } from '@shared/ipc';
  * 依赖全部注入,决策逻辑纯粹可测(见 spike:notify);Electron/Notification 归 main 提供。
  *
  * 完成信号:
- *   - status → 'reviewing':首轮扫描结束(每 review 只提示一次)
+ *   - status 迁出 scanning(github 走 'reviewing',本地/vbranch 直接闭环成 'completed'):
+ *     首轮扫描结束(每 review 只提示一次)
  *   - message role='agent':某条 discussion 的追问有新回复
  */
 export interface CompletionNotifierDeps {
@@ -27,7 +28,7 @@ export function createCompletionNotifier(deps: CompletionNotifierDeps): (e: Revi
     if (!deps.isEnabled()) return;
 
     let notice: CompletionNotice | null = null;
-    if (e.type === 'status' && e.payload === 'reviewing') {
+    if (e.type === 'status' && (e.payload === 'reviewing' || e.payload === 'completed')) {
       if (scanNotified.has(e.reviewId)) return;
       scanNotified.add(e.reviewId);
       notice = {

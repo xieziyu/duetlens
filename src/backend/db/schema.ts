@@ -155,7 +155,14 @@ ALTER TABLE review_rounds ADD COLUMN changed_files TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE review_rounds ADD COLUMN code_changed INTEGER NOT NULL DEFAULT 0;
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9];
+// 本地分支 / vbranch 扫完即终态(见 scanDoneStatus):这类 source 没有「提交 PR」那一步,
+// 存量的 reviewing 是永远闭不了环的旧态,一次性收成 completed;扫描中/失败/已提交不动。
+const V10 = `
+UPDATE reviews SET status = 'completed'
+ WHERE status = 'reviewing' AND source <> 'github-pr';
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

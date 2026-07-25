@@ -237,7 +237,9 @@
   background: var(--agent-soft);
   box-shadow: inset -1px 0 0 var(--border);
 }
-.rev-statusbar .sb-status.s-reviewing {
+.rev-statusbar .sb-status.s-reviewing,
+.rev-statusbar .sb-status.s-completed,
+.rev-statusbar .sb-status.s-submitted {
   color: var(--add);
   background: var(--add-bg);
 }

@@ -44,9 +44,11 @@ stateDiagram-v2
 
 `Starting` 是**阻断浮层**(见 [ui](ui.md#启动等待浮层点开始审核到进屏之间)):review 记录尚未建立、review 屏无从渲染,浮层按后端 `review:start-progress` 的四档真实阶段推进,失败原地转错误态。恢复历史会话不经过它。
 
-## Review 生命周期:scan → reviewing
+## Review 生命周期:scan → reviewing / completed
 
 进入 review 屏后先跑**首轮机审**(scan),扫描态即右栏初始态(否决 overlay —— 这条只管进屏之后;进屏之前的等待见上面的 `Starting`),扫完自动切到 Discussion/Findings。scan 期间左侧 diff 全程可读、可点 finding、可框选提问。
+
+**扫完落到哪个状态由 source 决定**(`scanDoneStatus`,见 `src/shared/domain.ts`):`github-pr` 还剩「提交 review 到 PR」这一步真正的终点动作,停在 `reviewing` 是有意义的待办;`local-branch` / `gitbutler-vbranch` 没有这一步 —— 导出与否、之后还追不追问都不改变「机审已出结论」,故**扫完即 `completed` 终态**,否则这类 review 永远闭不了环。追问、编辑 finding、triage 都不改状态;只有重跑复审把它拉回 `Scanning`。
 
 ```mermaid
 stateDiagram-v2
@@ -58,16 +60,21 @@ stateDiagram-v2
         ReadingFiles --> ReadingFiles : ◆ report_finding (findings 实时流入)
         ReadingFiles --> [*] : ⚙ 通读 N/N files 完成
     }
-    Scanning --> Reviewing : ⚙ 首轮机审就绪 (自动切 tab)
+    Scanning --> Reviewing : ⚙ 机审就绪 · source=github-pr (自动切 tab)
+    Scanning --> Completed : ⚙ 机审就绪 · source=local/vbranch (自动切 tab)
     state Reviewing {
         [*] --> Idle
         Idle --> Turn : ● 追问 / ◆ 主动补充
         Turn --> Idle : ⚙ turn 完成 (可能伴随 report_finding / update_finding)
     }
-    Reviewing --> Reviewing : ● 编辑 finding / triage / 提交
+    Reviewing --> Reviewing : ● 编辑 finding / triage
+    Reviewing --> Submitted : ⚙ 提交 PR review 成功
+    Completed --> Completed : ● 追问 / 编辑 finding / triage / 导出
+    Reviewing --> Scanning : ● 重跑复审
+    Completed --> Scanning : ● 重跑复审
 ```
 
-状态栏尾部的 `扫描中 / 已完成` demo 开关对应 `Scanning ↔ Reviewing` 两态(mockup 里手动切换以演示)。scan 的四个子步是右栏纵向 timeline 的 `pending → active → done` 序列(见下)。
+scan 的四个子步是右栏纵向 timeline 的 `pending → active → done` 序列(见下)。
 
 ### Scan timeline 单步
 

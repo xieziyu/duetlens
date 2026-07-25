@@ -13,6 +13,7 @@ import type {
   ReviewStartStage,
 } from '@shared/ipc';
 import type { PrSummary } from '@shared/source-discovery';
+import { scanDoneStatus } from '@shared/domain';
 import type { Discussion, Finding, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
 import { mergeLayers } from '@shared/prompt';
 import type { EditablePromptLayer, PromptSectionKey, ReviewPromptView } from '@shared/prompt';
@@ -107,7 +108,7 @@ const REVIEW: Review = {
   reasoningEffort: 'high',
   intensity: 'adversarial',
   title: 'feat: streaming transcode pipeline',
-  status: 'reviewing',
+  status: 'completed',
   summaryBody: '本次改动引入并发编码管线,整体方向合理,但并发计数存在数据竞争,需修正。',
   currentRound: 2,
   createdAt: now,
@@ -118,8 +119,8 @@ const REVIEW: Review = {
 const RECENT_REVIEWS: RecentReview[] = [
   { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: 'feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, updatedAt: now - 23 * 60_000 },
   { ...REVIEW, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', title: 'fix: episode duration off-by-one on live cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
-  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding', title: 'fix/feed-encoding', repoPath: '/Users/dev/podcast-go', status: 'exported', findingCount: 0, discussionCount: 0, submittedCount: 0, updatedAt: now - 26 * 3600_000 },
-  { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'exported', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
+  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding', title: 'fix/feed-encoding', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, submittedCount: 0, updatedAt: now - 26 * 3600_000 },
+  { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
   { ...REVIEW, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: 'refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, updatedAt: now - 10 * 86_400_000 },
   { ...REVIEW, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
 ];
@@ -531,9 +532,10 @@ export function installPreviewApi(): void {
         setTimeout(() => {
           const done: ReviewRound = { ...round, status: 'done', newFindings: 1, fixedCount: 1, endedAt: Date.now() };
           rounds[rounds.length - 1] = done;
-          review = { ...review, status: 'reviewing' };
+          const settled = scanDoneStatus(review.source);
+          review = { ...review, status: settled };
           fire({ reviewId: 'demo', type: 'round', payload: done });
-          fire({ reviewId: 'demo', type: 'status', payload: 'reviewing' });
+          fire({ reviewId: 'demo', type: 'status', payload: settled });
         }, 4000);
         return round;
       },
@@ -560,9 +562,10 @@ export function installPreviewApi(): void {
         setTimeout(() => {
           const done: ReviewRound = { ...round, status: 'done', newFindings: 1, endedAt: Date.now() };
           rounds[rounds.length - 1] = done;
-          review = { ...review, status: 'reviewing' };
+          const settled = scanDoneStatus(review.source);
+          review = { ...review, status: settled };
           fire({ reviewId: 'demo', type: 'round', payload: done });
-          fire({ reviewId: 'demo', type: 'status', payload: 'reviewing' });
+          fire({ reviewId: 'demo', type: 'status', payload: settled });
         }, 3000);
         return round;
       },

@@ -76,7 +76,7 @@ async function main() {
 
     assert.ok(persisted.length > 0, 'store 应至少有一条 finding');
     assert.equal(findings.length, persisted.length);
-    assert.equal(store.getReview(review.id)!.status, 'reviewing');
+    assert.equal(store.getReview(review.id)!.status, 'completed'); // local-branch:扫完即终态
     assert.ok(store.getReview(review.id)!.codexThreadId, 'threadId 应落库');
     for (const f of persisted) {
       assert.equal(f.origin, 'agent');

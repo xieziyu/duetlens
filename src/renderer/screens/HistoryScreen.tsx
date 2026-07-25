@@ -277,8 +277,8 @@ function SourceBadge({ source, sourceRef }: { source: SourceKind; sourceRef: str
 const STATUS_META: Record<ReviewStatus, { cls: string; label: string; pulse?: boolean }> = {
   scanning: { cls: 'review', label: '扫描中', pulse: true },
   reviewing: { cls: 'review', label: '审核中', pulse: true },
+  completed: { cls: 'done', label: '已完成' },
   submitted: { cls: 'submitted', label: '✓ 已提交' },
-  exported: { cls: 'done', label: '已完成' },
   // 失败与已完成不共用 done:两者都是终态,但失败要你回头看。字形前缀保证不只靠颜色区分
   failed: { cls: 'failed', label: '✕ 失败' },
 };
@@ -293,7 +293,7 @@ function StatusChip({ status }: { status: ReviewStatus }): React.JSX.Element {
   );
 }
 
-/** 状态筛选归组:扫描中/审核中 → reviewing;已提交 → submitted;导出/失败 → done。 */
+/** 状态筛选归组:扫描中/审核中 → reviewing;已提交 → submitted;已完成/失败 → done。 */
 function statusGroup(status: ReviewStatus): StatusFilter {
   if (status === 'scanning' || status === 'reviewing') return 'reviewing';
   if (status === 'submitted') return 'submitted';

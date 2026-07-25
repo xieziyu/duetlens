@@ -88,8 +88,8 @@ function SourceBadge({ source, sourceRef }: { source: SourceKind; sourceRef: str
 const STATUS_META: Record<ReviewStatus, { cls: string; label: string; pulse?: boolean }> = {
   scanning: { cls: 'scanning', label: '扫描中', pulse: true },
   reviewing: { cls: 'review', label: '审核中', pulse: true },
+  completed: { cls: 'done', label: '已完成' },
   submitted: { cls: 'submitted', label: '✓ 已提交' },
-  exported: { cls: 'done', label: '已完成' },
   failed: { cls: 'failed', label: '✕ 失败' },
 };
 

@@ -26,7 +26,7 @@ const review: Review = {
   reasoningEffort: null,
   intensity: 'standard',
   title: null,
-  status: 'reviewing',
+  status: 'completed',
   summaryBody: '并发方向合理,需收口共享状态的线程安全。',
   currentRound: 1,
   createdAt: T0,

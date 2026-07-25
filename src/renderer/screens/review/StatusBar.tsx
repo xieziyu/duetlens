@@ -4,8 +4,8 @@ import type { TokenUsage } from '@shared/agent-events';
 const STATUS_LABEL: Record<ReviewStatus, string> = {
   scanning: '扫描中',
   reviewing: '审核中',
+  completed: '已完成',
   submitted: '已提交',
-  exported: '已导出',
   failed: '失败',
 };
 
