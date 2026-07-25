@@ -336,11 +336,12 @@ export function ReviewScreen({
   }, [helpOpen, diffView, update, setActiveTab]);
 
   const scanning = status === 'scanning' || !status;
-  // 本轮失败的轮次记录 —— 进度条靠它显示断点与原因。只认当前轮:更早的失败轮已被后续轮次接手。
-  const failedRound = useMemo(
-    () => rounds.find((r) => r.round === currentRound && r.status === 'failed') ?? null,
+  const currentRoundRec = useMemo(
+    () => rounds.find((r) => r.round === currentRound) ?? null,
     [rounds, currentRound],
   );
+  // 本轮失败的轮次记录 —— 进度条靠它显示断点与原因。只认当前轮:更早的失败轮已被后续轮次接手。
+  const failedRound = currentRoundRec?.status === 'failed' ? currentRoundRec : null;
   // 失败后进度条**不卸载**:它是唯一能承载"断在哪、为什么断、怎么重试"的位置
   const showScanbar = scanning || failedRound !== null;
   // 进度信号必须按轮次隔离:findings 是整个 review 的累积集,拿全量当"本轮实时产出"会把
@@ -349,8 +350,14 @@ export function ReviewScreen({
     () => findings.filter((f) => f.round === currentRound),
     [findings, currentRound],
   );
-  // 同理 sessionReady 只看本轮信号(lastTool/tokenUsage 已在开轮时清空,见 useReviewStream)
-  const sessionReady = lastTool != null || tokenUsage != null || roundFindings.length > 0;
+  // 同理 sessionReady 只看本轮信号(lastTool/tokenUsage 已在开轮时清空,见 useReviewStream)。
+  // 落库的 codexThreadId 是这里唯一扛得住重入的信号:实时流信号随组件挂载清空,
+  // 扫描中途退出再从历史进来,进度就会倒退回"建立会话"—— 后端那轮 turn 其实一直在跑。
+  const sessionReady =
+    lastTool != null ||
+    tokenUsage != null ||
+    roundFindings.length > 0 ||
+    currentRoundRec?.codexThreadId != null;
   // 右栏扫描空态的镜片动画点亮几行 —— 与进度条同一份阶段派生,免得两处对"跑到哪一步"各说一套
   const scanLit = useMemo(
     () =>
