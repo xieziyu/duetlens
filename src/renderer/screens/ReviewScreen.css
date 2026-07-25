@@ -252,36 +252,6 @@
   background: currentColor;
   animation: pulse 2s infinite;
 }
-.rev-statusbar .sb-seg {
-  display: flex;
-  gap: 2px;
-  margin: 0 6px;
-  padding: 1.5px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface-3);
-}
-.rev-statusbar .sb-seg button {
-  padding: 1px 8px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-faint);
-  font-family: var(--mono);
-  font-size: 10.5px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-.rev-statusbar .sb-seg button:hover {
-  color: var(--text-dim);
-}
-.rev-statusbar .sb-seg button.on {
-  background: var(--agent-soft);
-  color: var(--agent-2);
-}
-
 .ring {
   width: 13px;
   height: 13px;
@@ -2449,28 +2419,6 @@
   opacity: 0.45;
 }
 
-.view-seg {
-  display: flex;
-  background: var(--surface-3);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 2px;
-}
-.view-seg button {
-  border: 0;
-  background: transparent;
-  color: var(--text-dim);
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 9px;
-  font-family: var(--mono);
-}
-.view-seg button.on {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 0 0 1px var(--agent-line) inset;
-}
 /* 文件头动作按钮:纯图标读不出功能,故带文案 */
 .fh-btn {
   height: 26px;
