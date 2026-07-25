@@ -137,7 +137,7 @@ stateDiagram-v2
 
 ## 右栏 tab
 
-Discussion / Findings / Summary 三 tab 互斥;键盘 `1/2/3` 直切(见 ui.md 键盘快捷键)。scan 结束后默认落在 Discussion。
+Discussion / Findings / Summary 三 tab 互斥;键盘 `⌘1/⌘2/⌘3` 直切(见 ui.md 键盘快捷键)。scan 结束后默认落在 Discussion。
 
 ```mermaid
 stateDiagram-v2
@@ -222,13 +222,13 @@ stateDiagram-v2
 
 ### unified / split 切换
 
-file-header segmented 切换;键盘 `u` 直切。同一 hunk 保留两张 `.code` 表,内联卡共享不复制(见 ui.md「split vs unified」)。
+file-header segmented 切换;键盘 `⌘U` 直切。同一 hunk 保留两张 `.code` 表,内联卡共享不复制(见 ui.md「split vs unified」)。
 
 ```mermaid
 stateDiagram-v2
     [*] --> unified
-    unified --> split : ● 切 Split / 键 u
-    split --> unified : ● 切 Unified / 键 u
+    unified --> split : ● 切 Split / 键 ⌘U
+    split --> unified : ● 切 Unified / 键 ⌘U
 ```
 
 ### per-file viewed

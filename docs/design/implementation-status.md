@@ -90,6 +90,7 @@
 - **finding 去重从软约束升级为软+硬**:prompt 要求不重报之外,`shared/finding-dedupe.ts` 兜底吸收(同文件 + 邻近行 + 标题 bigram 相似度)。阈值取保守值 —— 宁可多出一条也不吞掉真问题。该兜底对首轮同样生效(agent 偶尔会重复上报同一处)。
 - **复审表态是三态而非两态**:`resolve_finding` 除 `fixed` / `still_present` 外必须有 `wont_fix`(作者已回应说明不改)。实机踩过:作者在 PR 上回「纯联调,手动调试脚本,可忽略」后代码原样未变,只有两格时 agent 只能答 `still_present`,同一条每轮重报 —— 它没答错,是**我们问错了问题**。thread 回复一直都注入到了 prompt,缺的是**表达结论的词**与**要求它先读作者回复的指令**。判定顺序因此把「作者怎么说」排在「代码变没变」之前。`wont_fix` **不自动剔除**:作者一句"可忽略"不该自动关掉一条真实的安全问题,采纳与否是 reviewer 的决定(卡上给一键采纳,把作者原话存为剔除理由)。
 - **`fixed` 反过来自动剔除**:复核判定已修复 = 代码里已经没有,不该继续占着待提交清单等人逐条手点。与 `wont_fix` 的差别是语义而非力度("问题没了" vs "作者说不改")。自动结案的条目不进去重黑名单 —— 同一处再被报出来算**回归**,恢复保留而非静默抑制;复审 prompt 里也因此与 reviewer 剔除项分节交代。判据 `isAutoClosedFixed` 收在 `shared/domain.ts`。
+- **导航快捷键一律带 `⌘`,帮助层只有一份**:`1/2/3`、`u`、`/` 这类裸键在一屏全是输入框的 review 上要么误触、要么打字时被迫失效,改为 `⌘1/⌘2/⌘3`、`⌘U`、`⌘⇧F`(裸键只留 `?` 与 `Esc`),修饰键在输入框内照常生效。设置屏原先手抄一份「常用摘录」,已漂移出 `e` 编辑、`⌘.` 中断、`⌘⇧↵` 提交三条从未实现的键位 —— 现在改为一个按钮复用 `components/KbdHelp` 同一浮层(键位只读,无第二份表可抄错)。
 - **右栏 tab 持久化**:全局 `ui_settings.default_tab` 为「无记忆时的初始默认」,per-review `review_ui_state.last_active_tab` 覆盖。
 - **领域事件面全程编译期收敛**:`ReviewSessionEvents` 是事件名→载荷的单一来源;ReviewSession **组合**(非继承)EventEmitter,`on/off` 收窄、`emit` 私有;ReviewManager 用 `keyof` 映射的转发表;renderer `useReviewStream` 用 `switch` + never 哨兵(运行时只告警不抛,容忍 main 比 renderer 新)。三处任一漏接新事件都编译失败 —— 起因是 agent finding 的承载 discussion 曾只落库未外发,整个 Discussion 栏为空却无人报错。
 - codex 版本以 **0.144.1** 实测为准,**0.144.6 经 `generate-ts` 全量 diff 确认协议逐字节无变化**(详见 [codex-integration](codex-integration.md));协议子集手写在 `protocol.ts`。
