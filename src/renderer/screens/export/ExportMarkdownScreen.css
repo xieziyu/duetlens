@@ -448,12 +448,16 @@
   gap: 8px;
 }
 .btn-copy:hover {
-  filter: brightness(1.06);
+  background: var(--accent-solid-hover);
 }
 .btn-copy.done {
   background: var(--agent-soft);
   color: var(--agent-2);
   box-shadow: 0 0 0 1px var(--agent-line) inset;
+}
+/* .done 自带 background 且更靠后,不单独给 hover 就会没有反馈(仍可再复制一次) */
+.btn-copy.done:hover {
+  background: color-mix(in oklab, var(--agent) 22%, transparent);
 }
 .btn-save {
   width: 100%;

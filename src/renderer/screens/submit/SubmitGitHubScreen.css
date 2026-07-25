@@ -702,7 +702,7 @@ textarea.summary:focus {
   gap: 8px;
 }
 .submit:hover {
-  filter: brightness(1.06);
+  background: var(--accent-solid-hover);
 }
 .submit:disabled {
   opacity: 0.5;
@@ -719,10 +719,17 @@ textarea.summary:focus {
   color: var(--text);
   border: 1px solid var(--border);
 }
+.submit.ghost:hover {
+  background: var(--surface-3);
+}
 .submit.retry {
   background: var(--sev-high);
   /* 同 .scanbar .se-act button.primary:浅红填充上不能用白字 */
   color: var(--on-accent);
+}
+/* 变体自带 background,和 .submit:hover 同权重却更靠后 —— 不各给一条 hover 就会没有任何反馈 */
+.submit.retry:hover {
+  background: color-mix(in oklab, var(--sev-high) 85%, black);
 }
 .foot-note {
   margin-top: 9px;

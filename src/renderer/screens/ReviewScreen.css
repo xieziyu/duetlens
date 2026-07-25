@@ -108,7 +108,7 @@
   border: 1px solid transparent;
 }
 .rev-topbar .submit-cta:hover {
-  filter: brightness(1.08);
+  background: var(--accent-solid-hover);
 }
 /* 按钮内的小垫子往**深**走,不能用半透明白:白垫会把 --accent-solid 冲淡成更亮的蓝,
    压在上面的白字于是比按钮标签还难读(曾是 2.98:1)。深垫同时对上了 --surface-2/-3 那套"内部凹陷"的语义。 */
@@ -2373,7 +2373,7 @@
   gap: 7px;
 }
 .fe-foot .save:hover {
-  filter: brightness(1.08);
+  background: var(--accent-solid-hover);
 }
 /* 同 .cta-badge:实心按钮内的垫子走深色 */
 .fe-foot .save .kbd {
@@ -3337,7 +3337,7 @@
   gap: 7px;
 }
 .sum-submit:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--accent-solid-hover);
 }
 .sum-submit:disabled {
   opacity: 0.55;
@@ -3854,7 +3854,7 @@
   color: var(--on-solid);
 }
 .rp-go:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--accent-solid-hover);
 }
 .rp-cancel:disabled,
 .rp-go:disabled {

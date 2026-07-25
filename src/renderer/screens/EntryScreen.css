@@ -815,7 +815,7 @@
   white-space: nowrap;
   font-family: inherit;
 }
-.gobtn:hover { filter: brightness(1.08); }
+.gobtn:hover { background: var(--accent-solid-hover); }
 .gobtn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
 .gobtn .arw { font-size: 15px; line-height: 1; }
 

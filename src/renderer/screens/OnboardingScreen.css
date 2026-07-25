@@ -305,7 +305,7 @@
   font-size: 14px;
 }
 .ob-cta:hover:not(:disabled) {
-  filter: brightness(1.06);
+  background: var(--accent-solid-hover);
 }
 .ob-cta:disabled {
   background: var(--surface-3);

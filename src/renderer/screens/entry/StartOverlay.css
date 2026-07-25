@@ -265,4 +265,4 @@
   color: var(--on-solid, var(--on-accent));
   font-weight: 500;
 }
-.sbtn.primary:hover { filter: brightness(1.08); }
+.sbtn.primary:hover { background: var(--accent-solid-hover); }
