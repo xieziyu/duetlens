@@ -226,7 +226,24 @@ function main() {
   });
   assert.match(noChange, /代码与上一轮相比没有变化/);
   assert.ok(!noChange.includes('PR 上的协作上下文'), '非 github source 不应出现 PR 区块');
-  log('代码未变 / 非 github source 的降级措辞正确');
+
+  // vbranch 两端都没有 head:整句省掉 head,而不是写「head (未知) → (未知)」这种废话
+  const noSha = buildRerunPrompt({
+    round: 2, prevRound: { ...prevRound, headSha: null }, headSha: null,
+    changedFiles: ['src/pipeline.ts'], codeChanged: true,
+    openFindings: open, dismissedFindings: dropped, messagesByDiscussion, pr: null,
+  });
+  assert.match(noSha, /^代码已更新。$/m);
+  assert.ok(!noSha.includes('(未知)'), 'vbranch 没有稳定 commit,不该把占位符喂给 agent');
+  assert.match(noSha, /- src\/pipeline\.ts/, '省掉 head 不影响变更文件仍然列出');
+  // 一端有 head 时仍要写出来 —— 那半边是真信息
+  const oneSha = buildRerunPrompt({
+    round: 2, prevRound: { ...prevRound, headSha: null }, headSha: 'cccc2222dddd',
+    changedFiles: [], codeChanged: true,
+    openFindings: open, dismissedFindings: dropped, messagesByDiscussion, pr: null,
+  });
+  assert.match(oneSha, /head \(未知\) → cccc2222/);
+  log('代码未变 / 非 github source / vbranch 无 head 的降级措辞正确');
 
   // ---- 5. 去重:相似度与命中判定 ----
   assert.ok(titleSimilarity('counter 命名可更贴合语义', 'counter 命名建议更贴合语义') > 0.7);

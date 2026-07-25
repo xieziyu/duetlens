@@ -268,7 +268,12 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
 
   out.push(`这是第 ${round} 轮复审(上一轮是第 ${round - 1} 轮)。`);
   if (codeChanged) {
-    out.push(`代码已更新:head ${sha8(prevRound?.headSha)} → ${sha8(headSha)}。`);
+    // vbranch 的改动还在工作区、没有稳定 commit,两端都是空 —— 与其写「head (未知) → (未知)」
+    // 这种什么也没说的话,不如整句省掉 head:变化本身已由下面的变更文件与 diff 表达。
+    const hasSha = Boolean(prevRound?.headSha || headSha);
+    out.push(
+      hasSha ? `代码已更新:head ${sha8(prevRound?.headSha)} → ${sha8(headSha)}。` : '代码已更新。',
+    );
     if (changedFiles.length) {
       out.push(`自上一轮以来发生改动的文件(复审重点,但不要只看这些):`);
       out.push(changedFiles.map((f) => `- ${f}`).join('\n'));
