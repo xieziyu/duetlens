@@ -233,21 +233,23 @@ stateDiagram-v2
 
 ### per-file viewed
 
-文件树每行 + diff file-header 的 viewed tick;标记后删除线 + 变灰 + 绿✓,并折叠该文件 diff。折叠(`⌄`)与 viewed 是两件事:`⌄` 仅折叠不改 viewed。
+文件树每行的 viewed tick + diff file-header 的「已看」勾选框;标记后删除线 + 变灰 + 绿✓,并折叠该文件 diff、把视口推进到下一个未看文件。折叠与 viewed 是两件事:折叠按钮(`− 折叠` / `+ 展开`)仅折叠不改 viewed,也不推进。
 
 ```mermaid
 stateDiagram-v2
     state "file" as file {
         [*] --> unviewed
-        unviewed --> viewed : ● file-header ✓ (标记 + 折叠)
-        viewed --> unviewed : ● 再次点 ✓ (取消)
+        unviewed --> viewed : ● 已看 (标记 + 折叠 + 跳下一个未看)
+        viewed --> unviewed : ● 再次点已看 (取消 + 展开, 不跳)
     }
     state "diff 折叠" as fold {
         [*] --> expanded
-        expanded --> collapsed : ● ⌄ 折叠 / ● 标记 viewed
+        expanded --> collapsed : ● 折叠 / ● 标记 viewed
         collapsed --> expanded : ● 点击展开 bar / ● 取消 viewed
     }
 ```
+
+折叠与推进都挂在「标记已看即折叠」偏好上:该偏好关闭时标记已看既不折叠也不推进。
 
 viewed 是**每 review 持久化**的 UI 状态(见 [frontend-components](frontend-components.md) 持久化节)。
 

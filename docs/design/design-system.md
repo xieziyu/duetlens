@@ -67,7 +67,7 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 | Nav rail | 全局导航:入口/当前审核/历史/规则 ▸ 明暗/设置 | `.rail .rail-btn` | on / hover |
 | Top bar | 来源 chip(含 ⧉ 外链)/ 标题 / 提交 CTA | `.topbar .pr-chip .submit-cta` | github / 本地 |
 | Status bar | agent 运行态(codex · 模型 · effort)· ctx/token | `.statusbar .sb-status .sb-item .sb-agent` | scan / reviewing / failed |
-| File header | 文件名 / 路径两行 + 计量 + 已看/折叠 | `.file-header .fh-name .fh-path .fh-meta` | viewed / collapsed |
+| File header | 文件名 / 路径两行 + 计量 + 已看/折叠 | `.file-header .fh-name .fh-path .fh-meta .fh-btn` | viewed / collapsed |
 | File tree | 改动文件 + finding 徽标 + Viewed | `.tree .file .badge .vtick` | active / viewed |
 | Diff | unified / split 代码 + 展开未改动 | `.code.unified .code.split .expander` | unified / split / collapsed |
 | Inline card | 内联 finding / discussion | `.card.agent .card.human` | view / edit / submitted / dismissed |
