@@ -93,6 +93,20 @@ export interface ReviewStartInput {
   intensity?: ReviewIntensity;
   /** 用户给 agent 的附加上下文,随首轮机审注入(可选) */
   context?: string;
+  /** renderer 生成的一次性 id;启动阶段事件按它回关,过期的启动不会污染当前浮层 */
+  startId?: string;
+}
+
+/**
+ * 启动一次审核的阶段。大 PR 卡在 `diff`(gh 下载可达数十秒),入口浮层靠这几档
+ * 让等待有真实进度,而不是空转的 spinner。
+ */
+export type ReviewStartStage = 'resolve' | 'diff' | 'record' | 'agent';
+
+/** 启动阶段推进:stage 刚进入(其前序阶段即已完成)。 */
+export interface ReviewStartProgress {
+  startId: string;
+  stage: ReviewStartStage;
 }
 
 /** 发起一轮重跑的入参。 */
@@ -161,6 +175,8 @@ export type SubmitReviewResult =
 /** 后端 → renderer 单向推送(webContents.send) */
 export const IpcEvents = {
   reviewEvent: 'review:event',
+  /** 发起审核期间的阶段推进(review 记录尚未建立,故不走 reviewEvent) */
+  reviewStartProgress: 'review:start-progress',
   /** 原生通知点击后主进程回推:打开该 review */
   notifyOpenReview: 'notify:open-review',
   /** 窗口聚焦时的应用内轻提示(不弹原生通知) */
@@ -260,6 +276,8 @@ export interface DuetlensApi {
     saveUiState(reviewId: string, state: ReviewUiState): Promise<void>;
     /** 订阅领域事件;返回取消订阅函数。 */
     onEvent(handler: (e: ReviewEvent) => void): () => void;
+    /** 订阅 start 的阶段推进(入口等待浮层用);返回取消订阅函数。 */
+    onStartProgress(handler: (p: ReviewStartProgress) => void): () => void;
   };
   notifications: {
     /** 原生完成通知被点击 → 打开对应 review(reply 通知带 discussionId,可定位线程);返回取消订阅函数。 */

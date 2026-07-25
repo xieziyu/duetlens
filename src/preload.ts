@@ -5,6 +5,7 @@ import {
   type CompletionNotice,
   type DuetlensApi,
   type ReviewEvent,
+  type ReviewStartProgress,
 } from '@shared/ipc';
 import type { UiSettings } from '@shared/domain';
 
@@ -53,6 +54,11 @@ const api: DuetlensApi = {
       const listener = (_e: IpcRendererEvent, payload: ReviewEvent) => handler(payload);
       ipcRenderer.on(IpcEvents.reviewEvent, listener);
       return () => ipcRenderer.off(IpcEvents.reviewEvent, listener);
+    },
+    onStartProgress: (handler: (p: ReviewStartProgress) => void) => {
+      const listener = (_e: IpcRendererEvent, payload: ReviewStartProgress) => handler(payload);
+      ipcRenderer.on(IpcEvents.reviewStartProgress, listener);
+      return () => ipcRenderer.off(IpcEvents.reviewStartProgress, listener);
     },
   },
   notifications: {

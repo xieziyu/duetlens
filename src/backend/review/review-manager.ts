@@ -11,7 +11,7 @@ import type {
   UiSettings,
 } from '@shared/domain';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { AddFindingInput, FindingEditInput, RecentReview, RerunInput, ReviewEvent, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, FindingEditInput, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
@@ -399,10 +399,18 @@ export class ReviewManager extends EventEmitter {
     return loadReviewPrompt({ cwd: input.cwd });
   }
 
-  /** 起真实审核:按 target 建 source,拉元数据落库,后台跑首轮扫描。 */
-  async startReview(target: ReviewTarget): Promise<Review> {
+  /**
+   * 起真实审核:按 target 建 source,拉元数据落库,后台跑首轮扫描。
+   * onStage 逐阶段回调(入口等待浮层据此显示真实进度);拉取失败时不留下半张 review 记录。
+   */
+  async startReview(target: ReviewTarget, onStage?: (s: ReviewStartStage) => void): Promise<Review> {
     const source = createSource(target);
+    onStage?.('resolve');
     const prepared = await source.prepare();
+    // 预取 diff 落库:MCP 与 renderer 共用同一份,省 codex 侧一次 get_diff 往返。
+    onStage?.('diff');
+    const rawDiff = await source.getDiff();
+    onStage?.('record');
     const review = this.store.createReview({
       source: target.source,
       sourceRef: target.ref,
@@ -412,11 +420,10 @@ export class ReviewManager extends EventEmitter {
       reasoningEffort: target.reasoningEffort || null,
       intensity: target.intensity ?? 'standard',
     });
-    // 预取 diff 落库:MCP 与 renderer 共用同一份,省 codex 侧一次 get_diff 往返。
-    const rawDiff = await source.getDiff();
     this.store.setDiff(review.id, rawDiff);
     // 首轮也建轮次记录:轮次表是完整履历,复审只是往后追加,不是另一套东西。
     this.store.startRound(review.id, 1, { headSha: prepared.headSha, note: target.context });
+    onStage?.('agent');
     const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: review.intensity });
     this.launch(review, prepared.cwd, {
       getDiff: () => rawDiff,

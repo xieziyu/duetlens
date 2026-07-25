@@ -9,7 +9,7 @@ import {
   type ReviewIntensity,
   type SourceKind,
 } from '@shared/domain';
-import type { RecentReview, ReviewStartInput } from '@shared/ipc';
+import type { RecentReview, ReviewStartInput, ReviewStartStage } from '@shared/ipc';
 import type {
   GitButlerStatus,
   LocalBranchList,
@@ -19,6 +19,7 @@ import type {
 import { useSettings } from '../settings/SettingsProvider';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './entry/icons';
 import { RecentReviews } from './entry/RecentReviews';
+import { StartOverlay } from './entry/StartOverlay';
 import { LogoMark } from '../components/LogoMark';
 import './EntryScreen.css';
 
@@ -58,6 +59,12 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 启动等待浮层:阶段由后端事件推进,失败时原地转错误态(不回落到卡片内的行内报错)
+  const [overlay, setOverlay] = useState(false);
+  const [startStage, setStartStage] = useState<ReviewStartStage | null>(null);
+  const [startFailed, setStartFailed] = useState<string | null>(null);
+  const startIdRef = useRef<string | null>(null);
+  const shownAt = useRef(0);
   // github 面板上报的「PR 已成功解析且 gh 已登录」;作为该来源可发起的门控
   const [ghReady, setGhReady] = useState(false);
 
@@ -66,6 +73,15 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     void refreshRecent();
     window.duetlens.agent.listModels().then(setModels).catch(() => setModels([]));
   }, []);
+
+  // 阶段推进只认当前这次发起的 startId,重试后旧的一路事件不会再往浮层里灌
+  useEffect(
+    () =>
+      window.duetlens.review.onStartProgress((p) => {
+        if (p.startId === startIdRef.current) setStartStage(p.stage);
+      }),
+    [],
+  );
 
   // settings 落地后预填默认来源/模型/effort 一次(不覆盖用户随后编辑)
   const prefilled = useRef(false);
@@ -99,8 +115,12 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     (source === 'github-pr' ? ghReady : !!repoPath.trim());
 
   const start = async () => {
+    const startId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+    startIdRef.current = startId;
     setBusy(true);
     setError(null);
+    setStartFailed(null);
+    setStartStage('resolve');
     const trimmedModel = model.trim();
     const input: ReviewStartInput = {
       source,
@@ -111,16 +131,37 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       reasoningEffort: effort,
       intensity,
       context: context.trim() || undefined,
+      startId,
     };
     update({ defaultModel: trimmedModel, defaultEffort: effort, defaultIntensity: intensity });
+    // 只有慢启动才升浮层:本地分支常几百毫秒就回来,闪一下比不闪更吵
+    const rise = window.setTimeout(() => {
+      shownAt.current = performance.now();
+      setOverlay(true);
+    }, START_OVERLAY_DELAY);
     try {
       const review = await window.duetlens.review.start(input);
+      window.clearTimeout(rise);
+      await settleOverlay(shownAt.current);
       onOpenReview(review.id);
     } catch (e) {
-      setError((e as Error).message ?? String(e));
-    } finally {
+      window.clearTimeout(rise);
+      const message = (e as Error).message ?? String(e);
+      // 浮层已经挡住界面,就地转错误态;还没升起来的快速失败仍走卡片内行内报错
+      if (shownAt.current) setStartFailed(message);
+      else setError(message);
       setBusy(false);
     }
+  };
+
+  // 返回修改:收浮层、把失败原因留在卡片里,选项与已填内容原样保留
+  const dismissOverlay = () => {
+    startIdRef.current = null;
+    shownAt.current = 0;
+    setOverlay(false);
+    setStartStage(null);
+    if (startFailed) setError(startFailed);
+    setStartFailed(null);
   };
 
   return (
@@ -300,8 +341,29 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       </div>
 
       <RecentReviews reviews={reviews} onOpen={onOpenReview} />
+
+      {overlay && (
+        <StartOverlay
+          stage={startStage ?? 'resolve'}
+          target={target || ref.trim()}
+          error={startFailed}
+          onRetry={() => void start()}
+          onBack={dismissOverlay}
+        />
+      )}
     </div>
   );
+}
+
+/** 浮层升起前的静默期:比这更快返回的启动不该看见浮层一闪。 */
+const START_OVERLAY_DELAY = 240;
+/** 浮层已经露面时的最短停留,免得刚看清就被换屏。 */
+const START_OVERLAY_MIN = 520;
+
+function settleOverlay(shownAt: number): Promise<void> {
+  if (!shownAt) return Promise.resolve();
+  const rest = START_OVERLAY_MIN - (performance.now() - shownAt);
+  return rest > 0 ? new Promise((r) => window.setTimeout(r, rest)) : Promise.resolve();
 }
 
 // ---------- GitHub PR panel ----------

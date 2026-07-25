@@ -1,0 +1,268 @@
+/* 发起审核的等待浮层。配色 token 复用 theme/tokens.css。 */
+
+.start-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in oklab, var(--bg) 72%, transparent);
+  backdrop-filter: blur(7px) saturate(0.9);
+  animation: sv-in 160ms ease-out;
+}
+/* 亮色下拿 bg 调出来的遮罩就是一片白,压不住底层;改用中性暗色压场 */
+:root[data-mode='light'] .start-veil {
+  background: color-mix(in oklab, #1f2328 30%, transparent);
+}
+@keyframes sv-in {
+  from { opacity: 0; }
+}
+
+.start-panel {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow), 0 0 0 1px color-mix(in oklab, var(--agent) 12%, transparent);
+  padding: 0 0 16px;
+  overflow: hidden;
+  outline: none;
+  animation: sv-rise 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes sv-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+}
+
+/* ---------- 扫描动画:镜片在一叠代码行上来回扫 ---------- */
+.start-art {
+  position: relative;
+  height: 104px;
+  padding: 22px 26px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-soft);
+  background:
+    radial-gradient(120% 100% at 50% 0%, var(--glow1), transparent 70%),
+    var(--surface-2);
+}
+.art-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.art-row {
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--text-faint) 42%, transparent);
+  transition: background 0.5s ease;
+}
+.art-row.add { background: color-mix(in oklab, var(--add) 26%, transparent); }
+.art-row.del { background: color-mix(in oklab, var(--del) 24%, transparent); }
+/* 已跑过的阶段数 = 已「读到」的行数,让动画本身也带一点真实进度 */
+.art-row.lit { background: color-mix(in oklab, var(--text-dim) 62%, transparent); }
+.art-row.lit.add { background: color-mix(in oklab, var(--add) 55%, transparent); }
+.art-row.lit.del { background: color-mix(in oklab, var(--del) 50%, transparent); }
+
+/* 镜片横坐标:亮色副本的裁切与镜片本体共用同一个动画变量,两者不可能错位 */
+@property --lx {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 50%;
+}
+.start-art {
+  --lx: 50%;
+  animation: sv-sweep 3s ease-in-out infinite alternate;
+}
+@keyframes sv-sweep {
+  from { --lx: 13%; }
+  to { --lx: 87%; }
+}
+
+/* 亮色副本只在镜片圆内露出 = 镜片下才「看清」这几行 */
+.art-sweep,
+.art-track {
+  position: absolute;
+  inset: 22px 26px;
+}
+.art-sweep {
+  clip-path: circle(20px at var(--lx) 50%);
+}
+.art-sweep .art-row {
+  background: var(--agent-2);
+  opacity: 0.92;
+}
+.art-sweep .art-row.add { background: var(--add); }
+.art-sweep .art-row.del { background: var(--del); }
+
+/* 镜片本体:与应用图标同一语汇(细环 + 左上高光) */
+.art-lens {
+  position: absolute;
+  top: 50%;
+  left: var(--lx);
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, var(--agent) 48%, transparent);
+  background:
+    linear-gradient(150deg, color-mix(in oklab, #fff 18%, transparent), transparent 46%),
+    color-mix(in oklab, var(--agent) 7%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--bg) 35%, transparent),
+    0 6px 18px -8px color-mix(in oklab, var(--agent) 60%, transparent);
+}
+
+/* 失败:扫描停住、镜片居中转红环 —— 画面一眼看出不是还在跑 */
+.start-art.failed {
+  animation: none;
+  --lx: 50%;
+}
+.start-art.failed .art-sweep { display: none; }
+.start-art.failed .art-lens {
+  border-color: color-mix(in oklab, var(--sev-high) 55%, transparent);
+  box-shadow: 0 6px 18px -8px color-mix(in oklab, var(--sev-high) 50%, transparent);
+}
+.start-art.failed .art-row { opacity: 0.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .start-veil, .start-panel, .start-art { animation: none; }
+}
+
+/* ---------- 文案 ---------- */
+.start-head {
+  padding: 15px 20px 4px;
+}
+.start-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.start-target {
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 阶段 stepper:与审核屏 .scanbar 同一套 done/active/pending 语义 ---------- */
+.start-steps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.start-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.start-steps li.done { color: var(--text-dim); }
+.start-steps li.active { color: var(--text); font-weight: 500; }
+.start-steps .slabel { min-width: 0; }
+.start-steps .stime {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.start-steps .sdot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex: none;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  position: relative;
+}
+.start-steps li.done .sdot {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--agent) 40%, transparent);
+}
+.start-steps li.done .sdot::after {
+  content: '';
+  position: absolute;
+  left: 2.5px;
+  top: 0.5px;
+  width: 3px;
+  height: 6px;
+  border: solid var(--agent-2);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(42deg);
+}
+.start-steps li.active .sdot {
+  border-color: transparent;
+  background: conic-gradient(from 210deg, var(--agent), var(--agent-2), var(--agent));
+}
+.start-steps li.active .sdot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid var(--agent-line);
+  animation: sv-pulse 1.8s ease-out infinite;
+}
+@keyframes sv-pulse {
+  0% { opacity: 0.9; transform: scale(0.85); }
+  70%, 100% { opacity: 0; transform: scale(1.35); }
+}
+
+.start-hint {
+  margin: 14px 20px 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+.start-hint.slow { color: var(--text-dim); }
+
+/* ---------- 错误态 ---------- */
+.start-err {
+  margin: 12px 20px 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in oklab, var(--sev-high) 30%, var(--border));
+  background: color-mix(in oklab, var(--sev-high) 8%, transparent);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.55;
+  max-height: 132px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.start-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 14px 20px 0;
+}
+.sbtn {
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 7px 13px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.sbtn:hover { background: var(--surface-2); color: var(--text); }
+.sbtn.primary {
+  border-color: transparent;
+  background: var(--accent-solid, var(--agent));
+  color: var(--on-solid, var(--on-accent));
+  font-weight: 500;
+}
+.sbtn.primary:hover { filter: brightness(1.08); }

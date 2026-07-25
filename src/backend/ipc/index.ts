@@ -12,6 +12,7 @@ import {
   type RerunInput,
   type ReviewEvent,
   type ReviewStartInput,
+  type ReviewStartProgress,
   type SubmitReviewInput,
 } from '@shared/ipc';
 import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
@@ -51,18 +52,25 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   );
   ipcMain.handle(IpcChannels.reviewDiscussions, (_e, reviewId: string) => manager.getDiscussions(reviewId));
   ipcMain.handle(IpcChannels.reviewMessages, (_e, discussionId: string) => manager.getMessages(discussionId));
-  ipcMain.handle(IpcChannels.reviewStart, (_e, input: ReviewStartInput) =>
-    manager.startReview({
-      source: input.source,
-      ref: input.ref,
-      repoPath: input.repoPath ?? '',
-      baseRef: input.baseRef,
-      model: input.model,
-      reasoningEffort: input.reasoningEffort,
-      intensity: input.intensity,
-      context: input.context,
-    }),
-  );
+  ipcMain.handle(IpcChannels.reviewStart, (_e, input: ReviewStartInput) => {
+    const startId = input.startId;
+    return manager.startReview(
+      {
+        source: input.source,
+        ref: input.ref,
+        repoPath: input.repoPath ?? '',
+        baseRef: input.baseRef,
+        model: input.model,
+        reasoningEffort: input.reasoningEffort,
+        intensity: input.intensity,
+        context: input.context,
+      },
+      startId
+        ? (stage) =>
+            broadcast(IpcEvents.reviewStartProgress, { startId, stage } satisfies ReviewStartProgress)
+        : undefined,
+    );
+  });
   ipcMain.handle(IpcChannels.reviewRerun, (_e, reviewId: string, input?: RerunInput) =>
     manager.rerunReview(reviewId, input ?? {}),
   );

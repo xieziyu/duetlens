@@ -4,7 +4,14 @@
  * 仅 preview 入口引用,不进 app 打包路径。
  */
 import { parseUnifiedDiff } from '@shared/diff';
-import type { CompletionNotice, DuetlensApi, RecentReview, ReviewEvent } from '@shared/ipc';
+import type {
+  CompletionNotice,
+  DuetlensApi,
+  RecentReview,
+  ReviewEvent,
+  ReviewStartProgress,
+  ReviewStartStage,
+} from '@shared/ipc';
 import type { PrSummary } from '@shared/source-discovery';
 import type { Discussion, Finding, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
 import { mergeLayers } from '@shared/prompt';
@@ -362,6 +369,7 @@ export function installPreviewApi(): void {
   const discussions = asClean || asStream ? [] : DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const listeners = new Set<(e: ReviewEvent) => void>();
+  const startListeners = new Set<(p: ReviewStartProgress) => void>();
   const fire = (e: ReviewEvent) => {
     for (const l of listeners) l(e);
   };
@@ -422,7 +430,29 @@ export function installPreviewApi(): void {
       fileContent: async (_r, path) => (path === 'src/pipeline.ts' ? PIPELINE_SRC : null),
       discussions: async () => discussions,
       messages: async (discussionId) => msgStore[discussionId] ?? [],
-      start: async () => review,
+      // ?start 模拟大 PR 的慢启动(阶段按真实顺序推进,diff 停够久能看到「拉取偏慢」提示);
+      // ?start=error 在 diff 阶段失败,自查浮层的错误态
+      start: async (input) => {
+        const mode = params.get('start');
+        if (mode === null) return review;
+        const id = input.startId ?? '';
+        const at = (stage: ReviewStartStage, ms: number) =>
+          window.setTimeout(() => {
+            for (const l of startListeners) l({ startId: id, stage });
+          }, ms);
+        at('resolve', 120);
+        at('diff', 1_100);
+        if (mode === 'error') {
+          await new Promise((r) => window.setTimeout(r, 4_000));
+          throw new Error(
+            'gh pr diff 失败:GraphQL: Could not resolve to a PullRequest with the number of 482. (repository.pullRequest)',
+          );
+        }
+        at('record', 12_000);
+        at('agent', 13_000);
+        await new Promise((r) => window.setTimeout(r, 14_000));
+        return review;
+      },
       rounds: async () => rounds,
       // 开一轮:插入 scanning 记录并回推,4s 后收轮 —— 够看清面板→扫描→收轮的整条视觉链路
       rerun: async (_r, input) => {
@@ -639,6 +669,10 @@ export function installPreviewApi(): void {
       onEvent: (handler) => {
         listeners.add(handler);
         return () => listeners.delete(handler);
+      },
+      onStartProgress: (handler) => {
+        startListeners.add(handler);
+        return () => startListeners.delete(handler);
       },
     },
     notifications: {
