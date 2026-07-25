@@ -110,10 +110,12 @@
 .rev-topbar .submit-cta:hover {
   filter: brightness(1.08);
 }
+/* 按钮内的小垫子往**深**走,不能用半透明白:白垫会把 --accent-solid 冲淡成更亮的蓝,
+   压在上面的白字于是比按钮标签还难读(曾是 2.98:1)。深垫同时对上了 --surface-2/-3 那套"内部凹陷"的语义。 */
 .rev-topbar .submit-cta .cta-badge {
   font-family: var(--mono);
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.22);
   padding: 1px 6px;
   border-radius: 6px;
 }
@@ -2373,10 +2375,11 @@
 .fe-foot .save:hover {
   filter: brightness(1.08);
 }
+/* 同 .cta-badge:实心按钮内的垫子走深色 */
 .fe-foot .save .kbd {
   font-family: var(--mono);
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.22);
   padding: 1px 5px;
   border-radius: 5px;
 }
