@@ -19,6 +19,14 @@ function agentTitle(model: string | null, effort: string | null): string {
   return parts.join(' · ');
 }
 
+/** 状态栏空间有限,只给量级;精确值留在 title 里 */
+function compactTokens(n: number): string {
+  if (n < 1000) return String(n);
+  const [value, unit] = n < 1_000_000 ? [n / 1000, 'K'] : [n / 1_000_000, 'M'];
+  const text = value < 10 ? value.toFixed(1).replace(/\.0$/, '') : String(Math.round(value));
+  return `${text}${unit}`;
+}
+
 function contextTitle({ used, cumulative, total }: TokenUsage): string {
   const ctx = total ? `上下文 ${used.toLocaleString()} / ${total.toLocaleString()}` : `上下文 ${used.toLocaleString()}`;
   return `${ctx} · 本次会话累计 ${cumulative.toLocaleString()} tok`;
@@ -76,7 +84,7 @@ export function ReviewStatusBar({
               </svg>
             )}
             <span className="mono">
-              {tokenUsage.used.toLocaleString()} tok{pct !== null ? ` · ${pct}%` : ''}
+              {compactTokens(tokenUsage.used)} tok{pct !== null ? ` · ${pct}%` : ''}
             </span>
           </span>
         </>
