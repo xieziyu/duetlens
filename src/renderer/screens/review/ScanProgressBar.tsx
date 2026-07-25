@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import type { ReviewRound } from '@shared/domain';
 import { deriveScanSteps, activeScanStepLabel, type ScanStep } from './scan-progress';
 import { describeRoundError } from './round-error';
+import { LaunchError } from './LaunchError';
 
 export interface ScanProgressBarProps {
   findingCount: number;
@@ -124,7 +125,7 @@ export function ScanProgressBar({
                   <pre>{failedRound.errorMessage}</pre>
                 </details>
               )}
-              {retryError && <p className="se-retry-err">重试没能发起:{retryError}</p>}
+              {retryError && <LaunchError message={retryError} />}
               <div className="se-act">
                 <button
                   className={copy.retryable ? 'primary' : ''}

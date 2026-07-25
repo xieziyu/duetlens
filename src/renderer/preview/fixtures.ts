@@ -503,6 +503,10 @@ export function installPreviewApi(): void {
       rounds: async () => rounds,
       // 开一轮:插入 scanning 记录并回推,4s 后收轮 —— 够看清面板→扫描→收轮的整条视觉链路
       rerun: async (_r, input) => {
+        if (params.get('retry') === 'error')
+          throw new Error(
+            "Error invoking remote method 'review:rerun': Error: Command failed: but diff feat/entry-branch-picker --format json --no-tui\nNo ID found for entity No ID found for entity\n",
+          );
         const round: ReviewRound = {
           reviewId: 'demo',
           round: rounds.length + 1,
@@ -535,6 +539,11 @@ export function installPreviewApi(): void {
       },
       // 重试:沿用同一轮号覆盖失败记录,3s 后收轮 —— 与后端 startRound 的 upsert 语义一致
       retryRound: async () => {
+        // ?retry=error:重跑/重试在**开跑前**就失败(source 没了),自查 LaunchError 的呈现
+        if (params.get('retry') === 'error')
+          throw new Error(
+            "Error invoking remote method 'review:retry-round': Error: Command failed: but diff feat/entry-branch-picker --format json --no-tui\nNo ID found for entity No ID found for entity\n",
+          );
         const failed = rounds[rounds.length - 1];
         const round: ReviewRound = {
           ...failed,

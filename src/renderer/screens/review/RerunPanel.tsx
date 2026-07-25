@@ -9,6 +9,7 @@ import {
   type ReviewIntensity,
   type ReviewRound,
 } from '@shared/domain';
+import { LaunchError } from './LaunchError';
 
 /**
  * 重跑确认面板:开跑前把「这一轮会带上什么」摊开讲清楚,再让用户加一句本轮说明。
@@ -162,7 +163,11 @@ export function RerunPanel({
           />
         </label>
 
-        {error && <div className="rp-error">{error}</div>}
+        {error && (
+          <div className="rp-error">
+            <LaunchError message={error} />
+          </div>
+        )}
 
         <footer className="rp-foot">
           <span className="rp-hint mono">⌘↵ 开跑 · Esc 关闭</span>
