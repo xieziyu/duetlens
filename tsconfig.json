@@ -23,5 +23,11 @@
     },
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "scripts", "electron.vite.config.ts", "vite.renderer.config.ts"]
+  "include": [
+    "src",
+    "scripts",
+    "electron.vite.config.ts",
+    "vite.renderer.config.ts",
+    "vite.preview.config.ts"
+  ]
 }

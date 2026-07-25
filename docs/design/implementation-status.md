@@ -16,7 +16,7 @@
 
 ### 如何运行
 - **实机**:`npm run rebuild:electron` → `npm start`。前提:`codex login`(扫描/追问烧 token);github-pr source 需 `gh auth login`。
-- **前端视觉自查(不需 Electron)**:`npm run preview:ui` → 浏览器开 `/preview.html`。`src/renderer/preview/` 用 fixture stub `window.duetlens`;明暗在左侧 rail 底部切,配色主题在设置屏(`?screen=settings`)。支持 `?screen=entry|review|submit|prompt|settings|history|onboarding`、`?source=github`、`?submit=invalid|failed`(`invalid` 同时让「最新 diff」推进,复现锚点落空)、`?latest=error`(现拉最新 diff 失败)、`?scan`、`?clean`。
+- **前端视觉自查(不需 Electron)**:`npm run preview:ui` → 浏览器开 `/preview.html`(直开 origin 或 `/index.html` 会 302 到它,见 `vite.preview.config.ts`;真落到 Electron 入口时 `main.tsx` 会打出提示而不是白屏)。`src/renderer/preview/` 用 fixture stub `window.duetlens`;明暗在左侧 rail 底部切,配色主题在设置屏(`?screen=settings`)。支持 `?screen=entry|review|submit|prompt|settings|history|onboarding`、`?source=github`、`?submit=invalid|failed`(`invalid` 同时让「最新 diff」推进,复现锚点落空)、`?latest=error`(现拉最新 diff 失败)、`?scan`、`?clean`。
 - **mockup 自查**:`mockup/*.html` 要用静态服务打开(如 `python3 -m http.server`),**不能走 `preview:ui`** —— vite 会把 mockup 当入口做 HTML transform,代码示例里的 `Result<()>` 之类会被当标签解析而报错。
 - **出包**:`npm run package` 出免打包的 `release/mac-arm64/Duetlens.app`,`npm run dist` 出 zip。本地无 Developer ID,走 ad-hoc 签名(`identity: "-"` + `disable-library-validation` entitlement);翻过 fuses 的二进制不重签会被系统 SIGKILL。
 - **ABI 坑**:同一 `better-sqlite3` 服务两运行时——app 需 Electron ABI(`rebuild:electron`)、spike/tsx 需 Node ABI(`rebuild:node`),切换后对方失效。
