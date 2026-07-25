@@ -2437,8 +2437,10 @@
   border-color: var(--add-gutter);
   color: var(--add);
 }
+/* 「已看」不是失效态:这一行仍可点、仍要按文件名认出来并再打开,所以文件名留在 --text-faint,
+   已看只由删除线 + 绿勾 + 淡掉的行数表达,别把它降到 --text-deco。 */
 .file.viewed .name {
-  color: var(--text-deco);
+  color: var(--text-faint);
   text-decoration: line-through;
   text-decoration-color: var(--border-soft);
 }
