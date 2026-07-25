@@ -230,6 +230,32 @@ function ClearButton({ onConfirm }: { onConfirm: () => void }) {
   );
 }
 
+/** 复制 agent 回答原文(markdown 源码,非渲染后的富文本);成功后短暂回显。 */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1400);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <button
+      className={`msg-copy${copied ? ' on' : ''}`}
+      title="复制这条回答"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+        } catch {
+          /* 剪贴板不可用时静默 */
+        }
+      }}
+    >
+      {copied ? '✓ 已复制' : '⧉ 复制'}
+    </button>
+  );
+}
+
 function MessageBubble({
   role,
   name,
@@ -248,6 +274,7 @@ function MessageBubble({
         <div className="nm">
           <b className={role === 'agent' ? 'agent-name' : 'human-name'}>{name}</b>
           {meta && <span className="t mono">{meta}</span>}
+          {role === 'agent' && text.trim() && <CopyButton text={text} />}
         </div>
         <div className={`bubble${role === 'agent' ? ' agent' : ''}`}>
           <div className="c-prose">{renderMarkdown(text)}</div>
