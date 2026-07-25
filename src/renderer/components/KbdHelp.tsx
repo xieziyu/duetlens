@@ -1,25 +1,27 @@
 import { useEffect, useRef } from 'react';
+import './KbdHelp.css';
 
-// 键盘快捷键浮层。仅列已实现的快捷键。
+// 键盘快捷键浮层。仅列已实现的快捷键;review 屏与设置屏共用这一份表。
+// 导航键统一带 ⌘ 修饰:裸键在有输入框的屏上太容易误触,也没法在打字时生效。
 const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
   {
     title: '导航',
     rows: [
       { label: '打开 / 关闭本帮助', keys: ['?'] },
       { label: '关闭弹层 · 取消编辑', keys: ['Esc'] },
-      { label: '切到 Discussion / Findings / Summary', keys: ['1', '2', '3'] },
+      { label: '切到 Discussion / Findings / Summary', keys: ['⌘', '1 / 2 / 3'] },
     ],
   },
   {
     title: 'Diff',
-    rows: [{ label: 'Unified / Split 切换', keys: ['u'] }],
+    rows: [{ label: 'Unified / Split 切换', keys: ['⌘', 'U'] }],
   },
   {
     title: '文件过滤',
     rows: [
-      { label: '聚焦文件过滤框', keys: ['/'] },
-      { label: '跳到第一条命中', keys: ['↵'] },
-      { label: '在命中间上下移动', keys: ['↑', '↓'] },
+      { label: '聚焦文件过滤框', keys: ['⌘', '⇧', 'F'] },
+      { label: '跳到首个筛选结果', keys: ['↵'] },
+      { label: '在筛选结果中移动', keys: ['↑', '↓'] },
       { label: '清空过滤 · 再按退焦', keys: ['Esc'] },
     ],
   },
@@ -85,7 +87,7 @@ export function KbdHelp({ onClose }: { onClose: () => void }) {
       >
         <div className="kh">
           <h2>键盘快捷键</h2>
-          <span className="khs">按 ? 随时唤起</span>
+          <span className="khs">审核屏按 ? 随时唤起</span>
           <button className="kx" onClick={onClose} title="关闭 (Esc)" ref={closeRef}>
             ✕
           </button>
@@ -107,7 +109,7 @@ export function KbdHelp({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-        <div className="kbd-foot">⌘ 在 Windows / Linux 为 Ctrl · 焦点在输入框时快捷键自动让位</div>
+        <div className="kbd-foot">⌘ 在 Windows / Linux 为 Ctrl · 带 ⌘ 的导航键在输入框内同样生效</div>
       </div>
     </div>
   );

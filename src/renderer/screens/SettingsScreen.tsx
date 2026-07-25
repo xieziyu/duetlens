@@ -4,6 +4,7 @@ import type { CodexModelInfo, SourceKind, UiSettings } from '@shared/domain';
 import { DEFAULT_UI_SETTINGS, REASONING_EFFORTS, REVIEW_INTENSITIES } from '@shared/domain';
 import type { EnvironmentReport } from '@shared/environment';
 import { useSettings } from '../settings/SettingsProvider';
+import { KbdHelp } from '../components/KbdHelp';
 import './SettingsScreen.css';
 
 // 独立设置屏。左导航分节 + 右内容;改动经 useSettings 即时去抖落库。
@@ -43,17 +44,6 @@ const SOURCE_CHOICES: { v: SourceKind; label: string }[] = [
   { v: 'local-branch', label: '本地仓库' },
 ];
 
-const SHORTCUTS: { label: string; keys: string[] }[] = [
-  { label: '打开/关闭帮助层', keys: ['?'] },
-  { label: '切右栏 tab', keys: ['1', '2', '3'] },
-  { label: '切 unified / split', keys: ['u'] },
-  { label: '编辑聚焦的 finding', keys: ['e'] },
-  { label: '保存编辑', keys: ['⌘', '↵'] },
-  { label: '取消 / 关闭浮层', keys: ['Esc'] },
-  { label: '中断当前 turn', keys: ['⌘', '.'] },
-  { label: '提交 review', keys: ['⌘', '⇧', '↵'] },
-];
-
 export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): React.JSX.Element {
   const { settings, update } = useSettings();
   const [active, setActive] = useState<SectionId>('appearance');
@@ -61,6 +51,7 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
   const [checkingCodex, setCheckingCodex] = useState(false);
   const [models, setModels] = useState<CodexModelInfo[] | null>(null);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const runEnvCheck = useCallback(async () => {
@@ -217,19 +208,10 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
           {/* 快捷键 */}
           <section className="set-sec" data-sec="shortcuts">
             <h2><span className="ic">⌘</span> 快捷键</h2>
-            <div className="desc">完整列表在审核屏按 <kbd>?</kbd> 唤出帮助层;此处为常用摘录。</div>
-            <div className="kbd-list">
-              {SHORTCUTS.map((s) => (
-                <div className="kbd-row" key={s.label}>
-                  <span>{s.label}</span>
-                  <span className="keys">
-                    {s.keys.map((k, i) => (
-                      <kbd key={i}>{k}</kbd>
-                    ))}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <div className="desc">键位暂不支持修改。</div>
+            <Row label="键位一览">
+              <button className="btn-sm" onClick={() => setHelpOpen(true)}>查看快捷键</button>
+            </Row>
           </section>
 
           {/* codex */}
@@ -346,6 +328,7 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
           <button className="btn-reset" onClick={resetDefaults}>恢复默认设置</button>
         </div>
       </footer>
+      {helpOpen && <KbdHelp onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

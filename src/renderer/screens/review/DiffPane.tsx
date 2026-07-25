@@ -64,7 +64,7 @@ function AnchorDot({ mark, onClick }: { mark: AnchorMark; onClick: (m: AnchorMar
   );
 }
 
-/** diff 列头的视图切换:图标 + 文字,让「这是排版方式」一眼可辨(快捷键 u)。 */
+/** diff 列头的视图切换:图标 + 文字,让「这是排版方式」一眼可辨(快捷键 ⌘U)。 */
 function ViewSwitch({ view, onChange }: { view: DiffView; onChange: (v: DiffView) => void }) {
   return (
     <span className="db-seg" role="group" aria-label="diff 视图">
@@ -74,7 +74,7 @@ function ViewSwitch({ view, onChange }: { view: DiffView; onChange: (v: DiffView
           className={view === v ? 'on' : ''}
           onClick={() => onChange(v)}
           aria-pressed={view === v}
-          title={`${v === 'unified' ? '单栏对照' : '左右分栏'} diff(快捷键 u 切换)`}
+          title={`${v === 'unified' ? '单栏对照' : '左右分栏'} diff(快捷键 ⌘U 切换)`}
         >
           <ViewIcon view={v} />
           {v === 'unified' ? 'Unified' : 'Split'}

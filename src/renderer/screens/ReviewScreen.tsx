@@ -10,7 +10,7 @@ import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
 import { SummaryTab } from './review/SummaryTab';
 import { ScanProgressBar } from './review/ScanProgressBar';
-import { KbdHelp } from './review/KbdHelp';
+import { KbdHelp } from '../components/KbdHelp';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
 import { RerunPanel } from './review/RerunPanel';
@@ -70,7 +70,7 @@ export function ReviewScreen({
   const { settings, update } = useSettings();
   const [activePath, setActivePath] = useState<string | null>(null);
   const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
-  // 左栏文件检索:纯导航态不持久化;由屏持有才能在换 review 时清掉,并让 `/` 把焦点甩进输入框
+  // 左栏文件检索:纯导航态不持久化;由屏持有才能在换 review 时清掉,并让 ⌘⇧F 把焦点甩进输入框
   const [fileQuery, setFileQuery] = useState('');
   const fileQueryRef = useRef<HTMLInputElement>(null);
   // discussion 协同态:活跃线程 / 正在等 agent 回复
@@ -278,8 +278,9 @@ export function ReviewScreen({
     if (focusRequest) focusDiscussion(focusRequest.id);
   }, [focusRequest]);
 
-  // 全局导航快捷键:? 帮助 / 1-3 切 tab / u 切 diff / Esc 关闭。
-  // 焦点在输入框或按住修饰键时让位;编辑/发送的 ⌘↵·Esc·↵ 由各 composer/编辑器自理。
+  // 全局导航快捷键:? 帮助 / ⌘1-3 切 tab / ⌘U 切 diff / ⌘⇧F 聚焦过滤框 / Esc 关闭。
+  // 导航键一律带 ⌘,所以打字时也照常生效;只有裸键 ? 要给输入框让位。
+  // 编辑/发送的 ⌘↵·Esc·↵ 由各 composer/编辑器自理。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
@@ -288,29 +289,34 @@ export function ReviewScreen({
         if (helpOpen) setHelpOpen(false);
         return;
       }
-      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === '?') {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod && !e.altKey && e.key === '?' && !typing) {
         e.preventDefault();
         setHelpOpen((v) => !v);
         return;
       }
-      if (helpOpen) return; // 帮助打开时不抢导航键
-      if (e.key === '1') {
+      if (!mod || e.altKey || helpOpen) return; // 帮助打开时不抢导航键
+      const key = e.key.toLowerCase();
+      if (e.shiftKey) {
+        if (key === 'f') {
+          e.preventDefault();
+          fileQueryRef.current?.focus();
+          fileQueryRef.current?.select();
+        }
+        return;
+      }
+      if (key === '1') {
         e.preventDefault();
         setActiveTab('discussion');
-      } else if (e.key === '2') {
+      } else if (key === '2') {
         e.preventDefault();
         setActiveTab('findings');
-      } else if (e.key === '3') {
+      } else if (key === '3') {
         e.preventDefault();
         setActiveTab('summary');
-      } else if (e.key === 'u') {
+      } else if (key === 'u') {
         e.preventDefault();
         update({ defaultDiffView: diffView === 'unified' ? 'split' : 'unified' });
-      } else if (e.key === '/') {
-        e.preventDefault(); // 否则 `/` 会跟着落进刚聚焦的输入框
-        fileQueryRef.current?.focus();
-        fileQueryRef.current?.select();
       }
     };
     window.addEventListener('keydown', onKey);

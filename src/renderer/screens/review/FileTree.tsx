@@ -95,7 +95,7 @@ export function FileTree({
   // 已看进度是整份 review 的,不随过滤缩水
   const viewedCount = files.filter((f) => viewed.has(f.path)).length;
 
-  // 检索框内的移动键:↵ 跳第一条命中,↑/↓ 在命中间挪选中(手不离键盘也能翻过一串候选)
+  // 检索框内的移动键:↵ 跳首个筛选结果,↑/↓ 在筛选结果间挪选中(手不离键盘也能翻过一串候选)
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       e.stopPropagation();
@@ -141,7 +141,7 @@ export function FileTree({
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="过滤文件 · /"
+            placeholder="过滤文件 · ⌘⇧F"
             spellCheck={false}
             aria-label="过滤文件"
           />
