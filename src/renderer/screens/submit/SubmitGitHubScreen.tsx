@@ -455,7 +455,8 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                         : btnLabel}
                 </button>
                 {!blocked && (sub === 'invalid' || staleIds.size > 0) && (
-                  <div className="foot-note">
+                  /* 失效锚点会让整份 review 被拒,是阻断条件而非脚注 —— 单独标记以拿到警示样式 */
+                  <div className={'foot-note' + (staleIds.size > 0 ? ' blocking' : '')}>
                     {staleIds.size > 0
                       ? `⛔ ${staleIds.size} 条锚点不在最新改动上,整份会被 422 拒 —— 先处理红框`
                       : fresh.state === 'synced'

@@ -733,6 +733,13 @@ textarea.summary:focus {
   justify-content: center;
   text-align: center;
 }
+.foot-note.blocking {
+  color: var(--sev-high);
+  background: color-mix(in oklab, var(--sev-high) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--sev-high) 26%, transparent);
+  border-radius: 6px;
+  padding: 6px 9px;
+}
 @keyframes sg-spin {
   to {
     transform: rotate(360deg);

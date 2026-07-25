@@ -272,7 +272,8 @@
   cursor: pointer;
   font-family: inherit;
 }
-.ga-alt { margin-top: 13px; font-size: 11.5px; color: var(--text-faint); }
+/* gh 未登录时唯一的绕行办法,且这块底色被 --human-soft 抬过(faint 在上面只有 4.27:1)*/
+.ga-alt { margin-top: 13px; font-size: 11.5px; color: var(--text-dim); }
 
 /* open PR list — 折叠式,按需展开 */
 .prbrowse { margin-top: 12px; }
@@ -795,7 +796,9 @@
 .footcta { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
 .footcta .target { font-size: 12px; color: var(--text-faint); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .footcta .target b { font-family: var(--mono); color: var(--agent-2); font-weight: 600; }
-.footcta .target-empty { color: var(--text-faint); }
+/* 这条是主 CTA 点不动的唯一解释,不是注脚:提到正文档并挂琥珀标记 */
+.footcta .target-empty { color: var(--text-dim); }
+.footcta .target-empty::before { content: '◇'; color: var(--human); margin-right: 6px; }
 .gobtn {
   margin-left: auto;
   display: inline-flex;
