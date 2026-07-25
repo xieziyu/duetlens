@@ -49,7 +49,10 @@
   --add:#57e39a; --del:#ff7085;
   --add-bg:rgba(64,196,132,.10); --del-bg:rgba(255,90,110,.09);
   --add-gutter:rgba(64,196,132,.22); --del-gutter:rgba(255,90,110,.22);
-  --code-hl:rgba(139,155,255,.10);          /* 代码内搜索/引用高亮 */
+  --code-hl:rgba(139,155,255,.10);          /* 文件树过滤的命中底色(配合非命中压暗才够看) */
+  /* ⌘F diff 内检索的两档命中色。独占靛紫色相:agent 蓝 / human 琥珀 / diff 绿红都已有语义,
+     搜索是纯导航,不该借用其中任何一档。--code-hl 单用太淡,压不过 add/del 行底色,故另立一对。 */
+  --find-hl:rgba(139,155,255,.34); --find-hl-on:#8b9bff; --find-hl-fg:#0b0d12;
   --sev-high:#ff7085; --sev-med:#e8a24d; --sev-low:#8b9bff;
 }
 /* ---- CHROME: light ---- */
@@ -82,6 +85,7 @@
   --add-bg:oklch(96.4% .034 153); --del-bg:oklch(95.8% .036 26);
   --add-gutter:color-mix(in oklab,var(--add) 26%,transparent); --del-gutter:color-mix(in oklab,var(--del) 24%,transparent);
   --code-hl:color-mix(in oklab,var(--agent) 13%,transparent);
+  --find-hl:color-mix(in oklab,oklch(.52 .17 285) 26%,transparent); --find-hl-on:oklch(.52 .17 285); --find-hl-fg:#fff;
   --sev-high:oklch(46% .18 16); --sev-med:oklch(46% .13 86); --sev-low:oklch(47% .055 242);
 }
 /* ---- THEME: GitHub · dark ---- */
@@ -92,6 +96,7 @@
   --add-bg:rgba(46,160,67,.15); --del-bg:rgba(248,81,73,.13);
   --add-gutter:rgba(46,160,67,.32); --del-gutter:rgba(248,81,73,.32);
   --code-hl:rgba(187,128,9,.28);
+  --find-hl:rgba(139,155,255,.34); --find-hl-on:#8b9bff; --find-hl-fg:#0d1117;
   --sev-high:#f85149; --sev-med:#d29922; --sev-low:#58a6ff;
 }
 /* ---- THEME: GitHub · light ---- */
@@ -102,5 +107,6 @@
   --add-bg:#e6ffec; --del-bg:#ffebe9;
   --add-gutter:rgba(26,127,55,.22); --del-gutter:rgba(207,34,46,.16);
   --code-hl:rgba(84,174,255,.28);
+  --find-hl:color-mix(in oklab,oklch(.52 .17 285) 26%,transparent); --find-hl-on:oklch(.52 .17 285); --find-hl-fg:#fff;
   --sev-high:#cf222e; --sev-med:#9a6700; --sev-low:#0969da;
 }

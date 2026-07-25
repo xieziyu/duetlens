@@ -89,6 +89,8 @@ export function ReviewScreen({
   const [rerunOpen, setRerunOpen] = useState(false);
   // 状态栏「查看原因」→ 让进度条的失败卡展开并闪一下(递增即触发)
   const [revealFailure, setRevealFailure] = useState(0);
+  // ⌘F diff 内检索:0 = 关;每按一次自增,DiffPane 据此把焦点抢回输入框并全选
+  const [findNonce, setFindNonce] = useState(0);
   // 栏宽 + diff 视图:持久化偏好,拖拽 / 切换即写回(去抖)
   const leftW = settings.leftWidth;
   const rightW = settings.rightWidth;
@@ -278,6 +280,7 @@ export function ReviewScreen({
     setFileQuery('');
     setCategoryFilter(null);
     setAwaitingReply(null);
+    setFindNonce(0);
   }, [reviewId]);
 
   // diff 到达后默认选中首个文件
@@ -290,7 +293,12 @@ export function ReviewScreen({
     if (focusRequest) focusDiscussion(focusRequest.id);
   }, [focusRequest]);
 
-  // 全局导航快捷键:? 帮助 / ⌘1-3 切 tab / ⌘U 切 diff / ⌘⇧F 聚焦过滤框 / Esc 关闭。
+  // 有模态压在上面时,导航键一律挂起。判据必须是**所有**打开中的模态,不能只认帮助层:
+  // 重跑面板同样是带 scrim 的 dialog,漏掉它时在说明输入框里按 ⌘F 会把焦点抢到对话框背后的
+  // 检索条,⌘G 还会在背后换命中并滚动 diff。DiffPane 自带的 ⌘G 也吃这同一个判据。
+  const modalOpen = helpOpen || rerunOpen;
+
+  // 全局导航快捷键:? 帮助 / ⌘1-3 切 tab / ⌘U 切 diff / ⌘F 查 diff 内容 / ⌘⇧F 聚焦过滤框 / Esc 关闭。
   // 导航键一律带 ⌘,所以打字时也照常生效;只有裸键 ? 要给输入框让位。
   // 编辑/发送的 ⌘↵·Esc·↵ 由各 composer/编辑器自理。
   useEffect(() => {
@@ -303,11 +311,12 @@ export function ReviewScreen({
       }
       const mod = e.metaKey || e.ctrlKey;
       if (!mod && !e.altKey && e.key === '?' && !typing) {
+        if (!helpOpen && modalOpen) return; // 已有别的模态在前,别再叠一层帮助
         e.preventDefault();
         setHelpOpen((v) => !v);
         return;
       }
-      if (!mod || e.altKey || helpOpen) return; // 帮助打开时不抢导航键
+      if (!mod || e.altKey || modalOpen) return; // 模态打开时不抢导航键
       const key = e.key.toLowerCase();
       if (e.shiftKey) {
         if (key === 'f') {
@@ -317,7 +326,10 @@ export function ReviewScreen({
         }
         return;
       }
-      if (key === '1') {
+      if (key === 'f') {
+        e.preventDefault();
+        setFindNonce((n) => n + 1);
+      } else if (key === '1') {
         e.preventDefault();
         setActiveTab('discussion');
       } else if (key === '2') {
@@ -333,7 +345,7 @@ export function ReviewScreen({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [helpOpen, diffView, update, setActiveTab]);
+  }, [helpOpen, modalOpen, diffView, update, setActiveTab]);
 
   const scanning = status === 'scanning' || !status;
   const currentRoundRec = useMemo(
@@ -505,6 +517,10 @@ export function ReviewScreen({
             onToggleCollapsed={onToggleCollapsed}
             collapseOnViewed={settings.collapseViewedFiles}
             onSelectFile={setActivePath}
+            onExpandFile={expandFile}
+            findNonce={findNonce}
+            onFindClose={() => setFindNonce(0)}
+            keysSuspended={modalOpen}
           />
           <Resizer
             cssVar="--right-w"

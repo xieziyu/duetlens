@@ -560,8 +560,21 @@
 }
 
 /* ---------- 中:diff ---------- */
-.diff {
+/* 中栏外壳。存在的唯一理由是给 ⌘F 检索条一个**不滚动**的定位基准 ——
+   检索条放进 .diff 里会随内容滚开,点上一处 / 下一处时它自己先跑掉。 */
+.diff-col {
+  /* 声明在外壳而非 .diff:检索条是 .diff-col 的子元素,要靠它算 top */
   --diff-bar-h: 30px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* 检索条按中栏实宽退化,而非窗口宽:中栏宽度由两侧栏拖拽决定,与视口无关 */
+  container-type: inline-size;
+}
+.diff {
+  flex: 1;
   background: var(--bg);
   /* 横滚只归各 .code-scroll;整栏可横滚会把文件头、hunk 头、内联卡片一起推出视口 */
   overflow-x: hidden;
@@ -630,6 +643,140 @@
   background: var(--agent-soft);
   color: var(--agent-2);
 }
+/* ---------- ⌘F:diff 内容检索 ---------- */
+/* 两档命中色。只画字不改 DOM(CSS Custom Highlight API),故只有 background / color 一类
+   属性可用 —— 圆角、边框在 ::highlight() 里无效,不必尝试。 */
+::highlight(dl-find) {
+  background: var(--find-hl);
+}
+::highlight(dl-find-cur) {
+  background: var(--find-hl-on);
+  color: var(--find-hl-fg);
+}
+.dfind {
+  position: absolute;
+  top: calc(var(--diff-bar-h) + 6px);
+  right: 14px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(342px, calc(100% - 28px));
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.dfind .dfi {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  /* 挤到零宽就没法看自己输了什么;宁可让计数先省略也要留住输入框 */
+  min-width: 76px;
+}
+.dfind .dopts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dfind .mag {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--text-deco);
+}
+.dfind input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+.dfind input::placeholder {
+  color: var(--text-deco);
+}
+.dfind .cnt {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 无结果只改边线与计数色,不动输入框底色:输的字仍要清清楚楚 */
+.dfind.none {
+  border-color: var(--del-gutter);
+}
+.dfind.none .cnt {
+  color: var(--del);
+}
+.dfind .dsep {
+  flex: none;
+  width: 1px;
+  height: 15px;
+  background: var(--border-soft);
+}
+.dfind button {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.dfind .dnav {
+  width: 22px;
+}
+.dfind .dopt {
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+/* 不能用 --hover:它是 2% 白,专为铺在 --bg 上的宽行设计的;这几枚 22px 按钮坐在 --card 上,
+   那点叠色在深色下等于没有,悬停毫无反馈。改用实打实的表面阶梯 + 提亮文字。 */
+.dfind button:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.dfind button.on {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+}
+/* 选中态的 hover 要**单独写**:通用 hover 是 (0,3,1),.on 只有 (0,2,1),
+   不补这条的话悬停在已选开关上会被刷成未选样式,看起来像点了没生效。 */
+.dfind button.on:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--agent) 24%, transparent);
+  color: var(--agent-2);
+}
+.dfind button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* 两侧栏拉满时中栏只剩 ~340px:撤掉两枚开关(smart-case 仍在),保住输入框与前后跳 */
+@container (max-width: 440px) {
+  .dfind {
+    right: 8px;
+    width: calc(100% - 16px);
+  }
+  .dfind .dopts {
+    display: none;
+  }
+}
+
 .diff-empty,
 .diff-note {
   padding: 16px;

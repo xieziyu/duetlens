@@ -1,4 +1,13 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { DiffFile, DiffHunk, DiffLine } from '@shared/diff';
 import type { Discussion, Finding, Triage } from '@shared/domain';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
@@ -6,6 +15,22 @@ import { InlineCard } from './InlineCard';
 import { InlineComposer } from './InlineComposer';
 import { NewFindingComposer, type NewFindingDraft } from './NewFindingComposer';
 import { SelectionPopover } from './SelectionPopover';
+import { DiffFindBar } from './DiffFindBar';
+import {
+  clearMatches,
+  findMatches,
+  hitKey,
+  matchKey,
+  matchCell,
+  paintCurrent,
+  paintMatches,
+  scrollToMatch,
+  selectionSeed,
+  type FindFile,
+  type FindLine,
+  type FindMatch,
+  type FindOptions,
+} from './diff-find';
 import { highlightLine, langOf } from './highlight';
 
 export type DiffView = 'unified' | 'split';
@@ -135,6 +160,14 @@ export interface DiffPaneProps {
   collapseOnViewed?: boolean;
   /** 自动推进时同步左栏选中;缺省则只滚动不改选中(如预览) */
   onSelectFile?: (path: string) => void;
+  /** 只展开不折叠:⌘F 跳到折叠文件里的命中时先把它展开 */
+  onExpandFile?: (path: string) => void;
+  /** ⌘F 请求打开 diff 内检索;每次按下自增,重复按即把焦点抢回输入框。0 / 缺省 = 未开启 */
+  findNonce?: number;
+  /** 模态弹层(如快捷键帮助)开着:检索自己的全局键位让位,别在弹层背后动 diff */
+  keysSuspended?: boolean;
+  /** 检索条自行关闭(Esc / ✕)时回报,好让屏侧的 nonce 归零 */
+  onFindClose?: () => void;
 }
 
 /**
@@ -157,6 +190,71 @@ export function DiffPane(props: DiffPaneProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [sel, setSel] = useState<{ pick: AnchorPick; top: number; left: number } | null>(null);
   const [composeAt, setComposeAt] = useState<Compose | null>(null);
+
+  // ---- diff 外上下文展开:按需拉文件新侧全文并缓存,记录各 gap 已展开的行数 ----
+  // 这份状态住在整栏而非各 DiffFileView:检索索引要把已展开的上下文一并算进去,
+  // 藏在子组件里就取不到了。reveal 的键是 `路径 gapKey`。
+  //
+  // 但提到这里就活得比一条 review 长了(切 review 只换 prop、组件不卸载),故按 diff 版本作废:
+  // 换 review 或复审重拉 diff 后,同名文件的全文与展开进度都不再对得上新行号,
+  // 照旧渲染就会拿上一条 review 的内容去检索。`files` 的引用只在 diff 重新拉取时变,正好当版本号。
+  const diffGen = useRef(0);
+  const lastFiles = useRef<DiffFile[] | null>(null);
+  if (lastFiles.current !== files) {
+    lastFiles.current = files;
+    diffGen.current += 1;
+  }
+  const gen = diffGen.current;
+  const [ctxState, setCtxState] = useState<CtxCache>(() => emptyCtx(gen));
+  // 在 render 期派生作废,而不是留给 effect 去补清 —— 否则换 diff 后会先渲染一帧旧内容。
+  // 空缓存按 gen 记住:它一路当依赖传到检索索引与着色,每帧新建对象等于换 diff 后从没展开过上下文的
+  // 那段时间里(常态)全部 memo 失效,⌘G 每跳一次都要重扫全 diff 并重建所有 Range。
+  const empty = useMemo(() => emptyCtx(gen), [gen]);
+  const ctx = ctxState.gen === gen ? ctxState : empty;
+  const fetchFileContent = props.fetchFileContent;
+
+  const ensureFile = useCallback(
+    async (path: string): Promise<string[] | null> => {
+      const cached = ctx.lines[path];
+      if (cached) return cached;
+      if (!fetchFileContent) return null;
+      // 请求发出时的版本随请求一起走:回来时 diff 已换版就整份丢弃,不写进新版缓存
+      const at = gen;
+      setCtxState((c) => withCtx(c, at, (d) => ({ ...d, loading: { ...d.loading, [path]: true } })));
+      try {
+        const raw = await fetchFileContent(path);
+        if (raw == null || at !== diffGen.current) return null;
+        const lines = raw.split('\n');
+        if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop(); // 去掉末换行 split 残留
+        setCtxState((c) => withCtx(c, at, (d) => ({ ...d, lines: { ...d.lines, [path]: lines } })));
+        return lines;
+      } catch {
+        return null;
+      } finally {
+        setCtxState((c) => withCtx(c, at, (d) => ({ ...d, loading: { ...d.loading, [path]: false } })));
+      }
+    },
+    [ctx.lines, fetchFileContent, gen],
+  );
+
+  const expand = useCallback(
+    async (path: string, gap: Gap) => {
+      const at = gen;
+      const lines = await ensureFile(path);
+      if (!lines || at !== diffGen.current) return;
+      setCtxState((c) =>
+        withCtx(c, at, (d) => {
+          const key = revealKey(path, gap.key);
+          const cur = d.reveal[key] ?? 0;
+          const newTo = gap.side === 'trail' ? lines.length : gap.newTo;
+          const remaining = Math.max(0, newTo - gap.newFrom + 1 - cur);
+          if (remaining <= 0) return d;
+          return { ...d, reveal: { ...d.reveal, [key]: cur + Math.min(CTX_CHUNK, remaining) } };
+        }),
+      );
+    },
+    [ensureFile, gen],
+  );
 
   // 按文件聚合 findings,便于每个 DiffFileView 只拿自己的
   const byFile = useMemo(() => {
@@ -280,6 +378,158 @@ export function DiffPane(props: DiffPaneProps) {
     return () => pane.removeEventListener('scroll', onScroll, true);
   }, []);
 
+  // ---- ⌘F diff 内容检索 ----
+  const findNonce = props.findNonce ?? 0;
+  const findOpen = findNonce > 0;
+  const [query, setQuery] = useState('');
+  const [findOpts, setFindOpts] = useState<FindOptions>({ caseSensitive: false, wholeWord: false });
+  const [cur, setCur] = useState(0);
+  const [revealNonce, setRevealNonce] = useState(0);
+  // 建索引 + 画命中在按键的同一帧做完会拖住输入;让匹配结果落后一帧,输入框始终跟手
+  const deferredQuery = useDeferredValue(query);
+
+  // 可检索的行 = hunk 行 + **已展开**的 diff 外上下文行,按渲染顺序交错。
+  // 上下文算进来意味着命中总数会随展开增长,故下方要把「当前项」钉住,不能只按下标记。
+  const searchable = useMemo<FindFile[]>(() => {
+    if (!findOpen) return [];
+    return files.map((file) => {
+      const gaps = buildGaps(file.hunks);
+      const lines: FindLine[] = [];
+      const push = (ls: DiffLine[]) => {
+        for (const l of ls) lines.push({ hit: hitKey(l), text: l.text });
+      };
+      const gapLines = (gap: Gap | null) =>
+        gap
+          ? revealedGapLines(gap, ctx.lines[file.path] ?? null, ctx.reveal[revealKey(file.path, gap.key)] ?? 0)
+          : [];
+      push(gapLines(gaps.lead));
+      file.hunks.forEach((h, i) => {
+        push(h.lines);
+        push(gapLines(gaps.between[i] ?? null));
+      });
+      push(gapLines(gaps.trail));
+      return { path: file.path, lines };
+    });
+  }, [findOpen, files, ctx]);
+
+  const { matches, capped } = useMemo(
+    () => findMatches(searchable, deferredQuery, findOpts),
+    [searchable, deferredQuery, findOpts],
+  );
+  const matchesRef = useRef<FindMatch[]>(matches);
+  matchesRef.current = matches;
+
+  // 命中集会因改词、展开上下文、增删 finding 而重算。改词=回到第一处;
+  // 其余情况把当前项钉在原来那处 —— 否则每展开一段上下文,序号就跳到别的地方去了。
+  const curKey = useRef<string | null>(null);
+  const prevQuery = useRef('');
+  useEffect(() => {
+    const changedQuery = prevQuery.current !== deferredQuery;
+    prevQuery.current = deferredQuery;
+    if (matches.length === 0) {
+      curKey.current = null;
+      setCur(0);
+      return;
+    }
+    const kept = !changedQuery && curKey.current ? matches.findIndex((m) => matchKey(m) === curKey.current) : -1;
+    const next = kept >= 0 ? kept : 0;
+    curKey.current = matchKey(matches[next]);
+    setCur(next);
+    // 钉不住原来那处就等于换了当前项(改词,或 Aa / 全词把它筛掉了),必须跟着滚过去 ——
+    // 否则计数显示的是新的一处,视口却还停在已经失效的旧位置,命中甚至可能在折叠文件里根本看不见。
+    if (kept < 0) {
+      pendingReveal.current = true;
+      setRevealNonce((n) => n + 1);
+    }
+  }, [matches, deferredQuery]);
+
+  const step = useCallback((delta: 1 | -1) => {
+    const list = matchesRef.current;
+    if (list.length === 0) return;
+    setCur((c) => {
+      const next = (c + delta + list.length) % list.length;
+      curKey.current = matchKey(list[next]);
+      return next;
+    });
+    pendingReveal.current = true;
+    setRevealNonce((n) => n + 1);
+  }, []);
+
+  // 着色必须在同一帧提交,否则跳转时会闪过一帧「旧命中还亮着」。
+  // 依赖列的是**所有会重建 `.src` 单元格的东西** —— Highlight 存的是 Range,指向具体文本节点,
+  // 节点一旦被替换,旧 Range 就脱离了文档,高亮凭空消失而计数照旧。除了换视图 / 展开文件,
+  // findings 与 composeAt 也会让 segmentByAnchor 重新切表(扫描期 finding 陆续到达最容易撞上)。
+  // cur 不在依赖里:换当前项走下面的增量着色,重建全部 Range 太贵,而它正是 ⌘G 的热路径。
+  const curRef = useRef(cur);
+  curRef.current = cur;
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    paintMatches(ref.current, matches, curRef.current);
+  }, [matches, props.view, props.collapsed, findings, composeAt, ctx]);
+
+  // 同一帧内两者都变时,上面那条(声明在先)已按新的 cur 画完,这里退化成空操作。
+  useLayoutEffect(() => paintCurrent(cur), [cur]);
+
+  // 关掉即清空:检索词是纯导航态,下次 ⌘F 应当是干净的一次新检索(切 review 也走这条)
+  useEffect(() => {
+    if (findOpen) return;
+    setQuery('');
+    clearMatches();
+  }, [findOpen]);
+  useEffect(() => clearMatches, []);
+
+  // 跳到当前项。本 effect 也挂在 collapsed 上(展开后才滚得到),所以必须两处设防:
+  //   1. 只在真的请求了跳转时动作(pendingReveal),否则用户手动折叠任何文件都会被当成跳转;
+  //   2. 展开走 onExpandFile 这条只展不收的路 —— 用 toggle 的话,用户折叠恰好含当前命中的
+  //      文件时,会被本 effect 立刻掰回展开。
+  const pendingReveal = useRef(false);
+  useEffect(() => {
+    if (!pendingReveal.current || !ref.current) return;
+    const m = matchesRef.current[cur];
+    if (m && props.collapsed.has(m.file) && props.onExpandFile) {
+      props.onExpandFile(m.file); // 展开后 collapsed 变化,本 effect 再跑一遍完成滚动
+      return;
+    }
+    pendingReveal.current = false;
+    const cell = m && matchCell(ref.current, m);
+    if (cell && m) scrollToMatch(ref.current, cell, m);
+  }, [revealNonce, cur, props.collapsed]);
+
+  // ⌘F 以选区预填(编辑器惯例)。选区只能在**按键当场**读:检索条一挂载就抢焦点并全选,
+  // 那一步会清空文档选区,而子组件的 effect 先于父组件跑 —— 等这里的 effect 轮到时已什么都不剩。
+  const findSeed = useRef<string | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') return;
+      findSeed.current = selectionSeed(ref.current);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+
+  useEffect(() => {
+    if (!findOpen) return;
+    const seed = findSeed.current;
+    findSeed.current = null;
+    if (seed) setQuery(seed);
+  }, [findNonce]);
+
+  // ⌘G / ⌘⇧G 前后跳:只在检索开启、且没有模态弹层压在上面时接管。
+  // 少了 keysSuspended 这一档,帮助层开着按 ⌘G 会在弹层背后偷偷换命中并滚动 diff,
+  // 关掉弹层才发现视口已经不是原来那处 —— ⌘F 由屏侧的导航 handler 同样按这条让位。
+  useEffect(() => {
+    if (!findOpen || props.keysSuspended) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'g') return;
+      e.preventDefault();
+      step(e.shiftKey ? -1 : 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [findOpen, props.keysSuspended, step]);
+
+  const closeFind = props.onFindClose;
+
   // ---- 框选 → popover:解析选区新侧锚点 + 定位 ----
   const canStart = !!onStartDiscussion;
   const onMouseUp = useCallback(() => {
@@ -352,8 +602,10 @@ export function DiffPane(props: DiffPaneProps) {
 
   if (files.length === 0 && absentByFile.size === 0) {
     return (
-      <div className="diff pane" ref={ref}>
-        <p className="diff-empty">暂无 diff。扫描期会在拉取改动后显示。</p>
+      <div className="diff-col">
+        <div className="diff pane" ref={ref}>
+          <p className="diff-empty">暂无 diff。扫描期会在拉取改动后显示。</p>
+        </div>
       </div>
     );
   }
@@ -365,6 +617,9 @@ export function DiffPane(props: DiffPaneProps) {
   );
 
   return (
+    // 检索条是 .diff-col 的绝对定位子元素,**不能**放进滚动容器:
+    // 放进去它会随内容滚开,点上一处 / 下一处时搜索条自己先跑掉
+    <div className="diff-col">
     <div className="diff pane" ref={ref} onMouseUp={onMouseUp}>
       <div className="diff-bar">
         <span className="db-stat mono" title="本次改动总量">
@@ -393,6 +648,10 @@ export function DiffPane(props: DiffPaneProps) {
           collapseOnViewed={!!props.collapseOnViewed}
           onToggleViewed={() => onToggleViewed(f.path)}
           onToggleCollapsed={() => props.onToggleCollapsed(f.path)}
+          fileLines={ctx.lines[f.path] ?? null}
+          loadingCtx={!!ctx.loading[f.path]}
+          revealOf={(gapKey) => ctx.reveal[revealKey(f.path, gapKey)] ?? 0}
+          onExpand={(gap) => expand(f.path, gap)}
           onAddThread={
             canStart
               ? (line, snippet) =>
@@ -445,6 +704,21 @@ export function DiffPane(props: DiffPaneProps) {
           left={sel.left}
           onDiscussion={() => startCompose(sel.pick, 'discussion')}
           onFinding={() => startCompose(sel.pick, 'finding')}
+        />
+      )}
+    </div>
+      {findOpen && (
+        <DiffFindBar
+          query={query}
+          onQueryChange={setQuery}
+          options={findOpts}
+          onOptionsChange={setFindOpts}
+          total={matches.length}
+          current={cur}
+          capped={capped}
+          onStep={step}
+          onClose={() => closeFind?.()}
+          focusNonce={findNonce}
         />
       )}
     </div>
@@ -538,6 +812,41 @@ function buildGaps(hunks: DiffHunk[]): { lead: Gap | null; between: (Gap | null)
 /** 由新侧行号构造一条 context 行(用于展开的 diff 外上下文)。 */
 function ctxLine(n: number, lines: string[], oldOffset: number): DiffLine {
   return { kind: 'context', oldLine: n + oldOffset, newLine: n, text: lines[n - 1] ?? '' };
+}
+
+/** reveal 记账的键:同一份 gap.key 在不同文件里会重名。分隔符用 NUL —— 路径里可能有空格。 */
+function revealKey(path: string, gapKey: string): string {
+  return `${path}\u0000${gapKey}`;
+}
+
+/** diff 外上下文缓存,连同它属于哪一版 diff(见 DiffPane 里 diffGen 的说明) */
+interface CtxCache {
+  gen: number;
+  /** 文件新侧全文,按路径 */
+  lines: Record<string, string[]>;
+  loading: Record<string, boolean>;
+  /** 各 gap 已展开的行数,键见 revealKey */
+  reveal: Record<string, number>;
+}
+
+const emptyCtx = (gen: number): CtxCache => ({ gen, lines: {}, loading: {}, reveal: {} });
+
+/** 按版本更新:迟到的旧版写入直接丢弃,新版写入落在一份干净缓存上。 */
+function withCtx(cache: CtxCache, gen: number, update: (c: CtxCache) => CtxCache): CtxCache {
+  if (gen < cache.gen) return cache;
+  return update(cache.gen === gen ? cache : emptyCtx(gen));
+}
+
+/**
+ * 某个 gap 当前已展开出来的行。首部贴着下方 hunk 向上揭示(取区间末段),
+ * 其余贴着上方 hunk 向下揭示(取区间首段)。渲染与检索索引共用这一份,免得两处算法漂移。
+ */
+function revealedGapLines(gap: Gap, fileLines: string[] | null, revealed: number): DiffLine[] {
+  if (!fileLines || revealed <= 0) return [];
+  const newTo = gap.side === 'trail' ? fileLines.length : gap.newTo;
+  return gap.side === 'lead'
+    ? Array.from({ length: revealed }, (_, i) => ctxLine(newTo - revealed + 1 + i, fileLines, gap.oldOffset))
+    : Array.from({ length: revealed }, (_, i) => ctxLine(gap.newFrom + i, fileLines, gap.oldOffset));
 }
 
 /** 一段 context 行的 code 表(复用 LineRow/SplitRow,故选区发起 discussion、锚点圆点均沿用)。 */
@@ -637,13 +946,7 @@ function GapExpander({
   const remaining = total == null ? null : Math.max(0, total - revealed);
   const ctxProps = { view, lang, onAddThread, anchorByLine, onAnchorClick };
 
-  // 首部贴着下方 hunk 向上揭示(取区间末段);其余贴着上方 hunk 向下揭示(取区间首段)
-  const revealedLines =
-    fileLines && revealed > 0
-      ? gap.side === 'lead'
-        ? Array.from({ length: revealed }, (_, i) => ctxLine(newTo - revealed + 1 + i, fileLines, gap.oldOffset))
-        : Array.from({ length: revealed }, (_, i) => ctxLine(gap.newFrom + i, fileLines, gap.oldOffset))
-      : [];
+  const revealedLines = revealedGapLines(gap, fileLines, revealed);
   const revealedTable = revealedLines.length > 0 ? <ContextTable lines={revealedLines} {...ctxProps} /> : null;
 
   if (remaining === 0) return revealedTable; // 全部展开完,收起条
@@ -698,6 +1001,10 @@ function DiffFileView({
   onSendCompose,
   onCreateFinding,
   onCancelCompose,
+  fileLines,
+  loadingCtx,
+  revealOf,
+  onExpand,
 }: {
   file: DiffFile;
   findings: Finding[];
@@ -720,6 +1027,11 @@ function DiffFileView({
   onSendCompose: (text: string) => void;
   onCreateFinding: (draft: NewFindingDraft) => void;
   onCancelCompose: () => void;
+  /** 以下四项由 DiffPane 托管:检索索引要看得到已展开的上下文,状态不能留在这里 */
+  fileLines: string[] | null;
+  loadingCtx: boolean;
+  revealOf: (gapKey: string) => number;
+  onExpand: (gap: Gap) => void;
 }) {
   // 新侧存在的行号集合;锚点不在其中的 finding 归 off-diff
   const newLines = useMemo(() => {
@@ -764,47 +1076,10 @@ function DiffFileView({
     byLine.set(f.line, arr);
   }
 
-  // ---- diff 外上下文展开:按需拉文件新侧全文并缓存,记录各 gap 已展开的行数 ----
   // 新增/删除文件整份即在 diff 里(无 diff 外上下文),不给展开控件以免留下点了无效的空条。
   const canExpand =
     !!fetchFileContent && !file.binary && file.status !== 'added' && file.status !== 'deleted';
   const gaps = useMemo(() => buildGaps(file.hunks), [file.hunks]);
-  const [fileLines, setFileLines] = useState<string[] | null>(null);
-  const [loadingCtx, setLoadingCtx] = useState(false);
-  const [reveal, setReveal] = useState<Record<string, number>>({});
-
-  const ensureFile = useCallback(async (): Promise<string[] | null> => {
-    if (fileLines) return fileLines;
-    if (!fetchFileContent) return null;
-    setLoadingCtx(true);
-    try {
-      const raw = await fetchFileContent(file.path);
-      if (raw == null) return null;
-      const lines = raw.split('\n');
-      if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop(); // 去掉末换行 split 残留
-      setFileLines(lines);
-      return lines;
-    } catch {
-      return null;
-    } finally {
-      setLoadingCtx(false);
-    }
-  }, [fileLines, fetchFileContent, file.path]);
-
-  const expand = useCallback(
-    async (gap: Gap) => {
-      const lines = await ensureFile();
-      if (!lines) return;
-      setReveal((r) => {
-        const cur = r[gap.key] ?? 0;
-        const newTo = gap.side === 'trail' ? lines.length : gap.newTo;
-        const remaining = Math.max(0, newTo - gap.newFrom + 1 - cur);
-        if (remaining <= 0) return r;
-        return { ...r, [gap.key]: cur + Math.min(CTX_CHUNK, remaining) };
-      });
-    },
-    [ensureFile],
-  );
 
   const gapNode = (gap: Gap | null) =>
     gap && canExpand ? (
@@ -814,8 +1089,8 @@ function DiffFileView({
         lang={lang}
         fileLines={fileLines}
         loading={loadingCtx}
-        revealed={reveal[gap.key] ?? 0}
-        onExpand={() => expand(gap)}
+        revealed={revealOf(gap.key)}
+        onExpand={() => onExpand(gap)}
         onAddThread={onAddThread}
         anchorByLine={anchorByLine}
         onAnchorClick={onAnchorClick}
@@ -1170,7 +1445,8 @@ function LineRow({
       <td className="gutter">
         {mark ? <AnchorDot mark={mark} onClick={onAnchorClick} /> : gutter}
       </td>
-      <td className="src">
+      {/* data-hit:⌘F 检索把命中的字符区间画回这一格,见 diff-find.ts */}
+      <td className="src" data-hit={hitKey(line)}>
         <span dangerouslySetInnerHTML={{ __html: html }} />
       </td>
     </tr>
@@ -1214,7 +1490,7 @@ function SplitCell({
           <AddThread line={line.newLine} text={line.text} onAddThread={onAddThread} />
         )}
       </td>
-      <td className={srcBase + mod}>
+      <td className={srcBase + mod} data-hit={hitKey(line)}>
         <span dangerouslySetInnerHTML={{ __html: html }} />
       </td>
     </>
