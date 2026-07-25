@@ -352,20 +352,22 @@
   padding: 2px 8px;
   border-radius: 6px;
 }
+/* 与审核屏 .sev-high/-medium/-low 同一套推法(只是修饰名不同):底色从本档 --sev-* 现推,
+   不借 diff / 双声道的色板。两处修饰名不统一是历史遗留,改名另开一轮。 */
 .sev.high {
   color: var(--sev-high);
-  background: var(--del-bg);
-  border: 1px solid var(--del-gutter);
+  background: color-mix(in oklab, var(--sev-high) 12%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--sev-high) 34%, transparent);
 }
 .sev.med {
   color: var(--sev-med);
-  background: var(--human-soft);
-  border: 1px solid var(--human-line);
+  background: color-mix(in oklab, var(--sev-med) 15%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--sev-med) 40%, transparent);
 }
 .sev.low {
   color: var(--sev-low);
-  background: var(--agent-soft);
-  border: 1px solid var(--agent-line);
+  background: color-mix(in oklab, var(--sev-low) 10%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--sev-low) 28%, transparent);
 }
 .f-title {
   font-weight: 600;

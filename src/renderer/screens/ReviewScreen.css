@@ -1803,20 +1803,23 @@
   height: fit-content;
   flex: none;
 }
+/* 底色/边线一律从本档的 --sev-* 现推,不借 diff(--del-bg)或双声道(--human-soft/--agent-soft)的色板:
+   借过来的话 HIGH 会读成"删除行"、MED 读成"human 发言"、LOW 读成"agent 发言"。
+   混色比例逐档调而非统一:同样比例下琥珀比红显得淡,三档的存在感才对不齐。 */
 .sev.sev-high {
   color: var(--sev-high);
-  background: var(--del-bg);
-  border: 1px solid var(--del-gutter);
+  background: color-mix(in oklab, var(--sev-high) 12%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--sev-high) 34%, transparent);
 }
 .sev.sev-medium {
   color: var(--sev-med);
-  background: var(--human-soft);
-  border: 1px solid var(--human-line);
+  background: color-mix(in oklab, var(--sev-med) 15%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--sev-med) 40%, transparent);
 }
 .sev.sev-low {
   color: var(--sev-low);
-  background: var(--agent-soft);
-  border: 1px solid var(--agent-line);
+  background: color-mix(in oklab, var(--sev-low) 10%, var(--card));
+  border: 1px solid color-mix(in oklab, var(--sev-low) 28%, transparent);
 }
 
 /* ---------- 内联卡:操作条 / 就地编辑器 / 剔除态 ---------- */
@@ -3198,20 +3201,24 @@
   border: 1px solid transparent;
   white-space: nowrap;
 }
+/* 轮次是第四条语义轴,之前拿红/蓝表达,于是「仍存在」≡ HIGH chip、「本轮新增」≡ LOW chip。
+   现在整轴退出色相竞争:标签文字本身就说清了状态,差别交给字重。
+   唯独「已修复」留绿 —— 绿在 severity 轴上没人用,且"这条结了"值得一个正向信号。 */
 .round-tag.new {
-  color: var(--agent-2);
-  border-color: var(--agent-line);
-  background: var(--agent-soft);
+  color: var(--text-dim);
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+.round-tag.still {
+  color: var(--text);
+  font-weight: 600;
+  border-color: var(--border);
+  background: var(--surface-2);
 }
 .round-tag.fixed {
   color: var(--add);
   border-color: color-mix(in srgb, var(--add) 34%, transparent);
   background: color-mix(in srgb, var(--add) 12%, transparent);
-}
-.round-tag.still {
-  color: var(--del);
-  border-color: color-mix(in srgb, var(--del) 34%, transparent);
-  background: color-mix(in srgb, var(--del) 10%, transparent);
 }
 
 /* 已有结论的行是「归档态」:压低底色而不是整体调透明,状态 chip 仍需保持可读 */
@@ -3613,12 +3620,12 @@
   cursor: default;
 }
 
-/* 作者已回应(wont_fix):代码未改,但这条意见已有结论 —— 与「仍存在」区分开,
-   用 agent 轴的颜色而非 del 轴,避免读成"还没解决的问题" */
+/* 作者已回应(wont_fix):代码未改,但这条意见已有结论 —— 必须与「仍存在」区分开,
+   否则读成"还没解决的问题"。同在中性族里靠字重排:仍存在最重(要注意),这条最轻(已结案)。 */
 .round-tag.wontfix {
-  color: var(--agent-2);
-  border-color: var(--agent-line);
-  background: var(--agent-soft);
+  color: var(--text-faint);
+  border-color: var(--border-soft);
+  background: var(--surface-2);
 }
 .c-resnote.wontfix {
   border-left-color: var(--agent);
