@@ -525,6 +525,10 @@
 .f-status.done::before {
   content: '✓';
 }
+/* 已提交但本轮要追发复核评论:归待提交,不用 done 的绿 */
+.f-status.followup {
+  color: var(--agent-2);
+}
 .restore {
   font-size: 11px;
   color: var(--agent-2);

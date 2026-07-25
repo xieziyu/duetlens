@@ -8,6 +8,7 @@ import {
   hasAnchor,
   isStaleAnchor,
   isSubmittable,
+  needsRecheckFollowUp,
   nearestLiveLine,
   submitBlocker,
   type GhReviewEvent,
@@ -75,12 +76,18 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     return res.diff;
   }, [reviewId]);
 
-  const pending = useMemo(() => findings.filter(isSubmittable), [findings]);
+  const round = review.currentRound;
+  const pending = useMemo(() => findings.filter((f) => isSubmittable(f, round)), [findings, round]);
   const submitted = useMemo(() => findings.filter((f) => f.submission === 'submitted'), [findings]);
+  // 已提交但本轮复核仍存在 → 本次会就同一处追发一条带复核说明的评论
+  const followUps = useMemo(
+    () => findings.filter((f) => f.triage !== 'dismiss' && needsRecheckFollowUp(f, round)),
+    [findings, round],
+  );
   const dismissed = useMemo(() => findings.filter((f) => f.triage === 'dismiss'), [findings]);
   const staleIds = useMemo(
-    () => new Set(findings.filter((f) => isStaleAnchor(f, diff)).map((f) => f.id)),
-    [findings, diff],
+    () => new Set(findings.filter((f) => isStaleAnchor(f, diff, round)).map((f) => f.id)),
+    [findings, diff, round],
   );
   const inlineCount = pending.filter(hasAnchor).length;
   const keptCount = findings.filter((f) => f.triage !== 'dismiss').length;
@@ -115,7 +122,8 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   const degradeAllInline = () => pending.filter(hasAnchor).forEach(degradeToSummary);
 
   const toggleKeep = (f: Finding) => {
-    if (f.submission === 'submitted') return; // 已提交锁定
+    // 已提交即锁定;唯一例外是欠一条复核追评的,用户仍可决定这条追评发不发
+    if (f.submission === 'submitted' && !needsRecheckFollowUp(f, round)) return;
     void window.duetlens.review.setTriage(reviewId, f.id, f.triage === 'dismiss' ? 'open' : 'dismiss');
   };
 
@@ -139,7 +147,7 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     if (res.status !== 'invalid') return;
     const latest = await syncLatest();
     // 记下拒稿当下定位到几条:后续用户处理完 staleIds 会归零,banner 不能因此改口说「没定位到」。
-    setRejectStale(latest ? findings.filter((f) => isStaleAnchor(f, latest)).length : null);
+    setRejectStale(latest ? findings.filter((f) => isStaleAnchor(f, latest, round)).length : null);
   };
 
   // 锚点判定依据了哪份 diff、结论如何 —— 用户据此知道红框可不可信。
@@ -203,7 +211,12 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
           </div>
 
           {submitted.length > 0 && (
-            <div className="incbar">↻ 上次已提交 {submitted.length} 条 · 已锁定,不重发</div>
+            <div className="incbar">
+              ↻ 上次已提交 {submitted.length} 条 · 已锁定,不重发
+              {followUps.length > 0 && (
+                <b>；其中 {followUps.length} 条本轮复核仍存在,将就同一处追发一条复核说明</b>
+              )}
+            </div>
           )}
 
           {inlineCount > 0 && (
@@ -245,22 +258,25 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
           {findings.map((f) => {
             const isSubmitted = f.submission === 'submitted';
             const isDismissed = f.triage === 'dismiss';
+            // 已提交但本轮复核仍存在 → 不按锁定态处理,本次要就同一处追发一条复核评论
+            const canFollowUp = needsRecheckFollowUp(f, round);
+            const locked = isSubmitted && !canFollowUp;
             // GitHub 422 不告知是哪条锚点失效 → 本地据最新 diff 预判并逐条标红。
             const isStale = staleIds.has(f.id);
             // 卡片正文按实际提交的排法预览:本轮复核说明在前,首轮正文降为背景
-            const note = recheckNote(f, review.currentRound);
+            const note = recheckNote(f, round);
             const prior = f.body.trim();
             const canReAnchor = isStale && nearestLiveLine(f.file, f.line, diff) != null;
             const cls =
               'finding' +
-              (isSubmitted ? ' locked' : isDismissed ? ' dismissed' : ' kept') +
+              (locked ? ' locked' : isDismissed ? ' dismissed' : ' kept') +
               (isStale ? ' risky' : '');
             return (
               <div key={f.id} className={cls}>
                 <span
                   className={'chk' + (!isDismissed ? ' on' : '')}
                   onClick={() => toggleKeep(f)}
-                  title={isSubmitted ? '已提交锁定' : isDismissed ? '恢复' : '剔除'}
+                  title={locked ? '已提交锁定' : isDismissed ? '恢复' : '剔除'}
                 >
                   {!isDismissed ? '✓' : ''}
                 </span>
@@ -313,11 +329,13 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                     </div>
                   )}
                   {isSubmitted && (
-                    <div className="f-status done">
-                      已提交{f.submittedUrl ? '' : ''} · inline {f.file}:{f.line}
+                    <div className={'f-status ' + (canFollowUp ? 'followup' : 'done')}>
+                      {canFollowUp
+                        ? `↻ 上一轮已提交 · 本轮复核仍存在,将追发一条复核评论 · inline ${f.file}:${f.line}`
+                        : `已提交 · inline ${f.file}:${f.line}`}
                     </div>
                   )}
-                  {isStale && !isDismissed && !isSubmitted && (
+                  {isStale && !isDismissed && !locked && (
                     <div className={'f-invalid' + (sub === 'invalid' ? ' escalated' : '')}>
                       <b>⛔ 行锚点失效</b> —— <code>{f.file}:{f.line}</code>{' '}
                       不在最新 diff 的新增侧(base 已更新,原行已移位)。作为 inline 评论会让整份 review 被 422 拒。
@@ -333,7 +351,7 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                     </div>
                   )}
                 </div>
-                {isDismissed && !isSubmitted && (
+                {isDismissed && !locked && (
                   <button className="restore" onClick={() => toggleKeep(f)}>
                     ↩ 恢复
                   </button>

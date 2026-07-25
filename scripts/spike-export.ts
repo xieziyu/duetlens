@@ -45,6 +45,7 @@ function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'titl
     dismissReason: null,
     submission: 'unsubmitted',
     submittedUrl: null,
+    submittedRound: null,
     round: 1,
     lastSeenRound: 1,
     resolution: null,

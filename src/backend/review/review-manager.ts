@@ -343,8 +343,8 @@ export class ReviewManager extends EventEmitter {
   }
 
   /**
-   * 把保留且未提交的 findings 组成一次 GitHub PR review 原子提交。
-   * 成功后被提交项锁定为 submitted(增量:下次只发新的 delta);失败/被拒不改任何状态。
+   * 把待提交的 findings(未提交的 + 欠一条复核追评的)组成一次 GitHub PR review 原子提交。
+   * 成功后记下提交轮次(增量:下次只发新的 delta 与新的复核追评);失败/被拒不改任何状态。
    */
   async submitReview(reviewId: string, input: SubmitReviewInput): Promise<SubmitReviewResult> {
     const review = this.store.getReview(reviewId);
@@ -357,7 +357,7 @@ export class ReviewManager extends EventEmitter {
       this.updateSummary(reviewId, input.summaryBody);
     }
     const fresh = this.store.getReview(reviewId)!;
-    const pending = this.store.listFindings(reviewId).filter(isSubmittable);
+    const pending = this.store.listFindings(reviewId).filter((f) => isSubmittable(f, fresh.currentRound));
 
     // 无 finding 也可提交:Comment/Approve/Request changes 本身就是表态
     const payload = buildPrReviewPayload(fresh, pending, input.event);
@@ -367,7 +367,7 @@ export class ReviewManager extends EventEmitter {
 
     if (result.status === 'success') {
       for (const f of pending) {
-        this.store.setSubmission(f.id, 'submitted', result.url);
+        this.store.setSubmission(f.id, 'submitted', result.url, fresh.currentRound);
         const updated = this.store.getFinding(f.id);
         if (updated) this.forward({ reviewId, type: 'finding', payload: updated });
       }

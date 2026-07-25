@@ -76,6 +76,7 @@ interface FindingRow {
   dismiss_reason: string | null;
   submission: string;
   submitted_url: string | null;
+  submitted_round: number | null;
   round: number;
   last_seen_round: number;
   resolution: string | null;
@@ -169,6 +170,7 @@ function toFinding(r: FindingRow): Finding {
     dismissReason: r.dismiss_reason,
     submission: r.submission as Submission,
     submittedUrl: r.submitted_url,
+    submittedRound: r.submitted_round,
     round: r.round,
     lastSeenRound: r.last_seen_round,
     resolution: r.resolution as FindingResolution | null,
@@ -668,11 +670,20 @@ export class ReviewStore {
       .run(round, now(), findingId, round);
   }
 
-  setSubmission(findingId: string, submission: Submission, url: string | null = null): void {
+  /** round 记下这次提交发生在第几轮:之后的轮次复核仍存在时,据此判断是否还欠一条追评。 */
+  setSubmission(
+    findingId: string,
+    submission: Submission,
+    url: string | null = null,
+    round: number | null = null,
+  ): void {
     this.withReviewTouch({ finding: findingId }, (ts) => {
       this.db
-        .prepare('UPDATE findings SET submission = ?, submitted_url = ?, updated_at = ? WHERE id = ?')
-        .run(submission, url, ts, findingId);
+        .prepare(
+          `UPDATE findings SET submission = ?, submitted_url = ?, submitted_round = ?, updated_at = ?
+            WHERE id = ?`,
+        )
+        .run(submission, url, submission === 'submitted' ? round : null, ts, findingId);
     });
   }
 

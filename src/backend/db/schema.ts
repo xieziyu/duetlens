@@ -162,7 +162,17 @@ UPDATE reviews SET status = 'completed'
  WHERE status = 'reviewing' AND source <> 'github-pr';
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
+// 提交发生在第几轮 —— 复核仍存在的条目要能在**之后的轮次**追发一条复核评论,
+// 只看 submission 分不出「本轮刚发的」与「上一轮发的」。存量记录无从追溯,按所在 review 的当前轮次算:
+// 宁可少发一条追评,也不要给存量数据凭空重发一遍已经在 PR 上的评论。
+const V11 = `
+ALTER TABLE findings ADD COLUMN submitted_round INTEGER;
+UPDATE findings
+   SET submitted_round = (SELECT current_round FROM reviews WHERE reviews.id = findings.review_id)
+ WHERE submission = 'submitted';
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

@@ -11,7 +11,9 @@ import {
   buildPrReviewPayload,
   isAnchorLive,
   isStaleAnchor,
+  isSubmittable,
   nearestLiveLine,
+  needsRecheckFollowUp,
 } from '../src/shared/github-review';
 import { parseUnifiedDiff } from '../src/shared/diff';
 import type { GitHubSubmitter } from '../src/backend/review/github-submitter';
@@ -104,6 +106,62 @@ async function main() {
     log('增量:已提交锁定不重发,body 单独成立 ok');
   }
 
+  // ---- 复核追评:上一轮已提交、本轮复核仍存在 → 追发一条以复核说明为主体的评论 ----
+  {
+    const db = openDatabase(':memory:');
+    const store = new ReviewStore(db);
+    const { review, f1 } = seed(store);
+    const fake = new FakeSubmitter({ status: 'success', url: 'https://gh/x#r1', submittedCount: 2 });
+    const manager = new ReviewManager(store, undefined, { submitter: fake });
+    await manager.submitReview(review.id, { event: 'comment' });
+    assert.equal(store.getFinding(f1.id)!.submittedRound, 1, '提交记下轮次');
+
+    // 第 2 轮:agent 复核判定仍存在
+    store.startRound(review.id, 2, {});
+    store.setFindingResolution(f1.id, 2, 'still_present', '第 2 轮复核:换成了 RefCell,跨线程仍不安全。');
+    const f1r2 = store.getFinding(f1.id)!;
+    assert.equal(needsRecheckFollowUp(f1r2, 2), true, '上一轮已提交 + 本轮仍存在 → 欠一条追评');
+    assert.equal(isSubmittable(f1r2, 2), true, '追评项回到待提交集');
+
+    const res = await manager.submitReview(review.id, { event: 'comment' });
+    assert.equal(res.status, 'success');
+    const body = fake.last!.payload.comments.find((c) => c.line === 20)!.body;
+    assert.match(body, /↻ 第 2 轮复核追评/, '追评自报身份,别看着像重复上报');
+    assert.ok(
+      body.indexOf('换成了 RefCell') < body.indexOf('用 Atomic 替代'),
+      '复核说明在前,首轮正文降为背景',
+    );
+    assert.match(body, /首次报出时的说明/, '首轮正文仍带上');
+
+    // 同一轮内不重复追发:提交时记下的轮次即本轮
+    const after = store.getFinding(f1.id)!;
+    assert.equal(after.submittedRound, 2, '追评后轮次推进到本轮');
+    assert.equal(needsRecheckFollowUp(after, 2), false, '同轮不再追发第二条');
+    assert.equal(isSubmittable(after, 2), false, '同轮不再进待提交集');
+    log('复核追评:跨轮追发一次 + 同轮不重复 ok');
+  }
+
+  // ---- 脱锚 finding 并入摘要:多段正文整体缩进在列表项内 ----
+  {
+    const db = openDatabase(':memory:');
+    const store = new ReviewStore(db);
+    const review = store.createReview({ source: 'github-pr', sourceRef: 'acme/repo#7', title: 't' });
+    const f = store.addFinding(review.id, {
+      severity: 'high',
+      title: '架构点',
+      body: '第一段。\n\n第二段带列表:\n- 甲\n- 乙',
+      file: 'src/p.ts',
+      line: 0,
+    });
+    const payload = buildPrReviewPayload(store.getReview(review.id)!, [store.getFinding(f.id)!], 'comment');
+    const tail = payload.body.split('### 整体意见')[1];
+    const orphan = tail
+      .split('\n')
+      .filter((l) => l.trim() && !l.startsWith('- ') && !l.startsWith('  '));
+    assert.deepEqual(orphan, [], '正文每一行都缩进在列表项内,不会掉出去');
+    log('脱锚项并入摘要:多段正文不逃逸列表项 ok');
+  }
+
   // ---- blocked:Comment 既无 body 也无 finding → 前置校验拦下,不走 submitter ----
   {
     const db = openDatabase(':memory:');
@@ -185,8 +243,8 @@ async function main() {
     store.setReviewSummary(review.id, '整体 OK。');
     const live = store.addFinding(review.id, { severity: 'high', title: '活锚点', body: 'b', file: 'src/p.ts', line: 21 });
     const stale = store.addFinding(review.id, { severity: 'medium', title: '失效锚点', body: '架构点', file: 'src/p.ts', line: 99 });
-    assert.equal(isStaleAnchor(store.getFinding(live.id)!, diff), false, '活锚点不算 stale');
-    assert.equal(isStaleAnchor(store.getFinding(stale.id)!, diff), true, 'off-diff 锚点算 stale');
+    assert.equal(isStaleAnchor(store.getFinding(live.id)!, diff, 1), false, '活锚点不算 stale');
+    assert.equal(isStaleAnchor(store.getFinding(stale.id)!, diff, 1), true, 'off-diff 锚点算 stale');
 
     const manager = new ReviewManager(store, undefined, {
       submitter: new FakeSubmitter({ status: 'success', url: 'u', submittedCount: 0 }),
@@ -206,7 +264,7 @@ async function main() {
     const stale2 = store.addFinding(review.id, { severity: 'low', title: '再失效', body: 'x', file: 'src/p.ts', line: 88 });
     const near = nearestLiveLine('src/p.ts', 88, diff)!;
     manager.setFindingAnchor(review.id, stale2.id, near);
-    assert.equal(isStaleAnchor(store.getFinding(stale2.id)!, diff), false, '改锚点后不再 stale');
+    assert.equal(isStaleAnchor(store.getFinding(stale2.id)!, diff, 1), false, '改锚点后不再 stale');
     log('行锚点预判 + 降级为摘要 + 改锚点 ok');
   }
 
@@ -256,7 +314,7 @@ async function main() {
   }
 
   log('────────────────────────');
-  log('✅ PASS — 提交:payload/成功锁定/增量/被拒不改态/source 守卫/锚点预判/现拉最新 diff 全通过');
+  log('✅ PASS — 提交:payload/成功锁定/增量/复核追评/被拒不改态/source 守卫/锚点预判/现拉最新 diff 全通过');
 }
 
 main().then(

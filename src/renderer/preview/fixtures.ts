@@ -14,6 +14,7 @@ import type {
 } from '@shared/ipc';
 import type { PrSummary } from '@shared/source-discovery';
 import { scanDoneStatus } from '@shared/domain';
+import { isSubmittable } from '@shared/github-review';
 import type { Discussion, Finding, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
 import { mergeLayers } from '@shared/prompt';
 import type { EditablePromptLayer, PromptSectionKey, ReviewPromptView } from '@shared/prompt';
@@ -144,6 +145,7 @@ function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'titl
     dismissReason: null,
     submission: 'unsubmitted',
     submittedUrl: null,
+    submittedRound: null,
     round: 1,
     lastSeenRound: 1,
     resolution: null,
@@ -227,6 +229,22 @@ const FINDINGS: Finding[] = [
     body: 'appVersion 比较未校验格式,非法值被静默视为相等;文件不在本次改动内,agent 顺 import 读到并 off-diff 提出。',
     file: 'src/shared/config.ts',
     line: 42,
+  }),
+  // 第 1 轮就提交给 author、第 2 轮复核仍存在 —— 提交屏据此追发一条带复核说明的评论
+  mkFinding({
+    id: 'f7',
+    severity: 'high',
+    category: 'Error Handling',
+    title: '重试循环吞掉最后一次错误',
+    body: '重试耗尽后返回 null,调用方无从区分"没结果"与"全部失败",线上排查只能靠猜。',
+    file: 'src/pipeline.ts',
+    line: 33,
+    submission: 'submitted',
+    submittedUrl: 'https://github.com/acme/repo/pull/1#pullrequestreview-1',
+    submittedRound: 1,
+    lastSeenRound: 2,
+    resolution: 'still_present',
+    resolutionNote: '第 2 轮复核:加了日志,但仍旧返回 null —— 调用方拿到的信息没变,问题照旧。',
   }),
 ];
 
@@ -652,6 +670,7 @@ export function installPreviewApi(): void {
           dismissReason: null,
           submission: 'unsubmitted',
           submittedUrl: null,
+          submittedRound: null,
           round: 2,
           lastSeenRound: 2,
           resolution: null,
@@ -695,6 +714,7 @@ export function installPreviewApi(): void {
           dismissReason: null,
           submission: 'unsubmitted',
           submittedUrl: null,
+          submittedRound: null,
           round: 2,
           lastSeenRound: 2,
           resolution: null,
@@ -723,9 +743,15 @@ export function installPreviewApi(): void {
         if (forceSubmit === 'failed')
           return { status: 'failed', message: 'gh 认证已过期。' };
         const url = 'https://github.com/xieziyu/podcast-go/pull/482#pullrequestreview-1';
-        const pending = findings.filter((f) => f.triage !== 'dismiss' && f.submission !== 'submitted');
+        const pending = findings.filter((f) => isSubmittable(f, review.currentRound));
         for (const f of pending) {
-          const next = { ...f, submission: 'submitted' as const, submittedUrl: url, updatedAt: Date.now() };
+          const next = {
+            ...f,
+            submission: 'submitted' as const,
+            submittedUrl: url,
+            submittedRound: review.currentRound,
+            updatedAt: Date.now(),
+          };
           emit(next);
         }
         return { status: 'success', url, submittedCount: pending.filter((f) => f.file && f.line > 0).length };

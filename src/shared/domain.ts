@@ -231,6 +231,8 @@ export interface Finding {
   submission: Submission;
   /** 提交后回填的 GitHub 评论链接 */
   submittedUrl: string | null;
+  /** 提交发生在第几轮;判断复核说明是否还欠 author 一条追评(见 needsRecheckFollowUp) */
+  submittedRound: number | null;
   /** 首次被报出的轮次 */
   round: number;
   /** agent 最近一次对它表态或重报的轮次 */

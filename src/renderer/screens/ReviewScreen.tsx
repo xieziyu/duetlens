@@ -384,7 +384,7 @@ export function ReviewScreen({
   // 常驻 CTA:github-pr → 提交 review(徽标=待提交数);其余 → 导出 review(徽标=保留数)
   const isGithub = review?.source === 'github-pr';
   const ctaCount = isGithub
-    ? findings.filter(isSubmittable).length
+    ? findings.filter((f) => isSubmittable(f, review.currentRound)).length
     : findings.filter((f) => f.triage !== 'dismiss').length;
   // 顶栏源标识:PR 拆成「#号 chip + 仓库 nwo 尾注」,分支 / vbranch 直接显示 ref
   const pr = isGithub ? parsePrRefLoose(review.sourceRef) : null;
