@@ -132,7 +132,7 @@
   align-items: center;
   gap: 13px;
   padding: 12px 14px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
   cursor: pointer;
@@ -303,7 +303,7 @@
   padding: 44px 22px;
   border: 1px dashed var(--border);
   border-radius: 14px;
-  background: var(--surface);
+  background: var(--card);
   color: var(--text-faint);
 }
 .hist-empty .ic {

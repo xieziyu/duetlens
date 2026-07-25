@@ -161,7 +161,7 @@
 .pr-card {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--card);
   margin-bottom: 14px;
   overflow: hidden;
 }

@@ -95,7 +95,7 @@
   padding: 9px 13px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface);
+  background: var(--card);
   margin-bottom: 10px;
   font-size: 12.5px;
 }
@@ -150,7 +150,7 @@
 .freshbar {
   border: 1px solid var(--border);
   border-radius: 9px;
-  background: var(--surface);
+  background: var(--card);
   padding: 8px 12px;
   margin-bottom: 12px;
   font-size: 11.5px;
@@ -231,13 +231,15 @@
   color: var(--text);
 }
 
+/* 注意:这个类名没有加屏幕前缀,会漏到审核屏的内联卡(它们也带 .finding)并压掉 .card 的填充。
+   两处都是"面板上的卡",填充同为 --card 才对得上;真正的收敛(加前缀)另开一轮。 */
 .finding {
   display: flex;
   gap: 12px;
   padding: 13px 14px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface);
+  background: var(--card);
   margin-bottom: 10px;
 }
 .finding.kept {

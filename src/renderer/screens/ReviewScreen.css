@@ -671,7 +671,7 @@
   align-items: center;
   gap: 14px;
   padding: 9px 12px 9px 16px;
-  background: var(--surface);
+  background: var(--card);
   border-bottom: 1px solid var(--border);
   /* 中栏宽度由两侧栏拖拽决定,与窗口宽度无关,故按容器而非视口退化 */
   container-type: inline-size;
@@ -829,7 +829,7 @@
 .card {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface);
+  background: var(--card);
   overflow: hidden;
   box-shadow: var(--shadow);
 }
@@ -1675,7 +1675,7 @@
 .frow {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface);
+  background: var(--card);
   padding: 10px 11px;
   margin-bottom: 8px;
   cursor: pointer;
@@ -2742,7 +2742,7 @@
   flex: none;
   border-top: 1px solid var(--border);
   padding: 10px 12px 12px;
-  background: var(--surface);
+  background: var(--card);
 }
 .composer .box {
   border: 1px solid var(--border);
@@ -2971,7 +2971,7 @@
   line-height: 1.65;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--surface);
+  background: var(--card);
   padding: 11px 12px;
 }
 .sb-prose p {
@@ -3008,7 +3008,7 @@
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 9px;
-  background: var(--surface);
+  background: var(--card);
   margin-bottom: 7px;
   cursor: pointer;
   width: 100%;
@@ -3411,7 +3411,7 @@
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: var(--surface);
+  background: var(--card);
   box-shadow: 0 24px 60px rgb(0 0 0 / 32%);
   padding: 20px 22px 16px;
 }

@@ -23,7 +23,7 @@
 .start-panel {
   width: 100%;
   max-width: 420px;
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: var(--shadow), 0 0 0 1px color-mix(in oklab, var(--agent) 12%, transparent);

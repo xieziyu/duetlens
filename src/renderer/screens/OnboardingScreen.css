@@ -67,7 +67,7 @@
 .ob-checks {
   border: 1px solid var(--border);
   border-radius: 16px;
-  background: var(--surface);
+  background: var(--card);
   overflow: hidden;
   box-shadow: var(--shadow);
   animation: ob-rise 0.45s 0.05s both;

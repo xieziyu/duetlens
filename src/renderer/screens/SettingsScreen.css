@@ -298,7 +298,7 @@
 
 /* about */
 .settings .about {
-  background: var(--surface);
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px 18px;

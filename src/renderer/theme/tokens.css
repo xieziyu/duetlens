@@ -19,6 +19,9 @@
   color-scheme:dark;
   /* ===== CHROME (data-mode) — dark · brand ===== */
   --bg:#0b0d12; --surface:#12151d; --surface-2:#171b24; --surface-3:#1c212c;
+  /* 卡片/行的填充。深色靠边线就能读出抬起,故与 --surface 同值;浅色下近白边线会糊,
+     必须靠填充差,于是 --card 亮于 --surface。组件因此一律写 --card,不必分模式。 */
+  --card:#12151d;
   --border:#232834; --border-soft:#1b2028;
   --text:#e7eaf1; --text-dim:#9aa3b2; --text-faint:#5f6877;
   /* 天蓝 accent(对齐 better-review brand · oklch hue 245) */
@@ -39,27 +42,36 @@
   --sev-high:#ff7085; --sev-med:#e8a24d; --sev-low:#8b9bff;
 }
 /* ---- CHROME: light ---- */
+/* 明度阶梯必须是深色的镜像:--bg 是最"远"的画布(外壳缝隙 / 代码井),--surface 抬起成面板,
+   --card 最亮。曾经反过来(--bg:#fff 最亮、--surface 更暗),卡片于是陷进面板里,三栏糊成一片。
+   --surface-2/-3 继续向下走,表示卡片内部的凹陷(引用块 / 输入框 / chip)。 */
 :root[data-mode="light"]{
   color-scheme:light;
-  --bg:#ffffff; --surface:#f6f8fa; --surface-2:#eef1f4; --surface-3:#e6eaee;
-  --border:#d6dde3; --border-soft:#e6eaee;
-  --text:#1f2328; --text-dim:#57606a; --text-faint:#8b949e;
-  --agent:oklch(.52 .13 245); --agent-2:oklch(.46 .14 246); --agent-soft:color-mix(in oklab,var(--agent) 10%,transparent); --agent-line:color-mix(in oklab,var(--agent) 28%,transparent);
-  --human:#b7791f; --human-soft:rgba(183,121,31,.12); --human-line:rgba(183,121,31,.35);
-  --on-accent:#ffffff; --hover:rgba(31,35,40,.03);
-  --sel:color-mix(in oklab,var(--agent) 18%,transparent); --scroll:#d0d7de; --scroll-h:#b9c1ca;
-  --shadow:0 10px 26px -16px rgba(31,35,40,.28);
-  --glow1:color-mix(in oklab,var(--agent) 6%,transparent); --glow2:rgba(183,121,31,.045);
+  --bg:oklch(94.6% .003 250); --surface:oklch(97.8% .002 250); --card:#ffffff;
+  --surface-2:oklch(96.4% .003 250); --surface-3:oklch(93.4% .004 250);
+  --border:oklch(82.5% .007 250); --border-soft:oklch(89.6% .005 250);
+  --text:oklch(22% .008 258); --text-dim:oklch(45% .010 256); --text-faint:oklch(60% .009 254);
+  --agent:oklch(.50 .145 252); --agent-2:oklch(.43 .155 254); --agent-soft:color-mix(in oklab,var(--agent) 9%,transparent); --agent-line:color-mix(in oklab,var(--agent) 28%,transparent);
+  --accent-solid:oklch(.49 .16 253); --on-solid:#fff;
+  --human:oklch(.56 .145 50); --human-soft:color-mix(in oklab,var(--human) 11%,transparent); --human-line:color-mix(in oklab,var(--human) 32%,transparent);
+  --on-accent:#ffffff; --hover:color-mix(in oklab,var(--text) 4%,transparent);
+  --sel:color-mix(in oklab,var(--agent) 15%,transparent); --scroll:oklch(86% .01 250); --scroll-h:oklch(78% .013 250);
+  /* 阴影带底色的色相,不用纯黑:近白面上纯黑阴影会发灰发脏 */
+  --shadow:0 1px 2px oklch(38% .05 258/.06),0 8px 22px -14px oklch(38% .06 258/.24);
+  --glow1:color-mix(in oklab,var(--agent) 5%,transparent); --glow2:color-mix(in oklab,var(--human) 4%,transparent);
 }
 /* ---- THEME: Duetlens · light ---- */
+/* severity 三档在这里各自占一个色相,且都避开 diff(绿/红)与双声道(agent 蓝 / human 琥珀):
+   sev-low 用低彩度蓝灰而非靛蓝,免得读成 agent。chip 的底色/边线由 .sev 规则从这三个值现推,
+   不再借 --del-bg / --human-soft / --agent-soft(见 ReviewScreen.css 的 .sev)。 */
 :root[data-mode="light"][data-theme="duetlens"]{
-  --code-text:#1f2328;
-  --k:#7c3aed; --fn:#0b84c4; --s:#1a8f5a; --n:#b45309; --c:#8b949e; --ty:#a16207; --mac:#c026a0;
-  --add:#1a7f37; --del:#cf222e;
-  --add-bg:#e9fbef; --del-bg:#ffeef0;
-  --add-gutter:rgba(26,127,55,.18); --del-gutter:rgba(207,34,46,.15);
-  --code-hl:rgba(79,87,214,.10);
-  --sev-high:#cf222e; --sev-med:#9a6700; --sev-low:#4f57d6;
+  --code-text:oklch(22% .008 258);
+  --k:oklch(46% .2 298); --fn:oklch(46% .145 243); --s:oklch(43% .12 157); --n:oklch(47% .13 54); --c:oklch(60% .009 254); --ty:oklch(47% .11 74); --mac:oklch(47% .19 336);
+  --add:oklch(46% .13 153); --del:oklch(49% .17 26);
+  --add-bg:oklch(96.4% .034 153); --del-bg:oklch(95.8% .036 26);
+  --add-gutter:color-mix(in oklab,var(--add) 26%,transparent); --del-gutter:color-mix(in oklab,var(--del) 24%,transparent);
+  --code-hl:color-mix(in oklab,var(--agent) 13%,transparent);
+  --sev-high:oklch(46% .18 16); --sev-med:oklch(46% .13 86); --sev-low:oklch(47% .055 242);
 }
 /* ---- THEME: GitHub · dark ---- */
 :root[data-mode="dark"][data-theme="github"]{
