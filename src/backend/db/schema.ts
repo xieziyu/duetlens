@@ -172,7 +172,15 @@ UPDATE findings
  WHERE submission = 'submitted';
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
+// 结案来源:复核判定已修复而自动结案,与 reviewer 主动剔除在库里长得一样(都是 triage=dismiss),
+// 但对回归的态度相反(见 isAutoClosedFixed),只能显式记。存量行按当时唯一的判据回填 ——
+// 那会儿 reviewer 剔过又被判 fixed 的条目本就分不出来,回填只是把旧口径原样接过来。
+const V12 = `
+ALTER TABLE findings ADD COLUMN auto_closed INTEGER NOT NULL DEFAULT 0;
+UPDATE findings SET auto_closed = 1 WHERE triage = 'dismiss' AND resolution = 'fixed';
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

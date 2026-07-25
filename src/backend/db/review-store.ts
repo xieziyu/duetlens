@@ -4,6 +4,7 @@ import type { RecentReview } from '@shared/ipc';
 import type { DB } from './database';
 import {
   DEFAULT_UI_SETTINGS,
+  isAutoClosedFixed,
   type Discussion,
   type Finding,
   type FindingResolution,
@@ -25,15 +26,8 @@ import {
 
 const now = () => Date.now();
 
-/**
- * 复核判定已修复时自动写下的剔除理由。它同时是「这条剔除出自复核、不是 reviewer 的判断」的
- * 唯一凭据(见 setFindingResolution 的恢复分支)—— 改这行文案就是改判定口径,存量行会退回
- * 「不自动恢复」的老行为。真正干净的做法是给 finding 存一个显式的结案来源字段,值得单独一次
- * schema 变更;在那之前,这条标记由本模块独家读写。
- */
+/** 复核判定已修复时自动写下的剔除理由(结案来源记在 auto_closed,这里只是给人看的文案)。 */
 const AUTO_CLOSE_REASON = (round: number): string => `第 ${round} 轮复核判定已修复`;
-const isAutoCloseReason = (reason: string | null): boolean =>
-  reason != null && /^第 \d+ 轮复核判定已修复$/.test(reason);
 
 interface ReviewRow {
   id: string;
@@ -91,6 +85,7 @@ interface FindingRow {
   last_seen_round: number;
   resolution: string | null;
   resolution_note: string | null;
+  auto_closed: number;
   created_at: number;
   updated_at: number;
 }
@@ -185,6 +180,7 @@ function toFinding(r: FindingRow): Finding {
     lastSeenRound: r.last_seen_round,
     resolution: r.resolution as FindingResolution | null,
     resolutionNote: r.resolution_note,
+    autoClosed: r.auto_closed === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -620,12 +616,17 @@ export class ReviewStore {
   /**
    * 用户裁决。剔除可带理由(复审时注入,让 agent 明白为何不是问题、不再报同类);
    * 恢复为 open 时理由随之清空,避免陈旧理由在下一轮误导 agent。
+   *
+   * 一经手动裁决就不再是自动结案:reviewer 恢复后重新剔除的,是他自己的决定,
+   * 下一轮复核说「仍存在」也不该把它翻回保留(见 setFindingResolution 的恢复分支)。
    */
   setTriage(findingId: string, triage: Triage, reason?: string | null): void {
     const dismissReason = triage === 'dismiss' ? (reason?.trim() || null) : null;
     this.withReviewTouch({ finding: findingId }, (ts) => {
       this.db
-        .prepare('UPDATE findings SET triage = ?, dismiss_reason = ?, updated_at = ? WHERE id = ?')
+        .prepare(
+          'UPDATE findings SET triage = ?, dismiss_reason = ?, auto_closed = 0, updated_at = ? WHERE id = ?',
+        )
         .run(triage, dismissReason, ts, findingId);
     });
   }
@@ -642,9 +643,9 @@ export class ReviewStore {
    * 重报走 report_finding 的回归路径由 ReviewSession.absorbDuplicate 兜底,这里管的是 agent
    * 直接对旧 id 表态的那条路。
    *
-   * 恢复只认 AUTO_CLOSE_REASON 这条我们自己写下的标记,不能用「剔除 + fixed」去推 ——
-   * reviewer 亲自剔除过的条目照样可能挂着 fixed(他先剔除、agent 之后才表态;或结案后
-   * 他「↩ 恢复」再重新剔除),那是他的判断,不该被下一轮的表态推翻。
+   * 恢复只认落库的 auto_closed,不能用「剔除 + fixed」去推 —— reviewer 亲自剔除过的条目照样
+   * 可能挂着 fixed(他先剔除、agent 之后才表态;或结案后他「↩ 恢复」再重新剔除),
+   * 那是他的判断,不该被下一轮的表态推翻。
    */
   setFindingResolution(
     findingId: string,
@@ -655,23 +656,23 @@ export class ReviewStore {
     const prior = this.getFinding(findingId);
     if (!prior) return;
     const autoDismiss = resolution === 'fixed' && prior.triage === 'open';
-    const restore =
-      resolution !== 'fixed' && prior.triage === 'dismiss' && isAutoCloseReason(prior.dismissReason);
+    const restore = resolution !== 'fixed' && isAutoClosedFixed(prior);
     const triage: Triage = autoDismiss ? 'dismiss' : restore ? 'open' : prior.triage;
     const dismissReason = autoDismiss
       ? AUTO_CLOSE_REASON(round)
       : restore
         ? null
         : prior.dismissReason;
+    const autoClosed = autoDismiss ? 1 : restore ? 0 : Number(prior.autoClosed);
     this.withReviewTouch({ finding: findingId }, (ts) => {
       this.db
         .prepare(
           `UPDATE findings
               SET resolution = ?, resolution_note = ?, last_seen_round = ?, updated_at = ?,
-                  triage = ?, dismiss_reason = ?
+                  triage = ?, dismiss_reason = ?, auto_closed = ?
             WHERE id = ?`,
         )
-        .run(resolution, note?.trim() || null, round, ts, triage, dismissReason, findingId);
+        .run(resolution, note?.trim() || null, round, ts, triage, dismissReason, autoClosed, findingId);
     });
   }
 

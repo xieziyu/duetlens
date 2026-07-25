@@ -15,7 +15,7 @@
  *
  * PR 评论是**外部数据**(任何人都能在 PR 上写字),统一包在隔离区块里并显式声明其非指令性质。
  */
-import type { Finding, Message, ReviewRound } from '@shared/domain';
+import { isAutoClosedFixed, type Finding, type Message, type ReviewRound } from '@shared/domain';
 import type { PrContext, PrReviewThread } from '@shared/github-context';
 
 /** 单条 finding 附带的讨论摘录条数上限(只取最近几条,够表达 reviewer 意图即可)。 */
@@ -256,8 +256,8 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
 
   // 「已确认修复」与「reviewer 剔除」都不再要表态,但对回归的态度相反:前者再出现要当新问题报,
   // 后者连同类问题都不该报。混在一节里讲,等于教 agent 把回归也一并咽掉。
-  const closedFixed = dismissedFindings.filter((f) => f.resolution === 'fixed');
-  const droppedByReviewer = dismissedFindings.filter((f) => f.resolution !== 'fixed');
+  const closedFixed = dismissedFindings.filter(isAutoClosedFixed);
+  const droppedByReviewer = dismissedFindings.filter((f) => !isAutoClosedFixed(f));
 
   const out: string[] = [];
   let section = 0;

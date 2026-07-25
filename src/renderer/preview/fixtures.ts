@@ -150,6 +150,7 @@ function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'titl
     lastSeenRound: 1,
     resolution: null,
     resolutionNote: null,
+    autoClosed: false,
     createdAt: now,
     updatedAt: now,
     ...p,
@@ -184,6 +185,7 @@ const FINDINGS: Finding[] = [
     // 判定已修复即自动结案(见 rerun.md),故 fixture 也是剔除态
     triage: 'dismiss',
     dismissReason: '第 2 轮复核判定已修复',
+    autoClosed: true,
   }),
   mkFinding({
     id: 'f3',
@@ -675,6 +677,7 @@ export function installPreviewApi(): void {
           lastSeenRound: 2,
           resolution: null,
           resolutionNote: null,
+          autoClosed: false,
           createdAt: ts,
           updatedAt: ts,
         };
@@ -719,6 +722,7 @@ export function installPreviewApi(): void {
           lastSeenRound: 2,
           resolution: null,
           resolutionNote: null,
+          autoClosed: false,
           createdAt: ts,
           updatedAt: ts,
         };

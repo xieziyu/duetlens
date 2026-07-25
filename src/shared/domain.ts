@@ -240,6 +240,8 @@ export interface Finding {
   /** 该次表态的结论;仅当 lastSeenRound === Review.currentRound 时代表本轮判定 */
   resolution: FindingResolution | null;
   resolutionNote: string | null;
+  /** 这条剔除出自复核自动结案,而非 reviewer 的判断(见 isAutoClosedFixed) */
+  autoClosed: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -247,10 +249,11 @@ export interface Finding {
 /**
  * 复核判定已修复后**自动结案**的条目 —— 与 reviewer 主动剔除(「这不是问题」)语义不同:
  * 它只是"当前代码里已经没有了",同一处再被报出来就是回归,应恢复而非继续抑制。
- * `resolution === 'fixed'` 足以判别:表态只发生在保留中的条目上,一旦表态即自动剔除。
+ *
+ * 判据是落库的 autoClosed 而非「剔除 + fixed」:后者推不出来源 —— reviewer 先剔除、agent 之后
+ * 才判 fixed,或结案后他「↩ 恢复」再重新剔除,都会留下同样的一对值,却是他的判断,不该被推翻。
  */
-export const isAutoClosedFixed = (f: Finding): boolean =>
-  f.triage === 'dismiss' && f.resolution === 'fixed';
+export const isAutoClosedFixed = (f: Finding): boolean => f.triage === 'dismiss' && f.autoClosed;
 
 /**
  * 本轮复核判定「仍存在」时 agent 给出的说明。它是看过作者的修改尝试之后写的,
