@@ -29,7 +29,7 @@
 1. 键位表不可配置(帮助层为只读 cheatsheet)。
 2. 运行时/异常态(turn 中断 / 反向审批 / turn 失败 / 连接断 / 压缩)只有设计,未落地 —— 设计见 `mockup/review-runtime.html`。`mockup/` 整体已冻结,但这一份是该功能目前**唯一**的设计参照,落地前别丢。
 
-> 入口页丰富流程已接 mockup(见「前端屏」):**两档**来源分段选择器(GitHub PR / 本地仓库)、GitHub PR 粘贴+实时预览卡+remote 校验、默认折叠的 open PR 列表(展开才拉)、gh 未登录引导、本地仓库面板(选目录后一次探测定模式:workspace → 虚拟分支列表 / 普通 git → 分支列表含 commits ahead + base;可手动改按普通分支)、最近仓库快选、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / inspect-repo / list-repo-paths）+ `review:list-recent`（附计数）。发起后到进屏之间由**启动等待浮层**接管（`screens/entry/StartOverlay.tsx`，阶段走 `review:start-progress` 事件；设计见 [ui](ui.md#启动等待浮层点开始审核到进屏之间)）。
+> 入口页丰富流程已接 mockup(见「前端屏」):**两档**来源分段选择器(GitHub PR / 本地仓库)、GitHub PR 粘贴+实时预览卡+remote 校验、默认折叠的 open PR 列表(展开才拉)、gh 未登录引导、本地仓库面板(选目录后一次探测定模式:workspace → 虚拟分支 / 普通 git → 分支;分支走带筛选的下拉选择器 + 默认选中 + 选中摘要,可手动改按普通分支)、最近仓库快选、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / inspect-repo / list-repo-paths）+ `review:list-recent`（附计数）。发起后到进屏之间由**启动等待浮层**接管（`screens/entry/StartOverlay.tsx`，阶段走 `review:start-progress` 事件；设计见 [ui](ui.md#启动等待浮层点开始审核到进屏之间)）。
 
 ## 分层落地情况
 
