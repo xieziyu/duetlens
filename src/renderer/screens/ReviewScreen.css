@@ -673,6 +673,8 @@
   padding: 9px 12px 9px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  /* 中栏宽度由两侧栏拖拽决定,与窗口宽度无关,故按容器而非视口退化 */
+  container-type: inline-size;
 }
 .file-header .fh-id {
   display: flex;
@@ -751,9 +753,15 @@
 .file-header .fh-acts {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   padding-left: 8px;
   border-left: 1px solid var(--border);
+}
+/* 两侧栏拉满时中栏只剩 ~340px:撤掉左栏行里已有的增删计量,把宽度让给文件名与操作按钮 */
+@container (max-width: 360px) {
+  .file-header .fh-num {
+    display: none;
+  }
 }
 .mini {
   font-family: var(--mono);
@@ -2187,26 +2195,59 @@
   color: var(--text);
   box-shadow: 0 0 0 1px var(--agent-line) inset;
 }
-.icon-btn {
-  width: 26px;
+/* 文件头动作按钮:纯图标读不出功能,故带文案 */
+.fh-btn {
   height: 26px;
+  padding: 0 9px;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-dim);
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 5px;
+  font-size: 11px;
+  white-space: nowrap;
   cursor: pointer;
 }
-.icon-btn:hover {
+.fh-btn:hover {
   color: var(--text);
   border-color: var(--agent-line);
 }
-.icon-btn.on {
+.fh-btn.on {
   background: var(--add-bg);
   border-color: var(--add-gutter);
   color: var(--add);
+}
+.fh-btn .fb-ic {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1;
+}
+/* 已看 = 勾选框:未选空框、选中打勾,不靠配色单独承载状态 */
+.fh-btn .fb-box {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--text-faint);
+  border-radius: 3px;
+  background: var(--surface);
+}
+.fh-btn .fb-box svg {
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+}
+.fh-btn.on .fb-box {
+  background: var(--add);
+  border-color: var(--add);
+  color: var(--bg);
+}
+.fh-btn.on .fb-box svg {
+  opacity: 1;
 }
 
 .file-collapsed-bar {

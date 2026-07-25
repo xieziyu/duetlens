@@ -133,6 +133,10 @@ export interface DiffPaneProps {
   collapsed: Set<string>;
   onToggleViewed: (path: string) => void;
   onToggleCollapsed: (path: string) => void;
+  /** 「标记已看即折叠」偏好;开启时标记已看会自动推进到下一个未看文件 */
+  collapseOnViewed?: boolean;
+  /** 自动推进时同步左栏选中;缺省则只滚动不改选中(如预览) */
+  onSelectFile?: (path: string) => void;
 }
 
 /**
@@ -202,11 +206,47 @@ export function DiffPane(props: DiffPaneProps) {
     [onJumpFinding, onJumpDiscussion],
   );
 
+  // 文件头是 sticky:一旦被吸在列头下,scrollIntoView 会认定它「已在视口起点」而原地不动,
+  // 于是顶上停着的还是上一个文件。故按非 sticky 的区块算落点、自己写 scrollTop。
+  const scrollToFile = useCallback((path: string, behavior: ScrollBehavior = 'smooth') => {
+    const pane = ref.current;
+    const el = pane?.querySelector(`#${CSS.escape(fileAnchorId(path))}`);
+    if (!pane || !el) return;
+    const box = el.closest('.diff-file') ?? el;
+    const pad = parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0;
+    const top =
+      pane.scrollTop + box.getBoundingClientRect().top - pane.getBoundingClientRect().top - pad;
+    pane.scrollTo({ top, behavior });
+  }, []);
+
   useEffect(() => {
-    if (!activePath || !ref.current) return;
-    const el = ref.current.querySelector(`#${CSS.escape(fileAnchorId(activePath))}`);
-    el?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }, [activePath]);
+    if (!activePath) return;
+    scrollToFile(activePath);
+  }, [activePath, scrollToFile]);
+
+  // 标记已看会把当前文件折叠掉,滚动位置不变则视口塌进下一个文件的中段;
+  // 记下落点,等折叠提交后再把它的文件头顶上来。取消已看不跳。
+  const advanceTo = useRef<string | null>(null);
+  const onToggleViewed = useCallback(
+    (path: string) => {
+      if (!props.viewed.has(path) && props.collapseOnViewed) {
+        const i = files.findIndex((f) => f.path === path);
+        const next = files.slice(i + 1).find((f) => !props.viewed.has(f.path));
+        advanceTo.current = next?.path ?? path; // 后面没有未看文件:回到自己的文件头,不留悬空视口
+      }
+      props.onToggleViewed(path);
+    },
+    [files, props.viewed, props.collapseOnViewed, props.onToggleViewed],
+  );
+
+  useEffect(() => {
+    const path = advanceTo.current;
+    if (!path) return;
+    advanceTo.current = null;
+    // 折叠刚把大段内容抽走,再补一段平滑动画只会更晕;直接定位
+    scrollToFile(path, 'auto');
+    props.onSelectFile?.(path); // 左栏高亮跟着走
+  }, [props.viewed]);
 
   useEffect(() => {
     if (!focusFindingId || !ref.current) return;
@@ -344,7 +384,8 @@ export function DiffPane(props: DiffPaneProps) {
           fetchFileContent={props.fetchFileContent}
           viewed={props.viewed.has(f.path)}
           collapsed={props.collapsed.has(f.path)}
-          onToggleViewed={() => props.onToggleViewed(f.path)}
+          collapseOnViewed={!!props.collapseOnViewed}
+          onToggleViewed={() => onToggleViewed(f.path)}
           onToggleCollapsed={() => props.onToggleCollapsed(f.path)}
           onAddThread={
             canStart
@@ -649,6 +690,7 @@ function DiffFileView({
   fetchFileContent,
   viewed,
   collapsed,
+  collapseOnViewed,
   onToggleViewed,
   onToggleCollapsed,
   onAddThread,
@@ -670,6 +712,7 @@ function DiffFileView({
   fetchFileContent?: (path: string) => Promise<string | null>;
   viewed: boolean;
   collapsed: boolean;
+  collapseOnViewed: boolean;
   onToggleViewed: () => void;
   onToggleCollapsed: () => void;
   onAddThread?: (line: number, snippet: string) => void;
@@ -700,6 +743,15 @@ function DiffFileView({
     }
     return m;
   }, [findings, discussions, newLines]);
+
+  // 同一个按钮在四种状态下做的事不同,tooltip 必须跟着说
+  const viewedTitle = viewed
+    ? collapseOnViewed
+      ? '取消已看并展开'
+      : '取消已看'
+    : collapseOnViewed
+      ? '标记已看并折叠,跳到下一个未看文件'
+      : '标记已看';
 
   const lang = useMemo(() => langOf(file.path), [file.path]);
   const offDiff = findings.filter((f) => !newLines.has(f.line));
@@ -818,16 +870,28 @@ function DiffFileView({
             </span>
           )}
           <span className="fh-acts">
+            {/* 复选框语义:文案恒为「已看」,状态由勾选框表达,免得点一下按钮宽度就跳 */}
             <button
-              className={`icon-btn${viewed ? ' on' : ''}`}
-              title="标记已看并折叠"
+              className={`fh-btn${viewed ? ' on' : ''}`}
+              title={viewedTitle}
               aria-pressed={viewed}
               onClick={onToggleViewed}
             >
-              ✓
+              <span className="fb-box" aria-hidden="true">
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  <path d="M2.4 6.3l2.6 2.6 4.6-5.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span className="fb-label">已看</span>
             </button>
-            <button className="icon-btn" title="折叠 / 展开" onClick={onToggleCollapsed}>
-              ⌄
+            {/* 与上一个相反:文案给的是点下去会发生什么,不是当前状态 */}
+            <button
+              className="fh-btn"
+              title={collapsed ? '展开文件内容' : '折叠文件内容'}
+              onClick={onToggleCollapsed}
+            >
+              <span className="fb-ic" aria-hidden="true">{collapsed ? '+' : '−'}</span>
+              <span className="fb-label">{collapsed ? '展开' : '折叠'}</span>
             </button>
           </span>
         </div>

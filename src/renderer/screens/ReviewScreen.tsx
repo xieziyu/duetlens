@@ -479,6 +479,8 @@ export function ReviewScreen({
             collapsed={collapsed}
             onToggleViewed={onToggleViewed}
             onToggleCollapsed={onToggleCollapsed}
+            collapseOnViewed={settings.collapseViewedFiles}
+            onSelectFile={setActivePath}
           />
           <Resizer
             cssVar="--right-w"
