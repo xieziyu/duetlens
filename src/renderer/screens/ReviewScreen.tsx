@@ -22,9 +22,9 @@ import { LogoMark } from '../components/LogoMark';
 import { Wordmark } from '../components/Wordmark';
 import {
   currentResolution,
-  isFixedThisRound,
+  isFixedResolved,
   isNewThisRound,
-  isSettledThisRound,
+  isSettled,
   isWontFixThisRound,
   roundSummary,
 } from './review/rounds';
@@ -677,10 +677,10 @@ function RightPanel({
     () => (categoryFilter ? findings.filter((f) => (f.category ?? '未分类') === categoryFilter) : findings),
     [findings, categoryFilter],
   );
-  // 本轮已有结论的条目移出主列表 —— 它们不再是待处理的意见,留在原位只会淹没真正要看的东西。
+  // 已有结论的条目移出主列表 —— 它们不再是待处理的意见,留在原位只会淹没真正要看的东西。
   // 「已修复」与「作者已回应」分开两组:后者还需 reviewer 决定接不接受作者的说法。
   const fixed = useMemo(
-    () => filtered.filter((f) => isFixedThisRound(f, currentRound)),
+    () => filtered.filter((f) => isFixedResolved(f, currentRound)),
     [filtered, currentRound],
   );
   const wontFix = useMemo(
@@ -688,7 +688,7 @@ function RightPanel({
     [filtered, currentRound],
   );
   const shown = useMemo(
-    () => filtered.filter((f) => !isSettledThisRound(f, currentRound)),
+    () => filtered.filter((f) => !isSettled(f, currentRound)),
     [filtered, currentRound],
   );
   // findings 分组:按严重度(high▸low)或按文件;渲染统一走 groups 列表。
@@ -838,7 +838,7 @@ function RightPanel({
               ))}
             </div>
           ))}
-          <FoldedGroup label="✓ 本轮判定已修复" tone="fixed" findings={fixed}>
+          <FoldedGroup label="✓ 复核判定已修复" tone="fixed" findings={fixed}>
             {(f) => (
               <FindingRow
                 key={f.id}
@@ -954,10 +954,13 @@ function FindingRow({
   const dismissed = f.triage === 'dismiss';
   const resolution = currentResolution(f, currentRound);
   const isNew = isNewThisRound(f, currentRound);
+  const fixedResolved = isFixedResolved(f, currentRound);
+  // 已修复组会同时装着历轮结案的条目,给它们把结案轮次点出来,免得看着像本轮刚判的
+  const fixedRound = fixedResolved && f.lastSeenRound < currentRound ? f.lastSeenRound : null;
   const rowClass =
     'frow' +
     (submitted ? ' submitted' : dismissed ? ' dismissed' : ' kept') +
-    (resolution === 'fixed' ? ' resolved' : '');
+    (fixedResolved ? ' resolved' : '');
   const triage = (t: Triage) => (e: React.MouseEvent) => {
     e.stopPropagation();
     onTriage(f, t);
@@ -971,8 +974,10 @@ function FindingRow({
           {f.category ? ` · ${f.category}` : ''}
         </span>
         {isNew && <span className="round-tag new">本轮新增</span>}
-        {resolution === 'fixed' && (
-          <span className="round-tag fixed">✓ 已修复{dismissed ? ' · 自动剔除' : ''}</span>
+        {fixedResolved && (
+          <span className="round-tag fixed">
+            ✓ {fixedRound ? `第 ${fixedRound} 轮` : ''}已修复{dismissed ? ' · 自动剔除' : ''}
+          </span>
         )}
         {resolution === 'still_present' && <span className="round-tag still">仍存在</span>}
         {resolution === 'wont_fix' && <span className="round-tag wontfix">◇ 作者已回应</span>}
@@ -982,14 +987,14 @@ function FindingRow({
         </span>
       </div>
       <div className="fr-title">{f.title}</div>
-      {f.resolutionNote && resolution && (
+      {f.resolutionNote && (resolution || fixedResolved) && (
         <div className={`fr-note res${resolution === 'wont_fix' ? ' wontfix' : ''}`}>
           <span className="frn-lbl">{resolution === 'wont_fix' ? '作者' : '复核'}</span>
           {f.resolutionNote}
         </div>
       )}
-      {/* 本轮的「✓ 已修复 · 自动剔除」标签已经说明了为何剔除,不必再拿理由行重复一遍 */}
-      {dismissed && f.dismissReason && resolution !== 'fixed' && (
+      {/* 「✓ 已修复 · 自动剔除」标签已经说明了为何剔除,不必再拿理由行重复一遍 */}
+      {dismissed && f.dismissReason && !fixedResolved && (
         <div className="fr-note reason">理由:{f.dismissReason}</div>
       )}
       <div className="fr-foot">
