@@ -1,0 +1,104 @@
+/* 镜片扫描动画(<LensScanArt/>)。配色 token 复用 theme/tokens.css。
+   尺寸走 --lens-* 变量,宿主想换大小改变量即可,不要另抄一份行/镜片规则。 */
+
+.lens-art {
+  --lens-pad-y: 22px;
+  --lens-pad-x: 26px;
+  --lens-glass-d: 44px;
+  /* 亮色副本的裁切半径比镜片本体小一圈,免得亮边压在环上 */
+  --lens-clip-r: 20px;
+  position: relative;
+  height: 104px;
+  padding: var(--lens-pad-y) var(--lens-pad-x);
+  overflow: hidden;
+}
+
+/* 两份行(底稿与镜下亮色副本)各自在自己的盒里居中 —— 盒高相同,居中即对齐,
+   宿主改高度 / 内边距也不会让副本错位 */
+.lens-art,
+.lens-sweep {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.lens-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.lens-row {
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--text-deco) 42%, transparent);
+  transition: background 0.5s ease;
+}
+.lens-row.add { background: color-mix(in oklab, var(--add) 26%, transparent); }
+.lens-row.del { background: color-mix(in oklab, var(--del) 24%, transparent); }
+.lens-row.lit { background: color-mix(in oklab, var(--text-dim) 62%, transparent); }
+.lens-row.lit.add { background: color-mix(in oklab, var(--add) 55%, transparent); }
+.lens-row.lit.del { background: color-mix(in oklab, var(--del) 50%, transparent); }
+
+/* 镜片横坐标:亮色副本的裁切与镜片本体共用同一个动画变量,两者不可能错位 */
+@property --lx {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 50%;
+}
+.lens-art {
+  --lx: 50%;
+  animation: lens-sweep 3s ease-in-out infinite alternate;
+}
+@keyframes lens-sweep {
+  from { --lx: 13%; }
+  to { --lx: 87%; }
+}
+
+/* 亮色副本只在镜片圆内露出 = 镜片下才「看清」这几行 */
+.lens-sweep,
+.lens-track {
+  position: absolute;
+  inset: var(--lens-pad-y) var(--lens-pad-x);
+}
+.lens-sweep {
+  clip-path: circle(var(--lens-clip-r) at var(--lx) 50%);
+}
+.lens-sweep .lens-row {
+  background: var(--agent-2);
+  opacity: 0.92;
+}
+.lens-sweep .lens-row.add { background: var(--add); }
+.lens-sweep .lens-row.del { background: var(--del); }
+
+/* 镜片本体:与应用图标同一语汇(细环 + 左上高光) */
+.lens-glass {
+  position: absolute;
+  top: 50%;
+  left: var(--lx);
+  width: var(--lens-glass-d);
+  height: var(--lens-glass-d);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, var(--agent) 48%, transparent);
+  background:
+    linear-gradient(150deg, color-mix(in oklab, #fff 18%, transparent), transparent 46%),
+    color-mix(in oklab, var(--agent) 7%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--bg) 35%, transparent),
+    0 6px 18px -8px color-mix(in oklab, var(--agent) 60%, transparent);
+}
+
+/* 失败:扫描停住、镜片居中转红环 —— 画面一眼看出不是还在跑 */
+.lens-art.failed {
+  animation: none;
+  --lx: 50%;
+}
+.lens-art.failed .lens-sweep { display: none; }
+.lens-art.failed .lens-glass {
+  border-color: color-mix(in oklab, var(--sev-high) 55%, transparent);
+  box-shadow: 0 6px 18px -8px color-mix(in oklab, var(--sev-high) 50%, transparent);
+}
+.lens-art.failed .lens-row { opacity: 0.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lens-art { animation: none; }
+}

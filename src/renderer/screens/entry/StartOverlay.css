@@ -36,98 +36,16 @@
   from { opacity: 0; transform: translateY(10px) scale(0.985); }
 }
 
-/* ---------- 扫描动画:镜片在一叠代码行上来回扫 ---------- */
+/* 扫描动画本体在 components/LensScanArt.css;这里只把它嵌成面板头 */
 .start-art {
-  position: relative;
-  height: 104px;
-  padding: 22px 26px;
-  overflow: hidden;
   border-bottom: 1px solid var(--border-soft);
   background:
     radial-gradient(120% 100% at 50% 0%, var(--glow1), transparent 70%),
     var(--surface-2);
 }
-.art-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.art-row {
-  height: 6px;
-  border-radius: 3px;
-  background: color-mix(in oklab, var(--text-deco) 42%, transparent);
-  transition: background 0.5s ease;
-}
-.art-row.add { background: color-mix(in oklab, var(--add) 26%, transparent); }
-.art-row.del { background: color-mix(in oklab, var(--del) 24%, transparent); }
-/* 已跑过的阶段数 = 已「读到」的行数,让动画本身也带一点真实进度 */
-.art-row.lit { background: color-mix(in oklab, var(--text-dim) 62%, transparent); }
-.art-row.lit.add { background: color-mix(in oklab, var(--add) 55%, transparent); }
-.art-row.lit.del { background: color-mix(in oklab, var(--del) 50%, transparent); }
-
-/* 镜片横坐标:亮色副本的裁切与镜片本体共用同一个动画变量,两者不可能错位 */
-@property --lx {
-  syntax: '<percentage>';
-  inherits: true;
-  initial-value: 50%;
-}
-.start-art {
-  --lx: 50%;
-  animation: sv-sweep 3s ease-in-out infinite alternate;
-}
-@keyframes sv-sweep {
-  from { --lx: 13%; }
-  to { --lx: 87%; }
-}
-
-/* 亮色副本只在镜片圆内露出 = 镜片下才「看清」这几行 */
-.art-sweep,
-.art-track {
-  position: absolute;
-  inset: 22px 26px;
-}
-.art-sweep {
-  clip-path: circle(20px at var(--lx) 50%);
-}
-.art-sweep .art-row {
-  background: var(--agent-2);
-  opacity: 0.92;
-}
-.art-sweep .art-row.add { background: var(--add); }
-.art-sweep .art-row.del { background: var(--del); }
-
-/* 镜片本体:与应用图标同一语汇(细环 + 左上高光) */
-.art-lens {
-  position: absolute;
-  top: 50%;
-  left: var(--lx);
-  width: 44px;
-  height: 44px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 1.5px solid color-mix(in oklab, var(--agent) 48%, transparent);
-  background:
-    linear-gradient(150deg, color-mix(in oklab, #fff 18%, transparent), transparent 46%),
-    color-mix(in oklab, var(--agent) 7%, transparent);
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--bg) 35%, transparent),
-    0 6px 18px -8px color-mix(in oklab, var(--agent) 60%, transparent);
-}
-
-/* 失败:扫描停住、镜片居中转红环 —— 画面一眼看出不是还在跑 */
-.start-art.failed {
-  animation: none;
-  --lx: 50%;
-}
-.start-art.failed .art-sweep { display: none; }
-.start-art.failed .art-lens {
-  border-color: color-mix(in oklab, var(--sev-high) 55%, transparent);
-  box-shadow: 0 6px 18px -8px color-mix(in oklab, var(--sev-high) 50%, transparent);
-}
-.start-art.failed .art-row { opacity: 0.5; }
 
 @media (prefers-reduced-motion: reduce) {
-  .start-veil, .start-panel, .start-art { animation: none; }
+  .start-veil, .start-panel { animation: none; }
 }
 
 /* ---------- 文案 ---------- */

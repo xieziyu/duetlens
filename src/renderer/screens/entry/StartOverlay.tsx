@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReviewStartStage } from '@shared/ipc';
+import { LensScanArt, LENS_ART_ROWS } from '../../components/LensScanArt';
 import './StartOverlay.css';
 
 /**
@@ -14,15 +15,6 @@ const STEPS: { stage: ReviewStartStage; label: string; slow: string }[] = [
   { stage: 'diff', label: '拉取本次改动的 diff', slow: '改动量大时 diff 要下载十几秒,这是正常的' },
   { stage: 'record', label: '解析 diff · 建立审核记录', slow: '正在切分文件与 hunk' },
   { stage: 'agent', label: '装配审核规则 · 启动 agent 会话', slow: '正在拉起 codex 会话' },
-];
-
-/** 扫描动画里的代码行:宽度与 diff 属性只为画面节奏,不代表真实改动 */
-const ART_ROWS: { w: number; kind?: 'add' | 'del' }[] = [
-  { w: 72 },
-  { w: 54, kind: 'add' },
-  { w: 88 },
-  { w: 46, kind: 'del' },
-  { w: 66, kind: 'add' },
 ];
 
 export function StartOverlay({
@@ -59,36 +51,14 @@ export function StartOverlay({
     return () => window.removeEventListener('keydown', onKey, true);
   }, [error, onBack]);
 
-  const lit = error ? 0 : Math.min(ART_ROWS.length, activeIndex + 1);
-
   return (
     <div className="start-veil" role="dialog" aria-modal="true" aria-busy={!error} aria-label="正在准备审核">
       <div className="start-panel" ref={panelRef} tabIndex={-1}>
-        <div className={error ? 'start-art failed' : 'start-art'} aria-hidden="true">
-          <div className="art-rows">
-            {ART_ROWS.map((r, i) => (
-              <span
-                key={i}
-                className={`art-row${r.kind ? ` ${r.kind}` : ''}${i < lit ? ' lit' : ''}`}
-                style={{ width: `${r.w}%` }}
-              />
-            ))}
-          </div>
-          <div className="art-sweep">
-            <div className="art-rows">
-              {ART_ROWS.map((r, i) => (
-                <span
-                  key={i}
-                  className={`art-row${r.kind ? ` ${r.kind}` : ''}`}
-                  style={{ width: `${r.w}%` }}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="art-track">
-            <span className="art-lens" />
-          </div>
-        </div>
+        <LensScanArt
+          className="start-art"
+          lit={Math.min(LENS_ART_ROWS, activeIndex + 1)}
+          failed={!!error}
+        />
 
         <div className="start-head">
           <h2>{error ? '没能启动这次审核' : '正在准备这次审核'}</h2>
