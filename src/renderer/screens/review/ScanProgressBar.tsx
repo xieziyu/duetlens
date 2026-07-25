@@ -10,7 +10,6 @@ export interface ScanProgressBarProps {
   sessionReady: boolean;
   /** 复审轮次;首轮为 1 */
   currentRound: number;
-  model: string | null;
   /** 本轮失败时的轮次记录(含原因);跑得好好的为 null */
   failedRound: ReviewRound | null;
   /** agent 正在自行重试(codex 退避重试期);计数是我们数到的次数,非 codex 上报 */
@@ -34,7 +33,6 @@ export function ScanProgressBar({
   diffReady,
   sessionReady,
   currentRound,
-  model,
   failedRound,
   retrying,
   onRetry,
@@ -93,8 +91,7 @@ export function ScanProgressBar({
           </span>
         )}
         {findingCount > 0 && <span className="sb-cnt">＋{findingCount} findings</span>}
-        <span className="sb-model mono">{model ? `codex · ${model}` : 'codex'}</span>
-        <span className="sb-chev">{open ? '▴' : '▾'}</span>
+        <span className="sb-chev" />
       </button>
 
       {open && (

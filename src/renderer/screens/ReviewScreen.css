@@ -1440,18 +1440,25 @@
   border-radius: 5px;
   padding: 1px 6px;
 }
-.scanbar .sb-model {
-  flex: none;
-  font-size: 10.5px;
-  color: var(--text-faint);
-}
+/* 展开/收起是整条唯一的显式操作提示。用边框画而非 ▾ 字符:那个字形在 em 盒里只占中间
+   一小撮墨,放大字号也长不了多少,远看就是个圆点 —— 与 .bp-trig .chev 同一套画法。 */
 .scanbar .sb-chev {
   flex: none;
-  font-size: 10px;
-  color: var(--text-faint);
+  width: 11px;
+  height: 11px;
+  margin-right: 4px;
+  border-right: 2px solid var(--text-dim);
+  border-bottom: 2px solid var(--text-dim);
+  transform: translateY(-3px) rotate(45deg);
+  transition:
+    transform 0.18s,
+    border-color 0.15s;
+}
+.scanbar.open .sb-chev {
+  transform: translateY(2px) rotate(-135deg);
 }
 .scanbar .sb-row:hover .sb-chev {
-  color: var(--agent-2);
+  border-color: var(--agent-2);
 }
 
 /* 展开区:竖排时间线(完整阶段名 + 计数)+ 扫描期可做什么的提示 */
@@ -1505,7 +1512,7 @@
   color: var(--sev-high);
 }
 .scanbar.failed .sb-row:hover .sb-chev {
-  color: var(--sev-high);
+  border-color: var(--sev-high);
 }
 .scanbar.flash {
   animation: scanbar-flash 0.9s ease;

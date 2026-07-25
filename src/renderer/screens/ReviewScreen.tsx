@@ -435,7 +435,6 @@ export function ReviewScreen({
             diffReady={diffReady}
             sessionReady={sessionReady}
             currentRound={currentRound}
-            model={review?.model ?? null}
             failedRound={failedRound}
             retrying={retrying}
             onRetry={onRetryRound}
