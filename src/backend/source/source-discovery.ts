@@ -266,19 +266,31 @@ export async function detectGitButler(repoPath: string): Promise<GitButlerStatus
   } catch {
     return { isWorkspace: false, repoName, branches: [] };
   }
-  const branches: VbranchSummary[] = [];
+  const listed: { name: string; commitCount: number; hasUncommitted: boolean }[] = [];
   for (const stack of parsed.stacks ?? []) {
-    const assigned = stack.assignedChanges?.length ?? 0;
+    // assignedChanges 是整条 lane 的未提交部分,不含各 branch 已提交的那些
+    const hasUncommitted = (stack.assignedChanges?.length ?? 0) > 0;
     for (const b of stack.branches ?? []) {
-      branches.push({
-        name: b.name,
-        fileCount: assigned,
-        commitCount: b.commits?.length ?? 0,
-        hasUncommitted: assigned > 0,
-      });
+      listed.push({ name: b.name, commitCount: b.commits?.length ?? 0, hasUncommitted });
     }
   }
+  // 计量按 `but diff <branch>` 现算:那正是 GitButlerSource 取 diff 用的命令,
+  // 于是入口卡片上的 N files 与进屏后看到的改动面天然同一个数。
+  // 不去并集各 commit 的文件清单 —— 那是"历史触达过",后一个 commit 把前一个改回去时会多算。
+  const branches: VbranchSummary[] = await Promise.all(
+    listed.map(async (b) => ({ ...b, fileCount: await countDiffFiles(repoPath, b.name) })),
+  );
   return { isWorkspace: true, repoName, branches };
+}
+
+/** 虚拟分支相对 base 的净改动文件数;取不到(分支刚被改名 / but 报错)记 0,不阻断列举。 */
+async function countDiffFiles(repoPath: string, branch: string): Promise<number> {
+  try {
+    const out = await run('but', ['diff', branch, '--format', 'json', '--no-tui'], repoPath);
+    return (JSON.parse(out) as { changes?: unknown[] }).changes?.length ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 interface ButStatus {
