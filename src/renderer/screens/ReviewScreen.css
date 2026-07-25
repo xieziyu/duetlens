@@ -640,7 +640,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--text-faint);
+  color: var(--text-dim);
   font-family: var(--mono);
   font-size: 11px;
   cursor: pointer;
@@ -2219,7 +2219,7 @@
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--surface-2);
-  color: var(--text-faint);
+  color: var(--text-dim);
   cursor: pointer;
 }
 .fe-sev button:hover {
