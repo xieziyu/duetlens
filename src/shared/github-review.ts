@@ -2,7 +2,7 @@
  * 把保留且未提交的 findings 组装成一次 GitHub PR review 的请求体(原子提交)。
  * 纯函数:不碰网络,便于单测与「按钮标签=实际提交内容」一致。见 docs/design/findings-submit.md。
  */
-import type { Finding, Review } from './domain';
+import { SEVERITY_EMOJI, type Finding, type Review } from './domain';
 import type { DiffFile } from './diff';
 
 /** UI 侧 event 值 → GitHub `POST .../reviews` 的 event 枚举。 */
@@ -30,19 +30,18 @@ export interface PrReviewPayload {
   comments: PrReviewComment[];
 }
 
-const SEV_LABEL: Record<Finding['severity'], string> = {
-  high: 'high',
-  medium: 'medium',
-  low: 'low',
-};
-
 /** finding 是否有可作为 inline 锚点的位置(新侧行号 > 0)。当前模型 finding 恒有锚点。 */
 export const hasAnchor = (f: Finding): boolean => Boolean(f.file) && f.line > 0;
 
+/** 严重度圆点 + 加粗的「[severity · category] 标题」,inline 与整体意见共用。 */
+function headline(f: Finding): string {
+  const cat = f.category ? ` · ${f.category}` : '';
+  return `${SEVERITY_EMOJI[f.severity]} **[${f.severity}${cat}] ${f.title}**`;
+}
+
 /** 一条 finding → inline 评论正文:标题 + 正文 + 可选 suggestion 块。 */
 function commentBody(f: Finding): string {
-  const cat = f.category ? ` · ${f.category}` : '';
-  let body = `**${SEV_LABEL[f.severity]}${cat}** — ${f.title}`;
+  let body = headline(f);
   if (f.body.trim()) body += `\n\n${f.body.trim()}`;
   if (f.suggestion?.trim()) body += '\n\n```suggestion\n' + f.suggestion.trim() + '\n```';
   return body;
@@ -70,10 +69,7 @@ export function buildPrReviewPayload(
   const parts: string[] = [];
   if (review.summaryBody?.trim()) parts.push(review.summaryBody.trim());
   if (unanchored.length) {
-    const lines = unanchored.map((f) => {
-      const cat = f.category ? ` · ${f.category}` : '';
-      return `- **${f.title}**（${SEV_LABEL[f.severity]}${cat}）— ${f.body.trim()}`;
-    });
+    const lines = unanchored.map((f) => `- ${headline(f)} — ${f.body.trim()}`);
     parts.push(`### 整体意见\n\n${lines.join('\n')}`);
   }
 

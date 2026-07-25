@@ -12,6 +12,13 @@ export type SourceKind = (typeof SOURCE_KINDS)[number];
 export const SEVERITIES = ['high', 'medium', 'low'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
+/** 严重度圆点:GitHub 评论与导出报告共用一套配色,便于两处产物对照。 */
+export const SEVERITY_EMOJI: Record<Severity, string> = {
+  high: '🔴',
+  medium: '🟡',
+  low: '🔵',
+};
+
 /**
  * finding 分类的软规范标签集(源自 better-review 1.0 builtin-rules)。
  * category 仍以自由字符串存储/校验,此集仅作填写建议与筛选归类,便于按类分组。

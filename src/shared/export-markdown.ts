@@ -2,7 +2,7 @@
  * 把一次 review 的保留 findings + 摘要生成一份 Markdown 报告(本地/vbranch source 的终点)。
  * 纯函数:仅依赖入参,便于单测与「预览=复制=保存」内容一致。见 docs/design/findings-submit.md。
  */
-import type { Finding, Review, Severity, SourceKind } from './domain';
+import { SEVERITY_EMOJI, type Finding, type Review, type Severity, type SourceKind } from './domain';
 
 export interface ExportOptions {
   /** 含 codex 审核摘要 */
@@ -21,11 +21,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   group: 'severity',
 };
 
-const SEV_META: Record<Severity, { emoji: string; rank: number }> = {
-  high: { emoji: '🔴', rank: 0 },
-  medium: { emoji: '🟠', rank: 1 },
-  low: { emoji: '🟡', rank: 2 },
-};
+const SEV_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2 };
 
 const SOURCE_LABEL: Record<SourceKind, string> = {
   'github-pr': 'GitHub PR',
@@ -36,7 +32,7 @@ const SOURCE_LABEL: Record<SourceKind, string> = {
 /** finding 是否保留(triage 非 dismiss);与 diff-review / GitHub submit 同一 triage 语义。 */
 export const isKept = (f: Finding): boolean => f.triage !== 'dismiss';
 
-const bySeverity = (a: Finding, b: Finding) => SEV_META[a.severity].rank - SEV_META[b.severity].rank;
+const bySeverity = (a: Finding, b: Finding) => SEV_RANK[a.severity] - SEV_RANK[b.severity];
 
 const isoDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
@@ -53,9 +49,8 @@ export function exportFileName(review: Review): string {
 
 /** 单条 finding 块;heading 为 finding 标题所用的 markdown 级别(分组下降一级)。 */
 function findingBlock(f: Finding, opts: ExportOptions, heading: string): string {
-  const meta = SEV_META[f.severity];
   const cat = f.category ? ` · ${f.category}` : '';
-  let block = `${heading} ${meta.emoji} ${f.severity}${cat} — ${f.title}\n\n`;
+  let block = `${heading} ${SEVERITY_EMOJI[f.severity]} ${f.severity}${cat} — ${f.title}\n\n`;
   block += `\`${f.file}:${f.line}\`\n\n`;
   if (f.body.trim()) block += `${f.body.trim()}\n\n`;
   if (opts.suggestion && f.suggestion?.trim()) {
