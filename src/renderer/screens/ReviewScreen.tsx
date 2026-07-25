@@ -758,6 +758,24 @@ function RightPanel({
 
       {tab === 'findings' && (
         <div className="tab-body">
+          {/* 列表里已经有东西时(重跑必然如此,首轮也在第一条报出后如此),整屏空态的镜片画面
+              没有位置可站,于是扫描期这一栏就只剩 tab 上一枚小转圈。压成一条同样的镜片横幅置顶,
+              让「还在读、下面这些还不是结论」在本栏自成一句,不必抬头看进度条。 */}
+          {scanning && findings.length > 0 && (
+            <div className="fscan-strip">
+              <LensScanArt className="fss-art" lit={scanLit} />
+              <div className="fss-text">
+                <div className="fss-title">
+                  {currentRound > 1 ? `第 ${currentRound} 轮复核中` : 'agent 通读改动中'}
+                </div>
+                <p className="fss-sub">
+                  {currentRound > 1
+                    ? '正在逐条复核既有结论并重扫最新改动,判定与新发现即刻更新在此。'
+                    : '发现即刻出现在此,下面这些还不是最终清单。'}
+                </p>
+              </div>
+            </div>
+          )}
           {categoryFilter && (
             <div className="cat-filter">
               筛选 · <b>{categoryFilter}</b>

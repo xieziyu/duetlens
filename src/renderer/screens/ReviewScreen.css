@@ -1476,6 +1476,47 @@
   color: var(--text-faint);
 }
 
+/* 同一份镜片动画压成横幅:列表已有条目时(重跑必然如此)整屏空态没有位置可站。
+   尺寸只改 --lens-* 变量,行的粗细/间距要一起缩,否则五行溢出被裁。 */
+.fscan-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 11px;
+  margin-bottom: 10px;
+  border: 1px solid var(--agent-line);
+  border-radius: 10px;
+  background: var(--agent-soft);
+}
+.fss-art {
+  --lens-pad-y: 8px;
+  --lens-pad-x: 11px;
+  --lens-glass-d: 26px;
+  --lens-clip-r: 12px;
+  --lens-row-h: 4px;
+  --lens-row-gap: 6px;
+  flex: none;
+  width: 96px;
+  height: 60px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.fss-text {
+  min-width: 0;
+}
+.fss-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.fss-sub {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-faint);
+}
+
 .scan-note {
   display: flex;
   align-items: center;

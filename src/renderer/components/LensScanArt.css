@@ -7,6 +7,9 @@
   --lens-glass-d: 44px;
   /* 亮色副本的裁切半径比镜片本体小一圈,免得亮边压在环上 */
   --lens-clip-r: 20px;
+  /* 行的粗细与间距也要跟着宿主缩放:高度压下来而行不变的话,五行会溢出被 overflow 切掉 */
+  --lens-row-h: 6px;
+  --lens-row-gap: 9px;
   position: relative;
   height: 104px;
   padding: var(--lens-pad-y) var(--lens-pad-x);
@@ -24,10 +27,10 @@
 .lens-rows {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--lens-row-gap);
 }
 .lens-row {
-  height: 6px;
+  height: var(--lens-row-h);
   border-radius: 3px;
   background: color-mix(in oklab, var(--text-deco) 42%, transparent);
   transition: background 0.5s ease;
