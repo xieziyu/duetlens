@@ -46,7 +46,7 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 
 两条容易复发的推论:
 
-- **未选中 ≠ 失效。** 分段选择器(`.choice` / `.tab` / `.view-seg` / `.hist-filter` / `.srcseg` / `.int-seg`)的未选中项走 `--text-dim`;用 `--text-faint` 会让二选一长得像单个按钮。真正 disabled 才配 `--text-deco` + `opacity`。
+- **未选中 ≠ 失效。** 分段选择器的未选中项走 `--text-dim`;用 `--text-faint` 会让二选一长得像单个按钮。真正 disabled 才配 `--text-deco` + `opacity`。这类控件散落在各屏且命名不统一,**改口径时按"有 `.on` 选中态的按钮组"去找,别靠记名字** —— 漏掉过 `.db-seg`(真正在用的 diff 视图开关)、`.mini-seg` / `.grp-seg`(导出屏)、`.fe-sev`(严重度选择)。
 - **阻断性提示不是脚注。** 解释主 CTA 为什么点不动、或"整份会被 422 拒"这类前置条件,至少 `--text-dim` + 警示标记;submit 的失效锚点用 `.foot-note.blocking` 走 `--sev-high` 描边块。
 
 ### 语义色当填充时前景要跟着翻
