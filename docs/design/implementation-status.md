@@ -29,7 +29,7 @@
 1. 键位表不可配置(帮助层为只读 cheatsheet)。
 2. 运行时/异常态(turn 中断 / 反向审批 / turn 失败 / 连接断 / 压缩)只有设计,未落地 —— 设计见 `mockup/review-runtime.html`。`mockup/` 整体已冻结,但这一份是该功能目前**唯一**的设计参照,落地前别丢。
 
-> 入口页丰富流程已接 mockup(见「前端屏」):三来源分段选择器、GitHub PR 粘贴+实时预览卡+remote 校验、默认折叠的 open PR 列表(展开才拉)、gh 未登录引导、本地分支选择器(commits ahead + base)、GitButler workspace 检测+虚拟分支列表、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / detect-gitbutler）+ `review:list-recent`（附计数）。发起后到进屏之间由**启动等待浮层**接管（`screens/entry/StartOverlay.tsx`，阶段走 `review:start-progress` 事件；设计见 [ui](ui.md#启动等待浮层点开始审核到进屏之间)）。
+> 入口页丰富流程已接 mockup(见「前端屏」):**两档**来源分段选择器(GitHub PR / 本地仓库)、GitHub PR 粘贴+实时预览卡+remote 校验、默认折叠的 open PR 列表(展开才拉)、gh 未登录引导、本地仓库面板(选目录后一次探测定模式:workspace → 虚拟分支列表 / 普通 git → 分支列表含 commits ahead + base;可手动改按普通分支)、最近仓库快选、附加上下文。后端配套 `source:*` 只读发现 IPC（check-gh-auth / preview-pr / list-open-prs / get-repo-remote / list-local-branches / inspect-repo / list-repo-paths）+ `review:list-recent`（附计数）。发起后到进屏之间由**启动等待浮层**接管（`screens/entry/StartOverlay.tsx`，阶段走 `review:start-progress` 事件；设计见 [ui](ui.md#启动等待浮层点开始审核到进屏之间)）。
 
 ## 分层落地情况
 
@@ -61,7 +61,7 @@
 | `source` | LocalGitSource 取真实 git diff/文件 → codex → 落库;parsePrRef |
 | `discussion` | 扫描后多轮追问 → user/agent 消息成对落库(同一 thread) |
 | `resume` | session dispose 后按 threadId `thread/resume` 续接 → 复用会话记忆追问 |
-| `gitbutler` | `but diff --format json` 重建 unified + 路径穿越防护 + 实仓 smoke |
+| `gitbutler` | `but diff --format json` 重建 unified + 路径穿越防护 + 实仓 smoke + 入口模式探测(workspace→vbranch / 普通仓与子目录→local 且归一到顶层 / 非 git 不误判) |
 | `mcp` | report_finding/update_finding 回写 store + bearer 令牌鉴权(无/错令牌 401) |
 | `prompt` | 提示词分层解析/合并/注入:分节覆盖(project ▸ global ▸ builtin)+ 锁定段首尾夹住 + severity 逐档覆盖/旧格式迁移/自造分级不生效 + baseInstructions 组装 |
 | `diff` | parseUnifiedDiff 对 add/del/modify/rename/binary/多 hunk 的结构与行号 + store 回环 |

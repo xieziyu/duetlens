@@ -18,9 +18,11 @@
 ├─ <EntryScreen>                           mockup/entry.html
 │  ├─ <Hero>
 │  ├─ <StartReviewCard>                    发起卡片
-│  │  ├─ <SourceSegmented>                 GitHub PR / 本地分支 / GitButler
+│  │  ├─ <SourceSegmented>                 GitHub PR / 本地仓库
 │  │  ├─ <PrInput> / <RepoPathField>       粘贴即解析 · 可选本地仓库路径
 │  │  ├─ <RecentOpenPrList>                从 open PR 选择 · 默认折叠,展开才拉
+│  │  ├─ <RepoPanel>                       选仓库 → 一次探测定模式 (vbranch / git 分支) · 可手动改按普通分支
+│  │  │  └─ <RecentRepoPicks>              空态列最近用过的仓库 · 预填上次路径
 │  │  ├─ <ExtraContext>                    可折叠附加上下文 textarea
 │  │  └─ <StartButton>                     单一「开始审核」CTA
 │  ├─ <StartOverlay>                       发起后到进屏之间的阻断浮层 (真实阶段 · 失败原地重试)
