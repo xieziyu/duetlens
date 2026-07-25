@@ -337,14 +337,15 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
               </div>
             </div>
           </section>
-
-          <div className="savebar">
-            <button className="btn-reset" onClick={resetDefaults}>恢复默认设置</button>
-            <span className="spring" />
-            <span className="msg">改动即时保存到本地</span>
-          </div>
         </div>
       </div>
+
+      <footer className="set-foot">
+        <div className="set-foot-in">
+          <span className="msg"><span className="d" />改动即时保存到本地</span>
+          <button className="btn-reset" onClick={resetDefaults}>恢复默认设置</button>
+        </div>
+      </footer>
     </div>
   );
 }
