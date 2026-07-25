@@ -48,3 +48,4 @@ codex app-server 把"一次常驻会话"本身称作 `thread`。为避免冲突,
 11. **入口只分 GitHub PR / 本地仓库两档**:本地这档按普通 git 分支还是 GitButler 虚拟分支审,由选定仓库后的探测决定(HEAD 是否 `gitbutler/workspace`);落库的 SourceKind 仍是三值,收敛的只是选择方式。→ [ui](design/ui.md#主入口--launchermockupentryhtml)
 12. **文件树的检索过滤只收窄树**:匹配完整路径(空格分词 AND、≥3 字才允许子序列),**中栏 diff 保持全量、结果不按相关度重排** —— 裁 diff 会让人误判改动规模且右栏计数对不上,重排会让树的顺序与 diff 堆叠顺序错位。→ [ui](design/ui.md#diff-导航与覆盖mockupdiff-reviewhtml)
 13. **提示词分「可配置口径」与「锁定契约」**:描述 MCP 工具契约的段落(角色与工具流程、`report_finding` 字段协议)不进分层模型、不下发 renderer、设置页不可见,并首尾夹住用户内容;严重度是 structured 节,`high/medium/low` 档位名锁死、只开放每档判定标准。→ [ui](design/ui.md#审核规则提示词--三层编辑器mockupprompt-ruleshtml)
+14. **标记已看 = 折叠 + 推进到下一个未看文件**:file-header 两枚操作都带文案(已看是勾选框语义、折叠按钮文案给动作),推进只在「标记已看即折叠」开启时发生;落点自己算 `scrollTop` —— file-header 是 sticky,`scrollIntoView` 对已吸顶的目标一步不滚。→ [ui](design/ui.md#diff-导航与覆盖mockupdiff-reviewhtml)
