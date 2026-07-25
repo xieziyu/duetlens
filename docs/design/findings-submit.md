@@ -51,8 +51,21 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA「提�
 
 - **submitting**:提交中,按钮转圈禁用。
 - **success**:绿 banner「review 已提交 · #NNN · <event>」+「在 GitHub 查看 ↗」;保留项转 `submitted`(passive 绿条锁定、不可再改),foot 换「完成 · 返回 diff」。
-- **invalid(422 · 行锚点失效)**:某条 finding 的 `file:line` 已不在最新 diff 的新增侧(base 更新 / 行移位),作为 inline 会让整份 review 被 GitHub 拒。这才是"部分不可提交"的真实形态(而非事后的部分成功)。红 banner + 该条**红框恢复**:**降级为摘要评论 / 改锚点到最近改动行 / 剔除此条**;处理后整份重提。
+- **invalid(422 · 行锚点失效)**:某条 finding 的 `file:line` 已不在最新 diff 的新增侧(base 更新 / 行移位),作为 inline 会让整份 review 被 GitHub 拒。这才是"部分不可提交"的真实形态(而非事后的部分成功)。红 banner + 该条**红框恢复**:**降级为摘要评论 / 改锚点到最近改动行 / 剔除此条**;处理后整份重提。**定位靠现拉,不靠快照** —— 见下。
 - **failed(整体)**:`gh` 认证过期 / 网络中断 / PR 已合并关闭 —— 未提交任何评论,红 banner + 原因 + 重试;findings 保持未提交。
+
+### 失效锚点靠「现拉最新 diff」定位
+
+GitHub 的 422 只说整份被拒,**不告知是哪条**,得由我们自己指出来。判定依据必须是 **PR 此刻的 diff**,不能是审核时落库的那份快照 —— 恰恰是"快照已落后于 GitHub"才导致 422,照快照预判会一条都找不出来,用户面对一句"提交被拒"无从下手。
+
+因此 submit 屏有一条独立于审核快照的**现拉**通路(`review.latestDiff` → `ReviewManager.getLatestDiff`,不写库):
+
+- **进屏即后台核对一次**(有 inline 锚点时),把失效锚点摆在提交**之前**,而不是等被拒才知道;顶部状态条交代判定依据(核对结果 / PR 是否有新提交 / 拉取失败时降级为按快照预判)。
+- **被 422 拒后自动重拉一次**并按最新 diff 重判,banner 直接说"定位到 N 条(左侧红框)"。
+- 逐条修法之外给**成批**入口:全部改锚到最近改动行 / 全部降级为摘要评论。
+- **定位不到时给退路**:拉取失败,或最新 diff 下仍无失效锚点(评论锚在 diff 之外),提供"把 N 条行评论全部并入摘要" —— 没有 inline 锚点的 review 不可能再被 422 拒。
+
+**不写库是刻意的**:审核时的 diff 快照是 findings 锚点与 diff 屏渲染的共同基准,推进它是**复审(rerun)**的职责;这里只借最新 diff 做一次判定与修锚。
 
 **增量提交(二次)**:一次 review 可多轮提交。已 `submitted` 的 finding **锁定不重发**;上次提交后新增或改动的 finding 组成 **delta**,再进 submit 屏只提交 delta,每次 submit = **追加一份新的 PR review**(info banner 标「上次已提交 N 条,本次 M 条新增」)。这与 finding 的 `submission` 状态(见上「finding 生命周期」)一致 —— submitted 是终态、只读。
 

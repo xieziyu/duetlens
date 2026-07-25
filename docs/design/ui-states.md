@@ -302,14 +302,15 @@ stateDiagram-v2
     Ready --> Submitting : ● 提交 review
     Submitting --> Success : ⚙ 创建成功 (201)
     Submitting --> Failed : ⚙ 认证过期 / 网络 / PR 已关闭
-    Submitting --> Invalid : ⚙ 422 行锚点不在最新 diff
+    Submitting --> Locating : ⚙ 422 行锚点不在最新 diff
+    Locating --> Invalid : ⚙ 现拉最新 diff,标出失效的那几条
     Failed --> Submitting : ● 重试
-    Invalid --> Ready : ● 降级为摘要 / 改锚点 / 剔除该条
+    Invalid --> Ready : ● 降级为摘要 / 改锚点 / 剔除(可成批)
     Success --> [*] : ● 完成 · 返回 diff
     Success --> Ready : ● 二次:仅提交新增 delta (追加一份 review)
 ```
 
-原子提交=全成或全败,故**无"部分成功"**;`Invalid` 是"某条不能作为 inline"导致的整份拒绝,需先在左侧处理该条再整份重提。`Success → Ready` 是增量路径:已 submitted 的 finding 锁定只读,二次只提交 delta。finding 侧 submission 状态机见上「finding:两组正交状态」。
+原子提交=全成或全败,故**无"部分成功"**;`Invalid` 是"某条不能作为 inline"导致的整份拒绝,需先在左侧处理该条再整份重提。GitHub 不告知是哪条,故 `Locating` 现拉 PR 最新 diff 自行定位(进屏时也会后台先核对一次,力争在提交前就标红);定位不到时给"全部并入摘要"的退路 —— 详见 [findings-submit](findings-submit.md#失效锚点靠现拉最新-diff-定位)。`Success → Ready` 是增量路径:已 submitted 的 finding 锁定只读,二次只提交 delta。finding 侧 submission 状态机见上「finding:两组正交状态」。
 
 ## 关联索引
 
