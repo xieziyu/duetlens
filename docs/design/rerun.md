@@ -63,7 +63,7 @@ MCP 新增 `resolve_finding(finding_id, status, note)`。复审 prompt 列出所
 两层防线:
 
 1. **软约束(prompt)**:已剔除的条目连同 reviewer 填的理由一起列出,明确要求不要重报、也不要报同类问题。理由是关键 —— 它让 agent 理解的是取舍标准,而不只是一个黑名单条目。
-2. **硬约束(去重兜底)**:`shared/finding-dedupe.ts` 对每条新上报做匹配(同文件 + 行号邻近 + 标题 bigram Dice 相似度)。命中**reviewer 剔除**项 → 抑制、不落库,只累加轮次的 `suppressedCount`;命中**保留中**项 → 等价于 agent 表态"仍存在",更新 `lastSeenRound` 而不新建。
+2. **硬约束(去重兜底)**:`shared/finding-dedupe.ts` 对每条新上报做匹配(同文件 + 行号邻近 + 标题 bigram Dice 相似度)。命中**reviewer 剔除**项 → 抑制、不落库,只累加轮次的 `suppressedCount`;命中**保留中**项 → 等价于 agent 表态"仍存在",更新 `lastSeenRound` 而不新建;这次表态没有附说明,跨轮推进时要**清掉上一轮的复核说明** —— 说明属于写下它的那一轮,留着会被下游(本轮结论展示、提交/导出的正文主体、复核追评)当成本轮新说明,把上一轮的话重新发给 author。
 
 **自动结案的条目不进黑名单**(`isAutoClosedFixed`:`triage=dismiss` 且 `resolution=fixed`)。它代表的是"当前代码里没有了",不是 reviewer 的判断 —— 若同一处又被报出来,那是**回归**:恢复为保留态并计入本轮,而不是当成重复上报吞掉。prompt 里两类因此分节交代,措辞相反:reviewer 剔除的连同类问题都别报;已结案的再出现要当新问题报回来。混在一节讲,等于教 agent 把回归也一并咽掉。
 

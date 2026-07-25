@@ -18,6 +18,7 @@ import {
 import { parseUnifiedDiff } from '../src/shared/diff';
 import type { GitHubSubmitter } from '../src/backend/review/github-submitter';
 import type { PrReviewPayload } from '../src/shared/github-review';
+import { recheckNote } from '../src/shared/domain';
 import type { Review } from '../src/shared/domain';
 import type { ReviewEvent, SubmitReviewResult } from '../src/shared/ipc';
 
@@ -138,7 +139,15 @@ async function main() {
     assert.equal(after.submittedRound, 2, '追评后轮次推进到本轮');
     assert.equal(needsRecheckFollowUp(after, 2), false, '同轮不再追发第二条');
     assert.equal(isSubmittable(after, 2), false, '同轮不再进待提交集');
-    log('复核追评:跨轮追发一次 + 同轮不重复 ok');
+
+    // 第 3 轮只被去重兜底命中(agent 没有再表态)→ 上一轮的说明必须失效,不能拿旧话再发一遍
+    store.startRound(review.id, 3, {});
+    store.touchFindingSeen(f1.id, 3);
+    const f1r3 = store.getFinding(f1.id)!;
+    assert.equal(f1r3.lastSeenRound, 3, '去重兜底前推轮次');
+    assert.equal(recheckNote(f1r3, 3), null, '本轮没有说明,不复用上一轮的话');
+    assert.equal(needsRecheckFollowUp(f1r3, 3), false, '没有新说明就不追评');
+    log('复核追评:跨轮追发一次 + 同轮不重复 + 旧说明不复用 ok');
   }
 
   // ---- 脱锚 finding 并入摘要:多段正文整体缩进在列表项内 ----

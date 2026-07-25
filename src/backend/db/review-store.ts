@@ -658,14 +658,18 @@ export class ReviewStore {
   }
 
   /**
-   * 兜底去重命中已有 finding 时调用:等价于 agent 表态「仍存在」,但不覆盖已有的 resolution note。
-   * 只前推 last_seen_round,不回退(同一轮多次命中幂等)。
+   * 兜底去重命中已有 finding 时调用:等价于 agent 表态「仍存在」,但这次表态没有附说明。
+   * 只前推 last_seen_round,不回退(同一轮多次命中幂等,故同轮里已填的说明不会被这里抹掉)。
+   *
+   * 跨轮推进时必须清空 resolution_note:说明属于写下它的那一轮,留着会被下游(UI 的本轮结论、
+   * 提交/导出的正文主体、复核追评)当成本轮新说明,把上一轮的话重新发给 author。
    */
   touchFindingSeen(findingId: string, round: number): void {
     this.db
       .prepare(
-        `UPDATE findings SET last_seen_round = ?, resolution = 'still_present', updated_at = ?
-         WHERE id = ? AND last_seen_round < ?`,
+        `UPDATE findings
+            SET last_seen_round = ?, resolution = 'still_present', resolution_note = NULL, updated_at = ?
+          WHERE id = ? AND last_seen_round < ?`,
       )
       .run(round, now(), findingId, round);
   }
