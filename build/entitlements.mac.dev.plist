@@ -2,14 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
-    <!-- 发布用(Developer ID + 公证)。这三条是 Electron 在 hardened runtime 下的最小集,少了起不来。 -->
+    <!-- 只给本地 ad-hoc 构建(npm run package)用,与发布版仅差最后一条。发布版见 entitlements.mac.plist。 -->
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
-    <!-- 刻意不放 disable-library-validation:Developer ID 下 Electron 框架与 better_sqlite3.node
-         都由同一 Team ID 重签,库校验能过。本地 ad-hoc 构建过不了,那条路走 entitlements.mac.dev.plist。 -->
+    <!-- ad-hoc 签名下 app 与 Electron 预编译框架的 Team ID 不一致,不关掉库校验会起不来 -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
   </dict>
 </plist>

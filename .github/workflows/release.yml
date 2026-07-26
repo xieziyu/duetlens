@@ -1,0 +1,84 @@
+# 打 tag 出正式包:签名 + 公证 + 传 GitHub Releases 草稿。
+# 草稿要人手点 publish 才对外 —— electron-updater 不读 draft,点之前老用户收不到推送。
+#
+# 需要的 secrets(逐条怎么拿见 docs/design/release.md):
+#   CSC_LINK / CSC_KEY_PASSWORD          Developer ID Application 证书(.p12 的 base64)与其密码
+#   APPLE_API_KEY_P8 / _ID / _ISSUER     公证用的 App Store Connect API key
+#   APPLE_TEAM_ID                        10 位 Team ID
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  # 手动跑一次验证链路;不打 tag 就只出包不发布
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    # macos-latest 自 macos-14 起是 arm64;只出 arm64 包,better-sqlite3 得按目标架构编
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # tag 与 package.json 对不上就别发:产物里的版本号来自 package.json,
+      # 发出去会得到一个「v0.2.0 的 release 里装着 0.1.0 的包」。
+      - name: check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::tag $tag != package.json $pkg"
+            exit 1
+          fi
+
+      - run: npm run typecheck
+      - run: npm run lint
+
+      # electron-builder 的 notarize 只认文件路径,secret 是字符串,得先落盘
+      - name: write notarization key
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          printf '%s' "$APPLE_API_KEY_P8" > ~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+
+      - name: build, sign, notarize, publish
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export APPLE_API_KEY=~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
+          # 非 tag 的手动跑只出包,不往 Releases 传
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            npm run release
+          else
+            npm run dist
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: duetlens-macos-arm64
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/latest-mac.yml
+          if-no-files-found: warn

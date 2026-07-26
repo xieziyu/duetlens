@@ -8,6 +8,7 @@ import {
   type ReviewStartProgress,
 } from '@shared/ipc';
 import type { UiSettings } from '@shared/domain';
+import type { UpdateStatus } from '@shared/update';
 
 // 唯一暴露给 renderer 的桥;沿 contextIsolation 边界只透出白名单方法。
 const api: DuetlensApi = {
@@ -81,6 +82,16 @@ const api: DuetlensApi = {
   ui: {
     getSettings: () => ipcRenderer.invoke(IpcChannels.uiGetSettings),
     saveSettings: (settings: UiSettings) => ipcRenderer.invoke(IpcChannels.uiSaveSettings, settings),
+  },
+  update: {
+    getStatus: () => ipcRenderer.invoke(IpcChannels.updateGetStatus),
+    check: () => ipcRenderer.invoke(IpcChannels.updateCheck),
+    install: () => ipcRenderer.invoke(IpcChannels.updateInstall),
+    onStatus: (handler: (s: UpdateStatus) => void) => {
+      const listener = (_e: IpcRendererEvent, s: UpdateStatus) => handler(s);
+      ipcRenderer.on(IpcEvents.updateStatus, listener);
+      return () => ipcRenderer.off(IpcEvents.updateStatus, listener);
+    },
   },
   agent: {
     listModels: () => ipcRenderer.invoke(IpcChannels.agentListModels),

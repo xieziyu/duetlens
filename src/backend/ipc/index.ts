@@ -19,16 +19,18 @@ import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import type { EnvCheckOptions } from '@shared/environment';
 import type { PromptSaveInput } from '@shared/prompt';
 import type { ReviewManager } from '../review/review-manager';
+import type { Updater } from '../update/updater';
 import { resolvePrUrl } from '../source/source-discovery';
 
 export interface IpcDeps {
   manager: ReviewManager;
   /** 把领域事件推给所有 renderer(main 提供,通常遍历 BrowserWindow) */
   broadcast: (channel: string, payload: unknown) => void;
+  updater: Updater;
 }
 
 /** 注册 main 侧全部 IPC handler,并把 ReviewManager 事件转发给 renderer。 */
-export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
+export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): void {
   ipcMain.handle(IpcChannels.appGetInfo, (): AppInfo => ({
     name: app.getName(),
     version: app.getVersion(),
@@ -136,6 +138,10 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
 
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());
   ipcMain.handle(IpcChannels.uiSaveSettings, (_e, settings: UiSettings) => manager.saveUiSettings(settings));
+
+  ipcMain.handle(IpcChannels.updateGetStatus, () => updater.getStatus());
+  ipcMain.handle(IpcChannels.updateCheck, () => updater.check());
+  ipcMain.handle(IpcChannels.updateInstall, () => updater.install());
 
   ipcMain.handle(IpcChannels.agentListModels, () => manager.listModels());
 

@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { CodexAppServer } from './codex-app-server';
+import { APP_VERSION } from '@shared/version';
 import {
   CodexItemType,
   CodexNotification,
@@ -71,7 +72,7 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
     const server = new CodexAppServer({ codexBin: opts.codexBin, codexHome: opts.codexHome, onLog: opts.onLog });
     try {
       server.start();
-      await server.initialize({ name: 'duetlens', version: '2.0.0-dev' });
+      await server.initialize({ name: 'duetlens', version: APP_VERSION });
       const models: CodexModel[] = [];
       let cursor: string | null | undefined;
       // 分页兜底:cursor 续取,上限防御异常服务端不收敛
@@ -117,7 +118,7 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
   /** 起子进程(带 MCP 令牌 env)并握手。 */
   private async launchServer(mcpToken?: string): Promise<void> {
     this.server.start(mcpToken ? { [MCP_TOKEN_ENV]: mcpToken } : undefined);
-    await this.server.initialize({ name: 'duetlens', version: '2.0.0-dev' });
+    await this.server.initialize({ name: 'duetlens', version: APP_VERSION });
   }
 
   /** per-thread config 覆盖:注入自建 MCP + reasoning effort(config.toml 形状透传)。 */

@@ -18,6 +18,17 @@ import { scanDoneStatus } from '@shared/domain';
 import { isSubmittable } from '@shared/github-review';
 import type { Discussion, Finding, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
 import { mergeLayers } from '@shared/prompt';
+import { APP_VERSION } from '@shared/version';
+import type { UpdateStatus } from '@shared/update';
+
+const UPDATE_FIXTURES: Record<string, UpdateStatus> = {
+  unsupported: { phase: 'unsupported' },
+  checking: { phase: 'checking' },
+  current: { phase: 'current' },
+  downloading: { phase: 'downloading', version: '0.2.0', percent: 42 },
+  ready: { phase: 'ready', version: '0.2.0' },
+  error: { phase: 'error', message: 'net::ERR_INTERNET_DISCONNECTED' },
+};
 import type { EditablePromptLayer, PromptSectionKey, ReviewPromptView } from '@shared/prompt';
 
 /** 预览用 src/pipeline.ts 新侧全文(供展开 diff 外上下文自查);行 14–24 为 hunk 覆盖区。 */
@@ -446,6 +457,14 @@ export function installPreviewApi(): void {
   (window as unknown as { __fireInApp?: (n: CompletionNotice) => void }).__fireInApp = (n) => {
     for (const l of inAppListeners) l(n);
   };
+
+  const updateListeners = new Set<(s: UpdateStatus) => void>();
+  const fireUpdate = (): void => {
+    for (const l of updateListeners) l(updateStatus);
+  };
+  let updateStatus: UpdateStatus = UPDATE_FIXTURES[params.get('upd') ?? 'current'] ?? {
+    phase: 'current',
+  };
   const emit = (payload: Finding) => {
     const i = findings.findIndex((f) => f.id === payload.id);
     if (i >= 0) findings[i] = payload;
@@ -470,7 +489,7 @@ export function installPreviewApi(): void {
   const api: DuetlensApi = {
     getAppInfo: async () => ({
       name: 'Duetlens (preview)',
-      version: '2.0.0-dev',
+      version: APP_VERSION,
       electron: '34.0.0',
       chrome: '132.0',
       node: '20.18',
@@ -869,6 +888,23 @@ export function installPreviewApi(): void {
       getSettings: async () => uiSettings,
       saveSettings: async (s) => {
         uiSettings = s;
+      },
+    },
+    // ?upd=current|checking|downloading|ready|error|unsupported(缺省 current)
+    update: {
+      getStatus: async () => updateStatus,
+      check: async () => {
+        updateStatus = { phase: 'checking' };
+        fireUpdate();
+        setTimeout(() => {
+          updateStatus = { phase: 'current' };
+          fireUpdate();
+        }, 900);
+      },
+      install: async () => undefined,
+      onStatus: (handler) => {
+        updateListeners.add(handler);
+        return () => updateListeners.delete(handler);
       },
     },
     agent: {

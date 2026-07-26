@@ -12,6 +12,7 @@ import type {
 import { run } from '../source/exec';
 import { checkGhAuth } from '../source/source-discovery';
 import { CodexAppServer } from '../agent/codex/codex-app-server';
+import { APP_VERSION } from '@shared/version';
 
 export interface EnvironmentCheckDeps extends EnvCheckOptions {
   codexBin?: string;
@@ -38,7 +39,7 @@ async function probeAppServer(deps: EnvironmentCheckDeps): Promise<AppServerChec
   try {
     server.start();
     await withTimeout(
-      server.initialize({ name: 'duetlens', version: '2.0.0-dev' }),
+      server.initialize({ name: 'duetlens', version: APP_VERSION }),
       APP_SERVER_TIMEOUT_MS,
       'app-server 握手超时',
     );

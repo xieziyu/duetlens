@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppInfo } from '@shared/ipc';
+import type { UpdateStatus } from '@shared/update';
 import type { CodexModelInfo, SourceKind, UiSettings } from '@shared/domain';
 import { DEFAULT_UI_SETTINGS, REASONING_EFFORTS, REVIEW_INTENSITIES } from '@shared/domain';
 import type { EnvironmentReport } from '@shared/environment';
@@ -335,6 +336,7 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
               </div>
               <span className="lic mono">GPL-3.0</span>
             </div>
+            <UpdateRow />
             <div className="about-links">
               <LinkOut href={PROJECT_LINKS.repo}>源码仓库</LinkOut>
               <i />
@@ -406,6 +408,61 @@ function LinkOut({ href, children }: { href: string; children: React.ReactNode }
       {children}
     </a>
   );
+}
+
+/**
+ * 更新状态一行。更新本身是后台下载、退出时静默安装的,所以这里不是升级的必经之路 ——
+ * 只让用户看得见进度、并能提前重启。dev / 不支持的渠道整行不渲染。
+ */
+function UpdateRow(): React.JSX.Element | null {
+  const [status, setStatus] = useState<UpdateStatus>({ phase: 'idle' });
+
+  useEffect(() => {
+    window.duetlens.update.getStatus().then(setStatus).catch(() => undefined);
+    return window.duetlens.update.onStatus(setStatus);
+  }, []);
+
+  if (status.phase === 'unsupported') return null;
+
+  const busy = status.phase === 'checking' || status.phase === 'downloading';
+  const tone =
+    status.phase === 'ready' ? 'ok' : status.phase === 'error' ? 'err' : busy ? 'checking' : '';
+
+  return (
+    <div className="about-update">
+      <span className={`stat${tone ? ` ${tone}` : ''}`}>
+        <span className="d" />
+        {updateText(status)}
+      </span>
+      {status.phase === 'ready' ? (
+        <button className="btn-sm" onClick={() => void window.duetlens.update.install()}>
+          立即重启更新
+        </button>
+      ) : (
+        <button className="btn-sm" disabled={busy} onClick={() => void window.duetlens.update.check()}>
+          检查更新
+        </button>
+      )}
+    </div>
+  );
+}
+
+function updateText(s: UpdateStatus): string {
+  switch (s.phase) {
+    case 'checking':
+      return '正在检查…';
+    case 'current':
+      return '已是最新版本';
+    case 'downloading':
+      // update-available 之后、第一个进度事件之前 version 才会是空
+      return s.version ? `正在下载 ${s.version} · ${s.percent}%` : '正在下载新版本…';
+    case 'ready':
+      return `${s.version} 已下载,重启后生效`;
+    case 'error':
+      return `检查失败:${s.message}`;
+    default:
+      return '尚未检查更新';
+  }
 }
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }): React.JSX.Element {

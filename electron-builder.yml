@@ -23,14 +23,32 @@ electronFuses:
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
 
+# 不签名的产物一启动就被 SIGKILL(fuses 翻过之后原签名失效),与其出个跑不起来的包不如直接失败
+forceCodeSigning: true
+
 mac:
-  target: zip
+  # dmg 给人下载,zip 给 electron-updater —— 少一个更新链就断了。
+  # 只出 arm64:Intel Mac 不在受众里,双架构要为每个架构重编 better-sqlite3。
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
   category: public.app-category.developer-tools
   # 各尺寸美术不同(128+ 带镜外代码 / 64-32 只留镜片 / 16 再砍一条行),
   # 所以自带 icns 而不是让 electron-builder 从单张 png 缩,改图跑 npm run icons:gen
   icon: build/icon.icns
-  # 发布用的 Developer ID 签名/公证留到发布阶段(见 docs/design/open-questions.md)。
-  # 本地必须 ad-hoc 签(identity "-"):翻过 fuses 的二进制会失去原签名,不重签会被系统 SIGKILL。
-  identity: "-"
+  # 不写 identity:从钥匙串自动发现 Developer ID Application。
+  # 本地 `npm run package` 在命令行覆盖成 ad-hoc,见 package.json。
+  hardenedRuntime: true
+  notarize: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+
+# 草稿发布:CI 出完包不直接对外,人过一眼再点 publish。
+# electron-updater 不读 draft,所以点之前老用户不会收到推送。
+publish:
+  provider: github
+  owner: xieziyu
+  repo: duetlens
+  releaseType: draft

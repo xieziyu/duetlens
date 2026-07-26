@@ -12,6 +12,7 @@ import path from 'node:path';
 import { CodexAppServer } from '../src/backend/agent/codex/codex-app-server';
 import { CodexNotification, type McpToolCallItem } from '../src/backend/agent/codex/protocol';
 import { DuetlensMcpServer, type ReportedFinding } from '../src/backend/mcp/duetlens-mcp-server';
+import { APP_VERSION } from '../src/shared/version';
 
 const TURN_TIMEOUT_MS = 180_000;
 
@@ -121,7 +122,7 @@ async function main() {
   codex.start();
 
   try {
-    await codex.initialize({ name: 'duetlens', version: '2.0.0-dev' });
+    await codex.initialize({ name: 'duetlens', version: APP_VERSION });
     log('codex', 'initialized');
 
     const thread = await codex.threadStart({

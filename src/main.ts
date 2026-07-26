@@ -6,6 +6,7 @@ import { ReviewStore } from '@backend/db/review-store';
 import { ReviewManager } from '@backend/review/review-manager';
 import { createCompletionNotifier } from '@backend/notify/completion-notifier';
 import { hydratePath } from '@backend/env/shell-path';
+import { createUpdater } from '@backend/update/updater';
 import { IpcEvents, type CompletionNotice, type ReviewEvent } from '@shared/ipc';
 
 // 开发态与打包版可能同时开着:各自独立 userData,否则两个进程写同一个 sqlite,
@@ -96,7 +97,15 @@ app.whenReady().then(async () => {
   const broadcast = (channel: string, payload: unknown) => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
   };
-  registerIpcHandlers({ manager, broadcast });
+  const updater = createUpdater({
+    onStatus: (s) => broadcast(IpcEvents.updateStatus, s),
+    cleanup: async () => {
+      // 置位要在清理之前:cleanup 期间 before-quit 若被触发,得让它放行
+      installingUpdate = true;
+      await cleanupSessions();
+    },
+  });
+  registerIpcHandlers({ manager, broadcast, updater });
 
   // 长任务完成提示:焦点判定 + 原生通知归 main(独占 BrowserWindow/Notification);
   // review-event 已流经 main,此处再挂一个消费者驱动通知。
@@ -129,23 +138,30 @@ app.on('window-all-closed', () => {
  */
 const QUIT_CLEANUP_TIMEOUT_MS = 3000;
 let quitting = false;
+let installingUpdate = false;
 
 /**
- * 退出前拆掉所有活跃会话,**清完再退**。
+ * 拆掉所有活跃会话,最多等 {@link QUIT_CLEANUP_TIMEOUT_MS}。
  *
- * 默认的退出不等异步清理:`session.dispose()` 里发 SIGTERM 与关 MCP 都是异步的,进程先跑掉的话,
- * 那些 codex 子进程就成了孤儿(POSIX 不因父进程退出而杀子进程),一路活到用户手动 kill。
- * 所以拦下这次退出自己收尾,再 {@link app.exit} —— exit 不会重新触发本事件。
+ * `session.dispose()` 里发 SIGTERM 与关 MCP 都是异步的,进程先跑掉的话那些 codex 子进程
+ * 就成了孤儿(POSIX 不因父进程退出而杀子进程),一路活到用户手动 kill。
  */
+function cleanupSessions(): Promise<unknown> {
+  const cleanup = manager?.disposeAll() ?? Promise.resolve();
+  const deadline = new Promise((r) => setTimeout(r, QUIT_CLEANUP_TIMEOUT_MS));
+  // 拆会话失败也照样往下走,别把错误挡在退出前面
+  return Promise.race([cleanup, deadline]).catch(() => undefined);
+}
+
+/** 退出前**清完再退**;默认的退出流程不等异步清理,所以拦下这次自己收尾。 */
 app.on('before-quit', (e) => {
+  // 装更新这条路自己清过了,且必须让退出真的发生 —— 拦下来 Squirrel 就永远等不到进程结束。
+  if (installingUpdate) return;
   // 拦下要先于重入判断:清理期间用户再按一次退出,放行的话默认流程当场结束进程,
   // 正好绕过这里的「清完再退」。第一次的收尾跑完(或超时)会统一 exit。
   e.preventDefault();
   if (quitting) return;
   quitting = true;
-  const cleanup = manager?.disposeAll() ?? Promise.resolve();
-  const deadline = new Promise((r) => setTimeout(r, QUIT_CLEANUP_TIMEOUT_MS));
-  void Promise.race([cleanup, deadline])
-    .catch(() => undefined) // 拆会话失败也照样退出,别把错误挡在 exit 前面
-    .then(() => app.exit(0));
+  // app.exit 不会重新触发本事件
+  void cleanupSessions().then(() => app.exit(0));
 });
