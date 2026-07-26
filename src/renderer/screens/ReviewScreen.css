@@ -2719,27 +2719,6 @@
   opacity: 1;
 }
 
-.file-collapsed-bar {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-soft);
-  color: var(--text-faint);
-  font-size: 12px;
-  cursor: pointer;
-  background: var(--surface);
-}
-.file-collapsed-bar .cb-ic {
-  color: var(--add);
-}
-.file-collapsed-bar .cb-x {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--agent-2);
-}
-
 .code.split {
   table-layout: fixed;
 }

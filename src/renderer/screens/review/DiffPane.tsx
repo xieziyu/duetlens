@@ -1179,13 +1179,8 @@ function DiffFileView({
         </div>
       )}
 
-      {collapsed ? (
-        <div className="file-collapsed-bar" onClick={onToggleCollapsed}>
-          <span className="cb-ic">✓</span>
-          {viewed ? '已标记看过 · 内容已折叠' : '内容已折叠'}
-          <span className="cb-x">点击展开</span>
-        </div>
-      ) : file.binary ? (
+      {/* 折叠态只留标题栏:已看勾选框与「展开」按钮就在其中,再加一条说明纯属复述 */}
+      {collapsed ? null : file.binary ? (
         <div className="diff-note">二进制文件,不显示逐行 diff。</div>
       ) : file.hunks.length === 0 ? (
         <div className="diff-note">无内容改动(仅重命名/模式变更)。</div>
