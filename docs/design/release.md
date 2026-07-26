@@ -42,6 +42,22 @@ Team ID 对不上,不关掉库校验起不来;Developer ID 下所有二进制由
 不重签的 app 一启动就被 SIGKILL。`forceCodeSigning: true` 让这种情况直接构建失败,而不是出一个
 跑不起来的包。
 
+## 每个脚本都显式写 `--publish`
+
+`dist` 是 never,`release` 是 always。不写的话 electron-builder 会因为检测到 CI 环境自己进发布模式,
+在 dry run 里白传一轮才因为「不是 tag」放弃;v27 起这个隐式行为会被移除,届时不写就等于 never。
+两边都写清楚,行为不随版本漂。
+
+## dmg 自身没有公证票据
+
+`notarize` 公证并 staple 的是 `.app`,之后才把它装进 dmg 和 zip —— dmg 本身既没签名也没票据
+(`spctl -a -t open` 会报 `no usable signature`)。实测带 quarantine 的 dmg 仍能正常挂载,盘里的 app
+判定为 `Notarized Developer ID`,拷出来也能启动,所以这条分发路径可用。
+
+但这低于 Apple「用磁盘映像分发就把映像也公证掉」的建议。要补的话得把 CI 拆成两阶段(先
+`--publish never`,再 codesign + notarytool + stapler 处理 dmg,最后才上传),还要处理 staple 之后
+dmg 的 sha512 与 `latest-mac.yml` 里那条对不上。**没做,不是忘了。**
+
 ## 一次性准备(换机器或换证书时重来)
 
 1. **Developer ID Application 证书**:Xcode → Settings → Accounts → Manage Certificates → `+`。

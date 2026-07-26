@@ -10,7 +10,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "npm run build && electron-builder --dir --arm64 -c.mac.identity=- -c.mac.notarize=false -c.mac.entitlements=build/entitlements.mac.dev.plist -c.mac.entitlementsInherit=build/entitlements.mac.dev.plist",
-    "dist": "npm run build && electron-builder --mac",
+    "dist": "npm run build && electron-builder --mac --publish never",
     "release": "npm run build && electron-builder --mac --publish always",
     "preview:ui": "vite --config vite.preview.config.ts --port 5177 --strictPort",
     "db:snapshot": "bash scripts/db-snapshot.sh",
