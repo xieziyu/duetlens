@@ -147,7 +147,7 @@ export interface FindingEditInput {
   suggestion?: string | null;
 }
 
-/** 用户发起 discussion 的锚点。 */
+/** 用户发起 discussion 的锚点;省略即建一条不锚定代码的全局讨论。 */
 export interface DiscussionAnchor {
   file: string;
   line: number;
@@ -172,6 +172,14 @@ export interface AddFindingInput {
  * Electron IPC 只把 reject 的 message 串过去(自定义字段全丢),故只能靠消息里的这段前缀认。
  */
 export const LIVE_SESSION_LIMIT_CODE = 'DUETLENS_LIVE_SESSION_LIMIT';
+
+/**
+ * `review.sendMessage` 失败在**问题已落库之后**(agent 没能给出回复)的识别串。同上只能靠消息认。
+ *
+ * 这一分野对用户是两件事:没发出去的该原样重发,已发出的重发就是把同一句话说两遍 ——
+ * 后者线程里已经有那条气泡了,缺的只是回复。
+ */
+export const FOLLOWUP_REPLY_FAILED_CODE = 'DUETLENS_FOLLOWUP_REPLY_FAILED';
 
 /** 正在跑的一条审核;满载提示逐条列出,可跳过去看或叫停。 */
 export interface BusyReview {
@@ -305,8 +313,8 @@ export interface DuetlensApi {
     release(reviewId: string): Promise<void>;
     /** 删除一次审核(级联清理 findings/discussions/messages 等);历史屏用。 */
     delete(reviewId: string): Promise<void>;
-    /** 新建用户发起、锚定代码位置的 discussion。 */
-    addDiscussion(reviewId: string, anchor: DiscussionAnchor): Promise<Discussion>;
+    /** 新建用户发起的 discussion;不传 anchor 即一条不锚定代码的全局讨论。 */
+    addDiscussion(reviewId: string, anchor?: DiscussionAnchor | null): Promise<Discussion>;
     /** 就某条 discussion 向 agent 追问;返回 agent 回复(无文本时返回用户消息)。 */
     sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message>;
     /** 清空一条 discussion 的往来消息(finding 卡保留);经 `messages-cleared` 事件回推。 */

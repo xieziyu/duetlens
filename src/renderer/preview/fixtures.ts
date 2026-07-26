@@ -633,9 +633,9 @@ export function installPreviewApi(): void {
           reviewId: 'demo',
           kind: 'user',
           origin: 'manual',
-          file: anchor.file,
-          line: anchor.line,
-          lineEnd: anchor.lineEnd ?? null,
+          file: anchor?.file ?? null,
+          line: anchor?.line ?? null,
+          lineEnd: anchor?.lineEnd ?? null,
           createdAt: Date.now(),
         };
         discussions.push(d);

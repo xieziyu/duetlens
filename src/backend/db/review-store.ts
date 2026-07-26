@@ -718,9 +718,10 @@ export class ReviewStore {
   }
 
   // ---- discussions / messages ----
+  /** anchor 为空 = 不锚定任何代码的全局讨论(问架构 / 问整体,后续也可补锚点提升为 finding)。 */
   addUserDiscussion(
     reviewId: string,
-    anchor: { file: string; line: number; lineEnd?: number | null },
+    anchor?: { file: string; line: number; lineEnd?: number | null } | null,
   ): Discussion {
     const id = randomUUID();
     const ts = this.withReviewTouch({ review: reviewId }, (writeTs) => {
@@ -729,7 +730,7 @@ export class ReviewStore {
           `INSERT INTO discussions (id, review_id, kind, origin, file, line, line_end, created_at)
            VALUES (?, ?, 'user', 'manual', ?, ?, ?, ?)`,
         )
-        .run(id, reviewId, anchor.file, anchor.line, anchor.lineEnd ?? null, writeTs);
+        .run(id, reviewId, anchor?.file ?? null, anchor?.line ?? null, anchor?.lineEnd ?? null, writeTs);
       return writeTs;
     });
     return {
@@ -737,9 +738,9 @@ export class ReviewStore {
       reviewId,
       kind: 'user',
       origin: 'manual',
-      file: anchor.file,
-      line: anchor.line,
-      lineEnd: anchor.lineEnd ?? null,
+      file: anchor?.file ?? null,
+      line: anchor?.line ?? null,
+      lineEnd: anchor?.lineEnd ?? null,
       createdAt: ts,
     };
   }

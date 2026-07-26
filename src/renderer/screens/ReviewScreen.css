@@ -2716,6 +2716,14 @@
 .c-edit.has-sugg .fe-sugg {
   display: block;
 }
+/* 建线程没成:卡片留在原地,原文一个字不动,这行说清为什么 */
+.fe-err {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--sev-high);
+  overflow-wrap: anywhere;
+}
 .fe-foot {
   display: flex;
   align-items: center;
@@ -3115,6 +3123,44 @@
   cursor: pointer;
   color: var(--text-dim);
 }
+/* 新开一条无锚点讨论:虚线边框与已存在的实心条目分开,一眼看出它是动作不是线程 */
+.disc-new {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.disc-new:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.disc-new:hover:not(:disabled) {
+  border-color: var(--human-line);
+  background: var(--human-soft);
+  color: var(--text);
+}
+.disc-new .dn-plus {
+  color: var(--human);
+  font-weight: 700;
+}
+.disc-new .dn-hint {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.dn-err {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--sev-high);
+  word-break: break-word;
+}
 .disc-item:hover {
   background: var(--hover);
 }
@@ -3188,6 +3234,17 @@
 .anchor-ref:hover {
   border-color: var(--human-line);
 }
+/* 无锚点的全局讨论:同一条位置带,但不可点(没有代码可跳),故去掉 hover 与手型 */
+.anchor-ref.none {
+  cursor: default;
+  border-style: dashed;
+}
+.anchor-ref.none:hover {
+  border-color: var(--border);
+}
+.anchor-ref.none .bar {
+  background: var(--border);
+}
 .anchor-ref .bar {
   width: 2px;
   align-self: stretch;
@@ -3216,8 +3273,38 @@
   flex-direction: column;
   gap: 14px;
 }
+/* 问题在上面躺着、只是没等到回复:接在线程末尾,与消息气泡区分开 */
+.thread .reply-failed {
+  display: flex;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--sev-high) 35%, transparent);
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--sev-high) 5%, transparent);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.thread .rf-ic {
+  color: var(--sev-high);
+  font-weight: 700;
+}
+.thread .rf-why {
+  margin-top: 3px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.thread .rf-hint {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
 .thread.thread-empty {
   justify-content: flex-start;
+  align-items: flex-start;
+  gap: 12px;
+}
+.thread.thread-empty .disc-new {
+  width: auto;
 }
 .msg {
   display: flex;
@@ -3356,6 +3443,58 @@
   display: flex;
   align-items: center;
   margin-top: 9px;
+}
+/* 没发出去的原文:每条一张,带原因与「放回输入框」。多条同时失败也各自完整,不互相覆盖 */
+.composer .cs-unsent {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in oklab, var(--sev-high) 35%, transparent);
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--sev-high) 5%, transparent);
+}
+.composer .cu-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.composer .cu-why {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--sev-high);
+  overflow-wrap: anywhere;
+}
+.composer .cu-restore {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.composer .cu-restore:hover {
+  border-color: var(--human-line);
+  background: var(--human-soft);
+  color: var(--text);
+}
+/* 这条原文本来问的是哪条线程 —— 放回输入框会切过去,先说清楚免得发错线程 */
+.composer .cu-to {
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-faint);
+  overflow-wrap: anywhere;
+}
+.composer .cu-text {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .composer .send {
   margin-left: auto;

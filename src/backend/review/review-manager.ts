@@ -113,6 +113,8 @@ export class ReviewManager extends EventEmitter {
   private readonly cleanups = new Map<string, () => void | Promise<void>>();
   /** 活跃会话的内容 provider(读 diff / 文件新侧);供 DiffPane 展开上下文按审核时快照读文件。 */
   private readonly providers = new Map<string, McpContentProviders>();
+  /** 在途的会话续接;同一 review 的并发追问共用一次,见 {@link resumeSession}。 */
+  private readonly resuming = new Map<string, Promise<ReviewSession>>();
   private readonly maxLiveSessions: number;
   /** 已预留、会话还没建出来的位子数,见 {@link reserveCapacity}。 */
   private pendingSessions = 0;
@@ -263,10 +265,10 @@ export class ReviewManager extends EventEmitter {
     }
   }
 
-  /** 新建一条用户发起的、锚定代码位置的 discussion(不落 finding)。 */
+  /** 新建一条用户发起的 discussion(不落 finding);anchor 省略即不锚定代码的全局讨论。 */
   addUserDiscussion(
     reviewId: string,
-    anchor: { file: string; line: number; lineEnd?: number | null },
+    anchor?: { file: string; line: number; lineEnd?: number | null } | null,
   ): Discussion {
     const discussion = this.store.addUserDiscussion(reviewId, anchor);
     this.forward({ reviewId, type: 'discussion', payload: discussion });
@@ -761,8 +763,25 @@ export class ReviewManager extends EventEmitter {
     if (finished) this.forward({ reviewId, type: 'round', payload: finished });
   }
 
+  /**
+   * 续接会话,同一 review 的并发调用共用同一次续接。
+   *
+   * 不去重的话,两条并行追问会各建一个 ReviewSession / codex 子进程去恢复同一个 thread:
+   * 后建的覆盖 map,两个 turn 就不再串在同一条链上;任一次失败的清理还会把另一次
+   * 已登记的会话从 map 里删掉(子进程与 source 无人释放)。
+   */
+  private resumeSession(reviewId: string): Promise<ReviewSession> {
+    const inflight = this.resuming.get(reviewId);
+    if (inflight) return inflight;
+    const started = this.startResume(reviewId).finally(() => {
+      if (this.resuming.get(reviewId) === started) this.resuming.delete(reviewId);
+    });
+    this.resuming.set(reviewId, started);
+    return started;
+  }
+
   /** 按持久化的 target 重建 source 并续接 codex thread(会话已不在内存)。 */
-  private async resumeSession(reviewId: string): Promise<ReviewSession> {
+  private async startResume(reviewId: string): Promise<ReviewSession> {
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
     if (!review.codexThreadId) throw new Error(`review 无 codex thread,无法续接: ${reviewId}`);

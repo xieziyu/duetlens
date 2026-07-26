@@ -19,6 +19,7 @@ import {
   type ReviewIntensity,
 } from '@shared/domain';
 import { findDuplicate } from '@shared/finding-dedupe';
+import { FOLLOWUP_REPLY_FAILED_CODE } from '@shared/ipc';
 import type { AgentErrorKind } from '@shared/agent-events';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
 import type { ReviewStore } from '../db/review-store';
@@ -40,6 +41,20 @@ export class AgentTurnError extends Error {
   ) {
     super(message);
     this.name = 'AgentTurnError';
+  }
+}
+
+/**
+ * 追问的问题**已落库并上屏**,失败发生在等 agent 回复那一步。
+ *
+ * 消息里嵌 {@link FOLLOWUP_REPLY_FAILED_CODE}:Electron IPC 只把 message 串过去、自定义字段一律丢失,
+ * renderer 认这一段才分得清「这句话没发出去(该原样重发)」与「发出去了、只是没等到回复
+ * (重发就是把同一句说两遍)」。
+ */
+export class FollowupReplyError extends Error {
+  constructor(readonly cause: unknown) {
+    super(`${FOLLOWUP_REPLY_FAILED_CODE} ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'FollowupReplyError';
   }
 }
 
@@ -157,12 +172,27 @@ export class ReviewSession {
    * 同样拆不得,那时被逐出只会让这次审核以一句莫名其妙的失败收场。
    */
   private inFlight = 0;
+  /**
+   * codex thread 建起来之前的闸门。追问可以早于建会话到达(Discussion 栏空态明说「不必等」),
+   * 那一问必须排在建会话之后跑 —— 就地回绝的话,用户按下发送就什么都不剩:输入框已清空,
+   * 消息还没落库,界面上只留一条空讨论。会话建不起来 / 被释放时以原因兑现,免得永远干等。
+   */
+  private readonly conversationReady: Promise<void>;
+  private openConversation!: () => void;
+  private failConversation!: (reason: unknown) => void;
 
   constructor(
     private readonly reviewId: string,
     private readonly store: ReviewStore,
     private readonly agent: ConversationalAgent,
-  ) {}
+  ) {
+    this.conversationReady = new Promise<void>((resolve, reject) => {
+      this.openConversation = resolve;
+      this.failConversation = reject;
+    });
+    // 没有追问在等时也可能被 reject(会话释放),挂个空 handler 免得成为进程级 unhandledRejection
+    this.conversationReady.catch(() => undefined);
+  }
 
   /** 订阅会话事件(事件面见 {@link ReviewSessionEvents});事件名与载荷由事件表收敛。 */
   on<K extends keyof ReviewSessionEvents>(
@@ -195,7 +225,7 @@ export class ReviewSession {
    * (复用会话会让新旧 diff 的行号在同一上下文里互相污染)。
    */
   start(opts: StartReviewOptions): Promise<Finding[]> {
-    return this.track(() => this.runStart(opts));
+    return this.gated(() => this.track(() => this.runStart(opts)));
   }
 
   private async runStart(opts: StartReviewOptions): Promise<Finding[]> {
@@ -210,6 +240,7 @@ export class ReviewSession {
       reasoningEffort: opts.reasoningEffort,
     });
     this.conversationId = handle.conversationId;
+    this.openConversation();
     this.store.setCodexThreadId(this.reviewId, handle.conversationId);
     if (opts.round) this.store.setRoundThreadId(this.reviewId, opts.round, handle.conversationId);
     this.recordModel(handle.model);
@@ -236,7 +267,7 @@ export class ReviewSession {
    * 重新注入 MCP,不重跑扫描。之后即可 sendMessage 追问。返回已落库的 findings。
    */
   resume(opts: StartReviewOptions): Promise<Finding[]> {
-    return this.track(() => this.runResume(opts));
+    return this.gated(() => this.track(() => this.runResume(opts)));
   }
 
   private async runResume(opts: StartReviewOptions): Promise<Finding[]> {
@@ -255,6 +286,7 @@ export class ReviewSession {
       reasoningEffort: opts.reasoningEffort,
     });
     this.conversationId = handle.conversationId;
+    this.openConversation();
     this.recordModel(handle.model);
     return this.store.listFindings(this.reviewId);
   }
@@ -277,7 +309,7 @@ export class ReviewSession {
    * 复用同一 codex thread(全局视野);轮次串行,不与扫描/前一轮并发。
    */
   async sendMessage(discussionId: string, text: string): Promise<Message> {
-    if (!this.conversationId) throw new Error('会话尚未建立,无法追问');
+    await this.conversationReady; // 会话还在建就排在它后面,别把这一问丢掉
     const discussion = this.store.getDiscussion(discussionId);
     if (!discussion) throw new Error(`discussion 不存在: ${discussionId}`);
 
@@ -286,16 +318,22 @@ export class ReviewSession {
     const userMsg = this.store.addMessage(discussionId, 'user', text);
     this.emit('message', userMsg);
 
-    const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text, history));
-    if (outcome.kind === 'failed')
-      throw new AgentTurnError(`追问失败: ${outcome.error}`, outcome.errorKind, outcome.error);
-    if (outcome.kind === 'stopped') return userMsg;
+    // 过了这一行,问题已经落库并推给了 UI:此后再失败都是「没等到回复」,不是「没发出去」。
+    // 两者对用户的下一步截然相反,故换上识别串(见 FollowupReplyError)。
+    try {
+      const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text, history));
+      if (outcome.kind === 'failed')
+        throw new AgentTurnError(`追问失败: ${outcome.error}`, outcome.errorKind, outcome.error);
+      if (outcome.kind === 'stopped') return userMsg;
 
-    const reply = outcome.reply.trim();
-    if (!reply) return userMsg;
-    const agentMsg = this.store.addMessage(discussionId, 'agent', reply);
-    this.emit('message', agentMsg);
-    return agentMsg;
+      const reply = outcome.reply.trim();
+      if (!reply) return userMsg;
+      const agentMsg = this.store.addMessage(discussionId, 'agent', reply);
+      this.emit('message', agentMsg);
+      return agentMsg;
+    } catch (e) {
+      throw new FollowupReplyError(e);
+    }
   }
 
   /**
@@ -344,6 +382,8 @@ export class ReviewSession {
   }
 
   async dispose(): Promise<void> {
+    // 排在闸门后的追问跟着这个会话一起完:不兑现的话它们会一直等一个再也不会来的 codex thread
+    this.failConversation(new Error('会话已释放,无法追问'));
     this.unsubscribe?.();
     this.agent.dispose();
     await this.mcp?.close();
@@ -435,8 +475,21 @@ export class ReviewSession {
         );
       }
     }
-    const head = loc ? `关于 ${loc} 处的代码:\n` : '';
+    // 无锚点 = reviewer 在问整体(架构 / 取舍 / 某个跨文件的疑问),得说清范围是本次改动全体,
+    // 否则 agent 容易拿上一条讨论的锚点当上下文接着答。
+    const head = loc ? `关于 ${loc} 处的代码:\n` : '关于本次改动整体(未锚定到具体代码位置):\n';
     return `${head}${prior}${text}`;
+  }
+
+  /**
+   * 建/续会话的外层:失败时把 {@link conversationReady} 一并兑现。
+   * 已经建起来之后才失败(turn 挂了)的,闸门早已放行,这里是空操作。
+   */
+  private gated<T>(run: () => Promise<T>): Promise<T> {
+    return run().catch((e: unknown) => {
+      this.failConversation(e);
+      throw e;
+    });
   }
 
   /** 在途期间计入 {@link isBusy};建会话与跑 turn 共用,可嵌套(start 内部还会再跑 turn)。 */

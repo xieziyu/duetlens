@@ -82,7 +82,7 @@ export function registerIpcHandlers({ manager, broadcast }: IpcDeps): void {
   ipcMain.handle(IpcChannels.reviewCapacity, () => manager.getLiveCapacity());
   ipcMain.handle(IpcChannels.reviewRelease, (_e, reviewId: string) => manager.disposeReview(reviewId));
   ipcMain.handle(IpcChannels.reviewDelete, (_e, reviewId: string) => manager.deleteReview(reviewId));
-  ipcMain.handle(IpcChannels.reviewAddDiscussion, (_e, reviewId: string, anchor: DiscussionAnchor) =>
+  ipcMain.handle(IpcChannels.reviewAddDiscussion, (_e, reviewId: string, anchor?: DiscussionAnchor | null) =>
     manager.addUserDiscussion(reviewId, anchor),
   );
   ipcMain.handle(IpcChannels.reviewSendMessage, (_e, reviewId: string, discussionId: string, text: string) =>

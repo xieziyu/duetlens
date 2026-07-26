@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Severity } from '@shared/domain';
 import { CategorySelect } from './CategorySelect';
+import { describeSendFailure } from './round-error';
 
 const SEV_LABEL: Record<Severity, string> = { high: 'high', medium: 'med', low: 'low' };
 const SEV_OPTIONS: Severity[] = ['high', 'medium', 'low'];
@@ -19,10 +20,13 @@ export interface NewFindingDraft {
 export interface AnnotateComposerProps {
   label: string;
   snippet: string;
-  /** 提问态发送:创建一条 user discussion 并向 codex 发出首问 */
-  onSend: (text: string) => void;
-  /** finding 态提交:经 review:add-finding 落库(origin=manual) */
-  onCreate: (draft: NewFindingDraft) => void;
+  /**
+   * 提问态发送:创建一条 user discussion 并向 codex 发出首问。
+   * resolve 才关卡片 —— 失败要原样抛出,这张卡是原文唯一的落脚处,关掉就没了。
+   */
+  onSend: (text: string) => void | Promise<void>;
+  /** finding 态提交:经 review:add-finding 落库(origin=manual);同 onSend,resolve 才关卡片 */
+  onCreate: (draft: NewFindingDraft) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -41,6 +45,8 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
   const [category, setCategory] = useState<string | null>(null);
   const [hasSugg, setHasSugg] = useState(false);
   const [suggestion, setSuggestion] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -73,25 +79,32 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
 
   const canSubmit = up ? !!title.trim() : !!text.trim();
 
-  const submit = () => {
-    if (!canSubmit) return;
-    if (up) {
-      onCreate({
-        severity,
-        category,
-        title: title.trim(),
-        body: text.trim(),
-        suggestion: hasSugg ? suggestion : null,
-      });
-    } else {
-      onSend(text.trim());
+  // 两态都不就地关卡片:落库成功了才由上层关掉(见 DiffPane 的 onSendCompose / onCreateFinding),
+  // 失败就留在原地报错并守住已写的内容 —— 这张卡是它唯一的落脚处。
+  const submit = async () => {
+    if (!canSubmit || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await (up
+        ? onCreate({
+            severity,
+            category,
+            title: title.trim(),
+            body: text.trim(),
+            suggestion: hasSugg ? suggestion : null,
+          })
+        : onSend(text.trim()));
+    } catch (e) {
+      setError(describeSendFailure((e as Error).message ?? String(e)).raw);
+      setSending(false);
     }
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      submit();
+      void submit();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onCancel();
@@ -176,14 +189,19 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
               </div>
             </div>
           )}
+          {error && (
+            <div className="fe-err">
+              ✕ {up ? '没能新增 finding' : '没能发出'}:{error}
+            </div>
+          )}
           <div className="fe-foot">
             {up ? (
-              <button className="save" onClick={submit} disabled={!canSubmit}>
-                新增 finding <span className="kbd">⌘↵</span>
+              <button className="save" onClick={() => void submit()} disabled={!canSubmit || sending}>
+                {sending ? '新增中…' : '新增 finding'} <span className="kbd">⌘↵</span>
               </button>
             ) : (
-              <button className="send" onClick={submit} disabled={!canSubmit}>
-                发送给 agent <span className="kbd">⌘↵</span>
+              <button className="send" onClick={() => void submit()} disabled={!canSubmit || sending}>
+                {sending ? '发送中…' : '发送给 agent'} <span className="kbd">⌘↵</span>
               </button>
             )}
             <button className="cancel" onClick={onCancel}>

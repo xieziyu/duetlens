@@ -134,9 +134,9 @@ export interface DiffPaneProps {
   onTriage?: (finding: Finding, triage: Triage, reason?: string | null) => void;
   onUpdate?: (input: FindingEditInput) => void;
   /** 框选 / hover ＋ 发起 discussion:创建 user discussion 并发出首问 */
-  onStartDiscussion?: (anchor: DiscussionAnchor, text: string) => void;
+  onStartDiscussion?: (anchor: DiscussionAnchor, text: string) => void | Promise<void>;
   /** 框选「记为 finding」:在锚点处填写后新增一条 manual finding */
-  onAddFinding?: (anchor: DiscussionAnchor, draft: NewFindingDraft) => void;
+  onAddFinding?: (anchor: DiscussionAnchor, draft: NewFindingDraft) => void | Promise<void>;
   /** 内联 finding 卡「追问」:切 Discussion 栏并选中该 finding 的承载线程 */
   onDiscussFinding?: (finding: Finding) => void;
   /** 点 gutter 圆点跳转:finding → 聚焦内联卡;user discussion → 切 Discussion 栏 */
@@ -661,12 +661,13 @@ export function DiffPane(props: DiffPaneProps) {
               : undefined
           }
           compose={composeAt && composeAt.pick.anchor.file === f.path ? composeAt : null}
-          onSendCompose={(text) => {
-            if (composeAt) onStartDiscussion?.(composeAt.pick.anchor, text);
+          onSendCompose={async (text) => {
+            // 发起卡是这段原文唯一的落脚处,建线程成功了才关;失败由卡片自己报错并守住内容
+            if (composeAt) await onStartDiscussion?.(composeAt.pick.anchor, text);
             setComposeAt(null);
           }}
-          onCreateFinding={(draft) => {
-            if (composeAt) onAddFinding?.(composeAt.pick.anchor, draft);
+          onCreateFinding={async (draft) => {
+            if (composeAt) await onAddFinding?.(composeAt.pick.anchor, draft);
             setComposeAt(null);
           }}
           onCancelCompose={() => setComposeAt(null)}
@@ -1017,8 +1018,8 @@ function DiffFileView({
   onToggleCollapsed: () => void;
   onAddThread?: (line: number, snippet: string) => void;
   compose: Compose | null;
-  onSendCompose: (text: string) => void;
-  onCreateFinding: (draft: NewFindingDraft) => void;
+  onSendCompose: (text: string) => void | Promise<void>;
+  onCreateFinding: (draft: NewFindingDraft) => void | Promise<void>;
   onCancelCompose: () => void;
   /** 以下四项由 DiffPane 托管:检索索引要看得到已展开的上下文,状态不能留在这里 */
   fileLines: string[] | null;

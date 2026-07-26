@@ -1,4 +1,5 @@
 import type { AgentErrorKind } from '@shared/agent-events';
+import { FOLLOWUP_REPLY_FAILED_CODE } from '@shared/ipc';
 
 /**
  * 失败归因 → 用户能读懂的结论与处置。原文一律另行原样呈现 ——
@@ -112,8 +113,9 @@ export interface LaunchErrorCopy {
 /**
  * Electron 的 `ipcRenderer.invoke` 只把 message 带过来,并裹上一层
  * `Error invoking remote method 'x': Error: `。剥掉纯噪声的前缀,剩下的是底层命令原文。
+ * 任何要把 IPC 失败原文摆到界面上的地方都该过这里。
  */
-function stripIpcWrapper(message: string): string {
+export function stripIpcWrapper(message: string): string {
   return message
     .replace(/^Error invoking remote method '[^']*':\s*/, '')
     .replace(/^(Error|UnhandledError):\s*/, '')
@@ -127,5 +129,29 @@ export function describeLaunchError(message: string): LaunchErrorCopy {
     title: hit?.title ?? '这一轮没能开跑',
     advice: hit?.advice ?? '',
     raw,
+  };
+}
+
+// ---- 追问失败 ----
+
+export interface SendFailureCopy {
+  /**
+   * 问题是否**已经发出去**(落库并上屏,只是没等到回复)。
+   * 决定草稿要不要还给用户:已发出还要是把同一句话劝人再说一遍。
+   */
+  sent: boolean;
+  /** 一句话结论 */
+  title: string;
+  /** 剥掉 IPC 包装与识别串后的原文 */
+  raw: string;
+}
+
+/** 追问失败的定性;识别串由后端嵌在 message 里(见 shared/ipc 的 FOLLOWUP_REPLY_FAILED_CODE)。 */
+export function describeSendFailure(message: string): SendFailureCopy {
+  const sent = message.includes(FOLLOWUP_REPLY_FAILED_CODE);
+  return {
+    sent,
+    title: sent ? '已发出,但 agent 没能回复' : '没能发出',
+    raw: stripIpcWrapper(message.replace(FOLLOWUP_REPLY_FAILED_CODE, '')),
   };
 }

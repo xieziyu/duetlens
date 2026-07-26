@@ -112,7 +112,11 @@ export function App({
       <AppRail active={RAIL_OF[screen]} reviewAvailable={activeReviewId !== null} onNavigate={onRail} />
 
       {screen === 'review' ? (
+        /* key = 换 review 即重挂:屏内一切 per-review 本地态(草稿、活跃线程、待恢复原文…)
+           随实例一起作废,旧 review 的在途回调也只能写到已卸载的那个实例上。手工逐项重置
+           迟早漏 —— 每加一处状态都得记得回去补,而漏掉的那次就是跨 review 写。 */
         <ReviewScreen
+          key={activeReviewId ?? 'none'}
           reviewId={activeReviewId}
           onOpenSubmit={() => setScreen('submit')}
           focusRequest={focusDiscussion}

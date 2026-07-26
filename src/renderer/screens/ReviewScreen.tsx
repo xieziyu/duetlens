@@ -9,6 +9,7 @@ import { useReviewUiState } from '../review/useReviewUiState';
 import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
+import type { UnsentDraft } from './review/Composer';
 import { SummaryTab } from './review/SummaryTab';
 import { ScanProgressBar } from './review/ScanProgressBar';
 import { deriveScanSteps } from './review/scan-progress';
@@ -16,7 +17,7 @@ import { KbdHelp } from '../components/KbdHelp';
 import { LensScanArt } from '../components/LensScanArt';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
-import { describeRoundError } from './review/round-error';
+import { describeRoundError, describeSendFailure } from './review/round-error';
 import { RerunPanel } from './review/RerunPanel';
 import { LogoMark } from '../components/LogoMark';
 import { Wordmark } from '../components/Wordmark';
@@ -38,6 +39,14 @@ const RIGHT_MIN = 300;
 const RIGHT_MAX = 620;
 
 type RightTab = 'discussion' | 'findings' | 'summary';
+
+/** 去掉一个键;键不在就原样返回,避免白白换掉引用触发下游重渲染。 */
+function dropKey<T>(map: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in map)) return map;
+  const rest = { ...map };
+  delete rest[key];
+  return rest;
+}
 
 const RIGHT_TABS: RightTab[] = ['discussion', 'findings', 'summary'];
 const isRightTab = (t: string | null): t is RightTab => t !== null && RIGHT_TABS.includes(t as RightTab);
@@ -78,9 +87,21 @@ export function ReviewScreen({
   // 左栏文件检索:纯导航态不持久化;由屏持有才能在换 review 时清掉,并让 ⌘⇧F 把焦点甩进输入框
   const [fileQuery, setFileQuery] = useState('');
   const fileQueryRef = useRef<HTMLInputElement>(null);
-  // discussion 协同态:活跃线程 / 正在等 agent 回复
+  // 没发出去的原文(含框选发起的首问):由屏持有,才能在发起卡关掉之后仍有落脚处
+  const [unsent, setUnsent] = useState<UnsentDraft[]>([]);
+  const unsentSeq = useRef(0);
+  // discussion 协同态:活跃线程 / 在途追问
   const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
-  const [awaitingReply, setAwaitingReply] = useState<string | null>(null);
+  // 每次追问在途期间占一条,记着问的是哪条线程。composer 发出即清空输入框、不锁,
+  // 所以同一线程可以同时挂着几条 —— 单个 discussionId 会被先回来的那条提前清掉。
+  const [sending, setSending] = useState<{ id: number; discussionId: string }[]>([]);
+  const sendSeq = useRef(0);
+  const awaitingReply = useMemo(() => new Set(sending.map((s) => s.discussionId)), [sending]);
+  // 「问题发出去了、agent 没能回复」的线程 → 原因;就地显示在该线程末尾,不占用 composer。
+  // 按线程存:两条线程各自失败时不能互相顶掉,否则先失败的那条在 UI 上凭空复原。
+  const [replyFailure, setReplyFailure] = useState<Record<string, string>>({});
+  // 建全局讨论是异步的,连点 / 空态连发会各建一条空线程;在途期间共用同一次创建。
+  const globalPending = useRef<Promise<string> | null>(null);
   // Summary 关注主题 → 筛 Findings tab
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   // 键盘快捷键帮助浮层
@@ -137,40 +158,68 @@ export function ReviewScreen({
   };
 
   // 向某条 discussion 追问:先乐观上屏 user 气泡再显打字指示(否则 IPC/续接延迟会让「回复中」抢先出现),
-  // 落库后权威 message 事件替换乐观占位;发送失败则清理占位。
+  // 落库后权威 message 事件替换乐观占位。
+  //
+  // 失败分两种,处置相反(定性见 describeSendFailure):
+  //   · 没发出去 —— 清掉占位并把失败抛回发起处,原文由那张 composer 留住,用户能原样重发;
+  //   · 已落库、只是没等到回复 —— 气泡得留着,失败记在该线程上就地显示。抛回去只会让人把
+  //     线程里已经有的那句话再说一遍。
   const runSend = useCallback(
     async (discussionId: string, text: string) => {
       if (!reviewId) return;
       const pendingId = addPendingMessage(discussionId, text);
-      setAwaitingReply(discussionId);
+      const sendId = sendSeq.current++;
+      setSending((prev) => [...prev, { id: sendId, discussionId }]);
+      setReplyFailure((cur) => dropKey(cur, discussionId));
       try {
         await window.duetlens.review.sendMessage(reviewId, discussionId, text);
-      } catch {
-        dropMessage(discussionId, pendingId);
+      } catch (e) {
+        const failure = describeSendFailure((e as Error).message ?? String(e));
+        if (!failure.sent) {
+          dropMessage(discussionId, pendingId);
+          throw e;
+        }
+        setReplyFailure((cur) => ({ ...cur, [discussionId]: failure.raw }));
       } finally {
-        setAwaitingReply((cur) => (cur === discussionId ? null : cur));
+        // 按本次发送的 id 摘除:同一线程并行的另一条可能还在等,不能一并清掉
+        setSending((prev) => prev.filter((s) => s.id !== sendId));
       }
     },
     [reviewId, addPendingMessage, dropMessage],
   );
 
+  // 没发出去的原文连同它本来要问的线程一起收着(见 UnsentDraft.discussionId);
+  // 发送路径都经这里,定性文案不必各写一遍。
+  const keepFailed = useCallback((text: string, discussionId: string | null, e: unknown) => {
+    const reason = describeSendFailure((e as Error).message ?? String(e)).raw;
+    setUnsent((prev) => [...prev, { id: unsentSeq.current++, text, reason, discussionId }]);
+  }, []);
+
   // 框选 / 行内 ＋ 发起 discussion:先建 user discussion(事件回推),再发出首问。
+  //
+  // 建线程失败原样抛回发起卡 —— 那时什么都还没建出来,原文只剩这一份(见 AnnotateComposer)。
+  // 线程建成之后就不再让卡片等着了:首问要等完整一轮 turn 才有结果,为它悬着一张盖住 diff 的卡
+  // 太久。此后的成败改在 Discussion 栏就地呈现,没发出去的原文进待恢复列表,一样丢不了。
   const onStartDiscussion = useCallback(
     async (anchor: DiscussionAnchor, text: string) => {
-      // diff 重拉未落定时中栏仍显示上一轮内容,此刻建锚会把旧行号记到已递增的新轮次上
-      if (!reviewId || !diffReady) return;
+      if (!reviewId) return;
+      // diff 重拉未落定时中栏仍显示上一轮内容,此刻建锚会把旧行号记到已递增的新轮次上。
+      // 拦下要说话:静默 return 会让发起卡当成功关掉,写好的问题就没了。
+      if (!diffReady) throw new Error('diff 正在重新拉取,等它落定再发起讨论');
       const d = await window.duetlens.review.addDiscussion(reviewId, anchor);
       setActiveDiscussionId(d.id);
       setTab('discussion');
-      void runSend(d.id, text);
+      void runSend(d.id, text).catch((e: unknown) => keepFailed(text, d.id, e));
     },
-    [reviewId, diffReady, runSend],
+    [reviewId, diffReady, runSend, keepFailed],
   );
 
   // 框选「记为 finding」:填写后新增一条 manual finding(落库回推),聚焦其内联卡。
   const onAddFinding = useCallback(
     async (anchor: DiscussionAnchor, draft: Omit<AddFindingInput, 'file' | 'line'>) => {
-      if (!reviewId || !diffReady) return; // 同 onStartDiscussion:锚点必须落在当前轮的 diff 上
+      if (!reviewId) return;
+      // 同 onStartDiscussion:锚点必须落在当前轮的 diff 上,拦下也要说话(填好的 finding 更丢不起)
+      if (!diffReady) throw new Error('diff 正在重新拉取,等它落定再新增 finding');
       const f = await window.duetlens.review.addFinding(reviewId, {
         file: anchor.file,
         line: anchor.line,
@@ -184,13 +233,49 @@ export function ReviewScreen({
     [reviewId, diffReady, expandFile],
   );
 
-  // Discussion 栏 composer 发送:只追问活跃线程;新讨论一律经中栏框选 / 行内 ＋ 就地发起。
+  // 无锚点的全局讨论:问架构 / 问整体取舍时不该被迫先在 diff 上框一段代码充数。
+  // 与框选发起共用同一条落库路径,只是不带 anchor;因此不受 diffReady 约束(没有行号可记错)。
+  //
+  // 在途期间只建一条:按钮连点、空态下连发两句都会打到这里,各建一条的话会永久落下几条
+  // 内容相同的空线程,活跃线程还由最后返回的那个请求抢走。落库回来才放开,失败也放开
+  // (用户可以再点)。
+  const startGlobalDiscussion = useCallback(async (): Promise<string | null> => {
+    if (!reviewId) return null;
+    const pending = globalPending.current;
+    if (pending) return pending;
+    const started = window.duetlens.review
+      .addDiscussion(reviewId)
+      .then((d) => {
+        setActiveDiscussionId(d.id);
+        setTab('discussion');
+        return d.id;
+      })
+      .finally(() => {
+        if (globalPending.current === started) globalPending.current = null;
+      });
+    globalPending.current = started;
+    return started;
+  }, [reviewId]);
+
+  // Discussion 栏 composer 发送:有活跃线程就追问它;空态下第一句话即开一条无锚点全局讨论。
+  //
+  // 失败在这里就地收住,不抛回 composer:只有这里知道这一句最终发给了哪条线程,
+  // 待恢复的原文必须带着那个 id(见 UnsentDraft.discussionId)。
   const onComposerSend = useCallback(
-    (text: string) => {
-      if (!activeDiscussionId) return;
-      void runSend(activeDiscussionId, text);
+    async (text: string) => {
+      let target = activeDiscussionId;
+      if (!target) {
+        try {
+          target = await startGlobalDiscussion();
+        } catch (e) {
+          keepFailed(text, null, e);
+          return;
+        }
+        if (!target) return;
+      }
+      await runSend(target, text).catch((e: unknown) => keepFailed(text, target, e));
     },
-    [activeDiscussionId, runSend],
+    [activeDiscussionId, runSend, startGlobalDiscussion, keepFailed],
   );
 
   const onEditSummary = useCallback(
@@ -205,6 +290,8 @@ export function ReviewScreen({
   const onClearMessages = useCallback(
     (discussionId: string) => {
       if (!reviewId) return;
+      // 往来都清了,挂在这条线程上的「没等到回复」也就无所指了
+      setReplyFailure((cur) => dropKey(cur, discussionId));
       void window.duetlens.review.clearDiscussion(reviewId, discussionId);
     },
     [reviewId],
@@ -275,18 +362,8 @@ export function ReviewScreen({
     [reviewId],
   );
 
-  // 切 review:reviewId 可在组件不卸载时变(点另一条 review 的完成通知 → App 只换 prop),
-  // 屏内这些本地态全是锚在「上一条 review」上的,不清就会跨库写。
-  // 放在 focusRequest effect 之前:通知带 discussionId 时由后者补回聚焦,不被这里清掉。
-  useEffect(() => {
-    setActiveDiscussionId(null);
-    setFocusFindingId(null);
-    setActivePath(null);
-    setFileQuery('');
-    setCategoryFilter(null);
-    setAwaitingReply(null);
-    setFindNonce(0);
-  }, [reviewId]);
+  // 屏内本地态全锚在「这一条 review」上,换 review 一律作废 —— 由 App 的 key 重挂整屏做到
+  // (见那里的注释)。此处不再逐项 reset:漏一项就是跨 review 写,而这份清单没法保证不漏。
 
   // diff 到达后默认选中首个文件
   useEffect(() => {
@@ -554,7 +631,16 @@ export function ReviewScreen({
             activeDiscussionId={activeDiscussionId}
             onSelectDiscussion={focusDiscussion}
             awaitingReply={awaitingReply}
+            replyFailure={replyFailure}
+            unsent={unsent}
+            onRestoreUnsent={(d) => {
+              setUnsent((prev) => prev.filter((x) => x.id !== d.id));
+              // 放回输入框 = 回到这句话原本要问的线程;线程还在才切,不在就留在当前线程
+              const back = d.discussionId && discussions.some((x) => x.id === d.discussionId);
+              if (back && d.discussionId !== activeDiscussionId) focusDiscussion(d.discussionId!);
+            }}
             onComposerSend={onComposerSend}
+            onStartGlobalDiscussion={startGlobalDiscussion}
             onJumpToCode={jumpToCode}
             ensureMessages={ensureMessages}
             onPromote={onPromote}
@@ -642,7 +728,11 @@ function RightPanel({
   activeDiscussionId,
   onSelectDiscussion,
   awaitingReply,
+  replyFailure,
+  unsent,
+  onRestoreUnsent,
   onComposerSend,
+  onStartGlobalDiscussion,
   onJumpToCode,
   ensureMessages,
   onPromote,
@@ -668,8 +758,12 @@ function RightPanel({
   onTriage: (finding: Finding, triage: Triage, reason?: string | null) => void;
   activeDiscussionId: string | null;
   onSelectDiscussion: (id: string) => void;
-  awaitingReply: string | null;
-  onComposerSend: (text: string) => void;
+  awaitingReply: ReadonlySet<string>;
+  replyFailure: Record<string, string>;
+  unsent: UnsentDraft[];
+  onRestoreUnsent: (d: UnsentDraft) => void;
+  onComposerSend: (text: string) => void | Promise<void>;
+  onStartGlobalDiscussion: () => Promise<string | null>;
   onJumpToCode: (d: Discussion) => void;
   ensureMessages: (id: string) => void;
   onPromote: (discussionId: string) => void;
@@ -878,8 +972,12 @@ function RightPanel({
           activeId={activeDiscussionId}
           onSelect={onSelectDiscussion}
           awaitingReply={awaitingReply}
+          replyFailure={replyFailure}
+          unsent={unsent}
+          onRestoreUnsent={onRestoreUnsent}
           scanning={scanning}
           onSend={onComposerSend}
+          onStartGlobal={onStartGlobalDiscussion}
           onJumpToCode={onJumpToCode}
           ensureMessages={ensureMessages}
           onPromote={onPromote}
