@@ -308,6 +308,13 @@ export interface UiSettings {
   ghPath: string;
 }
 
+/**
+ * 审核历史保留窗口:最后更新早于此时长的会话在启动时清掉,不看状态(未完成/未提交同样过期)。
+ * 放在 shared 是因为历史屏要把这条策略说给用户听 —— 后端清理与前端说明必须是同一个数。
+ */
+export const REVIEW_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+export const REVIEW_RETENTION_DAYS = REVIEW_RETENTION_MS / 86_400_000;
+
 export const DEFAULT_UI_SETTINGS: UiSettings = {
   dataMode: 'dark',
   dataTheme: 'duetlens',

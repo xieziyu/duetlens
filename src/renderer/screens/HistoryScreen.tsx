@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RecentReview } from '@shared/ipc';
-import type { ReviewStatus, SourceKind } from '@shared/domain';
+import { REVIEW_RETENTION_DAYS, REVIEW_RETENTION_MS, type ReviewStatus, type SourceKind } from '@shared/domain';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './entry/icons';
 import './HistoryScreen.css';
 
@@ -13,6 +13,8 @@ type Bucket = 'today' | 'week' | 'older';
 
 const DELETE_GRACE_MS = 5000;
 const DAY_MS = 86_400_000;
+/** 剩余不足这么多天就在行上标出来 —— 真的快没了的那些才出声,别把整页染成倒计时 */
+const EXPIRY_WARN_DAYS = 7;
 
 const SOURCE_TABS: { id: SourceFilter; label: string }[] = [
   { id: 'all', label: '全部来源' },
@@ -121,6 +123,8 @@ export function HistoryScreen({ onOpen }: { onOpen: (id: string) => void }): Rea
 
   const liveCount = reviews.length - pending.size;
   const shown = grouped.today.length + grouped.week.length + grouped.older.length;
+  // 渲染时取一次即可:临期标记按天算,分不出秒级差别
+  const now = Date.now();
 
   return (
     <div className="hist">
@@ -201,7 +205,7 @@ export function HistoryScreen({ onOpen }: { onOpen: (id: string) => void }): Rea
                         <SourceBadge source={r.source} sourceRef={r.sourceRef} />
                         <div className="m">
                           <div className="t">{r.title ?? r.sourceRef}</div>
-                          <div className="meta mono">{metaParts(r)}</div>
+                          <div className="meta mono">{metaParts(r, daysLeft(r.updatedAt, now))}</div>
                         </div>
                         <StatusChip status={r.status} />
                         <button
@@ -223,12 +227,19 @@ export function HistoryScreen({ onOpen }: { onOpen: (id: string) => void }): Rea
             );
           })
         )}
+
+        {/* 自动清理原本对用户完全不可见:东西少了却没人说过一句,只会被当成 bug */}
+        {loaded && reviews.length > 0 && (
+          <p className="hist-retention">
+            仅保留最近 <b>{REVIEW_RETENTION_DAYS} 天</b>的审核,按最后更新时间算 —— 仍在追问 / 复审的会一直续期。
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-function metaParts(r: RecentReview): React.JSX.Element {
+function metaParts(r: RecentReview, expiring: number | null): React.JSX.Element {
   return (
     <>
       <span>{repoLabel(r)}</span>
@@ -244,6 +255,11 @@ function metaParts(r: RecentReview): React.JSX.Element {
       )}
       <span className="dot" />
       <span>{formatWhen(r.updatedAt)}</span>
+      {expiring !== null && (
+        <span className="expiring" title={`超过 ${REVIEW_RETENTION_DAYS} 天未更新会被自动清理;再次追问或复审即续期`}>
+          {expiring === 0 ? '即将清理' : `${expiring} 天后清理`}
+        </span>
+      )}
     </>
   );
 }
@@ -298,6 +314,15 @@ function statusGroup(status: ReviewStatus): StatusFilter {
   if (status === 'scanning' || status === 'reviewing') return 'reviewing';
   if (status === 'submitted') return 'submitted';
   return 'done';
+}
+
+/**
+ * 距自动清理还剩几天(按 updated_at 算,与后端 pruneReviewsBefore 同一口径)。
+ * 只在快到期时返回数,其余返回 null —— 每行都挂倒计时等于没有提示。
+ */
+function daysLeft(updatedAt: number, now: number): number | null {
+  const left = Math.ceil((updatedAt + REVIEW_RETENTION_MS - now) / DAY_MS);
+  return left <= EXPIRY_WARN_DAYS ? Math.max(0, left) : null;
 }
 
 function bucketOf(ts: number, now: number): Bucket {

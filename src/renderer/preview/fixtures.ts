@@ -124,6 +124,16 @@ const RECENT_REVIEWS: RecentReview[] = [
   { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
   { ...REVIEW, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: 'refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, updatedAt: now - 10 * 86_400_000 },
   { ...REVIEW, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
+  // 距 30 天保留期只剩 3 天:历史屏的临期标记只有这种行才出现,没有它就自查不到
+  { ...REVIEW, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: 'chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, submittedCount: 0, updatedAt: now - 27 * 86_400_000 },
+];
+
+// 满载提示 fixture:正在跑的会话(?busy=1..4)
+const BUSY_REVIEWS: BusyReview[] = [
+  { reviewId: 'r1', title: 'feat: streaming transcode', sourceRef: 'xieziyu/podcast-go#482', source: 'github-pr', round: 1, scanning: true },
+  { reviewId: 'r2', title: 'fix: episode duration off-by-one on live cutover', sourceRef: 'xieziyu/podcast-go#479', source: 'github-pr', round: 2, scanning: true },
+  { reviewId: 'r3', title: 'fix/feed-encoding', sourceRef: 'fix/feed-encoding', source: 'local-branch', round: 1, scanning: true },
+  { reviewId: 'r4', title: 'virtual/api-cleanup', sourceRef: 'virtual/api-cleanup', source: 'gitbutler-vbranch', round: 3, scanning: false },
 ];
 
 // GitHub「从最近 open PR 选择」列表 fixture

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { REVIEW_RETENTION_MS } from '@shared/domain';
 import type {
   CodexModelInfo,
   Discussion,
@@ -45,9 +46,6 @@ import type {
 } from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
 import { AgentTurnError, DEFAULT_SCAN_PROMPT, ReviewSession, type ReviewSessionEvents } from './review-session';
-
-/** 审核历史保留窗口:最后更新早于此时长的会话在启动时清掉,不看状态(未完成/未提交同样过期)。 */
-export const REVIEW_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** 首轮扫描指令:有附加上下文时拼在缺省指令之后一并注入,否则用缺省。 */
 function buildScanPrompt(context?: string): string | undefined {
