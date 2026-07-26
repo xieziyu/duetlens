@@ -276,7 +276,7 @@ export interface Message {
   createdAt: number;
 }
 
-// ---- Persisted UI state(见 frontend-components.md 持久化表)----
+// ---- Persisted UI state(见 docs/design/architecture.md 持久化表)----
 export interface UiSettings {
   dataMode: 'light' | 'dark';
   dataTheme: 'duetlens' | 'github';

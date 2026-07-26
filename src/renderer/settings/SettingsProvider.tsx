@@ -19,7 +19,7 @@ const SAVE_DEBOUNCE_MS = 400;
 
 /**
  * 全局 UI 偏好的唯一权威:启动时从后端 `ui_settings` 拉取,改动去抖写回。
- * 主题两轴挂在 documentElement(data-mode × data-theme)。见 frontend-components.md 持久化表。
+ * 主题两轴挂在 documentElement(data-mode × data-theme)。见 docs/design/architecture.md 持久化表。
  */
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<UiSettings>(DEFAULT_UI_SETTINGS);

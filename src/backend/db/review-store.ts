@@ -211,7 +211,7 @@ function toMessage(r: MessageRow): Message {
 
 /**
  * review / discussion / finding / message + UI 状态的权威读写。
- * 前端不本地臆造权威数据,一律经此落库后回推(见 frontend-components.md 状态分层)。
+ * 前端不本地臆造权威数据,一律经此落库后回推(见 docs/design/architecture.md 状态分层)。
  */
 export class ReviewStore {
   constructor(private readonly db: DB) {}

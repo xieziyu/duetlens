@@ -44,7 +44,7 @@ function assertExhaustive(e: never): void {
 
 /**
  * 订阅一次 review 的 server-state:先拉初值,再随 IPC review:event 增量更新。
- * 前端不臆造权威数据,只反映后端推来的领域事件(见 frontend-components.md 状态分层)。
+ * 前端不臆造权威数据,只反映后端推来的领域事件(见 docs/design/architecture.md 状态分层)。
  */
 export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [review, setReview] = useState<Review | null>(null);

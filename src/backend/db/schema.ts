@@ -59,7 +59,7 @@ CREATE TABLE messages (
 );
 CREATE INDEX idx_messages_discussion ON messages(discussion_id);
 
--- per-user 外观偏好:单行 kv(见 frontend-components.md)
+-- per-user 外观偏好:单行 kv(见 docs/design/architecture.md)
 CREATE TABLE ui_settings (
   id                INTEGER PRIMARY KEY CHECK (id = 1),
   data_mode         TEXT NOT NULL,

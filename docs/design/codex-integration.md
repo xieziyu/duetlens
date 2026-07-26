@@ -1,71 +1,56 @@
 # codex app-server 集成
 
 > 返回 [文档索引](../README.md)
+>
+> 审核 agent 完全建立在 codex-cli 的 `app-server` 之上。下列是**实测结论**(2026-07-18 在 0.144.5 字节级验证,2026-07-20 在 0.144.1 端到端复跑并修正),不是文档臆测。协议随版本演进,升级后重新导出比对。
 
-Duetlens 的审核 agent 完全建立在 codex-cli 的 `app-server` 之上。本页记录集成机制与 2026-07-18 的验证结论。协议随版本演进,升级后应重新导出 schema 比对。
+## 关键假设验证
 
-## 关键技术假设验证(2026-07-18,codex-cli 0.144.5)
+| 锁定假设 | 结论 |
+| --- | --- |
+| app-server 常驻会话取代 one-shot exec | ✅ `initialize` → `thread/start` → `turn/start` → `turn/completed` 跑通 |
+| Duetlens 暴露 MCP、codex 调 `report_finding` 回传 | ✅ 事件流与 server 端 `tools/call` **双向观测** —— 「不再 watch 文件」坐实 |
+| 只读 sandbox 锁定 | ✅ `read-only` 生效 |
+| `ConversationalAgent` 抽象可落地 | ✅ 协议方法逐条对上 start / send / stream / interrupt / approve |
+| token 膨胀有治理原语 | ✅ 内置 auto-compact + `thread/tokenUsage/updated` |
 
-对最高风险的假设做了真实字节级验证(非文档臆测)。全部通过:
+**版本稳定性**:`generate-ts` 全量导出在 **0.144.1 → 0.144.6 逐字节完全一致**(方法名 / 通知名 / 反向请求名全同),即 0.144.x 内 wire 契约无变化。升级到不同 minor 时按此法重导比对。我们只手写最小协议子集,全量重导有专门脚本。
 
-| 锁定假设 | 验证方式 | 结论 |
-| --- | --- | --- |
-| app-server 常驻会话取代 one-shot exec | 真实 stdio JSON-RPC:`initialize` → `thread/start` → `turn/start` → `turn/completed` 跑通 | ✅ |
-| Duetlens 暴露 MCP,codex 调 `report_finding` 回传 | 最小 MCP server per-thread 注入 → codex 实际以正确参数调用,事件流 `item/mcpToolCall` 与 server 端 `tools/call` **双向观测** | ✅ "不再 watch 文件"坐实 |
-| 只读 sandbox 锁定 | `sandbox_mode:"read-only"` 生效(枚举 `read-only`/`workspace-write`/`danger-full-access`) | ✅ |
-| `ConversationalAgent` 抽象可落地 | 协议 schema 机器导出,方法逐条对上 start/send/stream/interrupt/approve | ✅ |
-| token 膨胀有治理原语 | codex 内置 auto-compact(按模型 `effective_context_window_percent` 默认开启、可 turn 内触发)+ `thread/tokenUsage/updated`;我们侧只观测,不主动 `thread/compact/start` | ✅ |
+## 会话 / turn 映射
 
-## 协议获取
-
-`codex app-server generate-json-schema --out <DIR>`(另有 `generate-ts`)可机器导出协议:约 **87** 个 client→server 请求、**68** 个流事件、**10** 个 server→client 反向审批请求。据此生成 TS 类型(codex 提供 `generate-ts`)并对 codex 升级做回归。
-
-## 会话 / turn 映射到 `ConversationalAgent`
-
-- **会话 = thread**:`thread/start`(返回 threadId,带 `forkedFromId`/`parentThreadId`/`ephemeral`/`historyMode`)、`thread/resume`/`list`/`fork`/`archive`/`compact/start`。
-- **一轮对话 = turn**:`turn/start`(input=`[{type:"text",text}]`)、`turn/steer`(中途注入)、`turn/interrupt`。
-- **流事件**:`turn/started`、`item/started`、`item/agentMessage/delta`、`item/reasoning/*`、`item/mcpToolCall`、`item/completed`、`turn/completed`、`thread/tokenUsage/updated`。
-
-**注入点**(`thread/start` 参数):`baseInstructions`(多层级提示词)、`config`(per-thread 覆盖,可注入 MCP server 与 sandbox)、`approvalPolicy`、`cwd`、`personality`。
+- **会话 = thread**:`thread/start` / `resume` / `list` / `fork` / `archive` / `compact/start`。
+- **一轮对话 = turn**:`turn/start` / `steer` / `interrupt`。
+- **注入点(`thread/start` 参数)**:`baseInstructions`(多层级提示词)、`config`(透传 config.toml 的 map)、`sandbox`(**顶层参数,不在 `config` 里**)、`approvalPolicy`、`cwd`、`personality`。
+- **MCP 工具调用没有 `item/mcpToolCall` 这个方法名**,经 `item/started` + `item/completed` 观测(`item.type === "mcpToolCall"` 时带 server / tool / status / arguments)。
+- **`model/list`** 在 `initialize` 后即可调,复用本机登录态,**不起 thread、不发 turn,故不烧 token** —— 发起表单的模型下拉数据源。注意各模型的 `supportedReasoningEfforts` 与我们硬编码的 effort 集不完全一致,下拉未按模型动态收窄。
 
 ## MCP 传输:in-process HTTP + per-thread 注入
 
-- Duetlens 在 Electron main(Node)进程内自托管一个 **HTTP MCP server**,codex 以 `--url` 连接;工具调用直接落进 app 状态,无需再 IPC 回来。
-- 注入走 **per-thread config**:`thread/start.config = { mcp_servers: { duetlens: { url: "http://127.0.0.1:PORT" } }, sandbox_mode: "read-only" }`。**不写全局 `~/.codex/config.toml`**,避免污染用户环境,并让每次 review 用独立端口/令牌隔离。
-- thread 启动时 codex 自动拉起 MCP server 并流 `mcpServer/startupStatus/updated`(starting→ready)。
-- **为什么不用 stdio 子进程**:实测 codex 会对 MCP server 做多次 `initialize`(thread 启动一次、首次用工具一次),stdio 子进程会被反复重启/重连;HTTP transport 规避 respawn。
+- main 进程内自托管 HTTP MCP server,codex 以 `--url` 连接;工具调用直接落进 app 状态,无需再 IPC 回来。
+- 注入走 **per-thread config**(`config.mcp_servers.duetlens = { url }` + `sandbox: "read-only"`),**不写全局 `~/.codex/config.toml`** —— 避免污染用户环境,并让每次 review 用独立端口 / 令牌隔离。
+- **为什么不用 stdio 子进程**:实测 codex 会对同一 MCP server 做**多次 `initialize`**(一次 review 观测到 startup starting/ready 各 4 次),stdio 子进程会被反复 respawn;HTTP transport 规避这一点。故每会话独立 Server 是对的。
 
 ## 审批 / elicitation(架构必需件)
 
-codex 通过 **server→client 反向请求** 要求授权,client 必须应答,否则 turn **卡死**:
+codex 通过 **server→client 反向请求**要求授权,client 必须应答,否则 turn **卡死**。
 
-- `mcpServer/elicitation/request` —— MCP 工具调用前的批准(`_meta.codex_approval_kind`,`persist:["session","always"]`;应答 `{action:"accept"|"decline"|"cancel"}`)。
-- 其他:`execCommandApproval`、`applyPatchApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`。
+**坑(已验证)**:即便 `approvalPolicy: "never"` + `sandbox: "read-only"`,codex 仍会在**每次** MCP 工具调用前发 elicitation。故 client 对**自建受信工具**自动 accept 是架构必需件(另一条路是 `AskForApproval::granular{ mcp_elicitations:false }`)。`exec` / `applyPatch` 类审批在 review-only 下一律拒绝(只读 sandbox 下实测未触发)。
 
-**坑(已验证)**:即便 `approvalPolicy:"never"` + `sandbox_mode:"read-only"`,codex 仍会对 MCP 工具发 elicitation。两条治理路径:
-1. client 侧对**自建受信工具**(`report_finding` 等)自动 `accept`——列为架构必需件;
-2. 或用 `AskForApproval::granular{ mcp_elicitations:false }` 从源头关。
+反向审批统一归一成 `approval` 领域事件:受信 accept 标记为预期内,其余拒绝并上浮供 UI 审批卡呈现。
 
-## 相关枚举
+## 上下文压缩
 
-- `SandboxMode` = `read-only` / `workspace-write` / `danger-full-access`
-- `AskForApproval` = `untrusted` / `on-request` / `never` / `granular{ mcp_elicitations, rules, sandbox_approval, request_permissions }`
-- `Personality` = `none` / `friendly` / `pragmatic`
+**靠 codex 内置 auto-compact**(按模型的上下文窗百分比默认开启,配置项为 null 表示用模型默认**而非关闭**),它能**在 turn 内触发**,优于只能插在 turn 间的手动 `thread/compact/start` —— 手动那条覆盖不到单 turn 撑爆的场景,故**不主动调用**,也不做「立即压缩」按钮。
 
-## 0.144.1 实测修正(实现期,已验证;0.144.6 确认无变化)
+我们侧只观测,归一成 `compaction` 领域事件。压缩只摘要 codex 内部历史,**discussion / finding 的代码锚点存于自有 sqlite、与 codex 上下文无关**,追问时再重注入,故锚点在压缩后天然保持。
 
-在 **0.144.1** 上把集成写成代码并端到端跑通,对上文(基于 0.144.5 的记录)有几处修正/细化。**2026-07-20 升级到 0.144.6 后,`generate-ts` 全量导出与 0.144.1 逐字节完全一致**(root 87 + v2 510 文件递归 diff 为空;方法/通知/反向请求名全同)—— 即 0.144.x 内 wire 契约稳定,以下结论继续适用,无需重跑:
+## 失败归因有两条通道,都要接
 
-- **`thread/start` 的 `sandbox` 是顶层参数**(值 `read-only` 等),不在 `config` 里;`config` 仍是透传 config.toml 的 map,MCP 注入形如 `config.mcp_servers.duetlens = { url }`(HTTP streamable;`codex mcp add --url` 写出的 TOML 即 `[mcp_servers.NAME] url=...`)。
-- **无 `item/mcpToolCall` 这个方法名**。MCP 工具调用经 **`item/started` + `item/completed`** 通知观测,其 `item.type === "mcpToolCall"` 时带 `server`/`tool`/`status`/`arguments`;另有 `item/mcpToolCall/progress`。
-- **elicitation 应答**:`{ action:"accept"|"decline"|"cancel", content:null, _meta:null }`;实测 `approvalPolicy:"never"` + `read-only` 下每次工具调用前仍发,自动 accept 必需(坐实架构决策)。
-- **exec/applyPatch 审批**应答 `{ decision: ReviewDecision }`(review-only 一律 `denied`;只读 sandbox 未触发)。反向审批(elicitation + exec/applyPatch/fileChange/permissions)现统一归一成 `approval` 领域事件:受信 accept 标 `expected=true`,其余 denied 且 `expected=false` 上浮。
-- **上下文压缩靠 codex auto-compact**(默认开启、turn 内触发);完成经 `contextCompaction` item(`item/started`+`item/completed`)观测,归一成 `compaction` 领域事件。**不主动 `thread/compact/start`**——手动只能插在 turn 间,覆盖不到单 turn 撑爆的场景。压缩只摘要 codex 内部历史,不碰我们 DB 里的锚点/finding。
-- **失败归因有两条通道,都要接**:`turn/completed` 的 `turn.error`(`{ message, codexErrorInfo, additionalDetails }`,仅 `status="failed"` 时有值)是终局;另有 `error` 通知 `{ error, willRetry, turnId }` 报中途失败 —— `willRetry=true` 时 codex 会自行退避重试(实测 5 次),这期间没有任何 item 事件,不接就是几十秒黑盒。我们只在 `willRetry` 时外发 `turn-retrying`(不再试的那次紧跟终局 `turn/completed`,两边都发会把同一次失败报两遍)。`codexErrorInfo` 取值可能是裸字符串,也可能是带 `httpStatusCode` 的单键对象,归一见 `codexErrorKind`;`additionalDetails` 常常才是可诊断的那半,不要只取 `message`。
-- codex 对同一 MCP server **多次 initialize**(startup starting/ready 各数次)→ HTTP transport + 每会话独立 Server 是对的。
-- Duetlens 只手写最小协议子集 `src/backend/agent/codex/protocol.ts`,`npm run codex:gen-types` 全量重导比对。
+- `turn/completed` 的 `turn.error`(仅失败时有值)是**终局**。
+- `error` 通知带 `willRetry` 报**中途失败** —— `willRetry=true` 时 codex 会自行退避重试(实测 5 次),这期间没有任何 item 事件,不接就是几十秒黑盒。
 
-## 版本注记与待评估
+只在 `willRetry` 时外发重试事件(不再试的那次紧跟终局 `turn/completed`,两边都发会把同一次失败报两遍)。错误信息里的 `codexErrorInfo` 可能是裸字符串也可能是带 HTTP 状态码的单键对象;**`additionalDetails` 常常才是可诊断的那半,不要只取 `message`**。
 
-- `app-server` 仍标 `[experimental]`,可能无预告 breaking change → `ConversationalAgent` 薄封装 + schema 导出回归隔离。
-- codex 另有内置 `review/start` + `item/autoApprovalReview/*` 全流程 —— **已决定不复用,自建 MCP 扫描**(见 [implementation-status](implementation-status.md))。
+## 已决定不复用的能力
+
+codex 另有内置 `review/start` + `item/autoApprovalReview/*` 全流程 —— **不复用,自建 MCP 扫描**:用自己的 baseInstructions + `report_finding` 驱动首轮,与后续对话式 review 同一套机制、完全可控。

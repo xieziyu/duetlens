@@ -23,4 +23,4 @@
 python3 -m http.server -d mockup 8000
 ```
 
-各稿的内容清单见 [docs/design/ui.md](../docs/design/ui.md) 的「mockup(历史存档,已冻结)」一节。
+设计决策见 [docs/design/ui.md](../docs/design/ui.md);各稿画的是哪一屏,看文件名即知。

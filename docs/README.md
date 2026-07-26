@@ -1,53 +1,44 @@
-# Duetlens 文档索引
+# Duetlens 设计文档
 
-> Duetlens 是 [better-review](https://github.com/xieziyu/better-review) 的 **2.0 全重写**:把 code review 从"人消费 agent 一次吐出的 findings"变成"**人与 agent 协同对话式** review"。
->
-> 状态:设计定稿 · 关键技术假设已验证 · **后端 + 前端七屏全部落地并合入 main**;核心 review 闭环(发起 → codex 扫描 → 协同讨论 → **多轮重跑复审** → 提交/导出)可实机使用。
->
-> 实现进度、如何运行、尚缺项见 [design/implementation-status.md](design/implementation-status.md)。设计文档描述目标,**实现细节与视觉均以代码为准**。
->
-> 本目录不记录「最后更新时间」「当前 HEAD」这类需要人肉同步的快照值 —— 时间线查 `git log`。
+Duetlens 是 [better-review](https://github.com/xieziyu/better-review) 的 **2.0 全重写**(另起新仓库,不是增量升级)。
 
-本索引是所有设计文档的**统一入口**。单篇文档只聚焦一个关注点,便于按需 recall。新增设计(如 UI 细化、持久化 schema、提示词系统)时新建分册并在下方"文档地图"登记一行。
+better-review 1.0 是 **单向、一次性** 的:一次 `codex exec` 跑完机审、写出 `findings.json` 就结束,人只能消费结果,与 agent 之间没有对话通道。2.0 要解决的是:**让 review 从「人消费 agent 的结果」变成「人和 agent 协同地做 review」** —— 就某条 finding 追问、自己框选一段代码发起讨论、让 agent 解释逻辑。这要求 agent 会话**常驻**,也正是采用 codex **app-server** 而非 `codex exec` 的根本原因。
+
+分水岭在流程后半段:findings 不再是终点,而是对话的锚点;每条 finding 背后挂着一个可继续追问的 **discussion**,用户也可在 diff 上任意框选新建 discussion。核心实体因此是「锚定在某个代码位置(或 finding)上的对话线程」,findings 只是其中一类由 agent 主动发起的 discussion。
+
+> 这里只写**目标与已拍板的决策**及其理由。实现细节、视觉与进度以代码和 `git log` 为准。工程约定见 [CLAUDE.md](../CLAUDE.md)。
+
+## 命名约定(易踩)
+
+codex app-server 把「一次常驻会话」本身称作 `thread`。为避免冲突,Duetlens 把自己「锚定代码的讨论线程」统一叫 **discussion**;`thread` / `conversation` 只指 codex 的会话实体。
 
 ## 文档地图
 
 | 文档 | 内容 | 何时看 |
 | --- | --- | --- |
-| [design/overview.md](design/overview.md) | 定位、背景、核心变革、命名约定 | 想理解"为什么这么做" |
-| [design/architecture.md](design/architecture.md) | 技术栈、架构分层与 `ConversationalAgent` 抽象、保留能力、暂不做的抽象 | 动结构 / 加模块前 |
-| [design/data-model.md](design/data-model.md) | Review / codex thread / discussion / findings 的数据结构与状态 | 改 schema / 数据流前 |
-| [design/findings-submit.md](design/findings-submit.md) | findings 筛选(保留/剔除)与提交到 GitHub PR review 的流程 | 碰提交流程 / finding 状态前 |
-| [design/rerun.md](design/rerun.md) | 多轮重跑:轮次模型、每轮新 thread、resolve_finding 表态、剔除抑制、GitHub 评论同步 | 碰复审 / 轮次 / 去重前 |
-| [design/codex-integration.md](design/codex-integration.md) | app-server 协议验证结论、MCP HTTP 注入、elicitation/sandbox/审批 | 碰 codex 集成 / MCP / 审批前 |
-| [design/ui.md](design/ui.md) | UI 方向 + 主题两轴 + 主入口/review 三 tab/扫描态/栏宽等屏与状态 | 做界面前 |
-| [design/ui-states.md](design/ui-states.md) | 屏级流转 + 各组件状态机(scan / tab / card 四态 / finding 两轴 / diff / viewed / 空态) | 理状态迁移 / 接事件前 |
-| [design/design-system.md](design/design-system.md) | tokens 单一来源(`src/renderer/theme/tokens.css`)+ 两轴分组 + 组件清单 | 抽组件 / 定 tokens 前 |
-| [design/frontend-components.md](design/frontend-components.md) | React 组件树 + 状态分层 + UI 状态持久化(粒度 / 存储 / schema) | 搭前端 / 定持久化前 |
-| [design/implementation-status.md](design/implementation-status.md) | 各层落地情况 + headless spike 验证 + 与设计的偏差 + 剩余 backlog | 想知道「写到哪了」/ 接着开发前 |
-| [design/open-questions.md](design/open-questions.md) | 待解决 / 风险点(开发中复审) | 遇到坑 / 排优先级时 |
+| [architecture.md](design/architecture.md) | 技术栈选型与代价、后端分层、前端状态分层与 UI 持久化、保留自 1.0 的能力 | 动结构 / 加模块前 |
+| [data-model.md](design/data-model.md) | review / round / discussion / finding 的结构与状态,历史保留策略 | 改 schema / 数据流前 |
+| [codex-integration.md](design/codex-integration.md) | app-server 协议的实测结论、MCP HTTP 注入、elicitation / sandbox / 审批 | 碰 codex 集成前 |
+| [rerun.md](design/rerun.md) | 多轮复审:轮次模型、三态表态、剔除抑制、PR 协作上下文、失败留证 | 碰复审 / 轮次 / 去重前 |
+| [findings-submit.md](design/findings-submit.md) | findings 筛选与提交 PR review / 导出 Markdown,422 失效锚点 | 碰提交流程 / finding 状态前 |
+| [ui.md](design/ui.md) | 各屏的锚点决策与易踩约束 | 做界面前 |
+| [design-system.md](design/design-system.md) | tokens 语义、表面与文字阶梯、对比度规则、品牌标记 | 改配色 / 抽组件前 |
+| [open-questions.md](design/open-questions.md) | 尚未收口的风险与空缺 | 排优先级时 |
 
-## 命名约定(易踩)
+## 已拍板决策
 
-codex app-server 把"一次常驻会话"本身称作 `thread`。为避免冲突,Duetlens 把自己"锚定代码的讨论线程"统一叫 **discussion**;`thread` / `conversation` 一词只指 codex 的会话实体。详见 [overview](design/overview.md)。
+每条注明详述所在分册;**被否决的方向记在各分册里,别再重提**。
 
-## 已拍板决策清单
-
-最常被 recall 的核心决策;每条注明详述所在分册。
-
-1. **全重写**(方案 A),另起新仓库,代号 **Duetlens**。→ [overview](design/overview.md)
-2. 技术栈:**Electron + Node/TS 主进程后端 + codex app-server + 外部 gh CLI**,先做 macOS(选 Electron 图渲染与 Chrome 一致,规避 Tauri 的 WKWebView 差异)。→ [architecture](design/architecture.md)
-3. findings 回传走 **MCP 工具**,不再 watch 文件(**已验证**)。→ [data-model](design/data-model.md) · [codex-integration](design/codex-integration.md)
-4. 会话粒度:**一轮机审一个 codex thread**,轮内全局视野;`thread/fork` 仅作备选。复审另起干净会话,上一轮上下文靠结构化注入而非会话记忆。→ [data-model](design/data-model.md) · [rerun](design/rerun.md)
-5. 保留:会话历史、三种 source、多层级提示词(经 `baseInstructions`)、审核总结、**findings 筛选+提交到 GitHub**。→ [architecture](design/architecture.md) · [findings-submit](design/findings-submit.md)
-6. 多 agent 暂不做,只在 **`ConversationalAgent` 接口层** 留抽象。→ [architecture](design/architecture.md)
-7. UI 整体重设计,**diff review 为核心界面**;讨论线程统一命名 **discussion**。→ [ui](design/ui.md)
-8. MCP server 采用 **in-process HTTP transport**,经 `thread/start` 的 **per-thread config 注入**,不写全局 `~/.codex/config.toml`。→ [codex-integration](design/codex-integration.md)
-9. **Elicitation 处理器为架构必需件**:对自建受信工具自动 accept,避免协同流程卡在审批。→ [codex-integration](design/codex-integration.md)
-10. **多轮重跑**:每轮新 thread + 全量重扫;agent 必须对上一轮 findings 三态表态(`fixed` / `wont_fix` / `still_present`),被剔除项经 prompt + 去重双层抑制;github-pr 同步 PR 评论作为**外部参考材料**注入(带隔离围栏)。→ [rerun](design/rerun.md)
-11. **入口只分 GitHub PR / 本地仓库两档**:本地这档按普通 git 分支还是 GitButler 虚拟分支审,由选定仓库后的探测决定(HEAD 是否 `gitbutler/workspace`);落库的 SourceKind 仍是三值,收敛的只是选择方式。→ [ui](design/ui.md#主入口--launchermockupentryhtml)
-12. **文件树的检索过滤只收窄树**:匹配完整路径(空格分词 AND、≥3 字才允许子序列),**中栏 diff 保持全量、结果不按相关度重排** —— 裁 diff 会让人误判改动规模且右栏计数对不上,重排会让树的顺序与 diff 堆叠顺序错位。→ [ui](design/ui.md#diff-导航与覆盖mockupdiff-reviewhtml)
-13. **提示词分「可配置口径」与「锁定契约」**:描述 MCP 工具契约的段落(角色与工具流程、`report_finding` 字段协议)不进分层模型、不下发 renderer、设置页不可见,并首尾夹住用户内容;严重度是 structured 节,`high/medium/low` 档位名锁死、只开放每档判定标准。→ [ui](design/ui.md#审核规则提示词--三层编辑器mockupprompt-ruleshtml)
-14. **标记已看 = 折叠 + 推进到下一个未看文件**:file-header 两枚操作都带文案(已看是勾选框语义、折叠按钮文案给动作),推进只在「标记已看即折叠」开启时发生;落点自己算 `scrollTop` —— file-header 是 sticky,`scrollIntoView` 对已吸顶的目标一步不滚。→ [ui](design/ui.md#diff-导航与覆盖mockupdiff-reviewhtml)
-15. **跳到代码前先展开目标文件**:折叠态下 diff 与内联卡都不在 DOM 里,滚动会静默落空;展开只展开、不动 viewed,也不牵连左栏树的点选。→ [ui](design/ui.md#diff-导航与覆盖mockupdiff-reviewhtml)
-16. **行内 `＋` 挂在钉住的行号格上**:代码格随长行横滚,贴其右缘的按钮要滑到行尾才够得着;unified 下行号列与 gutter `sticky` 钉左缘(背景须不透明),且宽度三处一起写,否则被 auto 表布局压没。→ [ui](design/ui.md#框选发起-discussion--composer-引用mockupdiff-reviewhtml)
+1. **全重写**(方案 A),另起新仓库,代号 Duetlens。
+2. **Electron + Node/TS 主进程后端 + codex app-server + 外部 `gh` CLI**,先做 macOS。选 Electron 是为渲染与 Chrome 一致。→ [architecture](design/architecture.md)
+3. **findings 走 MCP 工具回传**(`report_finding` / `update_finding` / `resolve_finding`),不再 watch 文件。→ [data-model](design/data-model.md) · [codex-integration](design/codex-integration.md)
+4. **一轮机审 = 一个 codex thread**(轮内全局视野),**跨轮换新会话**,上一轮结论靠结构化 prompt 注入。→ [rerun](design/rerun.md)
+5. **MCP 走 in-process HTTP + per-thread config 注入**,不写全局 `~/.codex/config.toml`;**elicitation 处理器是架构必需件**(对自建受信工具自动 accept,否则 turn 卡死)。→ [codex-integration](design/codex-integration.md)
+6. **只 review,不改代码**:sandbox 锁 read-only,没有「让 codex 给修法」;`suggestion` 只作提给 author 的 GitHub suggestion 块。→ [findings-submit](design/findings-submit.md)
+7. **多 agent 暂不做**,只在 `ConversationalAgent` 接口层留抽象 —— 先把一个真实实现磨对。→ [architecture](design/architecture.md)
+8. **多轮重跑复审**:每轮新 thread + 全量重扫;agent 必须对上一轮 findings 三态表态(`fixed` / `wont_fix` / `still_present`),被剔除项经 prompt + 去重双层抑制。→ [rerun](design/rerun.md)
+9. **提示词分「可配置口径」与「锁定契约」**:描述 MCP 工具契约的段落不进分层模型、不下发 renderer、设置页不可见,并首尾夹住用户内容。→ [ui](design/ui.md#审核规则提示词--三层编辑器)
+10. **入口只分 GitHub PR / 本地仓库两档**,本地这档按 HEAD 自动判普通分支还是 GitButler 虚拟分支;落库的 `SourceKind` 仍是三值。→ [ui](design/ui.md#主入口--launcher)
+11. **审核强度两档(标准 / 对抗),只做 L1 只读对抗推理**;L2「拉 worktree 写并执行对抗测试」已明确否决。→ [architecture](design/architecture.md#审核强度)
+12. **审核历史保留 30 天**,按 `updated_at`、启动清一次、不豁免未完成会话。→ [data-model](design/data-model.md#历史保留)
+13. **UI:diff review 是主场**,三栏 + 内联 discussion;duet 双声道(agent 天蓝 / human 琥珀);明暗与配色是两个正交轴。→ [ui](design/ui.md) · [design-system](design/design-system.md)

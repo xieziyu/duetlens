@@ -1,6 +1,6 @@
 /**
  * 结构化 diff:把 source 层拿到的 unified diff 原文解析成可渲染的文件/hunk/行模型,
- * 经 IPC 喂给 renderer 的 DiffPane(见 frontend-components.md)。
+ * 经 IPC 喂给 renderer 的 DiffPane。
  * 纯函数、无副作用,后端解析后把结果发给前端;renderer 只消费结构。
  */
 
@@ -10,7 +10,7 @@ export interface DiffLine {
   kind: DiffLineKind;
   /** 旧侧行号;add 行为 null */
   oldLine: number | null;
-  /** 新侧行号;del 行为 null(finding/discussion 锚点用新侧行号,见 ui-states 「diff 视图」) */
+  /** 新侧行号;del 行为 null(finding/discussion 锚点用新侧行号) */
   newLine: number | null;
   /** 行内容,不含前缀 +/-/空格 */
   text: string;
