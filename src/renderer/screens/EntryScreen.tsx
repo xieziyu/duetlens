@@ -268,7 +268,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
           <span className="cur">_</span>
         </div>
         <div className="entry-tag">
-          和 <span className="a">agent</span> 一起,看懂每一次改动
+          和 <span className="a">agent</span> 看透每一处改动
         </div>
       </div>
 
