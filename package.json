@@ -48,7 +48,7 @@
     "name": "xieziyu",
     "email": "rainnyxzy@gmail.com"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.9.0",
