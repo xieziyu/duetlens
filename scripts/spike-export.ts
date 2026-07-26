@@ -118,6 +118,25 @@ function main() {
   assert.ok(!md2.includes('```suggestion'), 'suggestion=false 去代码块');
   log('开关 summary/suggestion ok');
 
+  // ---- 复核过的条目:正文取复核说明,首轮正文与首轮 suggestion 一并作废 ----
+  const rechecked = findings.map((f) =>
+    f.id === 'f1'
+      ? {
+          ...f,
+          lastSeenRound: 2,
+          resolution: 'still_present' as const,
+          resolutionRound: 2,
+          resolutionNote: '换成了 Arc<Cell>,跨线程仍不安全 —— Cell 本身不是 Sync。',
+        }
+      : f,
+  );
+  const mdR = buildReviewMarkdown({ ...review, currentRound: 2 }, rechecked);
+  assert.match(mdR, /Cell 本身不是 Sync/, '正文取本轮复核说明');
+  assert.ok(!mdR.includes('用 Arc<AtomicUsize> 替代'), '首轮正文被取代');
+  // 首轮 suggestion 是一键补丁:挂到改动后的代码上会盖掉作者刚改的东西
+  assert.ok(!mdR.includes('```suggestion'), '首轮 suggestion 一并作废');
+  log('复核说明取代首轮正文 + 首轮 suggestion 作废 ok');
+
   // ---- 含已剔除项 ----
   const md3 = buildReviewMarkdown(review, findings, { ...DEFAULT_EXPORT_OPTIONS, dismissed: true });
   assert.match(md3, /## 已剔除（1）/);

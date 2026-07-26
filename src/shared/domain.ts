@@ -135,12 +135,28 @@ export const updateFindingSchema = z.object({
 });
 export type UpdateFindingInput = z.infer<typeof updateFindingSchema>;
 
+/**
+ * note 不可省的表态:`still_present` 的说明会原样取代首轮正文发给作者(见 {@link findingNarrative}),
+ * `wont_fix` 要摘录作者的原话作剔除理由 —— 两者缺了 note 都会让下游只剩一句没有依据的结论。
+ */
+export const RESOLUTIONS_REQUIRING_NOTE: readonly FindingResolution[] = ['still_present', 'wont_fix'];
+
 /** resolve_finding:复审轮次里对上一轮 finding 表态「已修复 / 仍存在」 */
-export const resolveFindingSchema = z.object({
-  findingId: z.string().min(1),
-  status: z.enum(FINDING_RESOLUTIONS),
-  note: z.string().optional(),
-});
+export const resolveFindingSchema = z
+  .object({
+    findingId: z.string().min(1),
+    status: z.enum(FINDING_RESOLUTIONS),
+    note: z.string().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (RESOLUTIONS_REQUIRING_NOTE.includes(v.status) && !v.note?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['note'],
+        message: `status=${v.status} 必须给出 note`,
+      });
+    }
+  });
 export type ResolveFindingInput = z.infer<typeof resolveFindingSchema>;
 
 // ---- 存储实体 ----
@@ -259,7 +275,7 @@ export const isAutoClosedFixed = (f: Finding): boolean => f.triage === 'dismiss'
 
 /**
  * 本轮复核判定「仍存在」时 agent 给出的说明。它是看过作者的修改尝试之后写的,
- * 比首次报出的正文更新,故提交/导出时充当评论正文主体(首轮正文降为背景)。
+ * 比首次报出的正文更新,故提交/导出时**取代**首轮正文作为评论正文。
  * 与 UI 同一口径:只有表态轮次 === 当前轮次才代表本轮结论。
  */
 export function recheckNote(f: Finding, currentRound: number): string | null {
@@ -267,8 +283,23 @@ export function recheckNote(f: Finding, currentRound: number): string | null {
   return f.resolutionNote?.trim() || null;
 }
 
-/** 复核说明顶上去后,首轮正文的小标题(GitHub 评论与导出报告共用文案)。 */
-export const PRIOR_BODY_LABEL = '首次报出时的说明';
+/**
+ * 提交 / 导出 / 预览三处共用的正文:有本轮复核说明就只发它,否则发首轮正文。
+ * 首轮正文写在作者这次改动之前,复核说明一旦存在,它描述的代码已经不在了。
+ */
+export function findingNarrative(f: Finding, currentRound: number): string {
+  return recheckNote(f, currentRound) ?? f.body.trim();
+}
+
+/**
+ * 同上三处共用的一键补丁:复核说明取代首轮正文时,首轮 suggestion 一并作废。
+ * 它与首轮正文同源、同样写在作者这次改动之前,而 `resolve_finding` 没有刷新它的入口 ——
+ * 挂到当前锚点上就是一键覆盖作者刚改的代码,比一段对不上的描述更伤。
+ */
+export function findingSuggestion(f: Finding, currentRound: number): string | null {
+  if (recheckNote(f, currentRound) !== null) return null;
+  return f.suggestion?.trim() || null;
+}
 
 export interface Message {
   id: string;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PRIOR_BODY_LABEL, recheckNote, type Finding, type Review } from '@shared/domain';
+import { findingNarrative, findingSuggestion, type Finding, type Review } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { SubmitReviewResult } from '@shared/ipc';
 import {
@@ -263,9 +263,9 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
             const locked = isSubmitted && !canFollowUp;
             // GitHub 422 不告知是哪条锚点失效 → 本地据最新 diff 预判并逐条标红。
             const isStale = staleIds.has(f.id);
-            // 卡片正文按实际提交的排法预览:本轮复核说明在前,首轮正文降为背景
-            const note = recheckNote(f, round);
-            const prior = f.body.trim();
+            // 卡片按实际提交的内容预览:有本轮复核说明就只发它,首轮 suggestion 随首轮正文一起作废
+            const narrative = findingNarrative(f, round);
+            const suggestion = findingSuggestion(f, round);
             const canReAnchor = isStale && nearestLiveLine(f.file, f.line, diff) != null;
             const cls =
               // 前缀不能省:裸 .finding 会漏到审核屏的内联卡与批注 composer(它们也带 .finding)
@@ -298,14 +298,8 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                       {f.origin === 'agent' ? 'agent' : '你 · ' + (f.origin === 'promoted' ? '由 discussion 提升' : '手动新增')}
                     </span>
                   </div>
-                  {!isDismissed && (note || prior) && (
-                    <div className="f-body">
-                      {note && renderMarkdown(note)}
-                      {note && prior && <div className="f-prior-lbl">{PRIOR_BODY_LABEL}</div>}
-                      {prior && renderMarkdown(prior)}
-                    </div>
-                  )}
-                  {!isDismissed && f.suggestion?.trim() && (
+                  {!isDismissed && narrative && <div className="f-body">{renderMarkdown(narrative)}</div>}
+                  {!isDismissed && suggestion && (
                     <div className="f-sugg">
                       <div className="f-sugg-lbl">
                         <span className="dia">◇</span> suggestion
@@ -320,7 +314,7 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                             </div>
                           ) : null;
                         })()}
-                        {f.suggestion.split('\n').map((l, i) => (
+                        {suggestion.split('\n').map((l, i) => (
                           <div className="fsd-row add" key={i}>
                             <span className="fsd-gut">＋</span>
                             <span className="fsd-code">{l || ' '}</span>

@@ -3,9 +3,9 @@
  * 纯函数:仅依赖入参,便于单测与「预览=复制=保存」内容一致。见 docs/design/findings-submit.md。
  */
 import {
-  PRIOR_BODY_LABEL,
   SEVERITY_EMOJI,
-  recheckNote,
+  findingNarrative,
+  findingSuggestion,
   type Finding,
   type Review,
   type Severity,
@@ -57,7 +57,7 @@ export function exportFileName(review: Review): string {
 
 /**
  * 单条 finding 块;heading 为 finding 标题所用的 markdown 级别(分组下降一级)。
- * 与 GitHub 提交同一口径:本轮复核判定仍存在的,复核说明作正文主体,首轮正文降为背景。
+ * 与 GitHub 提交同一口径:本轮复核判定仍存在的,正文取复核说明、首轮 suggestion 一并作废。
  */
 function findingBlock(
   f: Finding,
@@ -68,12 +68,11 @@ function findingBlock(
   const cat = f.category ? ` · ${f.category}` : '';
   let block = `${heading} ${SEVERITY_EMOJI[f.severity]} ${f.severity}${cat} — ${f.title}\n\n`;
   block += `\`${f.file}:${f.line}\`\n\n`;
-  const note = recheckNote(f, currentRound);
-  const prior = f.body.trim();
-  if (note) block += `${note}\n\n`;
-  if (prior) block += note ? `**${PRIOR_BODY_LABEL}**\n\n${prior}\n\n` : `${prior}\n\n`;
-  if (opts.suggestion && f.suggestion?.trim()) {
-    block += '```suggestion\n' + f.suggestion.trim() + '\n```\n\n';
+  const narrative = findingNarrative(f, currentRound);
+  if (narrative) block += `${narrative}\n\n`;
+  const suggestion = findingSuggestion(f, currentRound);
+  if (opts.suggestion && suggestion) {
+    block += '```suggestion\n' + suggestion + '\n```\n\n';
   }
   return block;
 }

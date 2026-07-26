@@ -10,7 +10,7 @@ import {
   isInitializeRequest,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
-import { FINDING_CATEGORIES } from '@shared/domain';
+import { FINDING_CATEGORIES, RESOLUTIONS_REQUIRING_NOTE, resolveFindingSchema } from '@shared/domain';
 
 const CATEGORY_HINT = `建议取值:${FINDING_CATEGORIES.join(' / ')}`;
 
@@ -105,10 +105,21 @@ const TOOLS = [
         },
         note: {
           type: 'string',
-          description: '判定依据。wont_fix 必填,摘录作者的原话;其余写清改在哪 / 为何仍存在',
+          minLength: 1,
+          description:
+            '判定依据。wont_fix 必填,摘录作者的原话;fixed 写清改在哪。' +
+            'still_present 必填且必须**自足**:它会原样取代首轮正文发给作者,' +
+            '需自带问题是什么、当前代码为何仍不成立,不能只写「仍存在」这类只有对照首轮正文才读得懂的话',
         },
       },
       required: ['finding_id', 'status'],
+      // 条件必填只是给模型的提示(不少客户端会忽略 if/then);硬约束在 resolveFindingSchema
+      allOf: [
+        {
+          if: { properties: { status: { enum: RESOLUTIONS_REQUIRING_NOTE } }, required: ['status'] },
+          then: { required: ['note'] },
+        },
+      ],
     },
   },
   {
@@ -256,6 +267,22 @@ export class DuetlensMcpServer extends EventEmitter {
           status: a.status as ReportedFindingResolution['status'],
           note: a.note as string | undefined,
         };
+        // 唯一一处会把校验结果回给 agent 的入口:静默丢弃的话,漏了 note 的表态照样落库,
+        // 而复核说明取代首轮正文的契约就此落空(下游只剩一句没有依据的结论)。
+        const check = resolveFindingSchema.safeParse(resolution);
+        if (!check.success) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  `resolve_finding 参数不合法,未记录:${check.error.issues.map((i) => i.message).join(';')}。` +
+                  `请补齐后重新调用。`,
+              },
+            ],
+            isError: true,
+          };
+        }
         this.emit('finding-resolution', resolution);
         return {
           content: [{ type: 'text', text: `finding resolved as ${resolution.status}, id=${resolution.findingId}` }],

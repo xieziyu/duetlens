@@ -11,9 +11,10 @@ import { ReviewStore } from '../src/backend/db/review-store';
 import {
   DuetlensMcpServer,
   type ReportedFinding,
+  type ReportedFindingResolution,
   type ReportedFindingUpdate,
 } from '../src/backend/mcp/duetlens-mcp-server';
-import { reportFindingSchema, updateFindingSchema } from '../src/shared/domain';
+import { reportFindingSchema, resolveFindingSchema, updateFindingSchema } from '../src/shared/domain';
 
 const log = (m: string) => process.stdout.write(`[mcp] ${m}\n`);
 
@@ -35,6 +36,12 @@ async function main() {
   mcp.on('finding-update', (raw: ReportedFindingUpdate) => {
     const p = updateFindingSchema.safeParse(raw);
     if (p.success) store.updateFinding(p.data);
+  });
+  mcp.on('finding-resolution', (raw: ReportedFindingResolution) => {
+    const p = resolveFindingSchema.safeParse(raw);
+    if (!p.success) return;
+    const round = store.getReview(review.id)!.currentRound;
+    store.setFindingResolution(p.data.findingId, round, p.data.status, p.data.note);
   });
   const url = await mcp.listen();
   log(`server ${url} (token=${mcp.token.slice(0, 8)}…)`);
@@ -86,6 +93,47 @@ async function main() {
   assert.equal(stored!.title, 'SQL 注入(可绕过认证)', 'title 应被 update');
   assert.equal(stored!.severity, 'medium', 'severity 应被 update');
   log(`update_finding → title/severity 已回写`);
+
+  // resolve_finding:still_present 的 note 会原样取代首轮正文发给作者,缺了就只剩一句没依据的结论。
+  // 提示词是软约束,这里验的是硬约束 —— 拒收并把原因回给 agent,而不是静默落库。
+  const blank = (await client.callTool({
+    name: 'resolve_finding',
+    arguments: { finding_id: id, status: 'still_present', note: '   ' },
+  })) as { isError?: boolean; content?: Array<{ type: string; text?: string }> };
+  assert.equal(blank.isError, true, '空白 note 的 still_present 应被拒');
+  assert.match(textOf(blank), /未记录/, '拒收要让 agent 知道这条没记上');
+  assert.equal(store.getFinding(id!)!.resolution, null, '被拒的表态不得落库');
+
+  const missing = (await client.callTool({
+    name: 'resolve_finding',
+    arguments: { finding_id: id, status: 'wont_fix' },
+  })) as { isError?: boolean };
+  assert.equal(missing.isError, true, 'wont_fix 缺 note 同样被拒(要摘录作者原话)');
+
+  const resolved = (await client.callTool({
+    name: 'resolve_finding',
+    arguments: { finding_id: id, status: 'still_present', note: '改成了预编译占位符,但拼接分支还在。' },
+  })) as { isError?: boolean };
+  assert.notEqual(resolved.isError, true, '带自足 note 的表态应被接收');
+  stored = store.getFinding(id!);
+  assert.equal(stored!.resolution, 'still_present');
+  assert.match(stored!.resolutionNote ?? '', /拼接分支/, 'note 落库,供正文取代首轮正文');
+  log('resolve_finding:缺 note 拒收并回错 / 自足 note 落库 ✓');
+
+  // fixed 不在必填之列:它不进评论正文,写清改在哪只是提示
+  const fixedRep = textOf(
+    (await client.callTool({
+      name: 'report_finding',
+      arguments: { severity: 'low', title: '命名', body: 'x', file: 'a.js', line: 9 },
+    })) as never,
+  );
+  const fixedId = fixedRep.match(/id=([0-9a-f-]+)/)?.[1];
+  const fixedRes = (await client.callTool({
+    name: 'resolve_finding',
+    arguments: { finding_id: fixedId, status: 'fixed' },
+  })) as { isError?: boolean };
+  assert.notEqual(fixedRes.isError, true, 'fixed 无 note 照常接收');
+  assert.equal(store.getFinding(fixedId!)!.resolution, 'fixed');
 
   await client.close();
   await mcp.close();

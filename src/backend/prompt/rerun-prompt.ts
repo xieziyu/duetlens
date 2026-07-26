@@ -304,6 +304,11 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
     );
     out.push('');
     out.push(
+      '判 `still_present` 时,note 会**原样取代**首轮正文发给作者 —— 请把问题本身与「这次改动为何仍不成立」' +
+        '一次写清,别写成只有对照首轮正文才读得懂的补充说明。',
+    );
+    out.push('');
+    out.push(
       openFindings
         .map((f) => openFindingBlock(f, messagesByDiscussion, threads, pr?.author ?? ''))
         .join('\n'),

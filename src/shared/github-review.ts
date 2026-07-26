@@ -2,7 +2,14 @@
  * 把保留且未提交的 findings 组装成一次 GitHub PR review 的请求体(原子提交)。
  * 纯函数:不碰网络,便于单测与「按钮标签=实际提交内容」一致。见 docs/design/findings-submit.md。
  */
-import { PRIOR_BODY_LABEL, SEVERITY_EMOJI, recheckNote, type Finding, type Review } from './domain';
+import {
+  SEVERITY_EMOJI,
+  findingNarrative,
+  findingSuggestion,
+  recheckNote,
+  type Finding,
+  type Review,
+} from './domain';
 import type { DiffFile } from './diff';
 
 /** UI 侧 event 值 → GitHub `POST .../reviews` 的 event 枚举。 */
@@ -39,20 +46,6 @@ function headline(f: Finding): string {
   return `${SEVERITY_EMOJI[f.severity]} **[${f.severity}${cat}] ${f.title}**`;
 }
 
-/**
- * 正文主体。本轮复核判定仍存在的,以复核说明打头 —— 那是针对作者这次改动写的,首轮正文已经过时;
- * 但首轮正文仍带上(降为背景),否则 author 只看到"仍不安全"而不知问题本身是什么。
- */
-function narrative(f: Finding, currentRound: number): string {
-  const note = recheckNote(f, currentRound);
-  const prior = f.body.trim();
-  const parts: string[] = [];
-  if (note) parts.push(note);
-  if (prior && note) parts.push(`<sub>${PRIOR_BODY_LABEL}</sub>`);
-  if (prior) parts.push(prior);
-  return parts.join('\n\n');
-}
-
 /** 追评要自报身份,否则 author 看到的是同一处冒出第二条评论,像重复上报。 */
 function followUpLead(f: Finding, currentRound: number): string {
   return needsRecheckFollowUp(f, currentRound)
@@ -62,9 +55,10 @@ function followUpLead(f: Finding, currentRound: number): string {
 
 /** 一条 finding → inline 评论正文:标题 + 正文 + 可选 suggestion 块。 */
 function commentBody(f: Finding, currentRound: number): string {
-  const parts = [followUpLead(f, currentRound), headline(f), narrative(f, currentRound)];
+  const parts = [followUpLead(f, currentRound), headline(f), findingNarrative(f, currentRound)];
   let body = parts.filter(Boolean).join('\n\n');
-  if (f.suggestion?.trim()) body += '\n\n```suggestion\n' + f.suggestion.trim() + '\n```';
+  const suggestion = findingSuggestion(f, currentRound);
+  if (suggestion) body += '\n\n```suggestion\n' + suggestion + '\n```';
   return body;
 }
 
@@ -98,7 +92,7 @@ export function buildPrReviewPayload(
   if (review.summaryBody?.trim()) parts.push(review.summaryBody.trim());
   if (unanchored.length) {
     const lines = unanchored.map((f) => {
-      const block = [followUpLead(f, review.currentRound), narrative(f, review.currentRound)]
+      const block = [followUpLead(f, review.currentRound), findingNarrative(f, review.currentRound)]
         .filter(Boolean)
         .join('\n\n');
       const head = `- ${headline(f)}`;

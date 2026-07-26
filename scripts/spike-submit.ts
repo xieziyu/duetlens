@@ -128,11 +128,11 @@ async function main() {
     assert.equal(res.status, 'success');
     const body = fake.last!.payload.comments.find((c) => c.line === 20)!.body;
     assert.match(body, /↻ 第 2 轮复核追评/, '追评自报身份,别看着像重复上报');
-    assert.ok(
-      body.indexOf('换成了 RefCell') < body.indexOf('用 Atomic 替代'),
-      '复核说明在前,首轮正文降为背景',
-    );
-    assert.match(body, /首次报出时的说明/, '首轮正文仍带上');
+    assert.match(body, /换成了 RefCell/, '正文取本轮复核说明');
+    assert.ok(!body.includes('用 Atomic 替代'), '首轮正文写在改动之前,被复核说明取代而非附在后面');
+    assert.ok(!body.includes('首次报出时的说明'), '分隔小标题随首轮正文一起废掉');
+    // 首轮 suggestion 是一键补丁,挂到改动后的锚点上会盖掉作者刚改的代码
+    assert.ok(!body.includes('```suggestion'), '首轮 suggestion 随首轮正文一起作废');
 
     // 同一轮内不重复追发:提交时记下的轮次即本轮
     const after = store.getFinding(f1.id)!;
