@@ -41,6 +41,10 @@ export function useReviewUiState(
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 加载阶段的 set* 不应触发写回(否则刚拉到的值又被原样写回一遍)
   const hydrating = useRef(false);
+  // 本次加载期间已被显式改过的字段:回填不得盖掉它们。通知点开某条讨论会在 getUiState
+  // 回来之前就把 tab 切好,拿库里的旧值盖回去等于把刚做的定位吞掉,而且那次改动
+  // 还因为 hydrating 压着写回而彻底消失。
+  const touched = useRef({ viewed: false, tab: false });
   // 最新持久化字段镜像:去抖 flush 从此整体快照,避免改一字段抹掉另一字段
   const stateRef = useRef<ReviewUiState>({ viewedFiles: [], lastActiveTab: null });
 
@@ -63,20 +67,27 @@ export function useReviewUiState(
     }
     let alive = true;
     hydrating.current = true;
+    touched.current = { viewed: false, tab: false };
     void window.duetlens.review.getUiState(reviewId).then((s) => {
       if (!alive) return;
-      const files = new Set(s.viewedFiles);
+      const stored = new Set(s.viewedFiles);
+      // 加载期间动过的字段以本地为准。viewed 取并集:那时列表还是空的,当时的勾选
+      // 只可能是新增,拿本地覆盖会把库里已看过的文件抹掉。
+      const files = touched.current.viewed ? new Set([...stored, ...stateRef.current.viewedFiles]) : stored;
+      const tab = touched.current.tab ? stateRef.current.lastActiveTab : s.lastActiveTab;
       setViewed(files);
       setCollapsed(collapseOnViewed ? new Set(files) : new Set());
-      setActiveTabState(s.lastActiveTab);
-      stateRef.current = { viewedFiles: [...files], lastActiveTab: s.lastActiveTab };
+      setActiveTabState(tab);
+      stateRef.current = { viewedFiles: [...files], lastActiveTab: tab };
       hydrating.current = false;
+      // 加载期间被压住的那次写回补上,否则这次改动只活在内存里
+      if (touched.current.viewed || touched.current.tab) flush();
     });
     return () => {
       alive = false;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [reviewId, collapseOnViewed]);
+  }, [reviewId, collapseOnViewed, flush]);
 
   const onToggleCollapsed = useCallback((path: string) => {
     setCollapsed((prev) => toggle(prev, path, !prev.has(path)));
@@ -89,6 +100,7 @@ export function useReviewUiState(
   // 标记已看同时折叠;取消已看则展开
   const onToggleViewed = useCallback(
     (path: string) => {
+      touched.current.viewed = true;
       setViewed((prev) => {
         const nowViewed = !prev.has(path);
         if (collapseOnViewed) setCollapsed((c) => toggle(c, path, nowViewed));
@@ -103,6 +115,7 @@ export function useReviewUiState(
 
   const setActiveTab = useCallback(
     (tab: string) => {
+      touched.current.tab = true;
       setActiveTabState(tab);
       stateRef.current = { ...stateRef.current, lastActiveTab: tab };
       flush();
