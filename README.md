@@ -7,6 +7,7 @@
 <p align="center">和 agent 看透每一处改动</p>
 
 <p align="center">
+  <a href="https://github.com/xieziyu/duetlens/releases/latest"><img src="https://img.shields.io/github/v/release/xieziyu/duetlens?color=brightgreen&label=release" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-black.svg" alt="Platform" />
   <img src="https://img.shields.io/badge/agent-codex%20app--server-38bdf8.svg" alt="codex app-server" />
@@ -61,7 +62,9 @@ agent 扫出的每条 finding 都是一个可以继续追问的讨论线程;你�
 
 ### 下载
 
-从 [Releases](https://github.com/xieziyu/duetlens/releases) 拿 `.dmg`,拖进 Applications。后续版本由应用内自动更新接手。
+从 [最新 Release](https://github.com/xieziyu/duetlens/releases/latest) 拿 `.dmg`,拖进 Applications。后续版本由应用内自动更新接手。
+
+同一页里的 `.zip` 是给自动更新用的,手动安装不需要。
 
 ### 从源码运行
 

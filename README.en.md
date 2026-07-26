@@ -7,6 +7,7 @@
 <p align="center">See what every change really does, with an agent</p>
 
 <p align="center">
+  <a href="https://github.com/xieziyu/duetlens/releases/latest"><img src="https://img.shields.io/github/v/release/xieziyu/duetlens?color=brightgreen&label=release" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-black.svg" alt="Platform" />
   <img src="https://img.shields.io/badge/agent-codex%20app--server-38bdf8.svg" alt="codex app-server" />
@@ -61,7 +62,9 @@ On first launch Duetlens probes each of these and hands you a copyable fix comma
 
 ### Download
 
-Grab the `.dmg` from [Releases](https://github.com/xieziyu/duetlens/releases) and drag it into Applications. Later versions arrive through the in-app updater.
+Grab the `.dmg` from the [latest release](https://github.com/xieziyu/duetlens/releases/latest) and drag it into Applications. Later versions arrive through the in-app updater.
+
+The `.zip` on that page is what the updater consumes; you don't need it for a manual install.
 
 ### Run from source
 
