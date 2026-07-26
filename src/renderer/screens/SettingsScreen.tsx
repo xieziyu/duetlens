@@ -333,7 +333,7 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
                   {env?.codex.version ? ` · codex ${env.codex.version}` : ''}
                 </div>
               </div>
-              <span className="lic mono">MIT</span>
+              <span className="lic mono">GPL-3.0</span>
             </div>
             <div className="about-links">
               <LinkOut href={PROJECT_LINKS.repo}>源码仓库</LinkOut>
