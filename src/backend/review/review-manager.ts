@@ -986,10 +986,14 @@ export class ReviewManager extends EventEmitter {
    * 光拆一遍表就会被那之后才登记进来的会话反超 —— 那个会话开的 codex 子进程无人再收。
    * 不等在途构建自己收完(github-pr 的临时 checkout 在 os tmpdir 里,留下也由系统清):
    * 那可能是一次几秒的 clone,不值得把用户的退出按在那里等。
+   *
+   * 一个会话拆失败不能拖累其余:串行 await 会在第一个 reject 处退出,排在后面的连
+   * `agent.dispose()` 都轮不上,那些 codex 子进程就成了孤儿。故并发起、allSettled 等,
+   * 且退出本就压着超时(见 main 的 before-quit),并发也顺带省下串行的那份等待。
    */
   async disposeAll(): Promise<void> {
     this.shuttingDown = true;
-    for (const id of [...this.sessions.keys()]) await this.teardown(id);
+    await Promise.allSettled([...this.sessions.keys()].map((id) => this.teardown(id)));
   }
 
   private forward(e: ReviewEvent): void {
