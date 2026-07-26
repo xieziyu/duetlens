@@ -116,6 +116,27 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
-  void manager?.disposeAll();
+/**
+ * 清理卡住也得让退出走完:codex 不理 SIGTERM、MCP 连接不断,都不能把「退出」永远挂在这。
+ * 超时就直接 exit —— 那时残留一个子进程,总好过一个退不掉的 app。
+ */
+const QUIT_CLEANUP_TIMEOUT_MS = 3000;
+let quitting = false;
+
+/**
+ * 退出前拆掉所有活跃会话,**清完再退**。
+ *
+ * 默认的退出不等异步清理:`session.dispose()` 里发 SIGTERM 与关 MCP 都是异步的,进程先跑掉的话,
+ * 那些 codex 子进程就成了孤儿(POSIX 不因父进程退出而杀子进程),一路活到用户手动 kill。
+ * 所以拦下这次退出自己收尾,再 {@link app.exit} —— exit 不会重新触发本事件。
+ */
+app.on('before-quit', (e) => {
+  if (quitting) return; // 清理期间用户再按一次退出:让第一次的收尾跑完,别重入
+  quitting = true;
+  e.preventDefault();
+  const cleanup = manager?.disposeAll() ?? Promise.resolve();
+  const deadline = new Promise((r) => setTimeout(r, QUIT_CLEANUP_TIMEOUT_MS));
+  void Promise.race([cleanup, deadline])
+    .catch(() => undefined) // 拆会话失败也照样退出,别把错误挡在 exit 前面
+    .then(() => app.exit(0));
 });

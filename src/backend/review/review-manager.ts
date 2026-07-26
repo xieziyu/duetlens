@@ -75,6 +75,17 @@ export class LiveSessionLimitError extends Error {
   }
 }
 
+/**
+ * 会话还在建的途中,这条 review 被释放 / 删除了(见 {@link ReviewManager.teardown})。
+ * 建到一半的会话与 source 就地收掉,这个错误只负责告诉发起方「本次作废」。
+ */
+class SessionReleasedError extends Error {
+  constructor(reviewId: string, reason = '审核会话已释放') {
+    super(`${reason},本次请求作废: ${reviewId}`);
+    this.name = 'SessionReleasedError';
+  }
+}
+
 // 演示用内置 fixture(source 层接好前,让 app 能端到端跑一遍真实审核)。
 /**
  * session 事件 → IPC ReviewEvent 的转发表。写成 keyof 映射而非一串 `session.on(...)`:
@@ -115,9 +126,16 @@ export class ReviewManager extends EventEmitter {
   private readonly providers = new Map<string, McpContentProviders>();
   /** 在途的会话续接;同一 review 的并发追问共用一次,见 {@link resumeSession}。 */
   private readonly resuming = new Map<string, Promise<ReviewSession>>();
+  /**
+   * 各 review 被 teardown 过的次数,即会话的「代次」。用于作废 teardown 期间在途的会话构建,
+   * 见 {@link teardownEpoch}。不清理:代次归零会让在途的旧代次重新对上,反而放它登记回来。
+   */
+  private readonly teardowns = new Map<string, number>();
   private readonly maxLiveSessions: number;
   /** 已预留、会话还没建出来的位子数,见 {@link reserveCapacity}。 */
   private pendingSessions = 0;
+  /** 进程收尾中:{@link disposeAll} 起,一律不再登记新会话。 */
+  private shuttingDown = false;
   /** GitHub 提交层;可注入(spike 用假实现,不烧真 PR)。 */
   private readonly submitter: GitHubSubmitter;
 
@@ -423,6 +441,9 @@ export class ReviewManager extends EventEmitter {
   async deleteReview(reviewId: string): Promise<void> {
     await this.teardown(reviewId);
     this.store.deleteReview(reviewId);
+    // 第一次 teardown 释放会话要 await,那期间来的追问读到的还是删除前的行,会照常续接上来。
+    // 再拆一次收掉它:此后新来的续接第一步就查不到 review,这条路到此为止。
+    await this.teardown(reviewId);
   }
 
   /**
@@ -518,7 +539,9 @@ export class ReviewManager extends EventEmitter {
       this.launch(review, prepared.cwd, {
         getDiff: () => rawDiff,
         getFile: (p) => source.getFile(p),
-      }, () => source.dispose(), baseInstructions, buildScanPrompt(target.context), 1);
+      }, () => source.dispose(), baseInstructions, buildScanPrompt(target.context), 1,
+        // 这条 review 刚建出来,id 还没出过本方法,外部无从释放它;代次只能是初始值。
+        this.teardownEpoch(review.id));
       return review;
     } catch (e) {
       // 预留兜不住的残余(判定后有空闲会话转忙,launch 仍开不出会话)也不能留下痕迹:
@@ -618,6 +641,8 @@ export class ReviewManager extends EventEmitter {
 
     // 每轮新 thread:先彻底释放上一轮的会话、MCP 与 source,再重建。
     await this.teardown(reviewId);
+    // 代次在 teardown 之后取:本轮要作废的是这次拆完之后又来的释放/删除。
+    const epoch = this.teardownEpoch(reviewId);
     // 刚腾出的位子立刻占住:下面还要 await 好几步拉取,期间被别的发起抢走的话,
     // 轮次已经落库、却只能收成一条莫名其妙的失败。
     const release = this.reserveCapacity();
@@ -693,6 +718,7 @@ export class ReviewManager extends EventEmitter {
         baseInstructions,
         prompt,
         round.round,
+        epoch,
       );
     } finally {
       release();
@@ -701,7 +727,10 @@ export class ReviewManager extends EventEmitter {
     return round;
   }
 
-  /** 建 session、接事件、后台跑一轮机审(首轮与重跑共用)。 */
+  /**
+   * 建 session、接事件、后台跑一轮机审(首轮与重跑共用)。
+   * `epoch` 要在本轮**第一个 await 之前**取,见 {@link teardownEpoch}。
+   */
   private launch(
     review: Review,
     cwd: string,
@@ -710,12 +739,13 @@ export class ReviewManager extends EventEmitter {
     baseInstructions: string | undefined,
     scanPrompt: string | undefined,
     round: number,
+    epoch: number,
   ): void {
     let session: ReviewSession;
     try {
-      session = this.createSession(review.id, onDone);
+      session = this.createSession(review.id, onDone, epoch);
     } catch (e) {
-      // 起不出会话(预留之后又有空闲会话转忙,连一个可逐出的都不剩)。
+      // 起不出会话(预留之后又有空闲会话转忙,连一个可逐出的都不剩;或这条 review 已被释放)。
       // 轮次已经落库,必须就地收成 failed 并带上原因,否则它会永远挂在「扫描中」。
       this.settleRound(review.id, round, 'failed', e);
       this.forward({ reviewId: review.id, type: 'status', payload: 'failed' });
@@ -786,6 +816,7 @@ export class ReviewManager extends EventEmitter {
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
     if (!review.codexThreadId) throw new Error(`review 无 codex thread,无法续接: ${reviewId}`);
 
+    const epoch = this.teardownEpoch(reviewId);
     const source = createSource({
       source: review.source,
       ref: review.sourceRef,
@@ -795,9 +826,9 @@ export class ReviewManager extends EventEmitter {
     const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: review.intensity });
     let session: ReviewSession;
     try {
-      session = this.createSession(reviewId, () => source.dispose());
+      session = this.createSession(reviewId, () => source.dispose(), epoch);
     } catch (e) {
-      await source.dispose(); // 建不出会话(如满载)时 source 还没交给任何清理钩子,自己收
+      await source.dispose(); // 建不出会话(如满载/已被释放)时 source 还没交给任何清理钩子,自己收
       throw e;
     }
     const providers: McpContentProviders = {
@@ -813,10 +844,16 @@ export class ReviewManager extends EventEmitter {
         model: review.model,
         reasoningEffort: review.reasoningEffort,
       });
+      // 续 thread 也是一段 await:期间被释放/删除的话,teardown 拆的是我们这个会话,
+      // 但它拆完我们还在跑,收尾一律走下面的清理,别把一个已作废的会话交给追问。
+      if (this.teardownEpoch(reviewId) !== epoch) throw new SessionReleasedError(reviewId);
     } catch (e) {
-      this.sessions.delete(reviewId);
-      this.cleanups.delete(reviewId);
-      this.providers.delete(reviewId);
+      // 只摘自己登记的那份:teardown 之后可能已有新一代会话就位,别顺手把它删了。
+      if (this.sessions.get(reviewId) === session) {
+        this.sessions.delete(reviewId);
+        this.cleanups.delete(reviewId);
+        this.providers.delete(reviewId);
+      }
       await session.dispose();
       await source.dispose();
       throw e;
@@ -824,8 +861,27 @@ export class ReviewManager extends EventEmitter {
     return session;
   }
 
+  /**
+   * 取当前会话代次。**任何 await 之前**取一次,交给 {@link createSession} 在登记时对账 ——
+   * 从这里到登记之间隔着好几步拉取(续接要 prepare source,复审还要拉最新 diff),
+   * 期间到来的 disposeReview / deleteReview 看不见一个还没登记的会话,只能靠代次作废它。
+   */
+  private teardownEpoch(reviewId: string): number {
+    return this.teardowns.get(reviewId) ?? 0;
+  }
+
   /** 建 ReviewSession、登记清理钩子、把领域事件转成 IPC ReviewEvent 外发。 */
-  private createSession(reviewId: string, onDispose?: () => void | Promise<void>): ReviewSession {
+  private createSession(
+    reviewId: string,
+    onDispose: (() => void | Promise<void>) | undefined,
+    epoch: number,
+  ): ReviewSession {
+    // 退出途中不再登记:disposeAll 已经拆过一遍,这时候建出来的会话没人再来收,
+    // 它开的 codex 子进程会活过 app 本身(见 main 的 before-quit)。
+    if (this.shuttingDown) throw new SessionReleasedError(reviewId, '应用正在退出');
+    // 代次已变:这条 review 在我们准备的途中被释放/删除了。登记回去就再没人来拆它 ——
+    // codex 子进程活到进程退出,deleteReview 的话还指着一批已经没有的行。
+    if (this.teardownEpoch(reviewId) !== epoch) throw new SessionReleasedError(reviewId);
     this.evictExcess();
     const agent = new CodexAgent({ codexHome: this.codexHome });
     const session = new ReviewSession(reviewId, this.store, agent);
@@ -910,6 +966,9 @@ export class ReviewManager extends EventEmitter {
 
   /** 拆一个会话:同步先从 map 摘除,再释放 session 与其 source 清理钩子。 */
   private async teardown(reviewId: string): Promise<void> {
+    // 先推代次,且**不能**因为「没有活跃会话」提前返回就跳过 —— 在途的续接/复审正是还没登记
+    // 会话的那段,这一步是它唯一能得知自己已被作废的信号(见 {@link teardownEpoch})。
+    this.teardowns.set(reviewId, this.teardownEpoch(reviewId) + 1);
     const session = this.sessions.get(reviewId);
     if (!session) return;
     this.sessions.delete(reviewId);
@@ -920,7 +979,16 @@ export class ReviewManager extends EventEmitter {
     await cleanup?.();
   }
 
+  /**
+   * 拆掉所有活跃会话(进程退出前的收尾)。
+   *
+   * 先立起 {@link shuttingDown} 再拆:在途的续接/复审还没登记会话,teardown 一个都碰不到它们,
+   * 光拆一遍表就会被那之后才登记进来的会话反超 —— 那个会话开的 codex 子进程无人再收。
+   * 不等在途构建自己收完(github-pr 的临时 checkout 在 os tmpdir 里,留下也由系统清):
+   * 那可能是一次几秒的 clone,不值得把用户的退出按在那里等。
+   */
   async disposeAll(): Promise<void> {
+    this.shuttingDown = true;
     for (const id of [...this.sessions.keys()]) await this.teardown(id);
   }
 
