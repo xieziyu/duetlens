@@ -72,10 +72,8 @@ dmg 的 sha512 与 `latest-mac.yml` 里那条对不上。**没做,不是忘了�
 唯一的触发方式是推 `v*` tag。**刻意不留 `workflow_dispatch`** —— 那等于允许从任意分支带着签名证书
 和 Apple 密钥跑一次。要临时验链路就临时加回来,验完删掉。
 
+`v*` tag 不可删也不可移(仓库 ruleset,连 owner 都不能 bypass),CI 挂了就等于烧掉一个收不回来的
+tag —— 推之前先在本地跑一遍 typecheck / lint 与 `npm run package`。
+
 tag 推上去之后 job 不会立刻开始:它挂在 `release` environment 上,要在 Actions 页面点一次批准。
 这一步是为了让「拿走密钥」必须经过一次人为确认,而不是任何跑在这个 job 里的代码都能静默做到。
-
-## 首次公开前必须先做
-
-仓库转 public 之前扫一遍 git 历史里有没有 token / `.env` / 私密路径。转公开的那一刻全部历史都可见,
-删了也已经被爬走。
