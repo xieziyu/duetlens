@@ -268,7 +268,8 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
             const prior = f.body.trim();
             const canReAnchor = isStale && nearestLiveLine(f.file, f.line, diff) != null;
             const cls =
-              'finding' +
+              // 前缀不能省:裸 .finding 会漏到审核屏的内联卡与批注 composer(它们也带 .finding)
+              'sub-fnd' +
               (locked ? ' locked' : isDismissed ? ' dismissed' : ' kept') +
               (isStale ? ' risky' : '');
             return (

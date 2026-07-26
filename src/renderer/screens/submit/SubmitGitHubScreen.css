@@ -231,9 +231,7 @@
   color: var(--text);
 }
 
-/* 注意:这个类名没有加屏幕前缀,会漏到审核屏的内联卡(它们也带 .finding)并压掉 .card 的填充。
-   两处都是"面板上的卡",填充同为 --card 才对得上;真正的收敛(加前缀)另开一轮。 */
-.finding {
+.sub-fnd {
   display: flex;
   gap: 12px;
   padding: 13px 14px;
@@ -242,18 +240,18 @@
   background: var(--card);
   margin-bottom: 10px;
 }
-.finding.kept {
+.sub-fnd.kept {
   border-left: 3px solid var(--agent);
 }
-.finding.locked {
+.sub-fnd.locked {
   border-left: 3px solid var(--add);
   opacity: 0.82;
 }
-.finding.dismissed {
+.sub-fnd.dismissed {
   opacity: 0.5;
   border-style: dashed;
 }
-.finding.risky {
+.sub-fnd.risky {
   border-left: 3px solid var(--sev-high);
 }
 /* 行锚点失效预警块:未提交时琥珀提示,422 后(escalated)升级为红 */
@@ -301,7 +299,7 @@
   border-color: var(--agent-line);
   color: var(--text);
 }
-.finding.dismissed .f-title {
+.sub-fnd.dismissed .f-title {
   text-decoration: line-through;
   color: var(--text-deco);
 }
@@ -325,7 +323,7 @@
   border-color: var(--agent);
   color: var(--on-accent);
 }
-.finding.locked .chk {
+.sub-fnd.locked .chk {
   background: var(--add);
   border-color: var(--add);
   color: var(--on-accent);
