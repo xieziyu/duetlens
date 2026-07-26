@@ -23,6 +23,7 @@ codex app-server 把「一次常驻会话」本身称作 `thread`。为避免冲
 | [findings-submit.md](design/findings-submit.md) | findings 筛选与提交 PR review / 导出 Markdown,422 失效锚点 | 碰提交流程 / finding 状态前 |
 | [ui.md](design/ui.md) | 各屏的锚点决策与易踩约束 | 做界面前 |
 | [design-system.md](design/design-system.md) | tokens 语义、表面与文字阶梯、对比度规则、品牌标记 | 改配色 / 抽组件前 |
+| [release.md](design/release.md) | 出包 / 签名 / 公证 / 自动更新的形态与理由,证书与 secrets 准备 | 发版前 |
 | [open-questions.md](design/open-questions.md) | 尚未收口的风险与空缺 | 排优先级时 |
 
 ## 已拍板决策

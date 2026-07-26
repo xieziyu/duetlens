@@ -11,6 +11,7 @@ import {
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { FINDING_CATEGORIES, RESOLUTIONS_REQUIRING_NOTE, resolveFindingSchema } from '@shared/domain';
+import { APP_VERSION } from '@shared/version';
 
 const CATEGORY_HINT = `建议取值:${FINDING_CATEGORIES.join(' / ')}`;
 
@@ -230,7 +231,7 @@ export class DuetlensMcpServer extends EventEmitter {
 
   private buildMcpServer(): Server {
     const server = new Server(
-      { name: 'duetlens', version: '2.0.0' },
+      { name: 'duetlens', version: APP_VERSION },
       { capabilities: { tools: {} } },
     );
 

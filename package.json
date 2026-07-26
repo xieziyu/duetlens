@@ -1,16 +1,17 @@
 {
   "name": "duetlens",
   "productName": "Duetlens",
-  "version": "2.0.0-dev",
-  "description": "Conversational code review — human and agent reviewing together (2.0 rewrite of better-review)",
+  "version": "0.1.0",
+  "description": "Conversational code review — human and agent reviewing together (full rewrite of better-review)",
   "main": "out/main/index.js",
   "private": true,
   "scripts": {
     "start": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder",
+    "package": "npm run build && electron-builder --dir --arm64 -c.mac.identity=- -c.mac.notarize=false -c.mac.entitlements=build/entitlements.mac.dev.plist -c.mac.entitlementsInherit=build/entitlements.mac.dev.plist",
+    "dist": "npm run build && electron-builder --mac",
+    "release": "npm run build && electron-builder --mac --publish always",
     "preview:ui": "vite --config vite.preview.config.ts --port 5177 --strictPort",
     "db:snapshot": "bash scripts/db-snapshot.sh",
     "icons:gen": "tsx scripts/gen-icons.ts",
@@ -74,6 +75,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.11.1",
+    "electron-updater": "^6.8.9",
     "zod": "^4.4.3"
   }
 }

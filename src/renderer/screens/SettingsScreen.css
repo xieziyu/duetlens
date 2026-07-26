@@ -345,6 +345,22 @@
   padding: 2px 8px;
 }
 
+/* 版本卡与外链行之间的更新状态行 */
+.settings .about-update {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 4px 0;
+}
+.settings .about-update .stat {
+  min-width: 0;
+}
+.settings .about-update .btn-sm {
+  flex: none;
+  height: 26px;
+  margin-left: auto;
+}
+
 /* 版本卡下的外链行;点分隔,点了会离开应用 */
 .settings .about-links {
   display: flex;

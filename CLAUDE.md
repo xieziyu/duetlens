@@ -38,13 +38,14 @@ Electron 桌面应用:人与 codex agent 协同对话式的 code review。主进
 | 强度显示名 / 代价文案 | `shared/domain.ts` 的 `INTENSITY_LABELS` / `INTENSITY_HINTS` |
 | 改动面计量 | `but diff <branch>`(入口卡片与 `GitButlerSource.getDiff` 同一条命令,数由构造相等) |
 | 仓库 / issue / 作者外链 | `src/shared/links.ts`(package.json 不重复一份) |
+| 客户端版本号 | `package.json` 的 `version` → 构建期 define 注入 `src/shared/version.ts`;发给 app-server / MCP 的 clientInfo 一律取 `APP_VERSION`,别再写字面量 |
 
 ## 运行与自查
 
 - **ABI 二选一**:app(`npm start`)先 `npm run rebuild:electron`;spike(tsx/Node)先 `npm run rebuild:node`。切换后对方失效,跑完 spike 记得切回。
 - 实机:`npm start`。前提 `codex login`(烧 token);github-pr source 另需 `gh auth login`。
 - 前端自查(不需 Electron):`npm run preview:ui` → 开 `/preview.html?screen=entry|review|submit|prompt|settings|history|onboarding`(dev server 已把 `/` 302 过去)。明暗在 rail 底部切,配色在设置屏。
-- 出包:`npm run package` / `npm run dist`。本地无 Developer ID,必须 ad-hoc 签名(`identity: "-"` + `disable-library-validation`)—— electron-builder 在签名前翻 fuses,不重签的 app 一启动就被 SIGKILL。
+- 出包:本地自查用 `npm run package`(ad-hoc 签名,命令行覆盖);正式包打 `v<version>` tag 交 CI,见 [release](docs/design/release.md)。electron-builder 在签名前翻 fuses,不重签的 app 一启动就被 SIGKILL,所以任何一条路都不能出未签名的包。
 - 直接读写本地库走系统 `/usr/bin/sqlite3`,**别为此 rebuild**(会弄坏正开着的 app)。库在 `~/Library/Application Support/Duetlens{,-dev}/duetlens.db`。
 - `mockup/` **已冻结**:改 UI 只改 `src/renderer/`,分歧一律以实现为准。看稿用 `python3 -m http.server -d mockup`(不能走 `preview:ui`)。
 

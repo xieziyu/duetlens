@@ -21,6 +21,7 @@ import type { AgentEvent } from './agent-events';
 import type { GhReviewEvent } from './github-review';
 import type { PromptSaveInput, ReviewPromptView } from './prompt';
 import type { EnvCheckOptions, EnvironmentReport } from './environment';
+import type { UpdateStatus } from './update';
 import type {
   LocalBranchList,
   PrPreview,
@@ -80,6 +81,9 @@ export const IpcChannels = {
   dialogPickDirectory: 'dialog:pick-directory',
   dialogPickFile: 'dialog:pick-file',
   dialogSaveTextFile: 'dialog:save-text-file',
+  updateGetStatus: 'update:get-status',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
 } as const;
 
 /** 发起一次真实审核的目标(对应 backend ReviewTarget;repoPath 对 github-pr 可省)。 */
@@ -235,6 +239,8 @@ export const IpcEvents = {
   notifyOpenReview: 'notify:open-review',
   /** 窗口聚焦时的应用内轻提示(不弹原生通知) */
   notifyInApp: 'notify:in-app',
+  /** 自动更新状态推进 */
+  updateStatus: 'update:status',
 } as const;
 
 /** 长任务完成提示的载荷(扫描完成 / 追问回复);原生通知与应用内提示共用。 */
@@ -356,6 +362,16 @@ export interface DuetlensApi {
   ui: {
     getSettings(): Promise<UiSettings>;
     saveSettings(settings: UiSettings): Promise<void>;
+  };
+  update: {
+    /** 当前状态(挂载时取一次,之后靠 onStatus 推)。 */
+    getStatus(): Promise<UpdateStatus>;
+    /** 手动查一次;结果同样走 onStatus,不用等这个 Promise 的返回值。 */
+    check(): Promise<void>;
+    /** 拆完活跃会话后重启装更新;仅在 ready 态可用。 */
+    install(): Promise<void>;
+    /** 订阅状态推进;返回取消订阅函数。 */
+    onStatus(handler: (s: UpdateStatus) => void): () => void;
   };
   agent: {
     /** 列举账号可用的 codex 模型(供发起表单下拉);未登录/出错时抛错,前端降级为手填。 */
