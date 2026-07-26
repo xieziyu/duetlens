@@ -69,7 +69,11 @@ dmg 的 sha512 与 `latest-mac.yml` 里那条对不上。**没做,不是忘了�
    `APPLE_API_KEY_ID`、`APPLE_API_ISSUER`。
 4. **`APPLE_TEAM_ID`**:developer.apple.com 的 Membership details 里那 10 位。
 
-配完可以先 `workflow_dispatch` 手动跑一次 —— 非 tag 触发只出包不发布,正好验签名和公证这段通不通。
+唯一的触发方式是推 `v*` tag。**刻意不留 `workflow_dispatch`** —— 那等于允许从任意分支带着签名证书
+和 Apple 密钥跑一次。要临时验链路就临时加回来,验完删掉。
+
+tag 推上去之后 job 不会立刻开始:它挂在 `release` environment 上,要在 Actions 页面点一次批准。
+这一步是为了让「拿走密钥」必须经过一次人为确认,而不是任何跑在这个 job 里的代码都能静默做到。
 
 ## 首次公开前必须先做
 
