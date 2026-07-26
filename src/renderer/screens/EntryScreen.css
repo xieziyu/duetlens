@@ -94,6 +94,28 @@
 
 .src-panel { padding: 16px; }
 
+/* ---------- 派生块:左侧 L 形虚线,借文件树的连接线语汇表达「这是上一级输入框推出来的」 ----------
+   挂 .derived 的块本身不是可填的输入,而是解析 / 探测的结果(解析出的 PR、按 remote 列出的 open PR、
+   仓库形态与分支摘要)。竖线要从上一级的下沿起笔,故 --derived-gap 必须等于该块自己的上间距 ——
+   两者写在同一条规则里,免得改了一个忘了另一个,线就断在半空。*/
+.derived {
+  position: relative;
+  margin-left: 18px;
+  --derived-gap: 12px;
+}
+.derived::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: calc(-1 * var(--derived-gap));
+  width: 10px;
+  height: calc(var(--derived-gap) + 16px);
+  border-left: 1px dashed var(--border);
+  border-bottom: 1px dashed var(--border);
+  border-bottom-left-radius: 8px;
+  pointer-events: none;
+}
+
 /* ---------- github: PR input + preview ---------- */
 .ghfield {
   display: flex;
@@ -216,7 +238,8 @@
 .pf-tag.warn { color: var(--human); border-color: var(--human-line); background: var(--human-soft); }
 .pf-tag.muted { color: var(--text-faint); border-color: var(--border); background: transparent; }
 .path-warn {
-  margin-top: 8px;
+  margin-top: 8px; /* = --derived-gap */
+  --derived-gap: 8px;
   font-size: 11.5px;
   color: var(--text-dim);
   line-height: 1.55;
@@ -548,7 +571,8 @@
   align-items: center;
   gap: 7px;
   flex-wrap: wrap;
-  margin-top: 9px;
+  margin-top: 9px; /* = --derived-gap */
+  --derived-gap: 9px;
   padding: 7px 11px;
   font-size: 11.5px;
   color: var(--text-dim);

@@ -190,7 +190,7 @@ export function BranchPicker({
 /** 选中项摘要:把收进下拉里的计量信息留在屏上。 */
 export function BranchSummary({ option, base }: { option: BranchOption; base?: string }) {
   return (
-    <div className="bp-summary">
+    <div className="bp-summary derived">
       <span className="mono s-cmp">
         {option.name}
         {base && (

@@ -589,7 +589,7 @@ function GitHubPanel({
       </div>
 
       {preview && (
-        <div className="pr-resolved ok">
+        <div className="pr-resolved ok derived">
           <span className="ok">✓</span>
           <div className="info">
             <div className="l1">
@@ -607,7 +607,7 @@ function GitHubPanel({
         </div>
       )}
       {previewErr && (
-        <div className="pr-resolved err">
+        <div className="pr-resolved err derived">
           <span className="ok err">!</span>
           <div className="info">
             <div className="l1">
@@ -639,14 +639,14 @@ function GitHubPanel({
         )}
       </label>
       {mismatch && (
-        <div className="path-warn">
+        <div className="path-warn derived">
           该目录的 remote 是 <code className="mono">{remoteNwo}</code>,不是 <code className="mono">{preview!.nwo}</code>。
           继续将忽略本地路径、改用临时 checkout;或选对目录以复用本地全量代码。
         </div>
       )}
 
       {remoteNwo && (
-        <div className="prbrowse">
+        <div className="prbrowse derived">
           <button
             type="button"
             className={browseOpen ? 'prtoggle open' : 'prtoggle'}
@@ -850,10 +850,10 @@ function RepoPanel({
         )}
       </div>
 
-      {!insp && <div className="list-loading mono">探测仓库…</div>}
+      {!insp && <div className="list-loading mono derived">探测仓库…</div>}
 
       {insp && !insp.isGit && (
-        <div className="gb-hint warn">
+        <div className="gb-hint warn derived">
           ⌂ <b>{repoPath}</b> 不是 git 仓库 ·{' '}
           <button type="button" className="link-btn" onClick={pickDir}>
             换个目录
@@ -862,7 +862,7 @@ function RepoPanel({
       )}
 
       {insp?.degraded && (
-        <div className="gb-hint warn">
+        <div className="gb-hint warn derived">
           ⎇ 当前在 <code className="mono">gitbutler/workspace</code> 分支,但
           {insp.degraded === 'but-missing' ? '未找到 but CLI' : '该目录不是 GitButler 项目(未 setup)'} ·
           已按普通 git 分支审核
@@ -870,7 +870,7 @@ function RepoPanel({
       )}
 
       {mode === 'gitbutler' && gb && (
-        <div className="gb-hint">
+        <div className="gb-hint derived">
           ⎇ GitButler workspace · <b>{gb.repoName}</b> · {gb.branches.length} 个 virtual branch ·{' '}
           <button type="button" className="link-btn" onClick={() => setForceLocal(true)}>
             改按普通 git 分支审核
@@ -878,7 +878,7 @@ function RepoPanel({
         </div>
       )}
       {forceLocal && insp?.mode === 'gitbutler' && (
-        <div className="gb-hint">
+        <div className="gb-hint derived">
           ⎇ 已改按普通 git 分支审核 ·{' '}
           <button type="button" className="link-btn" onClick={() => setForceLocal(false)}>
             回到虚拟分支
@@ -913,7 +913,7 @@ function RepoPanel({
             )}
           </div>
           {current && <BranchSummary option={current} base={listing ? branchList?.base : undefined} />}
-          {err && <div className="start-error">{err}</div>}
+          {err && <div className="start-error derived">{err}</div>}
         </>
       )}
     </div>
