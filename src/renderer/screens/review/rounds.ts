@@ -51,7 +51,7 @@ export function roundSummary(rounds: readonly ReviewRound[], currentRound: numbe
   if (currentRound <= 1) return null;
   const r = rounds.find((x) => x.round === currentRound);
   if (!r || r.status === 'scanning') return `第 ${currentRound} 轮`;
-  const parts = [`第 ${currentRound} 轮`];
+  const parts = [`第 ${currentRound} 轮${r.status === 'stopped' ? ' · 已停止' : ''}`];
   if (r.fixedCount) parts.push(`修复 ${r.fixedCount}`);
   if (r.newFindings) parts.push(`新增 ${r.newFindings}`);
   if (r.suppressedCount) parts.push(`过滤 ${r.suppressedCount}`);

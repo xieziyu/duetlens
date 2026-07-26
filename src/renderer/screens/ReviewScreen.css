@@ -1547,11 +1547,16 @@
     var(--surface)
   );
 }
+.scanbar .sb-head {
+  display: flex;
+  align-items: center;
+}
 .scanbar .sb-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 7px 14px;
   border: 0;
   background: none;
@@ -1681,6 +1686,74 @@
 }
 .scanbar .sb-row:hover .sb-chev {
   border-color: var(--agent-2);
+}
+
+/* 停止机审:不抢主视线(它是少数派动作),但确认态要能一眼看清后果 */
+.scanbar .sb-stop {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-right: 12px;
+}
+.scanbar .ss-trig {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.scanbar .ss-trig:hover {
+  color: var(--sev-high);
+  border-color: color-mix(in oklab, var(--sev-high) 45%, var(--border));
+}
+/* ■ 字形在 em 盒里大小不由我们说了算,用方块元素画 */
+.scanbar .ss-sq {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.scanbar .ss-ask {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.scanbar .ss-yes,
+.scanbar .ss-no {
+  font-family: inherit;
+  font-size: 11.5px;
+  border-radius: 7px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.scanbar .ss-yes {
+  font-weight: 600;
+  color: var(--on-solid);
+  background: var(--sev-high);
+  border: 1px solid transparent;
+}
+.scanbar .ss-yes:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.scanbar .ss-no {
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.scanbar .ss-no:hover {
+  color: var(--text);
+}
+.scanbar .sb-stoperr {
+  padding: 0 14px 12px;
 }
 
 /* 展开区:竖排时间线(完整阶段名 + 计数)+ 扫描期可做什么的提示 */

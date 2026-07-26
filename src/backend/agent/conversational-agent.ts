@@ -40,7 +40,8 @@ export interface ConversationalAgent {
   startConversation(opts: StartConversationOptions): Promise<ConversationHandle>;
   /** 按 conversationId 从磁盘续接会话(app 重启后追问);须重新注入 MCP。 */
   resumeConversation(opts: ResumeConversationOptions): Promise<ConversationHandle>;
-  sendMessage(conversationId: string, text: string): Promise<void>;
+  /** 发起一轮 turn;返回该 turn 的 id(agent 未给则空串),供调用方只认自己那一轮的终局事件。 */
+  sendMessage(conversationId: string, text: string): Promise<string>;
   streamEvents(handler: (e: AgentEvent) => void): () => void;
   interrupt(conversationId: string): Promise<void>;
   /** 反向审批的显式应答口子;受信工具默认自动 accept(见 CodexAppServer)。 */

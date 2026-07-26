@@ -38,6 +38,7 @@
     "spike:add-finding": "tsx scripts/spike-add-finding.ts",
     "spike:notify": "tsx scripts/spike-notify.ts",
     "spike:rerun": "tsx scripts/spike-rerun.ts",
+    "spike:stop-scan": "tsx scripts/spike-stop-scan.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
   },
   "keywords": [],

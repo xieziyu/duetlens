@@ -48,7 +48,7 @@ class StubAgent extends EventEmitter implements ConversationalAgent {
     return this.startConversation(opts);
   }
 
-  async sendMessage(): Promise<void> {
+  async sendMessage(): Promise<string> {
     const turnId = `t${++this.turn}`;
     const client = new Client({ name: 'stub-codex', version: '0' });
     await client.connect(
@@ -58,8 +58,10 @@ class StubAgent extends EventEmitter implements ConversationalAgent {
     );
     await client.callTool({ name: 'report_finding', arguments: REPORTED });
     await client.close();
-    // MCP 回调是同步落库的,此处紧接着收尾这一轮
+    // MCP 回调是同步落库的,此处紧接着收尾这一轮 —— 故意抢在返回 turnId 之前发,
+    // 复现真实 agent 也可能出现的「终局早于 turn/start 应答」次序
     this.emit('event', { kind: 'turn-completed', turnId } satisfies AgentEvent);
+    return turnId;
   }
 
   streamEvents(handler: (e: AgentEvent) => void): () => void {

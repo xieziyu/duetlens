@@ -16,6 +16,8 @@ export interface ScanProgressBarProps {
   retrying: { count: number; error: string } | null;
   /** 重试本轮;抛错即由本条自行提示 */
   onRetry: () => Promise<void>;
+  /** 叫停本轮机审(保留已上报的 findings,转人工);扫描中才给得出 */
+  onStop?: () => Promise<void>;
   /** 状态栏「查看原因」的定位请求;递增即展开并闪一下。0 表示没请求过 */
   revealNonce: number;
 }
@@ -36,6 +38,7 @@ export function ScanProgressBar({
   failedRound,
   retrying,
   onRetry,
+  onStop,
   revealNonce,
 }: ScanProgressBarProps) {
   const failed = failedRound !== null;
@@ -43,6 +46,10 @@ export function ScanProgressBar({
   const [retryError, setRetryError] = useState<string | null>(null);
   const [retrySending, setRetrySending] = useState(false);
   const [flash, setFlash] = useState(false);
+  // 停止要二次确认:已经烧掉的 token 退不回来,误点一下这一轮就白跑
+  const [confirmStop, setConfirmStop] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   // 失败是必须被看见的:从跑动态翻进失败态时强制展开,别让原因藏在收起的横条里
   useEffect(() => {
     if (failed) setOpen(true);
@@ -60,6 +67,20 @@ export function ScanProgressBar({
   const roundLabel = currentRound > 1 ? `第 ${currentRound} 轮机审` : '首轮机审';
   const copy = describeRoundError(failedRound?.errorKind ?? null);
 
+  const stop = async () => {
+    if (!onStop) return;
+    setStopping(true);
+    setStopError(null);
+    try {
+      await onStop();
+      setConfirmStop(false);
+    } catch (e) {
+      setStopError((e as Error).message);
+    } finally {
+      setStopping(false);
+    }
+  };
+
   const retry = async () => {
     setRetrySending(true);
     setRetryError(null);
@@ -73,26 +94,58 @@ export function ScanProgressBar({
 
   return (
     <div className={`scanbar${open ? ' open' : ''}${failed ? ' failed' : ''}${flash ? ' flash' : ''}`}>
-      <button
-        className="sb-row"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        title={open ? '收起时间线' : `展开完整时间线 · 当前:${activeScanStepLabel(steps)}`}
-      >
-        <span className="sb-glyph" />
-        <span className="sb-round">
-          {roundLabel}
-          {failed && ' 失败'}
-        </span>
-        <Stepper steps={steps} />
-        {retrying && (
-          <span className="sb-retry" title={retrying.error}>
-            连接中断,agent 重试中 · 第 {retrying.count} 次
+      {/* 展开钮吃掉整条,停止只能是它的**兄弟** —— 按钮不能套按钮 */}
+      <div className="sb-head">
+        <button
+          className="sb-row"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          title={open ? '收起时间线' : `展开完整时间线 · 当前:${activeScanStepLabel(steps)}`}
+        >
+          <span className="sb-glyph" />
+          <span className="sb-round">
+            {roundLabel}
+            {failed && ' 失败'}
+          </span>
+          <Stepper steps={steps} />
+          {retrying && (
+            <span className="sb-retry" title={retrying.error}>
+              连接中断,agent 重试中 · 第 {retrying.count} 次
+            </span>
+          )}
+          {findingCount > 0 && <span className="sb-cnt">＋{findingCount} findings</span>}
+          <span className="sb-chev" />
+        </button>
+        {onStop && !failed && (
+          <span className="sb-stop">
+            {confirmStop ? (
+              <>
+                <span className="ss-ask">停止后本轮不再新增,已报的都留着</span>
+                <button className="ss-yes" onClick={() => void stop()} disabled={stopping}>
+                  {stopping ? '停止中…' : '确认停止'}
+                </button>
+                <button className="ss-no" onClick={() => setConfirmStop(false)} disabled={stopping}>
+                  继续跑
+                </button>
+              </>
+            ) : (
+              <button
+                className="ss-trig"
+                onClick={() => setConfirmStop(true)}
+                title="停止机审,已上报的 findings 全部保留,转人工审核"
+              >
+                <span className="ss-sq" aria-hidden />
+                停止机审
+              </button>
+            )}
           </span>
         )}
-        {findingCount > 0 && <span className="sb-cnt">＋{findingCount} findings</span>}
-        <span className="sb-chev" />
-      </button>
+      </div>
+      {stopError && (
+        <div className="sb-stoperr">
+          <LaunchError message={stopError} />
+        </div>
+      )}
 
       {open && (
         <div className="sb-detail">

@@ -35,7 +35,8 @@ export type AgentErrorKind = (typeof AGENT_ERROR_KINDS)[number];
  */
 export type AgentEvent =
   | { kind: 'turn-started'; turnId: string }
-  | { kind: 'message-delta'; text: string }
+  // turnId 是 agent 可选给的:有就据此把残余 delta 挡在别的 turn 之外(被打断那轮常有补发)
+  | { kind: 'message-delta'; text: string; turnId?: string }
   | { kind: 'tool-call'; server: string; tool: string; status: string; args?: unknown }
   | ({ kind: 'token-usage' } & TokenUsage)
   // 上下文压缩由 codex auto-compact 触发,我们只观测(compaction 只摘要 codex 历史,

@@ -254,6 +254,11 @@ export function ReviewScreen({
     if (!reviewId) return;
     await window.duetlens.review.retryRound(reviewId);
   }, [reviewId]);
+  // 叫停本轮机审:已上报的 findings 全留下,状态经事件回推(不本地臆造)
+  const onStopScan = useCallback(async () => {
+    if (!reviewId) return;
+    await window.duetlens.review.stopScan(reviewId);
+  }, [reviewId]);
   const onUpdate = useCallback(
     (input: FindingEditInput) => {
       if (!reviewId) return;
@@ -470,6 +475,7 @@ export function ReviewScreen({
             failedRound={failedRound}
             retrying={retrying}
             onRetry={onRetryRound}
+            onStop={scanning ? onStopScan : undefined}
             revealNonce={revealFailure}
           />
         )}

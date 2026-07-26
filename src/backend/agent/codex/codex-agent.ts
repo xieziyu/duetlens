@@ -132,12 +132,13 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
     return Object.keys(config).length ? config : undefined;
   }
 
-  /** 发一轮对话;resolve 于 turn 启动,完成经 streamEvents 的 turn-completed。 */
-  async sendMessage(conversationId: string, text: string): Promise<void> {
-    await this.server.turnStart({
+  /** 发一轮对话;resolve 于 turn 启动(带回 turnId),完成经 streamEvents 的 turn-completed。 */
+  async sendMessage(conversationId: string, text: string): Promise<string> {
+    const started = await this.server.turnStart({
       threadId: conversationId,
       input: [{ type: 'text', text }],
     });
+    return started.turn?.id ?? '';
   }
 
   streamEvents(handler: (e: AgentEvent) => void): () => void {
@@ -167,7 +168,11 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
         this.emitEvent({ kind: 'turn-started', turnId: turnId(p) });
         break;
       case CodexNotification.agentMessageDelta:
-        this.emitEvent({ kind: 'message-delta', text: String(p.delta ?? '') });
+        this.emitEvent({
+          kind: 'message-delta',
+          text: String(p.delta ?? ''),
+          turnId: typeof p.turnId === 'string' ? p.turnId : undefined,
+        });
         break;
       case CodexNotification.itemStarted:
       case CodexNotification.itemCompleted: {

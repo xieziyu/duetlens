@@ -60,7 +60,8 @@ export const FINDING_RESOLUTIONS = ['fixed', 'still_present', 'wont_fix'] as con
 export type FindingResolution = (typeof FINDING_RESOLUTIONS)[number];
 
 /** 一轮机审的生命周期;失败轮次保留在历史里,不回滚轮次号。 */
-export const ROUND_STATUSES = ['scanning', 'done', 'failed'] as const;
+/** stopped = reviewer 中途叫停机审;已上报的 findings 照样作数,与跑完的 done 只差在没跑完。 */
+export const ROUND_STATUSES = ['scanning', 'done', 'failed', 'stopped'] as const;
 export type RoundStatus = (typeof ROUND_STATUSES)[number];
 
 export const DISCUSSION_KINDS = ['finding', 'user'] as const;

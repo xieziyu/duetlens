@@ -523,6 +523,21 @@ export class ReviewManager extends EventEmitter {
   }
 
   /**
+   * 中途叫停当前轮机审:打断 agent 的 turn,已上报的 findings 全部保留,
+   * review 就地转入人工审核(状态与跑完一轮相同,可照常追问 / 重跑)。
+   */
+  async stopScan(reviewId: string): Promise<void> {
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    const current = this.store.getRound(reviewId, review.currentRound);
+    if (current?.status !== 'scanning') throw new Error('本轮机审已结束,无需停止');
+    const session = this.sessions.get(reviewId);
+    if (!session) throw new Error('该 review 无活跃会话,无法停止');
+    // 收轮仍走 launch 那条链(叫停后 start 照常 resolve),轮次与状态经事件回推
+    await session.stopScan();
+  }
+
+  /**
    * 重试失败的当前轮:沿用**同一轮号**与原说明重跑,不新开一轮 ——
    * 失败那次没有任何产出,再给它一个轮号只会让「第 N 轮」变成重试计数。
    */
@@ -661,7 +676,7 @@ export class ReviewManager extends EventEmitter {
         round,
       })
       .then(
-        () => this.settleRound(review.id, round, 'done'),
+        () => this.settleRound(review.id, round, session.isStopped() ? 'stopped' : 'done'),
         (e: unknown) => {
           this.settleRound(review.id, round, 'failed', e);
           this.forward({ reviewId: review.id, type: 'status', payload: 'failed' });
@@ -673,7 +688,12 @@ export class ReviewManager extends EventEmitter {
    * 收一轮:统计本轮新增/判定已修复的条数落库(抑制数在命中时已累加),并外发轮次事件。
    * 失败必须连原因一起落库 —— 只记一个 'failed' 状态,用户就只能看到一句「失败」而无从追问。
    */
-  private settleRound(reviewId: string, round: number, status: 'done' | 'failed', cause?: unknown): void {
+  private settleRound(
+    reviewId: string,
+    round: number,
+    status: 'done' | 'failed' | 'stopped',
+    cause?: unknown,
+  ): void {
     const findings = this.store.listFindings(reviewId);
     const finished = this.store.finishRound(reviewId, round, status, {
       newFindings: findings.filter((f) => f.round === round).length,

@@ -43,6 +43,7 @@ export const IpcChannels = {
   reviewStart: 'review:start',
   reviewRerun: 'review:rerun',
   reviewRetryRound: 'review:retry-round',
+  reviewStopScan: 'review:stop-scan',
   reviewRounds: 'review:rounds',
   reviewResume: 'review:resume',
   reviewRelease: 'review:release',
@@ -262,6 +263,11 @@ export interface DuetlensApi {
      * 当前轮不是 failed 时抛错。
      */
     retryRound(reviewId: string): Promise<ReviewRound>;
+    /**
+     * 中途叫停当前轮机审:打断 agent,已上报的 findings 全部保留,就地转入人工审核。
+     * 本轮已结束(或无活跃会话)时抛错。
+     */
+    stopScan(reviewId: string): Promise<void>;
     /** 该 review 的轮次履历(首轮 + 每次重跑),用于展示轮次与各轮统计。 */
     rounds(reviewId: string): Promise<ReviewRound[]>;
     /** 续接一个非活跃 review(app 重启后按 codexThreadId 恢复会话),之后可追问。 */

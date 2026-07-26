@@ -53,8 +53,37 @@ export const ADVERSARIAL_SELFCHECK_PROMPT = `现在做一轮对抗式自检,站�
 3. 给一句话小结:本轮自检补报了几条、降级/撤回了几条。`;
 
 type TurnOutcome =
-  | { ok: true; reply: string }
-  | { ok: false; error: string; errorKind: AgentErrorKind };
+  | { kind: 'ok'; reply: string }
+  | { kind: 'stopped' }
+  | { kind: 'failed'; error: string; errorKind: AgentErrorKind };
+
+/** turn 的终局:agent 侧的完成/失败,或我们主动叫停。 */
+type TurnEnd = Extract<AgentEvent, { kind: 'turn-completed' | 'turn-failed' }> | { kind: 'stopped' };
+
+/**
+ * 一次 turn 的终局等待。turnId 要到 turn/start 应答回来才知道,而终局事件可能更早到
+ * (stub / 极快的 turn 都会),故 identify 之前先扣住,认领后再比对。
+ */
+interface TurnWaiter {
+  end: Promise<TurnEnd>;
+  /** 本次 turn 的 id 到手;空串表示 agent 没给,退回「来什么认什么」。 */
+  identify: (turnId: string) => void;
+  /** 本次 turn 已收到的回复文本(只含属于它的 delta)。 */
+  reply: () => string;
+  /** 不再需要这次等待(如 turn 根本没起来),拆掉订阅。 */
+  cancel: () => void;
+}
+
+/**
+ * 一次叫停能作用到的等待。叫停是**针对当时正在跑的那个 turn** 的,
+ * 故由 {@link ReviewSession.stopScan} 取快照逐个通知,而不是置一个全局旗子。
+ */
+interface StopTarget {
+  /** 打断已发出、结果未知:此后到达的终局先扣住,等 gate 出结果再定性 */
+  begin: (gate: Promise<void>) => void;
+  /** 打断成功:本次等待就地按「已停止」收尾,不再等 codex 的终局 */
+  stop: () => void;
+}
 
 /** 追问时重述的历史条数上限;够唤起线程脉络,又不至于把整条对话再喂一遍。 */
 const FOLLOWUP_RECAP = 6;
@@ -115,6 +144,13 @@ export class ReviewSession {
   private conversationId?: string;
   /** 串行化 turn:codex 单会话不能并发 turn,续问排在扫描/前一轮之后。 */
   private turnChain: Promise<unknown> = Promise.resolve();
+  /** reviewer 已叫停本轮机审(见 {@link stopScan});收轮时据此记 stopped 而非 done。 */
+  private stopped = false;
+  /**
+   * 正在等终局的那些 turn。叫停只作用于**当下这一批** —— 停完还能继续追问,
+   * 后起的 turn 必须按自己的真实终局收尾,不能被一个 session 级的旗子一路判成「已停止」。
+   */
+  private readonly stopTargets = new Set<StopTarget>();
 
   constructor(
     private readonly reviewId: string,
@@ -170,13 +206,14 @@ export class ReviewSession {
     this.setStatus('scanning');
 
     const outcome = await this.runTurn(opts.scanPrompt ?? DEFAULT_SCAN_PROMPT);
-    if (!outcome.ok) {
+    if (outcome.kind === 'failed') {
       this.setStatus('failed');
       const label = opts.round && opts.round > 1 ? `第 ${opts.round} 轮复审` : '首轮扫描';
       throw new AgentTurnError(`${label}失败: ${outcome.error}`, outcome.errorKind, outcome.error);
     }
     // 对抗档:同一 thread 追加一轮自检。已有扫描结论,自检失败不推翻本轮 —— 吞掉错误保留成果。
-    if (opts.intensity === 'adversarial') {
+    // 叫停是"到此为止",自检轮当然也不再跑;扫描 turn 恰好抢在打断前跑完也照样算叫停。
+    if (outcome.kind === 'ok' && !this.stopped && opts.intensity === 'adversarial') {
       await this.runTurn(ADVERSARIAL_SELFCHECK_PROMPT);
     }
     const source = this.store.getReview(this.reviewId)?.source;
@@ -236,13 +273,52 @@ export class ReviewSession {
     this.emit('message', userMsg);
 
     const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text, history));
-    if (!outcome.ok) throw new AgentTurnError(`追问失败: ${outcome.error}`, outcome.errorKind, outcome.error);
+    if (outcome.kind === 'failed')
+      throw new AgentTurnError(`追问失败: ${outcome.error}`, outcome.errorKind, outcome.error);
+    if (outcome.kind === 'stopped') return userMsg;
 
     const reply = outcome.reply.trim();
     if (!reply) return userMsg;
     const agentMsg = this.store.addMessage(discussionId, 'agent', reply);
     this.emit('message', agentMsg);
     return agentMsg;
+  }
+
+  /**
+   * reviewer 中途叫停本轮机审:打断 agent 当前 turn,已上报的 findings 一条不丢,
+   * review 直接进入人工审核阶段。
+   *
+   * 打断成功后**不再等** codex 为这个 turn 发终局 —— 那条事件不保证会来,
+   * 干等就会把这一轮永远挂在「扫描中」;就地兑现等待钩子收轮。
+   * 边界行为(打断在途收到终局 / 打断失败 / 终局迟到)见 scripts/spike-stop-scan.ts。
+   */
+  async stopScan(): Promise<void> {
+    if (this.stopped) return;
+    const conversationId = this.conversationId;
+    if (!conversationId) throw new Error('会话尚未建立,无法停止');
+
+    // 打断的应答与 turn 终局是两条各走各的消息,谁先到都不一定。闸门必须**先于**打断挂上:
+    // 在途期间到达的终局一律先扣住,由打断的成败来定性 —— 成了算「已停止」,
+    // 没成就还它本来的面目(那一轮确实是自己挂的/跑完的),别让两边各说一套。
+    // 快照也要在此刻取:被叫停的是**现在**在跑的那个 turn,之后新起的追问与这次叫停无关。
+    const targets = [...this.stopTargets];
+    let openGate!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve;
+    });
+    for (const t of targets) t.begin(gate);
+    try {
+      await this.agent.interrupt(conversationId);
+      this.stopped = true;
+      for (const t of targets) t.stop();
+    } finally {
+      openGate(); // 没停成的话,扣住的终局在这里还原本色
+    }
+  }
+
+  /** 本轮机审是否被 reviewer 叫停(收轮时据此记 stopped 而非 done)。 */
+  isStopped(): boolean {
+    return this.stopped;
   }
 
   async dispose(): Promise<void> {
@@ -348,20 +424,19 @@ export class ReviewSession {
   private runTurn(text: string): Promise<TurnOutcome> {
     const run = async (): Promise<TurnOutcome> => {
       const conversationId = this.conversationId!;
-      let reply = '';
-      const offDelta = this.agent.streamEvents((e) => {
-        if (e.kind === 'message-delta') reply += e.text;
-      });
-      const turnDone = this.nextTurnEnd();
+      // 订阅要先于发起:极快的 turn(乃至 stub)会在 turn/start 应答之前就把 delta 与终局发出来
+      const waiter = this.awaitTurnEnd();
       try {
-        await this.agent.sendMessage(conversationId, text);
-        const outcome = await turnDone;
-        if (outcome.kind === 'turn-failed')
-          return { ok: false, error: outcome.error, errorKind: outcome.errorKind };
-        return { ok: true, reply };
-      } finally {
-        offDelta();
+        waiter.identify(await this.agent.sendMessage(conversationId, text));
+      } catch (e) {
+        waiter.cancel(); // turn 根本没起来,别把订阅留在那儿等一个不会来的终局
+        throw e;
       }
+      const outcome = await waiter.end;
+      if (outcome.kind === 'stopped') return { kind: 'stopped' };
+      if (outcome.kind === 'turn-failed')
+        return { kind: 'failed', error: outcome.error, errorKind: outcome.errorKind };
+      return { kind: 'ok', reply: waiter.reply() };
     };
     const result = this.turnChain.then(run, run);
     this.turnChain = result.catch(() => undefined);
@@ -373,15 +448,93 @@ export class ReviewSession {
     this.emit('status', status);
   }
 
-  /** 解析于下一个 turn 结束(完成或失败)。 */
-  private nextTurnEnd(): Promise<Extract<AgentEvent, { kind: 'turn-completed' | 'turn-failed' }>> {
-    return new Promise((resolve) => {
-      const off = this.agent.streamEvents((e) => {
-        if (e.kind === 'turn-completed' || e.kind === 'turn-failed') {
-          off();
-          resolve(e);
-        }
-      });
+  /**
+   * 等下一个 turn 收尾(完成、失败,或被 {@link stopScan} 叫停),并只收集属于它的回复文本。
+   *
+   * **一切以 turnId 为准**:被叫停的那轮之后往往还会补终局与残余 delta,谁来都收的话,
+   * 那条迟到的终局会被下一次追问当成自己的(追问提前返回空回复),残余文本还会混进追问的答案。
+   * turnId 要到 turn/start 应答才知道,故认领之前先扣住,认领后再逐条比对。
+   */
+  private awaitTurnEnd(): TurnWaiter {
+    type TerminalEvent = Extract<AgentEvent, { kind: 'turn-completed' | 'turn-failed' }>;
+    const cleanup: (() => void)[] = [];
+    let settle!: (end: TurnEnd) => void;
+    const end = new Promise<TurnEnd>((resolve) => {
+      settle = resolve;
     });
+
+    let settled = false;
+    const finish = (e: TurnEnd) => {
+      if (settled) return; // 定性要等叫停闸门,期间可能被 stop() 抢先兑现
+      settled = true;
+      for (const c of cleanup) c();
+      settle(e);
+    };
+
+    // 叫停波及本次等待时由 stopScan 填入;没被波及就一直是空 —— 后起的 turn 照自己的终局收尾
+    let gate: Promise<void> | null = null;
+    let stoppedMe = false;
+    const classify = async (e: TurnEnd) => {
+      if (gate) await gate; // 打断在途:由它的成败定性,别把打断引发的失败当成 turn 自己挂了
+      finish(stoppedMe ? { kind: 'stopped' } : e);
+    };
+    const target: StopTarget = {
+      begin: (g) => {
+        gate = g;
+      },
+      stop: () => {
+        stoppedMe = true;
+        finish({ kind: 'stopped' });
+      },
+    };
+    this.stopTargets.add(target);
+    cleanup.push(() => this.stopTargets.delete(target));
+
+    let mine: string | undefined;
+    let identified = false;
+    /** 认领前无从判断归属的事件,先按 turnId 分组扣住(无 id 的归到 undefined 这组) */
+    const heldEnds: TerminalEvent[] = [];
+    const heldDeltas = new Map<string | undefined, string>();
+    let reply = '';
+
+    /**
+     * 归属判定:**两边都拿得出 id** 才谈得上排除 —— 有一边不知道就只能认下,
+     * 退回加此过滤之前的行为。turnId 是 agent 可选给的,一律按「不是我的」丢掉的话,
+     * 遇上不带 id 的 agent 就等于每条回复都被吞光。
+     */
+    const isMine = (turnId: string | undefined): boolean => !turnId || !mine || turnId === mine;
+    const takeEnd = (e: TerminalEvent) => {
+      if (!identified) {
+        heldEnds.push(e);
+        return;
+      }
+      if (isMine(e.turnId)) void classify(e);
+    };
+
+    cleanup.push(
+      this.agent.streamEvents((e) => {
+        if (e.kind === 'message-delta') {
+          if (!identified) heldDeltas.set(e.turnId, (heldDeltas.get(e.turnId) ?? '') + e.text);
+          else if (isMine(e.turnId)) reply += e.text;
+          return;
+        }
+        if (e.kind === 'turn-completed' || e.kind === 'turn-failed') takeEnd(e);
+      }),
+    );
+
+    return {
+      end,
+      reply: () => reply,
+      identify: (turnId) => {
+        if (identified) return;
+        identified = true;
+        mine = turnId || undefined; // agent 没给 id 就退回「来什么认什么」
+        for (const [from, text] of heldDeltas) if (isMine(from)) reply += text;
+        heldDeltas.clear();
+        const ends = heldEnds.splice(0);
+        for (const e of ends) if (isMine(e.turnId)) void classify(e);
+      },
+      cancel: () => finish({ kind: 'stopped' }),
+    };
   }
 }

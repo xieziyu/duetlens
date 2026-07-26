@@ -589,6 +589,20 @@ export function installPreviewApi(): void {
         }, 3000);
         return round;
       },
+      // 叫停:本轮就地收成 stopped,已上报的 findings 一条不动 —— 与后端 settleRound 同语义
+      stopScan: async () => {
+        if (params.get('stop') === 'error')
+          throw new Error(
+            "Error invoking remote method 'review:stop-scan': Error: 本轮机审已结束,无需停止",
+          );
+        const cur = rounds[rounds.length - 1];
+        const stopped: ReviewRound = { ...cur, status: 'stopped', endedAt: Date.now() };
+        rounds[rounds.length - 1] = stopped;
+        const settled = scanDoneStatus(review.source);
+        review = { ...review, status: settled };
+        fire({ reviewId: 'demo', type: 'round', payload: stopped });
+        fire({ reviewId: 'demo', type: 'status', payload: settled });
+      },
       resume: async () => review,
       release: async () => {},
       delete: async () => {},
