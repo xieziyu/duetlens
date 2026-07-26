@@ -3,6 +3,7 @@ import type { AppInfo } from '@shared/ipc';
 import type { CodexModelInfo, SourceKind, UiSettings } from '@shared/domain';
 import { DEFAULT_UI_SETTINGS, REASONING_EFFORTS, REVIEW_INTENSITIES } from '@shared/domain';
 import type { EnvironmentReport } from '@shared/environment';
+import { AUTHOR, PROJECT_LINKS, newIssueUrl } from '@shared/links';
 import { useSettings } from '../settings/SettingsProvider';
 import { KbdHelp } from '../components/KbdHelp';
 import './SettingsScreen.css';
@@ -30,7 +31,7 @@ const NAV: { group: string; items: { id: SectionId; icon: string; label: string 
     group: '其它',
     items: [
       { id: 'rules', icon: '▦', label: '审核规则提示词' },
-      { id: 'about', icon: '◇', label: '关于' },
+      { id: 'about', icon: '◇', label: '关于与反馈' },
     ],
   },
 ];
@@ -110,6 +111,13 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
     const f = await window.duetlens.dialog.pickFile();
     if (f) update({ ghPath: f });
   };
+
+  const issueUrl = newIssueUrl([
+    `Duetlens ${appInfo?.version ?? '—'}`,
+    `Electron ${appInfo?.electron ?? '—'} · Chrome ${appInfo?.chrome ?? '—'} · Node ${appInfo?.node ?? '—'}`,
+    `平台 ${appInfo?.platform ?? '—'}`,
+    `codex ${env?.codex.version ?? '未检测到'}`,
+  ]);
 
   const resetDefaults = (): void => {
     update({ ...DEFAULT_UI_SETTINGS, dataMode: settings.dataMode, dataTheme: settings.dataTheme });
@@ -313,9 +321,9 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
             </Row>
           </section>
 
-          {/* 关于 */}
+          {/* 关于与反馈 */}
           <section className="set-sec" data-sec="about">
-            <h2><span className="ic">◇</span> 关于</h2>
+            <h2><span className="ic">◇</span> 关于与反馈</h2>
             <div className="about">
               <div className="logo mono">duet<i>lens</i><span className="cur">_</span></div>
               <div className="vmeta">
@@ -325,6 +333,14 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
                   {env?.codex.version ? ` · codex ${env.codex.version}` : ''}
                 </div>
               </div>
+              <span className="lic mono">MIT</span>
+            </div>
+            <div className="about-links">
+              <LinkOut href={PROJECT_LINKS.repo}>源码仓库</LinkOut>
+              <i />
+              <LinkOut href={issueUrl}>反馈问题</LinkOut>
+              <i />
+              <LinkOut href={PROJECT_LINKS.author}>作者 @{AUTHOR}</LinkOut>
             </div>
           </section>
         </div>
@@ -380,6 +396,15 @@ function Choice({
         </button>
       ))}
     </div>
+  );
+}
+
+// 外链;窗口打开请求由 main 拦下交系统浏览器,preview 里则是普通新标签页。
+function LinkOut({ href, children }: { href: string; children: React.ReactNode }): React.JSX.Element {
+  return (
+    <a className="link-out" href={href} target="_blank" rel="noreferrer">
+      {children}
+    </a>
   );
 }
 

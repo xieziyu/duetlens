@@ -335,6 +335,39 @@
   font-size: 11px;
   margin-top: 3px;
 }
+.settings .about .lic {
+  flex: none;
+  align-self: flex-start;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+/* 版本卡下的外链行;点分隔,点了会离开应用 */
+.settings .about-links {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 4px 0;
+}
+.settings .about-links i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-deco);
+  flex: none;
+}
+.settings .link-out {
+  color: var(--agent);
+  text-decoration: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.settings .link-out:hover {
+  text-decoration: underline;
+}
 
 /* 底栏 */
 .set-foot {

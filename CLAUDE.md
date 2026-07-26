@@ -37,6 +37,7 @@ Electron 桌面应用:人与 codex agent 协同对话式的 code review。主进
 | 快捷键表 | `components/KbdHelp`(设置屏弹同一浮层,别抄摘录) |
 | 强度显示名 / 代价文案 | `shared/domain.ts` 的 `INTENSITY_LABELS` / `INTENSITY_HINTS` |
 | 改动面计量 | `but diff <branch>`(入口卡片与 `GitButlerSource.getDiff` 同一条命令,数由构造相等) |
+| 仓库 / issue / 作者外链 | `src/shared/links.ts`(package.json 不重复一份) |
 
 ## 运行与自查
 
