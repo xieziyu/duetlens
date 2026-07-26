@@ -2439,8 +2439,74 @@
   background: var(--agent-soft);
   border-color: var(--agent-line);
 }
-.fe-cat {
+/* 下拉要浮在卡外,而卡为了裁圆角设了 overflow:hidden —— 编辑态没有需要裁的内容,放开 */
+.card.editing {
+  overflow: visible;
+}
+.catsel {
   flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.catsel .cs-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  padding: 3px;
+  cursor: pointer;
+}
+.catsel .cs-clear:hover {
+  color: var(--text);
+}
+.cs-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 208px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.cs-opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.cs-opt.active {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+}
+.cs-opt.on {
+  font-weight: 600;
+  color: var(--agent-2);
+}
+.cs-empty {
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 6px 8px;
+}
+.fe-cat {
+  width: 100%;
+  box-sizing: border-box;
   min-width: 0;
   font-family: var(--mono);
   font-size: 12px;
@@ -2558,6 +2624,17 @@
 }
 .c-edit.has-sugg .fe-sugg-tog .dia {
   color: var(--agent-2);
+}
+/* 开关只写着 suggestion,不说它是什么;说明跟在同一行,别等展开了才解释。
+   inline-flex 的开关按基线对齐会比文字低半行,故整行改 flex 居中 */
+.fe-sugg-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.fe-sugg-hint {
+  font-size: 11px;
+  color: var(--text-faint);
 }
 .fe-sugg {
   display: none;

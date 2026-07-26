@@ -7,6 +7,7 @@ import {
   type Triage,
 } from '@shared/domain';
 import type { FindingEditInput } from '@shared/ipc';
+import { CategorySelect } from './CategorySelect';
 import { renderMarkdown } from './markdown';
 import { currentResolution, isNewThisRound } from './rounds';
 
@@ -299,7 +300,7 @@ function CardEdit({
   onCancel: () => void;
 }) {
   const [severity, setSeverity] = useState<Severity>(finding.severity);
-  const [category, setCategory] = useState(finding.category ?? '');
+  const [category, setCategory] = useState<string | null>(finding.category);
   const [title, setTitle] = useState(finding.title);
   const [body, setBody] = useState(finding.body);
   const [hasSugg, setHasSugg] = useState(finding.suggestion != null);
@@ -320,7 +321,7 @@ function CardEdit({
     onSave({
       findingId: finding.id,
       severity,
-      category: category.trim() || null,
+      category,
       title: t,
       body: body.trim(),
       suggestion: hasSugg ? suggestion : null,
@@ -351,14 +352,7 @@ function CardEdit({
             </button>
           ))}
         </span>
-        <input
-          className="fe-cat"
-          value={category}
-          spellCheck={false}
-          aria-label="category"
-          placeholder="category"
-          onChange={(e) => setCategory(e.target.value)}
-        />
+        <CategorySelect value={category} onChange={setCategory} />
       </div>
       <div className="fe-field">
         <div className="fe-cap">标题</div>
@@ -381,15 +375,18 @@ function CardEdit({
       </div>
       <div className="fe-field">
         {/* 真按钮:label 不带关联控件时不进 Tab 顺序,键盘用户展不开 suggestion */}
-        <button
-          type="button"
-          className="fe-sugg-tog"
-          aria-pressed={hasSugg}
-          onClick={() => setHasSugg((v) => !v)}
-        >
-          <span className="sw" />
-          <span className="dia">◇</span> suggestion
-        </button>
+        <div className="fe-sugg-row">
+          <button
+            type="button"
+            className="fe-sugg-tog"
+            aria-pressed={hasSugg}
+            onClick={() => setHasSugg((v) => !v)}
+          >
+            <span className="sw" />
+            <span className="dia">◇</span> suggestion
+          </button>
+          <span className="fe-sugg-hint">替换锚点行的代码,提交后作者可一键采纳</span>
+        </div>
         <div className="fe-sugg">
           <textarea
             className="fe-textarea fe-code"

@@ -598,7 +598,7 @@ export class ReviewStore {
     if (!existing) return null;
     const next = {
       severity: input.severity ?? existing.severity,
-      category: input.category ?? existing.category,
+      category: input.category === undefined ? existing.category : input.category,
       title: input.title ?? existing.title,
       body: input.body ?? existing.body,
       suggestion: input.suggestion === undefined ? existing.suggestion : input.suggestion,

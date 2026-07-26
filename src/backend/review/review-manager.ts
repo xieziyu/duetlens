@@ -311,7 +311,8 @@ export class ReviewManager extends EventEmitter {
     const finding = this.store.updateFinding({
       findingId: input.findingId,
       severity: input.severity,
-      category: input.category ?? undefined,
+      // null 要原样透到 store(清空 category),压成 undefined 就成了「不改」
+      category: input.category,
       title: input.title,
       body: input.body,
       suggestion: input.suggestion,

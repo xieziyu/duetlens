@@ -126,7 +126,8 @@ export type ReportFindingInput = z.infer<typeof reportFindingSchema>;
 export const updateFindingSchema = z.object({
   findingId: z.string().min(1),
   severity: z.enum(SEVERITIES).optional(),
-  category: z.string().min(1).optional(),
+  // 同 suggestion:null 是「清空」,缺省才是「不改」—— 合成 undefined 就再也清不掉了
+  category: z.string().min(1).nullable().optional(),
   title: z.string().min(1).optional(),
   body: z.string().optional(),
   suggestion: z.string().nullable().optional(),

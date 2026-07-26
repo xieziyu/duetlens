@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Severity } from '@shared/domain';
+import { CategorySelect } from './CategorySelect';
 
 const SEV_LABEL: Record<Severity, string> = { high: 'high', medium: 'med', low: 'low' };
 const SEV_OPTIONS: Severity[] = ['high', 'medium', 'low'];
@@ -37,7 +38,7 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
   const [text, setText] = useState('');
   const [title, setTitle] = useState('');
   const [severity, setSeverity] = useState<Severity>('medium');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState<string | null>(null);
   const [hasSugg, setHasSugg] = useState(false);
   const [suggestion, setSuggestion] = useState('');
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -77,7 +78,7 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
     if (up) {
       onCreate({
         severity,
-        category: category.trim() || null,
+        category,
         title: title.trim(),
         body: text.trim(),
         suggestion: hasSugg ? suggestion : null,
@@ -121,14 +122,7 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
                   </button>
                 ))}
               </span>
-              <input
-                className="fe-cat"
-                value={category}
-                spellCheck={false}
-                aria-label="category"
-                placeholder="category"
-                onChange={(e) => setCategory(e.target.value)}
-              />
+              <CategorySelect value={category} onChange={setCategory} />
             </div>
           )}
           {up && (
@@ -160,15 +154,18 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
           {up && (
             <div className="fe-field">
               {/* 同 .ac-up:真按钮,否则开关不进 Tab 顺序,键盘用户展不开 suggestion */}
-              <button
-                type="button"
-                className="fe-sugg-tog"
-                aria-pressed={hasSugg}
-                onClick={() => setHasSugg((v) => !v)}
-              >
-                <span className="sw" />
-                <span className="dia">◇</span> suggestion
-              </button>
+              <div className="fe-sugg-row">
+                <button
+                  type="button"
+                  className="fe-sugg-tog"
+                  aria-pressed={hasSugg}
+                  onClick={() => setHasSugg((v) => !v)}
+                >
+                  <span className="sw" />
+                  <span className="dia">◇</span> suggestion
+                </button>
+                <span className="fe-sugg-hint">替换锚点行的代码,提交后作者可一键采纳</span>
+              </div>
               <div className="fe-sugg">
                 <textarea
                   className="fe-textarea fe-code"
