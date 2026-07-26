@@ -3817,15 +3817,26 @@
   outline: none;
   border-color: var(--agent-line);
 }
+/* 与同行输入框等高:按钮不自带高度,只给左右内距会矮一截、底对不齐 */
 .c-dismissed .dm-save {
   flex: none;
-  font-size: 11px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
   color: var(--on-solid);
   background: var(--accent-solid);
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 7px;
-  padding: 0 11px;
+  padding: 6px 12px;
   cursor: pointer;
+}
+.c-dismissed .dm-save:hover {
+  background: var(--accent-solid-hover);
+}
+.c-dismissed .dm-save:focus-visible {
+  outline: 2px solid var(--agent-line);
+  outline-offset: 2px;
 }
 
 /* ---- 重跑面板 ---- */

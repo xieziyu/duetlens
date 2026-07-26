@@ -167,7 +167,7 @@ function DismissedCard({
             placeholder="为什么这不算问题?下一轮 agent 会据此不再报同类"
           />
           <button className="dm-save" onClick={save}>
-            存
+            保存
           </button>
         </div>
       )}
