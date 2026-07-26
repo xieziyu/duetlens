@@ -22,7 +22,13 @@
 - **一轮对话 = turn**:`turn/start` / `steer` / `interrupt`。
 - **注入点(`thread/start` 参数)**:`baseInstructions`(多层级提示词)、`config`(透传 config.toml 的 map)、`sandbox`(**顶层参数,不在 `config` 里**)、`approvalPolicy`、`cwd`、`personality`。
 - **MCP 工具调用没有 `item/mcpToolCall` 这个方法名**,经 `item/started` + `item/completed` 观测(`item.type === "mcpToolCall"` 时带 server / tool / status / arguments)。
-- **`model/list`** 在 `initialize` 后即可调,复用本机登录态,**不起 thread、不发 turn,故不烧 token** —— 发起表单的模型下拉数据源。注意各模型的 `supportedReasoningEfforts` 与我们硬编码的 effort 集不完全一致,下拉未按模型动态收窄。
+- **`model/list`** 在 `initialize` 后即可调,复用本机登录态,**不起 thread、不发 turn,故不烧 token** —— 发起表单的模型下拉数据源。注意各模型的 `supportedReasoningEfforts` 与我们硬编码的 effort 集不完全一致,下拉未按模型动态收窄;**它不带上下文窗口**,窗口只能从 `thread/tokenUsage/updated` 拿。
+
+### 上下文占用怎么算(状态栏那枚环)
+
+- 分母 `modelContextWindow` 是 codex 已折算过的**有效**窗口,不是模型名义窗口:gpt-5.6 系名义 272,000,`effective_context_window_percent = 95`,上报值 **258,400**(2026-07 在 0.145 实测,rollout 与 app-server 同源)。别把它跟名义值对不上当 bug 查。
+- 分子取 `last`(最近一次请求)而非 `total`:`total` 是全 thread 累计,含每轮重发的 cached input,比窗口能得出几百 % 的假数。
+- `last.totalTokens` 还要**扣掉 `reasoningOutputTokens`**:推理 token 只活在产出它的那次请求里,下一次不再回传,留着就高估占用。
 
 ## MCP 传输:in-process HTTP + per-thread 注入
 

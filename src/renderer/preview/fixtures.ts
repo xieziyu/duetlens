@@ -396,6 +396,7 @@ export function installPreviewApi(): void {
   // ?scan&round=retrying 模拟 agent 自行退避重试(那几十秒原本没有任何信号)
   const asRetrying = params.get('round') === 'retrying';
   let retrySimulated = false;
+  let usageSimulated = false;
   // 可变:重跑 stub 会改 currentRound / status,模拟后端回推后的新值
   let review: Review = {
     ...REVIEW,
@@ -799,6 +800,14 @@ export function installPreviewApi(): void {
       },
       onEvent: (handler) => {
         listeners.add(handler);
+        // 状态栏那枚上下文环只有收到 token-usage 才出现;给一发真实量级的数(gpt-5.6 有效窗口 258,400)
+        if (!usageSimulated) {
+          usageSimulated = true;
+          setTimeout(
+            () => fire({ reviewId: 'demo', type: 'agent', payload: { kind: 'token-usage', used: 62_732, cumulative: 1_161_165, total: 258_400 } }),
+            300,
+          );
+        }
         // ?scan&round=retrying:扫描期插一串 agent 退避重试事件,自查进度条的重试提示。
         // 只排一次 —— StrictMode 双挂载会订阅两次,不设闸门次数就会翻倍。
         if (asRetrying && !retrySimulated) {

@@ -28,7 +28,9 @@ function compactTokens(n: number): string {
 }
 
 function contextTitle({ used, cumulative, total }: TokenUsage): string {
-  const ctx = total ? `上下文 ${used.toLocaleString()} / ${total.toLocaleString()}` : `上下文 ${used.toLocaleString()}`;
+  const ctx = total
+    ? `上下文 ${used.toLocaleString()} / ${total.toLocaleString()}(codex 上报的有效窗口,已按模型折算)`
+    : `上下文 ${used.toLocaleString()}`;
   return `${ctx} · 本次会话累计 ${cumulative.toLocaleString()} tokens`;
 }
 
@@ -99,8 +101,11 @@ export function ReviewStatusBar({
                 <circle className="fg" cx="9" cy="9" r="7" />
               </svg>
             )}
+            {/* 分母要露面:只给「63K · 24%」时,占比看着不对也没法就地核对窗口有多大 */}
             <span className="mono">
-              {compactTokens(tokenUsage.used)}{pct !== null ? ` · ${pct}%` : ''}
+              {compactTokens(tokenUsage.used)}
+              {tokenUsage.total ? ` / ${compactTokens(tokenUsage.total)}` : ''}
+              {pct !== null ? ` · ${pct}%` : ''}
             </span>
           </span>
         </>

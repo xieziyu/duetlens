@@ -1,10 +1,10 @@
 /** codex 的 token 计量。占用率只能用 used/total;cumulative 是累计消耗,可远超窗口。 */
 export interface TokenUsage {
-  /** 当前上下文占用(codex tokenUsage.last.totalTokens) */
+  /** 当前上下文占用:最近一次请求的 totalTokens 扣掉 reasoning(见 codex-agent 的换算注释) */
   used: number;
   /** 整个 thread 的累计消耗(codex tokenUsage.total.totalTokens) */
   cumulative: number;
-  /** 模型上下文窗口;codex 未上报时为空 */
+  /** 模型**有效**上下文窗口(codex 已按 effective 比例折算过);未上报时为空 */
   total?: number;
 }
 
