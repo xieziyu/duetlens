@@ -55,6 +55,18 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
 
+      # 先手建 draft,别让 electron-builder 自己建:它的 publisher 缓存在 get 与 set 之间有 await
+      # (createPublisher → resolveReleaseBody 会读一个通常不存在的 release-notes.md),并发的
+      # artifactCreated 因此拿到两个 publisher 实例,各建一条 draft,产物被拆两边 —— 上游 #6676。
+      # release 已存在时两个实例都会复用它,竞态就没了后果。
+      - name: pre-create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --draft \
+              --title "Duetlens ${GITHUB_REF_NAME#v}" --notes ""
+
       # electron-builder 的 notarize 只认文件路径,secret 是字符串,得先落盘
       - name: write notarization key
         env:
