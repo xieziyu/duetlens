@@ -131,9 +131,11 @@ let quitting = false;
  * 所以拦下这次退出自己收尾,再 {@link app.exit} —— exit 不会重新触发本事件。
  */
 app.on('before-quit', (e) => {
-  if (quitting) return; // 清理期间用户再按一次退出:让第一次的收尾跑完,别重入
-  quitting = true;
+  // 拦下要先于重入判断:清理期间用户再按一次退出,放行的话默认流程当场结束进程,
+  // 正好绕过这里的「清完再退」。第一次的收尾跑完(或超时)会统一 exit。
   e.preventDefault();
+  if (quitting) return;
+  quitting = true;
   const cleanup = manager?.disposeAll() ?? Promise.resolve();
   const deadline = new Promise((r) => setTimeout(r, QUIT_CLEANUP_TIMEOUT_MS));
   void Promise.race([cleanup, deadline])

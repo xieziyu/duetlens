@@ -44,14 +44,16 @@ export function App({
   const [screen, setScreen] = useState<Screen>(initialScreen ?? (initialReviewId ? 'review' : 'entry'));
   const [activeReviewId, setActiveReviewId] = useState<string | null>(initialReviewId);
   const [toast, setToast] = useState<CompletionNotice | null>(null);
-  // 通知点击带来的定位目标:每次请求换一个 nonce,使 ReviewScreen 即便同一 discussion 也能重触发聚焦
-  const [focusDiscussion, setFocusDiscussion] = useState<{ id: string; nonce: number } | null>(null);
+  // 通知点击带来的定位目标。ReviewScreen 定位一次就把它消费掉(onFocusHandled)——
+  // 留着的话,换 review 重挂或离开再回本屏时会被当成新请求再执行一遍,
+  // 而那条 discussion 未必属于当下这条 review,composer 就会往一条不存在的线程发。
+  const [focusDiscussion, setFocusDiscussion] = useState<{ id: string } | null>(null);
 
   const openReview = (id: string, discussionId?: string) => {
     setActiveReviewId(id);
     setScreen('review');
     setToast(null);
-    if (discussionId) setFocusDiscussion({ id: discussionId, nonce: Date.now() });
+    setFocusDiscussion(discussionId ? { id: discussionId } : null);
   };
 
   // 通知点击「聚焦+定位」挂在常驻的 App:onOpenReview 打开 review;onInApp 弹轻提示。
@@ -120,6 +122,7 @@ export function App({
           reviewId={activeReviewId}
           onOpenSubmit={() => setScreen('submit')}
           focusRequest={focusDiscussion}
+          onFocusHandled={() => setFocusDiscussion(null)}
         />
       ) : (
         <main className="screen-host">

@@ -56,11 +56,14 @@ export function ReviewScreen({
   reviewId,
   onOpenSubmit,
   focusRequest,
+  onFocusHandled,
 }: {
   reviewId: string | null;
   onOpenSubmit?: () => void;
-  /** 外部(通知点击)请求定位到某条 discussion;nonce 保证同一线程可重触发 */
-  focusRequest?: { id: string; nonce: number } | null;
+  /** 外部(通知点击)请求定位到某条 discussion;每次请求换一个对象即可重触发 */
+  focusRequest?: { id: string } | null;
+  /** 定位已执行,请求方据此清掉它 —— 一条请求只该兑现一次 */
+  onFocusHandled?: () => void;
 }) {
   const {
     review,
@@ -370,9 +373,11 @@ export function ReviewScreen({
     if (!activePath && diff.length > 0) setActivePath(diff[0].path);
   }, [diff, activePath]);
 
-  // 通知点击带 discussionId 时定位到该线程(切 Discussion 栏);nonce 变化即重触发。
+  // 通知点击带 discussionId 时定位到该线程(切 Discussion 栏);兑现后即刻消费掉这条请求。
   useEffect(() => {
-    if (focusRequest) focusDiscussion(focusRequest.id);
+    if (!focusRequest) return;
+    focusDiscussion(focusRequest.id);
+    onFocusHandled?.();
   }, [focusRequest]);
 
   // 有模态压在上面时,导航键一律挂起。判据必须是**所有**打开中的模态,不能只认帮助层:

@@ -59,6 +59,17 @@ export class FollowupReplyError extends Error {
 }
 
 /**
+ * 会话已被释放(退出 / LRU 逐出 / 删除审核),手上与队里的 turn 一律就地作废。
+ * codex 进程都拆了,终局事件不会再来 —— 不兑现就是让调用方与 UI 永远等下去。
+ */
+export class SessionDisposedError extends Error {
+  constructor(message = '会话已释放,无法继续') {
+    super(message);
+    this.name = 'SessionDisposedError';
+  }
+}
+
+/**
  * 对抗强度:扫描/复审 turn 之后追加的自检轮指令。同一 codex thread 内跑,
  * agent 仍记得本轮报过什么,故可就地补漏与给存疑结论降级(codex 侧无删除 finding 的工具)。
  */
@@ -72,8 +83,11 @@ type TurnOutcome =
   | { kind: 'stopped' }
   | { kind: 'failed'; error: string; errorKind: AgentErrorKind };
 
-/** turn 的终局:agent 侧的完成/失败,或我们主动叫停。 */
-type TurnEnd = Extract<AgentEvent, { kind: 'turn-completed' | 'turn-failed' }> | { kind: 'stopped' };
+/** turn 的终局:agent 侧的完成/失败,或我们主动叫停/释放会话。 */
+type TurnEnd =
+  | Extract<AgentEvent, { kind: 'turn-completed' | 'turn-failed' }>
+  | { kind: 'stopped' }
+  | { kind: 'disposed' };
 
 /**
  * 一次 turn 的终局等待。turnId 要到 turn/start 应答回来才知道,而终局事件可能更早到
@@ -166,6 +180,16 @@ export class ReviewSession {
    * 后起的 turn 必须按自己的真实终局收尾,不能被一个 session 级的旗子一路判成「已停止」。
    */
   private readonly stopTargets = new Set<StopTarget>();
+  /**
+   * 会话已释放({@link dispose})。此后新起与排队中的 turn 一律就地作废,
+   * 不再去等一个已经没有进程能发出的终局。
+   */
+  private disposed = false;
+  /**
+   * 正在等终局的那些 turn 的作废钩子。释放会话时逐个兑现 —— 只 reject 建会话闸门是不够的:
+   * 闸门早已放行,等在 awaitTurnEnd 上的追问不会因此醒来。
+   */
+  private readonly liveWaiters = new Set<() => void>();
   /**
    * 在途活动数:建/续会话与每个 turn 各占一份。>0 = 拆掉这个会话会打断 agent 手上的活,
    * 见 {@link isBusy}。只数 turn 是不够的 —— 会话已入表、MCP 与 codex thread 还在建的那段
@@ -310,8 +334,15 @@ export class ReviewSession {
    */
   async sendMessage(discussionId: string, text: string): Promise<Message> {
     await this.conversationReady; // 会话还在建就排在它后面,别把这一问丢掉
+    // 等闸门期间会话可能已被拆掉。抢在落库之前回绝,这一问才算「没发出去」——
+    // composer 留着原文,重发时管理层会续接一个新会话。
+    if (this.disposed) throw new SessionDisposedError('会话已释放,无法追问');
     const discussion = this.store.getDiscussion(discussionId);
     if (!discussion) throw new Error(`discussion 不存在: ${discussionId}`);
+    // 只认本 review 名下的线程:串号的话,消息会写进上一条 review 的 discussion,
+    // 却由本 review 的 codex thread 作答,两边数据都被污染。
+    if (discussion.reviewId !== this.reviewId)
+      throw new Error(`discussion 不属于本次审核: ${discussionId}`);
 
     // 历史要在落库新消息之前取,否则本次追问会被重复叙述一遍
     const history = this.store.listMessages(discussionId);
@@ -382,8 +413,13 @@ export class ReviewSession {
   }
 
   async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
     // 排在闸门后的追问跟着这个会话一起完:不兑现的话它们会一直等一个再也不会来的 codex thread
-    this.failConversation(new Error('会话已释放,无法追问'));
+    this.failConversation(new SessionDisposedError('会话已释放,无法追问'));
+    // 会话已经建起来的那批更要管:闸门早放行了,正在等终局的 turn 只能由这里终结。
+    // 快照迭代 —— 兑现会顺手把自己从表里摘掉。
+    for (const abort of [...this.liveWaiters]) abort();
     this.unsubscribe?.();
     this.agent.dispose();
     await this.mcp?.close();
@@ -508,6 +544,8 @@ export class ReviewSession {
    */
   private runTurn(text: string): Promise<TurnOutcome> {
     const run = async (): Promise<TurnOutcome> => {
+      // 排在队里的那些:轮到自己时会话可能已经拆了,别再发一轮出去等终局
+      if (this.disposed) throw new SessionDisposedError();
       const conversationId = this.conversationId!;
       // 订阅要先于发起:极快的 turn(乃至 stub)会在 turn/start 应答之前就把 delta 与终局发出来
       const waiter = this.awaitTurnEnd();
@@ -518,6 +556,7 @@ export class ReviewSession {
         throw e;
       }
       const outcome = await waiter.end;
+      if (outcome.kind === 'disposed') throw new SessionDisposedError();
       if (outcome.kind === 'stopped') return { kind: 'stopped' };
       if (outcome.kind === 'turn-failed')
         return { kind: 'failed', error: outcome.error, errorKind: outcome.errorKind };
@@ -578,6 +617,11 @@ export class ReviewSession {
     };
     this.stopTargets.add(target);
     cleanup.push(() => this.stopTargets.delete(target));
+
+    // 会话被释放时由 dispose 兑现:此后 codex 不会再发终局,干等就是一条永远「回复中」的线程
+    const abort = () => finish({ kind: 'disposed' });
+    this.liveWaiters.add(abort);
+    cleanup.push(() => this.liveWaiters.delete(abort));
 
     let mine: string | undefined;
     let identified = false;
