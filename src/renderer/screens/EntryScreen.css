@@ -807,6 +807,73 @@
 }
 .cfg-notify input { cursor: pointer; }
 
+/* 并发满载拦截块。用 human(琥珀)而非红:这是「等一下」,不是出错了 */
+.cap-block {
+  margin-top: 12px;
+  border: 1px solid var(--human-line);
+  border-radius: 10px;
+  background: var(--human-soft);
+  padding: 11px 12px;
+}
+.cap-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); }
+.cap-head b { font-weight: 600; }
+.cap-head .cap-ic { color: var(--human); font-size: 13px; }
+.cap-refresh {
+  margin-left: auto;
+  padding: 3px 9px;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cap-refresh:hover { border-color: var(--human-line); color: var(--text); }
+.cap-body { margin-top: 7px; font-size: 11.5px; color: var(--text-dim); line-height: 1.55; }
+.cap-list { margin-top: 9px; display: flex; flex-direction: column; gap: 4px; }
+.cap-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-dim);
+}
+.cap-item:hover { border-color: var(--human-line); color: var(--text); }
+.cap-item .pulse {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--agent);
+  animation: entry-pulse 2s infinite;
+}
+.cap-item .ci-title {
+  flex: none;
+  max-width: 42%;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cap-item .ci-meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cap-item .ci-go { flex: none; color: var(--text-faint); }
+
 .start-error {
   margin: 12px 0 0;
   padding: 8px 10px;

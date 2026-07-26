@@ -151,6 +151,12 @@ export class ReviewSession {
    * 后起的 turn 必须按自己的真实终局收尾,不能被一个 session 级的旗子一路判成「已停止」。
    */
   private readonly stopTargets = new Set<StopTarget>();
+  /**
+   * 在途活动数:建/续会话与每个 turn 各占一份。>0 = 拆掉这个会话会打断 agent 手上的活,
+   * 见 {@link isBusy}。只数 turn 是不够的 —— 会话已入表、MCP 与 codex thread 还在建的那段
+   * 同样拆不得,那时被逐出只会让这次审核以一句莫名其妙的失败收场。
+   */
+  private inFlight = 0;
 
   constructor(
     private readonly reviewId: string,
@@ -188,7 +194,11 @@ export class ReviewSession {
    * 首轮与每次重跑都走这里 —— 复审不复用上一轮会话,靠 scanPrompt 把上下文结构化带过来
    * (复用会话会让新旧 diff 的行号在同一上下文里互相污染)。
    */
-  async start(opts: StartReviewOptions): Promise<Finding[]> {
+  start(opts: StartReviewOptions): Promise<Finding[]> {
+    return this.track(() => this.runStart(opts));
+  }
+
+  private async runStart(opts: StartReviewOptions): Promise<Finding[]> {
     const mcpUrl = await this.setupMcp(opts.providers);
 
     const handle = await this.agent.startConversation({
@@ -225,7 +235,11 @@ export class ReviewSession {
    * 续接已存在的 review 会话(app 重启后):按落库的 codexThreadId 从磁盘恢复 codex thread,
    * 重新注入 MCP,不重跑扫描。之后即可 sendMessage 追问。返回已落库的 findings。
    */
-  async resume(opts: StartReviewOptions): Promise<Finding[]> {
+  resume(opts: StartReviewOptions): Promise<Finding[]> {
+    return this.track(() => this.runResume(opts));
+  }
+
+  private async runResume(opts: StartReviewOptions): Promise<Finding[]> {
     const review = this.store.getReview(this.reviewId);
     const threadId = review?.codexThreadId;
     if (!threadId) throw new Error('该 review 无 codex thread,无法续接');
@@ -319,6 +333,14 @@ export class ReviewSession {
   /** 本轮机审是否被 reviewer 叫停(收轮时据此记 stopped 而非 done)。 */
   isStopped(): boolean {
     return this.stopped;
+  }
+
+  /**
+   * agent 手上是否有活:建/续会话中,或有在跑的 turn。并发上限逐出会话时据此避让 ——
+   * 拆掉忙碌会话等于凭空打断别人的机审,那一轮只会以一句莫名其妙的失败收场。
+   */
+  isBusy(): boolean {
+    return this.inFlight > 0;
   }
 
   async dispose(): Promise<void> {
@@ -417,6 +439,16 @@ export class ReviewSession {
     return `${head}${prior}${text}`;
   }
 
+  /** 在途期间计入 {@link isBusy};建会话与跑 turn 共用,可嵌套(start 内部还会再跑 turn)。 */
+  private async track<T>(run: () => Promise<T>): Promise<T> {
+    this.inFlight += 1;
+    try {
+      return await run();
+    } finally {
+      this.inFlight -= 1;
+    }
+  }
+
   /**
    * 跑一轮 turn(串行入队):累积 message-delta 作为 agent 回复文本,resolve 于 turn 结束。
    * 前一轮失败不阻断后续轮(链上 catch)。
@@ -438,7 +470,11 @@ export class ReviewSession {
         return { kind: 'failed', error: outcome.error, errorKind: outcome.errorKind };
       return { kind: 'ok', reply: waiter.reply() };
     };
-    const result = this.turnChain.then(run, run);
+    // 排队期间也算忙:队里还压着一轮的会话被拆掉,和跑到一半被拆没有区别。
+    this.inFlight += 1;
+    const result = this.turnChain.then(run, run).finally(() => {
+      this.inFlight -= 1;
+    });
     this.turnChain = result.catch(() => undefined);
     return result;
   }

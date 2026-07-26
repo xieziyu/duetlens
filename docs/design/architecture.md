@@ -25,6 +25,17 @@
 - **source 层**:`github-pr` / `local-branch` / `gitbutler-vbranch` 三种实现,各自负责取 diff 与读文件。
 - **持久化**:本地 sqlite(`better-sqlite3`,WAL + FK)。codex thread 由 codex 侧持久化,我们只存 threadId 做续接。
 
+### 活跃会话并发上限
+
+一个活跃会话 = 一个常驻 codex 子进程 + 一个 MCP server,故上限写死 **4**(`maxLiveSessions`),否则长时间使用会攒下一堆子进程。位置不够时按 LRU 逐出。
+
+- **只逐出空闲会话**。忙碌一律避让 —— 拆掉正在跑的会话等于替用户打断一轮机审,那一轮只会以一句莫名其妙的失败收场。这条曾经缺失,4 个都在扫时开第 5 个会**静默**弄挂其中一个。
+- **「忙」从入口算起,不只是在途 turn**:建 MCP、起/恢复 codex thread 的那段一个 turn 都没有,拆掉照样把这次审核打断在起跑线上(`spike:session-busy` 守着这条)。
+- **全在跑就拦下并告知**,列出在跑的是哪几条、可直达。「上限」是用户完全无法预期的内部数,不说清楚只会让人觉得应用坏了。有空闲位时静默回收,不打扰。
+- 会话位是**原子预留**、不是先判一下:判定与真正建出会话之间隔着拉取与建库几个 await,只判不占的话两个同时发起会在只剩一个位子时双双通过。预留兜不住的残余(判定后有空闲会话转忙)则整条回滚新建的 review/round/diff —— 否则库里会躺着一条用户当次看不见的失败审核。
+- 满载拦截只在**确实拿到满载快照**时接管;容量接口自己失败时退回普通报错,不然点了没反应、原因也一并丢了。
+- 错误跨 IPC 只剩 message(Electron 丢自定义字段),故满载错误在消息里嵌 `DUETLENS_LIVE_SESSION_LIMIT` 供 renderer 识别,在跑的名单由 renderer 回头问 `review.capacity()`。
+
 **领域事件面全程编译期收敛**:`ReviewSessionEvents` 是事件名→载荷的单一来源;ReviewSession **组合**(非继承)EventEmitter,`on/off` 收窄、`emit` 私有;ReviewManager 用 `keyof` 映射的转发表;renderer `useReviewStream` 用 `switch` + never 哨兵(运行时只告警不抛,容忍 main 比 renderer 新)。三处任一漏接新事件都编译失败。起因是 agent finding 的**承载 discussion** 曾只落库未外发,整个 Discussion 栏为空却无人报错。
 
 > 继承 EventEmitter + 同名 interface 声明合并也能收窄类型,但会触发 eslint `no-unsafe-declaration-merging`,故选组合。

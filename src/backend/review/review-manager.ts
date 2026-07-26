@@ -14,7 +14,8 @@ import type {
 } from '@shared/domain';
 import type { AgentErrorKind } from '@shared/agent-events';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { AddFindingInput, FindingEditInput, LatestDiffResult, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, BusyReview, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import { LIVE_SESSION_LIMIT_CODE } from '@shared/ipc';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
@@ -52,6 +53,26 @@ function buildScanPrompt(context?: string): string | undefined {
   const ctx = context?.trim();
   if (!ctx) return undefined;
   return `${DEFAULT_SCAN_PROMPT}\n\n用户附加上下文(审核时一并考虑):\n${ctx}`;
+}
+
+/**
+ * 活跃会话已满且**全在跑** —— 再起一个就得拆掉别人跑到一半的那轮。
+ *
+ * 消息里嵌 {@link LIVE_SESSION_LIMIT_CODE}:Electron IPC 只把 reject 的 message 串过去,
+ * 自定义字段一律丢失,renderer 认这一段字符串才认得出「是满载,不是别的失败」。
+ * 在跑的是哪几条由 renderer 回头问 `review.capacity()`,不塞进消息。
+ */
+export class LiveSessionLimitError extends Error {
+  constructor(
+    readonly busy: BusyReview[],
+    readonly max: number,
+  ) {
+    super(
+      `${LIVE_SESSION_LIMIT_CODE} 已有 ${busy.length} 个审核会话正在跑(上限 ${max}),` +
+        '先等一个结束、或叫停其中一个再发起。',
+    );
+    this.name = 'LiveSessionLimitError';
+  }
 }
 
 // 演示用内置 fixture(source 层接好前,让 app 能端到端跑一遍真实审核)。
@@ -93,6 +114,8 @@ export class ReviewManager extends EventEmitter {
   /** 活跃会话的内容 provider(读 diff / 文件新侧);供 DiffPane 展开上下文按审核时快照读文件。 */
   private readonly providers = new Map<string, McpContentProviders>();
   private readonly maxLiveSessions: number;
+  /** 已预留、会话还没建出来的位子数,见 {@link reserveCapacity}。 */
+  private pendingSessions = 0;
   /** GitHub 提交层;可注入(spike 用假实现,不烧真 PR)。 */
   private readonly submitter: GitHubSubmitter;
 
@@ -461,32 +484,51 @@ export class ReviewManager extends EventEmitter {
    * onStage 逐阶段回调(入口等待浮层据此显示真实进度);拉取失败时不留下半张 review 记录。
    */
   async startReview(target: ReviewTarget, onStage?: (s: ReviewStartStage) => void): Promise<Review> {
+    // 会话位在**建库记录之前**先占住,拿不到就直接回绝(下面的拉取一步都不做)。
+    const release = this.reserveCapacity();
     const source = createSource(target);
-    onStage?.('resolve');
-    const prepared = await source.prepare();
-    // 预取 diff 落库:MCP 与 renderer 共用同一份,省 codex 侧一次 get_diff 往返。
-    onStage?.('diff');
-    const rawDiff = await source.getDiff();
-    onStage?.('record');
-    const review = this.store.createReview({
-      source: target.source,
-      sourceRef: target.ref,
-      repoPath: target.repoPath || null,
-      title: prepared.title,
-      model: target.model || null,
-      reasoningEffort: target.reasoningEffort || null,
-      intensity: target.intensity ?? 'standard',
-    });
-    this.store.setDiff(review.id, rawDiff);
-    // 首轮也建轮次记录:轮次表是完整履历,复审只是往后追加,不是另一套东西。
-    this.store.startRound(review.id, 1, { headSha: prepared.headSha, note: target.context });
-    onStage?.('agent');
-    const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: review.intensity });
-    this.launch(review, prepared.cwd, {
-      getDiff: () => rawDiff,
-      getFile: (p) => source.getFile(p),
-    }, () => source.dispose(), baseInstructions, buildScanPrompt(target.context), 1);
-    return review;
+    let review: Review | undefined;
+    // launch 之后 source 的释放归它:成功挂在 session 的 cleanup 上(续问还要读文件),
+    // 失败它自己的 catch 已经收过 —— 在这之前失败才该由我们收。
+    let launched = false;
+    try {
+      onStage?.('resolve');
+      const prepared = await source.prepare();
+      // 预取 diff 落库:MCP 与 renderer 共用同一份,省 codex 侧一次 get_diff 往返。
+      onStage?.('diff');
+      const rawDiff = await source.getDiff();
+      onStage?.('record');
+      review = this.store.createReview({
+        source: target.source,
+        sourceRef: target.ref,
+        repoPath: target.repoPath || null,
+        title: prepared.title,
+        model: target.model || null,
+        reasoningEffort: target.reasoningEffort || null,
+        intensity: target.intensity ?? 'standard',
+      });
+      this.store.setDiff(review.id, rawDiff);
+      // 首轮也建轮次记录:轮次表是完整履历,复审只是往后追加,不是另一套东西。
+      this.store.startRound(review.id, 1, { headSha: prepared.headSha, note: target.context });
+      onStage?.('agent');
+      const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: review.intensity });
+      launched = true;
+      this.launch(review, prepared.cwd, {
+        getDiff: () => rawDiff,
+        getFile: (p) => source.getFile(p),
+      }, () => source.dispose(), baseInstructions, buildScanPrompt(target.context), 1);
+      return review;
+    } catch (e) {
+      // 预留兜不住的残余(判定后有空闲会话转忙,launch 仍开不出会话)也不能留下痕迹:
+      // 这一轮一步都没跑过,留在库里就是一条用户当次看不见、也不知从何而来的失败审核。
+      if (review) this.store.deleteReview(review.id);
+      // source 还没交给任何清理钩子就失败了,自己收 —— github-pr 的 prepare 会开一个临时
+      // checkout 目录,漏收就是每失败一次在 /tmp 里留一份。收不干净不能盖掉原始错误。
+      if (!launched) await source.dispose().catch(() => undefined);
+      throw e;
+    } finally {
+      release();
+    }
   }
 
   /** 某次 review 的全部轮次履历(首轮 + 每次重跑)。 */
@@ -574,6 +616,9 @@ export class ReviewManager extends EventEmitter {
 
     // 每轮新 thread:先彻底释放上一轮的会话、MCP 与 source,再重建。
     await this.teardown(reviewId);
+    // 刚腾出的位子立刻占住:下面还要 await 好几步拉取,期间被别的发起抢走的话,
+    // 轮次已经落库、却只能收成一条莫名其妙的失败。
+    const release = this.reserveCapacity();
 
     const source = createSource({
       source: review.source,
@@ -631,20 +676,25 @@ export class ReviewManager extends EventEmitter {
             });
       baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: opts.intensity });
     } catch (e) {
+      release();
       await source.dispose();
       throw e;
     }
     const intensity = opts.intensity;
 
-    this.launch(
-      { ...review, currentRound: round.round, intensity },
-      prepared.cwd,
-      { getDiff: () => rawDiff, getFile: (p) => source.getFile(p) },
-      () => source.dispose(),
-      baseInstructions,
-      prompt,
-      round.round,
-    );
+    try {
+      this.launch(
+        { ...review, currentRound: round.round, intensity },
+        prepared.cwd,
+        { getDiff: () => rawDiff, getFile: (p) => source.getFile(p) },
+        () => source.dispose(),
+        baseInstructions,
+        prompt,
+        round.round,
+      );
+    } finally {
+      release();
+    }
     this.forward({ reviewId, type: 'round', payload: round });
     return round;
   }
@@ -659,7 +709,17 @@ export class ReviewManager extends EventEmitter {
     scanPrompt: string | undefined,
     round: number,
   ): void {
-    const session = this.createSession(review.id, onDone);
+    let session: ReviewSession;
+    try {
+      session = this.createSession(review.id, onDone);
+    } catch (e) {
+      // 起不出会话(预留之后又有空闲会话转忙,连一个可逐出的都不剩)。
+      // 轮次已经落库,必须就地收成 failed 并带上原因,否则它会永远挂在「扫描中」。
+      this.settleRound(review.id, round, 'failed', e);
+      this.forward({ reviewId: review.id, type: 'status', payload: 'failed' });
+      void Promise.resolve(onDone?.()).catch(() => undefined);
+      throw e;
+    }
     this.providers.set(review.id, providers);
     // 不 await:扫描后台跑,调用方(IPC)立即返回。source 清理延到 dispose,续问仍能读文件。
     session
@@ -714,7 +774,13 @@ export class ReviewManager extends EventEmitter {
     });
     const prepared = await source.prepare();
     const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: review.intensity });
-    const session = this.createSession(reviewId, () => source.dispose());
+    let session: ReviewSession;
+    try {
+      session = this.createSession(reviewId, () => source.dispose());
+    } catch (e) {
+      await source.dispose(); // 建不出会话(如满载)时 source 还没交给任何清理钩子,自己收
+      throw e;
+    }
     const providers: McpContentProviders = {
       getDiff: () => source.getDiff(),
       getFile: (p) => source.getFile(p),
@@ -763,13 +829,64 @@ export class ReviewManager extends EventEmitter {
     }
   }
 
-  /** 超过上限时逐出最久未用的会话(teardown 同步先删 map,while 收敛)。 */
+  /**
+   * 腾出一个会话位:逐出最久未用的**空闲**会话(teardown 同步先删 map,while 收敛)。
+   * 忙碌会话一律避让 —— 拆掉它等于替用户打断一轮正在跑的机审,那一轮只会以一句
+   * 莫名其妙的失败收场。全都在忙就抛 {@link LiveSessionLimitError},由上层告诉用户。
+   */
   private evictExcess(): void {
     while (this.sessions.size >= this.maxLiveSessions) {
-      const oldest = this.sessions.keys().next().value as string | undefined;
-      if (!oldest) break;
-      void this.teardown(oldest).catch(() => undefined);
+      const idle = [...this.sessions.entries()].find(([, s]) => !s.isBusy())?.[0];
+      if (!idle) throw new LiveSessionLimitError(this.busyReviews(), this.maxLiveSessions);
+      void this.teardown(idle).catch(() => undefined);
     }
+  }
+
+  /** 当前正忙(agent 有在途 turn)的 review 摘要,供容量提示逐条列出。 */
+  busyReviews(): BusyReview[] {
+    const out: BusyReview[] = [];
+    for (const [reviewId, session] of this.sessions) {
+      if (!session.isBusy()) continue;
+      const review = this.store.getReview(reviewId);
+      out.push({
+        reviewId,
+        title: review?.title ?? review?.sourceRef ?? reviewId,
+        sourceRef: review?.sourceRef ?? '',
+        source: review?.source ?? 'local-branch',
+        round: review?.currentRound ?? 1,
+        scanning: this.store.getRound(reviewId, review?.currentRound ?? 1)?.status === 'scanning',
+      });
+    }
+    return out;
+  }
+
+  /** 并发容量快照(入口据此提前给出感知,不必等发起失败)。 */
+  getLiveCapacity(): LiveCapacity {
+    return { max: this.maxLiveSessions, live: this.sessions.size, busy: this.busyReviews() };
+  }
+
+  /**
+   * 占住一个会话位,满载则抛 {@link LiveSessionLimitError}。返回的释放钩子幂等,
+   * 会话建出来或中途失败都要调一次。
+   *
+   * 必须是**预留**而不是只判一下:判定与真正建出会话之间隔着 prepare、拉 diff、建库记录几个
+   * await,光判不占的话,两个同时发起的请求会在只剩一个位子时双双通过,后到的那个要到
+   * launch 才撞满载 —— 那时 review、diff、round 都已落库。
+   *
+   * 忙碌会话腾不出来,已预留的位子也不能重复分配,两者占满就没有可给新会话的位子了
+   * (空闲会话由 {@link evictExcess} 静默回收,不占额度)。
+   */
+  private reserveCapacity(): () => void {
+    const busy = this.busyReviews();
+    if (busy.length + this.pendingSessions >= this.maxLiveSessions)
+      throw new LiveSessionLimitError(busy, this.maxLiveSessions);
+    this.pendingSessions += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.pendingSessions -= 1;
+    };
   }
 
   /** 拆一个会话:同步先从 map 摘除,再释放 session 与其 source 清理钩子。 */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   INTENSITY_HINTS,
   INTENSITY_LABELS,
@@ -9,7 +9,8 @@ import {
   type ReviewIntensity,
   type SourceKind,
 } from '@shared/domain';
-import type { RecentReview, ReviewStartInput, ReviewStartStage } from '@shared/ipc';
+import { LIVE_SESSION_LIMIT_CODE } from '@shared/ipc';
+import type { LiveCapacity, RecentReview, ReviewStartInput, ReviewStartStage } from '@shared/ipc';
 import type {
   LocalBranchList,
   PrPreview,
@@ -80,13 +81,34 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   const shownAt = useRef(0);
   // github 面板上报的「PR 已成功解析且 gh 已登录」;作为该来源可发起的门控
   const [ghReady, setGhReady] = useState(false);
+  // 活跃会话并发容量:满载(全在跑)时不让发起,并列出在跑的那几条
+  const [capacity, setCapacity] = useState<LiveCapacity | null>(null);
 
   const refreshRecent = () => window.duetlens.review.listRecent().then(setReviews);
+  // 回传拿到的快照(拉不到给 null):满载拦截要凭它决定是交给面板还是退回报错,不能只更新 state
+  const refreshCapacity = useCallback(
+    (): Promise<LiveCapacity | null> =>
+      window.duetlens.review
+        .capacity()
+        .then((c) => {
+          setCapacity(c);
+          return c;
+        })
+        .catch(() => null),
+    [],
+  );
   useEffect(() => {
     void refreshRecent();
+    void refreshCapacity();
     window.duetlens.agent.listModels().then(setModels).catch(() => setModels([]));
     window.duetlens.source.listRepoPaths().then(setRecentRepos).catch(() => setRecentRepos([]));
-  }, []);
+  }, [refreshCapacity]);
+
+  // 会话跑完不会有事件通知入口(那是 review 屏的事),故停留期间自己轮询一次容量。
+  useEffect(() => {
+    const t = window.setInterval(() => void refreshCapacity(), CAPACITY_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [refreshCapacity]);
 
   // 阶段推进只认当前这次发起的 startId,重试后旧的一路事件不会再往浮层里灌
   useEffect(
@@ -163,8 +185,10 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     tab === 'github-pr' ? 'github-pr' : repoMode === 'gitbutler' ? 'gitbutler-vbranch' : 'local-branch';
 
   const target = useTargetLabel(source, ref);
+  const atCapacity = isAtCapacity(capacity);
   const canStart =
     !busy &&
+    !atCapacity &&
     !!ref.trim() &&
     (tab === 'github-pr' ? ghReady : !!repoPath.trim());
 
@@ -206,9 +230,21 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     } catch (e) {
       window.clearTimeout(rise);
       const message = (e as Error).message ?? String(e);
+      // 满载是可预期的拦截、不是故障:刷新容量让拦截面板接手,别把一串英文 code 甩给用户。
+      // 但只有**确实刷出了满载快照**才交给面板 —— 容量接口本身失败(或此刻已被腾空)时面板
+      // 根本不出现,那就退回普通报错,否则用户每点一次都只看见界面纹丝不动、真实原因还全丢了。
+      const atLimit = message.includes(LIVE_SESSION_LIMIT_CODE);
+      if (atLimit && isAtCapacity(await refreshCapacity())) {
+        setOverlay(false);
+        setStartStage(null);
+        shownAt.current = 0;
+        setBusy(false);
+        return;
+      }
+      const shown = atLimit ? message.replace(LIVE_SESSION_LIMIT_CODE, '').trim() : message;
       // 浮层已经挡住界面,就地转错误态;还没升起来的快速失败仍走卡片内行内报错
-      if (shownAt.current) setStartFailed(message);
-      else setError(message);
+      if (shownAt.current) setStartFailed(shown);
+      else setError(shown);
       setBusy(false);
     }
   };
@@ -377,6 +413,9 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
           </div>
 
           {error && <p className="start-error">{error}</p>}
+          {atCapacity && (
+            <CapacityBlock capacity={capacity!} onOpen={onOpenReview} onRefresh={refreshCapacity} />
+          )}
 
           <div className="footcta">
             <span className="target">
@@ -407,6 +446,62 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
           onBack={dismissOverlay}
         />
       )}
+    </div>
+  );
+}
+
+/** 入口停留期间的容量轮询间隔:会话跑完没有推给入口的事件,只能自己回头问一次。 */
+const CAPACITY_POLL_MS = 5000;
+
+/**
+ * 满载 = 会话位坐满且**每一个都在跑**。有空闲位时后端会静默回收,用户不必知道这回事。
+ * 快照缺失(容量接口失败)一律不算满载 —— 拦截面板要有真实的在跑清单才有意义。
+ */
+function isAtCapacity(c: LiveCapacity | null): boolean {
+  return !!c && c.live >= c.max && c.busy.length >= c.max;
+}
+
+/**
+ * 满载拦截:4 个会话位坐满且全在跑机审 / 追问,再起一个就得拆掉别人跑到一半的那轮。
+ * 逐条列出在跑的是谁并给直达入口 —— 只说「满了」等于让用户自己去猜该关掉哪个。
+ * 有空闲位时后端静默回收,这块根本不出现。
+ */
+function CapacityBlock({
+  capacity,
+  onOpen,
+  onRefresh,
+}: {
+  capacity: LiveCapacity;
+  onOpen: (id: string) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="cap-block">
+      <div className="cap-head">
+        <span className="cap-ic">◔</span>
+        <b>
+          {capacity.max} 个审核会话都在跑,暂时开不了新的
+        </b>
+        <button type="button" className="cap-refresh" onClick={onRefresh}>
+          刷新
+        </button>
+      </div>
+      <div className="cap-body">
+        每个会话是一个常驻 codex 子进程;等其中一个跑完、或进去把它叫停,这里会自动放行。
+      </div>
+      <div className="cap-list">
+        {capacity.busy.map((b) => (
+          <button key={b.reviewId} type="button" className="cap-item" onClick={() => onOpen(b.reviewId)}>
+            <span className="pulse" />
+            <span className="ci-title">{b.title}</span>
+            <span className="ci-meta mono">
+              {b.sourceRef}
+              {b.round > 1 ? ` · 第 ${b.round} 轮` : ''} · {b.scanning ? '机审中' : '回答中'}
+            </span>
+            <span className="ci-go">→</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -46,6 +46,7 @@ export const IpcChannels = {
   reviewStopScan: 'review:stop-scan',
   reviewRounds: 'review:rounds',
   reviewResume: 'review:resume',
+  reviewCapacity: 'review:capacity',
   reviewRelease: 'review:release',
   reviewDelete: 'review:delete',
   reviewDiscussions: 'review:discussions',
@@ -164,6 +165,32 @@ export interface AddFindingInput {
   suggestion?: string | null;
 }
 
+// ---- 活跃会话并发上限(一个活跃会话 = 一个 codex 子进程 + 一个 MCP server)----
+
+/**
+ * 满载且全在跑时 `review.start` 抛错的识别串。
+ * Electron IPC 只把 reject 的 message 串过去(自定义字段全丢),故只能靠消息里的这段前缀认。
+ */
+export const LIVE_SESSION_LIMIT_CODE = 'DUETLENS_LIVE_SESSION_LIMIT';
+
+/** 正在跑的一条审核;满载提示逐条列出,可跳过去看或叫停。 */
+export interface BusyReview {
+  reviewId: string;
+  title: string;
+  sourceRef: string;
+  source: SourceKind;
+  round: number;
+  /** true = 在机审扫描;false = 在回答追问 */
+  scanning: boolean;
+}
+
+/** 并发容量快照:入口据此提前表达「还能再开几个」,不必等发起失败。 */
+export interface LiveCapacity {
+  max: number;
+  live: number;
+  busy: BusyReview[];
+}
+
 /** 提交一次 GitHub PR review 的入参(summaryBody 传入即先落库为 review body)。 */
 export interface SubmitReviewInput {
   event: GhReviewEvent;
@@ -272,6 +299,8 @@ export interface DuetlensApi {
     rounds(reviewId: string): Promise<ReviewRound[]>;
     /** 续接一个非活跃 review(app 重启后按 codexThreadId 恢复会话),之后可追问。 */
     resume(reviewId: string): Promise<Review>;
+    /** 活跃会话并发容量快照(入口据此表达还能再开几个、满载时列出在跑的)。 */
+    capacity(): Promise<LiveCapacity>;
     /** 释放某 review 的活跃会话(codex 子进程 + MCP);下次追问自动续接。 */
     release(reviewId: string): Promise<void>;
     /** 删除一次审核(级联清理 findings/discussions/messages 等);历史屏用。 */

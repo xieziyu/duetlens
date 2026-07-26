@@ -5,6 +5,7 @@
  */
 import { parseUnifiedDiff } from '@shared/diff';
 import type {
+  BusyReview,
   CompletionNotice,
   DuetlensApi,
   RecentReview,
@@ -615,6 +616,15 @@ export function installPreviewApi(): void {
         fire({ reviewId: 'demo', type: 'status', payload: settled });
       },
       resume: async () => review,
+      // ?busy=N 模拟 N 条会话正在跑;=4 即满载,入口据此显示拦截面板
+      capacity: async () => {
+        const busyCount = Math.min(4, Number(params.get('busy') ?? 0) || 0);
+        return {
+          max: 4,
+          live: Math.max(busyCount, busyCount ? 4 : 0),
+          busy: BUSY_REVIEWS.slice(0, busyCount),
+        };
+      },
       release: async () => {},
       delete: async () => {},
       addDiscussion: async (_r, anchor) => {
