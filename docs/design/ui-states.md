@@ -297,24 +297,29 @@ stateDiagram-v2
 
 `local-branch` / `gitbutler-vbranch` 不需要 gh,`GhUnauth` 只作用于 `github-pr` source。
 
-## 框选发起 discussion
+## diff 上批注(提问 ⇄ 记为 finding)
 
-diff 主区框选代码后浮出 popover,再决定就地发起 discussion(琥珀)或记为 finding。
+行内 ✎ 与框选浮层开的是同一张卡;要提问还是要记 finding 在卡里定,可随时来回改。
 
 ```mermaid
 stateDiagram-v2
     [*] --> NoSel
+    NoSel --> Composer : ● 行内 ✎ (单行, 一步开卡)
     NoSel --> Selecting : ● 框选代码
     Selecting --> Popover : ● 松开 (popover 贴代码区左缘, 首行上方, 贴顶翻转)
     Popover --> NoSel : ● 点击别处 / 滚动
-    Popover --> Composer : ● ⬆ 发起 discussion (选中行下方插 human composer)
-    Popover --> FindingDraft : ● ＋ 记为 finding (同处插 finding 编辑器)
-    Composer --> Posted : ● 发送 ↵ (原地变「你的 discussion」卡)
-    Composer --> NoSel : ● 取消
+    Popover --> Composer : ● ✎ 段落批注
+    Composer --> FindingDraft : ● 开 ⚑ 记为 finding (正文首行提为标题, 长出 sev/cat/suggestion)
+    FindingDraft --> Composer : ● 关开关 (标题并回正文首行, 不丢字)
+    Composer --> Posted : ● 发送给 agent ⌘↵ (原地变「你的 discussion」卡)
+    FindingDraft --> Added : ● 新增 finding ⌘↵ (origin=manual, 落库后聚焦其内联卡)
+    Composer --> NoSel : ● 取消 Esc
+    FindingDraft --> NoSel : ● 取消 Esc
     Posted --> [*]
+    Added --> [*]
 ```
 
-新讨论只有这一条发起路径(行内 `＋` 是它的单行版本);右栏 composer 只追问已选中的线程。`@file` 弹文件菜单写入 `@path`(菜单本身是瞬态,选中即关)。
+新讨论只有这一条发起路径;右栏 composer 只追问已选中的线程。`@file` 弹文件菜单写入 `@path`(菜单本身是瞬态,选中即关)。
 
 ## 提交到 GitHub(结果 / 异常 / 增量)
 

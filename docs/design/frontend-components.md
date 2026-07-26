@@ -46,9 +46,8 @@
 │  │  │  ├─ <Expander>                     展开未改动代码
 │  │  │  ├─ <InlineCard>                   .card.agent | .card.human (view/edit/submitted/dismissed)
 │  │  │  │  └─ <FindingEditor>             .c-edit (sev/cat/标题/正文/suggestion)
-│  │  │  ├─ <InlineComposer>               .card.human.new-disc 锚点处新建 discussion:选区引用 + textarea
-│  │  │  ├─ <NewFindingComposer>           同处的「记为 finding」草稿表单
-│  │  │  └─ <SelectionPopover>             .sel-pop 框选发起 discussion / 记为 finding
+│  │  │  ├─ <AnnotateComposer>             锚点处唯一批注卡:提问态 .card.new-disc,开 .ac-up 升格为 .card.finding
+│  │  │  └─ <SelectionPopover>             .sel-pop 框选后的「✎ 段落批注」(与行内 ✎ 同一入口)
 │  │  └─ …
 │  ├─ <RightPanel>                         .tabs 三 tab 互斥
 │  │  ├─ <DiscussionTab>                   讨论线程 + <Composer>(只追问活跃线程)

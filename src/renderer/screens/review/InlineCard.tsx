@@ -380,10 +380,16 @@ function CardEdit({
         />
       </div>
       <div className="fe-field">
-        <label className="fe-sugg-tog" onClick={() => setHasSugg((v) => !v)}>
+        {/* 真按钮:label 不带关联控件时不进 Tab 顺序,键盘用户展不开 suggestion */}
+        <button
+          type="button"
+          className="fe-sugg-tog"
+          aria-pressed={hasSugg}
+          onClick={() => setHasSugg((v) => !v)}
+        >
           <span className="sw" />
           <span className="dia">◇</span> suggestion
-        </label>
+        </button>
         <div className="fe-sugg">
           <textarea
             className="fe-textarea fe-code"

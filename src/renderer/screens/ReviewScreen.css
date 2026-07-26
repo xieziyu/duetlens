@@ -2502,7 +2502,9 @@
   white-space: pre;
   min-height: 56px;
 }
-.fe-sugg-tog {
+/* 两枚开关都是 <button>(要能 Tab 到),故按钮默认的边框/底色/内距/字体要抹平回开关的样子 */
+.fe-sugg-tog,
+.ac-up {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -2510,8 +2512,19 @@
   color: var(--text-dim);
   cursor: pointer;
   user-select: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: var(--sans);
 }
-.fe-sugg-tog .sw {
+.fe-sugg-tog:focus-visible,
+.ac-up:focus-visible {
+  outline: 2px solid var(--agent-line);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.fe-sugg-tog .sw,
+.ac-up .sw {
   width: 30px;
   height: 17px;
   border-radius: 999px;
@@ -2521,7 +2534,8 @@
   transition: 0.18s;
   flex: none;
 }
-.fe-sugg-tog .sw::after {
+.fe-sugg-tog .sw::after,
+.ac-up .sw::after {
   content: '';
   position: absolute;
   top: 1px;
@@ -2532,11 +2546,13 @@
   background: var(--text-deco);
   transition: 0.18s;
 }
-.c-edit.has-sugg .fe-sugg-tog .sw {
+.c-edit.has-sugg .fe-sugg-tog .sw,
+.ac-up.on .sw {
   background: var(--agent-soft);
   border-color: var(--agent-line);
 }
-.c-edit.has-sugg .fe-sugg-tog .sw::after {
+.c-edit.has-sugg .fe-sugg-tog .sw::after,
+.ac-up.on .sw::after {
   left: 14px;
   background: var(--agent);
 }
@@ -2780,14 +2796,23 @@
   border-radius: 4px;
   background: color-mix(in oklab, var(--human) 15%, var(--bg));
   color: var(--human);
-  font-size: 12px;
   line-height: 1;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.row:hover .add-thread {
+/* Tab 聚焦时也要显影:只挂 hover 的话焦点会落在一枚完全看不见的按钮上,
+   既不知道自己在哪一行,也认不出按下去会发生什么 */
+.row:hover .add-thread,
+.add-thread:focus-visible {
   opacity: 1;
+}
+.add-thread:focus-visible {
+  outline: 2px solid var(--human);
+  outline-offset: 1px;
 }
 .add-thread:hover {
   background: color-mix(in oklab, var(--human) 26%, var(--bg));
@@ -2845,20 +2870,19 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.sel-pop .sp-disc {
+/* 与行内 ✎ 同一套 human 配色:两条路径开的是同一张 composer,不该在颜色上分家 */
+.sel-pop .sp-annotate {
   color: var(--human);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-.sel-pop .sp-disc:hover {
+.sel-pop .sp-annotate:hover {
   background: var(--human-soft);
 }
-.sel-pop .sp-finding {
-  color: var(--agent-2);
-}
-.sel-pop .sp-finding:hover {
-  background: var(--agent-soft);
-}
 
-/* ---------- 内联新建 discussion composer ---------- */
+/* ---------- 内联批注 composer(提问态 / 升格为 finding 后共用一张卡)---------- */
 .card.new-disc {
   border-left: 2px solid var(--human);
 }
@@ -2889,19 +2913,8 @@
 .nd-ref .lnref {
   color: var(--human);
 }
-.nd-body {
-  padding: 10px 12px 0;
-}
-.nd-body .fe-textarea {
-  min-height: 60px;
-}
-.nd-foot {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 10px 12px 12px;
-}
-.nd-foot .send {
+/* 提问态的主 CTA 走 human 声道(升格后换成 .save 的主操作蓝,见 .fe-foot) */
+.fe-foot .send {
   background: var(--human);
   color: var(--on-accent);
   font-weight: 600;
@@ -2910,26 +2923,37 @@
   padding: 6px 13px;
   cursor: pointer;
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
-.nd-foot .send:hover {
+.fe-foot .send:hover {
   filter: brightness(1.06);
 }
-.nd-foot .send:disabled {
+.fe-foot .send .kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+.fe-foot .save:disabled,
+.fe-foot .send:disabled {
   opacity: 0.5;
   cursor: default;
 }
-.nd-foot .cancel {
-  font-size: 12px;
-  color: var(--text-dim);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 12px;
-  cursor: pointer;
+.fe-foot .save:disabled:hover {
+  background: var(--accent-solid);
 }
-.nd-foot .cancel:hover {
-  color: var(--text);
-  border-color: var(--human-line);
+.fe-foot .send:disabled:hover {
+  filter: none;
+}
+/* 升格开关:与 suggestion 开关同形,推到 footer 右端 —— 它是"这条批注是什么"的档位,不是主动作 */
+.ac-up {
+  margin-left: auto;
+}
+.ac-up.on {
+  color: var(--agent-2);
 }
 
 /* ---------- Discussion 栏:切换 + 线程 + composer ---------- */

@@ -12,8 +12,8 @@ import type { DiffFile, DiffHunk, DiffLine } from '@shared/diff';
 import type { Discussion, Finding, Triage } from '@shared/domain';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { InlineCard } from './InlineCard';
-import { InlineComposer } from './InlineComposer';
-import { NewFindingComposer, type NewFindingDraft } from './NewFindingComposer';
+import { AnnotateComposer, type NewFindingDraft } from './AnnotateComposer';
+import { PencilIcon } from './PencilIcon';
 import { SelectionPopover } from './SelectionPopover';
 import { DiffFindBar } from './DiffFindBar';
 import {
@@ -35,11 +35,8 @@ import { highlightLine, langOf } from './highlight';
 
 export type DiffView = 'unified' | 'split';
 
-/** 内联 composer 的两种形态:发起 discussion 或 新增 finding。 */
-type ComposeMode = 'discussion' | 'finding';
 interface Compose {
   pick: AnchorPick;
-  mode: ComposeMode;
 }
 
 /** 文件锚点 id:供左栏点击滚动定位。路径里的非单词字符替换成 -。 */
@@ -594,10 +591,10 @@ export function DiffPane(props: DiffPaneProps) {
     };
   }, [sel]);
 
-  const startCompose = (pick: AnchorPick, mode: ComposeMode) => {
+  const startCompose = (pick: AnchorPick) => {
     setSel(null);
     window.getSelection()?.removeAllRanges();
-    setComposeAt({ pick, mode });
+    setComposeAt({ pick });
   };
 
   if (files.length === 0 && absentByFile.size === 0) {
@@ -655,15 +652,12 @@ export function DiffPane(props: DiffPaneProps) {
           onAddThread={
             canStart
               ? (line, snippet) =>
-                  startCompose(
-                    {
-                      anchor: { file: f.path, line, lineEnd: null },
-                      placeLine: line,
-                      label: `${basename(f.path)}:${line}`,
-                      snippet,
-                    },
-                    'discussion',
-                  )
+                  startCompose({
+                    anchor: { file: f.path, line, lineEnd: null },
+                    placeLine: line,
+                    label: `${basename(f.path)}:${line}`,
+                    snippet,
+                  })
               : undefined
           }
           compose={composeAt && composeAt.pick.anchor.file === f.path ? composeAt : null}
@@ -702,8 +696,7 @@ export function DiffPane(props: DiffPaneProps) {
           label={sel.pick.label}
           top={sel.top}
           left={sel.left}
-          onDiscussion={() => startCompose(sel.pick, 'discussion')}
-          onFinding={() => startCompose(sel.pick, 'finding')}
+          onAnnotate={() => startCompose(sel.pick)}
         />
       )}
     </div>
@@ -1098,21 +1091,17 @@ function DiffFileView({
     ) : null;
 
   const composeNode = compose ? (
-    compose.mode === 'finding' ? (
-      <NewFindingComposer
-        label={compose.pick.label}
-        snippet={compose.pick.snippet}
-        onCreate={onCreateFinding}
-        onCancel={onCancelCompose}
-      />
-    ) : (
-      <InlineComposer
-        label={compose.pick.label}
-        snippet={compose.pick.snippet}
-        onSend={onSendCompose}
-        onCancel={onCancelCompose}
-      />
-    )
+    <AnnotateComposer
+      // 锚点变了要重挂:同一张卡换个位置继续用会把上一处的草稿带过去。
+      // 起止行都要进 key —— 只认落位行的话,末行相同、起点不同的两次框选会共用实例,
+      // 草稿留在原地却提交到新锚点
+      key={`${compose.pick.anchor.file}:${compose.pick.anchor.line}:${compose.pick.anchor.lineEnd ?? ''}`}
+      label={compose.pick.label}
+      snippet={compose.pick.snippet}
+      onSend={onSendCompose}
+      onCreate={onCreateFinding}
+      onCancel={onCancelCompose}
+    />
   ) : null;
 
   return (
@@ -1396,22 +1385,22 @@ function toSplitRows(lines: DiffLine[]): SplitPair[] {
 }
 
 /**
- * hover 才显影的行内「发起 discussion」＋(仅新侧行)。挂在行号格里:代码格会随长行横滚,
- * 贴在其右缘的按钮要滑到行尾才够得着。
+ * hover 才显影的行内批注 ✎(仅新侧行);与框选浮层同一枚字形与配色,两条路径开的是同一张卡。
+ * 挂在行号格里:代码格会随长行横滚,贴在其右缘的按钮要滑到行尾才够得着。
  */
 function AddThread({ line, text, onAddThread }: { line: number; text: string; onAddThread?: (line: number, snippet: string) => void }) {
   if (!onAddThread) return null;
   return (
     <button
       className="add-thread"
-      title="发起 discussion"
+      title="批注这一行"
       onMouseDown={(e) => e.preventDefault()}
       onClick={(e) => {
         e.stopPropagation();
         onAddThread(line, text.trim().slice(0, 60));
       }}
     >
-      ＋
+      <PencilIcon />
     </button>
   );
 }

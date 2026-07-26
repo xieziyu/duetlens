@@ -126,7 +126,8 @@ CHROME 与 THEME 变量分离、互不耦合;**新增主题只补一组 THEME �
 | Diff | unified / split 代码 + 展开未改动 | `.code.unified .code.split .expander` | unified / split / collapsed |
 | Inline card | 内联 finding / discussion | `.card.agent .card.human` | view / edit / submitted / dismissed |
 | Finding editor | 就地编辑 sev/cat/标题/正文/suggestion | `.c-edit .fe-sev .fe-input .fe-textarea` | editing |
-| Selection popover | 框选发起 discussion / 记为 finding | `.sel-pop .sp-disc .sp-finding` | show |
+| Selection popover | 框选后的段落批注入口 | `.sel-pop .sp-annotate` | show |
+| Annotate composer | 锚点处批注:提问 ⇄ 升格为 finding | `.card.new-disc .c-edit .ac-up` | ask / finding |
 | off-diff 区 | 非改动行锚点的 finding 集合 | `.offdiff .odf` | open |
 | Right tabs | Discussion / Findings / Summary | `.tabs .tab .findings-panel .summary-panel` | active |
 | Findings list | 运行时 triage 列表 | `.frow .triage .fg-head` | kept / dismissed / submitted |

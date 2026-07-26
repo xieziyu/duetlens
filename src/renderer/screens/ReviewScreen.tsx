@@ -809,7 +809,7 @@ function RightPanel({
                   </div>
                 )}
                 <div className="fc-hint">
-                  仍可框选左侧代码发起 discussion,或「＋ 记为 finding」手动新增。
+                  仍可在左侧点行内 ✎ 或框选代码批注:向 agent 提问,或就地记为 finding。
                 </div>
               </div>
             ))}
