@@ -649,6 +649,7 @@
   align-items: baseline;
   gap: 7px;
   max-width: 260px;
+  overflow: hidden;
   padding: 5px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -657,10 +658,21 @@
   font-family: inherit;
 }
 .rr-item:hover { border-color: var(--agent-line); background: var(--agent-soft); }
-.rr-item .rr-name { font-size: 12px; color: var(--text); font-weight: 600; }
+/* 超宽时只截目录 —— 名字是识别这颗胶囊的唯一凭据,只有它自己撑满一行才退让 */
+.rr-item .rr-name {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 600;
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .rr-item .rr-dir {
   font-size: 10.5px;
   color: var(--text-faint);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

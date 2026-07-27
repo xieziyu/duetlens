@@ -982,7 +982,7 @@ export function installPreviewApi(): void {
           return { ...base, head: 'gitbutler/workspace', mode: 'local', degraded: 'but-missing' };
         return { ...base, head: 'gitbutler/workspace', mode: 'gitbutler', gitbutler };
       },
-      listRepoPaths: async () => ['/Users/dev/podcast-go', '/Users/dev/duetlens'],
+      listRepoPaths: async () => ['/Users/dev/GitHub/backend-podcast-node', '/Users/dev/duetlens'],
     },
     prompt: {
       get: async (cwd) => buildPromptView(cwd),
