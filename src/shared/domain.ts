@@ -298,7 +298,9 @@ export function findingNarrative(f: Finding, currentRound: number): string {
  */
 export function findingSuggestion(f: Finding, currentRound: number): string | null {
   if (recheckNote(f, currentRound) !== null) return null;
-  return f.suggestion?.trim() || null;
+  // 首行缩进是补丁的一部分(会被逐字替换进代码),只能削首尾空行与行尾空白,不能 trim
+  const s = f.suggestion?.replace(/^[ \t]*\n+/, '').replace(/\s+$/, '') ?? '';
+  return s || null;
 }
 
 export interface Message {
