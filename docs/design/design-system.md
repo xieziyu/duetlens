@@ -6,10 +6,14 @@
 
 ## 两个正交轴
 
-- `data-mode` = `light | dark` —— 明暗**品牌外壳**(chrome:bg / surface / border / text / brand / 阴影 / 辉光)。
-- `data-theme` = `duetlens | github` —— **配色主题**,成套打包所有该随主题走的部件:语法 token + 代码正文色、diff 增删的前景 / 背景 / gutter、severity 徽标色、代码内引用与搜索高亮。主题跟随 `data-mode` 自动切子模式,共四种组合。
+- `data-mode` = `light | dark` —— 明暗**品牌外壳**(chrome:bg / surface / border / text / brand / 阴影 / 辉光)的**默认档**。
+- `data-theme` = `duetlens | github | parchment` —— **配色主题**,成套打包所有该随主题走的部件:语法 token + 代码正文色、diff 增删的前景 / 背景 / gutter、severity 徽标色、代码内引用与搜索高亮。主题跟随 `data-mode` 自动切子模式。
 
-CHROME 与 THEME 变量**分离、互不耦合**;新增配色主题只需补一组 THEME 变量,不动外壳。**duet 双声道 accent(agent 天蓝 / human 琥珀)属于 chrome、跨配色主题恒定**,是品牌标识,仅随明暗取不同深浅。屏幕特有的布局变量(如栏宽)留在各屏自己的 CSS。
+**主题默认只管代码那一半,chrome 由 `data-mode` 给;但主题可以整套覆写 chrome** —— 纸的色温本身就是羊皮纸这套主题要传达的东西,只换语法色留一块冷灰画布等于没做。覆写档的选择器带两个属性(`[data-mode][data-theme]`),特异性高于 `data-mode` 那档,与书写顺序无关。**duet 双声道 accent(agent 天蓝 / human 琥珀)由 chrome 给出默认值,主题可按自己的画布覆写** —— 要守住的是**两条声道的语义角色与彼此、与 severity / diff 的可辨识度**,不是某个固定色值;把色值锁死等于规定了以后所有配色方案的画布色温。羊皮纸这一版就是照此各选各的:agent 天蓝原样(冷 accent 压在暖纸上最跳,信息层级一点不用重排),human 琥珀微调一档补偿暖纸吃掉的暖意。屏幕特有的布局变量(如栏宽)留在各屏自己的 CSS。
+
+> 覆写 chrome 的主题**必须把 THEME 变量给全**:`data-theme` 不是 `duetlens` 时,`duetlens · light` 那组不匹配,缺哪个变量就掉回 `:root` 的**深色**值(不是浅色),漏一个就是一处白底浅字。
+
+新增主题后按两条口径验:**逐屏跑对比度、并与现有主题逐条比差集** —— 只看绝对不达标数会被一批「本来就这样」的装饰性字形(diff gutter 的 ＋ ／ −、off-diff 的 ◇)淹掉,真正要拦的是**只有新主题才有的那几条**。羊皮纸这轮就是这样揪出两处:注释色整行落在 add/del 行底色上(只按画布验合格、压到 del 行不合格),以及 `--text-faint` 落在 `--surface-3` 的 chip 上 —— **两档的下限都由最亮的那层底定,不是由画布定**。
 
 > 检索命中色**独占靛紫色相**,不借用 agent 蓝 / human 琥珀 / diff 绿红任何一档语义。
 

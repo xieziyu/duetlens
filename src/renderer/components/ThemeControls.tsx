@@ -13,6 +13,7 @@ export function ThemeControls() {
       >
         <option value="duetlens">duetlens</option>
         <option value="github">github</option>
+        <option value="parchment">parchment</option>
       </select>
       <button
         className="mode-toggle"

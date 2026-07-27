@@ -1,10 +1,11 @@
 /* =========================================================
    Duetlens design tokens — 单一来源
    两个正交的配色轴:
-     data-mode  = dark | light        (明暗模式 · 品牌外壳 chrome)
-     data-theme = duetlens | github   (配色主题 · 成套:语法 token + diff + severity + 代码高亮)
+     data-mode  = dark | light                    (明暗模式 · 给出 chrome 的默认档)
+     data-theme = duetlens | github | parchment   (配色主题 · 成套:语法 token + diff + severity + 代码高亮)
    配色主题跟随 data-mode 自动切子模式(GitHub → Dark/Light)。
-   CHROME 变量与 THEME 变量分离,互不耦合;新增主题只补一组 THEME 变量。
+   THEME 默认只管代码那一半,chrome 由 data-mode 给;但**主题可以整套覆写 chrome**(parchment 即如此),
+   此时它的选择器带两个属性,特异性高于 data-mode 那档,与书写顺序无关。
    本文件是配色 tokens 的单一来源;勿在各处内联复制这些值。
    ========================================================= */
 
@@ -87,6 +88,56 @@
   --code-hl:color-mix(in oklab,var(--agent) 13%,transparent);
   --find-hl:color-mix(in oklab,oklch(.52 .17 285) 26%,transparent); --find-hl-on:oklch(.52 .17 285); --find-hl-fg:#fff;
   --sev-high:oklch(46% .18 16); --sev-med:oklch(46% .13 86); --sev-low:oklch(47% .055 242);
+}
+/* ---- THEME: Parchment · light ---- */
+/* 羊皮纸是三个主题里唯一连 chrome 一起换的:纸的色温本身就是这套主题要传达的东西,
+   只换语法色留一块冷灰画布,等于没做。
+   双声道要守住的是**语义角色与可辨识度**,不是固定色值:agent 天蓝原样照搬浅色基础档
+   —— 冷 accent 压在暖纸上最跳,信息层级一点不用重排;human 琥珀则微调(暖纸会吃掉一点
+   它的暖),两者仍各占原来的色相区,没往对方或 severity 那几档靠。
+   THEME 变量必须给全:data-theme 不是 duetlens 时,duetlens·light 那组不匹配,
+   缺哪个就掉回 :root 的**深色**值(不是浅色),漏一个就是一处白底浅字。 */
+:root[data-mode="light"][data-theme="parchment"]{
+  --bg:oklch(94.8% .014 88); --surface:oklch(97.4% .010 88); --card:oklch(99.2% .006 90);
+  --surface-2:oklch(96.2% .012 88); --surface-3:oklch(93.2% .016 86);
+  --border:oklch(82% .026 82); --border-soft:oklch(89.5% .018 84);
+  --text:oklch(23% .016 70); --text-dim:oklch(45% .018 68); --text-faint:oklch(52% .018 66); --text-deco:oklch(60% .016 66);
+  --agent:oklch(.50 .145 252); --agent-2:oklch(.43 .155 254); --agent-soft:color-mix(in oklab,var(--agent) 9%,transparent); --agent-line:color-mix(in oklab,var(--agent) 28%,transparent);
+  --accent-solid:oklch(.49 .16 253); --on-solid:#fff;
+  --human:oklch(.55 .15 52); --human-soft:color-mix(in oklab,var(--human) 12%,transparent); --human-line:color-mix(in oklab,var(--human) 32%,transparent);
+  --on-accent:#ffffff; --hover:color-mix(in oklab,var(--text) 4%,transparent);
+  --sel:color-mix(in oklab,var(--agent) 15%,transparent); --scroll:oklch(86% .022 84); --scroll-h:oklch(78% .030 82);
+  /* 阴影取纸的色相而非蓝灰,否则暖纸上的投影发青 */
+  --shadow:0 1px 2px oklch(38% .05 68/.07),0 8px 22px -14px oklch(38% .06 68/.26);
+  --glow1:color-mix(in oklab,var(--agent) 5%,transparent); --glow2:color-mix(in oklab,var(--human) 5%,transparent);
+  --code-text:oklch(23% .016 70);
+  /* --c 比浅色基础档更深一级:注释常整行落在 add/del 行底色上,那才是它最暗的处境 ——
+     只按画布验会漏(53% 在画布上 4.55 合格,压到 del 行只剩 4.46)。 */
+  --k:oklch(46% .19 296); --fn:oklch(46% .14 243); --s:oklch(43% .12 152); --n:oklch(47% .13 52); --c:oklch(51% .020 72); --ty:oklch(47% .11 74); --mac:oklch(47% .18 334);
+  --add:oklch(46% .13 150); --del:oklch(49% .17 26);
+  /* 增删底色也得带纸的暖底,否则两条 diff 行像贴在纸上的两张冷色贴纸。
+     它们与画布之间是**色相差不是明度差**,别拿亮度比去验(现状浅色同样只有 1.01)。 */
+  --add-bg:oklch(95.6% .042 145); --del-bg:oklch(95.2% .040 32);
+  --add-gutter:color-mix(in oklab,var(--add) 26%,transparent); --del-gutter:color-mix(in oklab,var(--del) 24%,transparent);
+  --code-hl:color-mix(in oklab,var(--agent) 13%,transparent);
+  --find-hl:color-mix(in oklab,oklch(.52 .17 285) 26%,transparent); --find-hl-on:oklch(.52 .17 285); --find-hl-fg:#fff;
+  --sev-high:oklch(46% .18 18); --sev-med:oklch(46% .13 84); --sev-low:oklch(47% .055 242);
+}
+/* ---- THEME: Parchment · dark ---- */
+/* 深色档只把纸与墨焐暖(灯下的旧纸),语法色、diff、severity 全部沿用基础深色档 ——
+   深底上再动语法色只会削弱它们彼此的区分度,而暖色调这件事靠 bg / text / border 就已经说清。 */
+:root[data-mode="dark"][data-theme="parchment"]{
+  --bg:oklch(15.5% .012 68); --surface:oklch(19.5% .012 70); --card:oklch(19.5% .012 70);
+  --surface-2:oklch(22.5% .013 70); --surface-3:oklch(25.5% .014 72);
+  --border:oklch(38% .020 74); --border-soft:oklch(28.5% .016 72);
+  /* faint 的下限由**最亮的那层底**定,不是画布:文件行的改动计数落在 --surface-3 的 chip 上,
+     63% 在那儿只有 4.48。65% 同时给选中态的 -soft 底留出被吃掉的那一档。 */
+  --text:oklch(92.5% .012 88); --text-dim:oklch(70% .016 84); --text-faint:oklch(65% .017 82); --text-deco:oklch(49% .015 78);
+  --hover:color-mix(in oklab,oklch(90% .04 82) 3%,transparent);
+  --scroll:oklch(26% .016 72); --scroll-h:oklch(32% .018 72);
+  --shadow:0 8px 24px -14px oklch(10% .02 60/.75);
+  --code-text:oklch(86% .012 85);
+  --c:oklch(62% .022 80);
 }
 /* ---- THEME: GitHub · dark ---- */
 :root[data-mode="dark"][data-theme="github"]{

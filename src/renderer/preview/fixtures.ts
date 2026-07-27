@@ -427,9 +427,16 @@ export function installPreviewApi(): void {
     ...(asRoundFailed ? { status: 'failed' as const } : {}),
   };
   // entry-state=pick 清掉记住的仓库,自查本地仓库档的选目录空态
+  // ?mode= / ?theme= 直接开在某套配色上:出图与逐屏比色都要它,靠点 rail 那颗钮只能切明暗、切不了主题
+  const asMode = params.get('mode');
+  const asTheme = params.get('theme');
   let uiSettings: UiSettings = {
     ...UI_SETTINGS,
     ...(params.get('entry-state') === 'pick' ? { lastRepoPath: '' } : {}),
+    ...(asMode === 'light' || asMode === 'dark' ? { dataMode: asMode } : {}),
+    ...(asTheme === 'duetlens' || asTheme === 'github' || asTheme === 'parchment'
+      ? { dataTheme: asTheme }
+      : {}),
   };
   // 预置一个已看文件,证明启动即从后端恢复 per-review 进度(非组件默认空态)
   // ?tab=findings|discussion|summary 强制初始右栏 tab(自查用,如在扫描期停在 Discussion 看进度头)
