@@ -149,7 +149,7 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
           {/* 外观 */}
           <section className="set-sec" data-sec="appearance">
             <h2><span className="ic">◐</span> 外观</h2>
-            <div className="desc">明暗模式与配色主题两个正交轴,应用启动即生效,跨所有审核一致。</div>
+            <div className="desc">明暗模式与配色主题两个正交轴,应用启动即生效,跨所有审核一致。羊皮纸会连同界面底色一起换。</div>
             <Row label="明暗模式">
               <Choice
                 value={settings.dataMode}
@@ -168,6 +168,7 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
               >
                 <option value="duetlens">Duetlens</option>
                 <option value="github">GitHub</option>
+                <option value="parchment">羊皮纸</option>
               </select>
             </Row>
           </section>

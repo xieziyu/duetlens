@@ -314,7 +314,7 @@ export interface Message {
 // ---- Persisted UI state(见 docs/design/architecture.md 持久化表)----
 export interface UiSettings {
   dataMode: 'light' | 'dark';
-  dataTheme: 'duetlens' | 'github';
+  dataTheme: 'duetlens' | 'github' | 'parchment';
   leftWidth: number;
   rightWidth: number;
   defaultTab: 'discussion' | 'findings' | 'summary';
