@@ -46,7 +46,7 @@ function seed(store: ReviewStore) {
     body: '用 Atomic 替代。',
     file: 'src/p.ts',
     line: 20,
-    suggestion: 'const c = new Atomic(0);',
+    suggestion: '    const c = new Atomic(0);',
   });
   const f2 = store.addFinding(review.id, {
     severity: 'low',
@@ -72,7 +72,8 @@ async function main() {
     assert.equal(payload.comments.length, 2, '两条有锚点 → 两条 inline');
     assert.equal(payload.comments[0].side, 'RIGHT');
     assert.equal(payload.comments[0].line, 20);
-    assert.match(payload.comments[0].body, /```suggestion\nconst c = new Atomic/, 'suggestion 块');
+    // 缩进是补丁的一部分:被削掉的话 author 一键采纳就把那行的缩进也改了
+    assert.match(payload.comments[0].body, /```suggestion\n {4}const c = new Atomic\(0\);\n```/, 'suggestion 块逐字保留缩进');
     assert.match(payload.body, /整体方向 OK/, 'review body = summary');
     log('payload 组装 ok');
   }
