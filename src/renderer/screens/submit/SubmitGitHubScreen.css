@@ -381,6 +381,30 @@
   color: var(--text-dim);
   font-weight: 500;
 }
+/* 降级为摘要条目:锚点仍显示(摘要正文里也会写出它),这里只标它不再是 inline 行评论 */
+.f-degraded {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+.f-degraded button {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border);
+  padding: 0 0 0 6px;
+  cursor: pointer;
+}
+.f-degraded button:hover {
+  color: var(--text);
+}
 .origin {
   font-family: var(--mono);
   font-size: 10.5px;

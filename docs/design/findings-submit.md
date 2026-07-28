@@ -19,7 +19,7 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA** 连�
 保留项组成**一次 GitHub PR review**:
 
 - 有 `file:line` 锚点的 → **inline 行评论**(带 `suggestion` 的用 suggestion 块)。
-- `file=null`(整体 / 架构类)的 → 并入 **review 摘要 body**,连同 codex 审核总结。
+- 没有行锚点、或被降级的(见下) → 并入 **review 摘要 body**,连同 codex 审核总结。**摘要条目自带 `file:line`** —— 它脱离了 inline 的位置,不写出锚点,作者就只剩一段不知道说的是哪儿的结论,而这些条目往往正是锚在改动之外、最需要按图索骥的那批。
 - 用户选 **event**:`Comment` / `Request changes` / `Approve`。
 - **零 finding 也可提交** —— event 本身就是表态。仅照搬 GitHub 的硬约束:`Comment` / `Request changes` 至少要有 body 或一条行评论。
 
@@ -30,6 +30,8 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA** 连�
 **PR review 是一次原子提交** —— GitHub 要么整份落地、要么整份失败,**没有「部分成功」**。所以结果只有三类:成功 / 整体失败(认证过期 / 网络 / PR 已关闭,未提交任何评论)/ **422 行锚点失效**。
 
 **422 才是「部分不可提交」的真实形态**:某条 finding 的 `file:line` 已不在最新 diff 的新增侧,作为 inline 会让整份被拒。逐条处理(降级为摘要评论 / 改锚点到最近改动行 / 剔除此条)后整份重提,并给成批入口。
+
+**降级只记一格 `anchorDropped`,不动行号** —— 降级要解决的是「不能作为 inline 发」,不是「不知道在哪儿」:锚点留着,摘要条目才写得出 `file:line`,用户也才能一键改回行评论。
 
 ### 失效锚点靠「现拉最新 diff」定位
 

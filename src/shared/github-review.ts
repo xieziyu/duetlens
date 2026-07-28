@@ -4,6 +4,7 @@
  */
 import {
   SEVERITY_EMOJI,
+  findingAnchorText,
   findingNarrative,
   findingSuggestion,
   recheckNote,
@@ -37,8 +38,9 @@ export interface PrReviewPayload {
   comments: PrReviewComment[];
 }
 
-/** finding 是否有可作为 inline 锚点的位置(新侧行号 > 0)。当前模型 finding 恒有锚点。 */
-export const hasAnchor = (f: Finding): boolean => Boolean(f.file) && f.line > 0;
+/** finding 是否作为 inline 行评论提交:有新侧行号,且没被提交屏降级为摘要条目。 */
+export const hasAnchor = (f: Finding): boolean =>
+  Boolean(f.file) && f.line > 0 && !f.anchorDropped;
 
 /** 严重度圆点 + 加粗的「[severity · category] 标题」,inline 与整体意见共用。 */
 function headline(f: Finding): string {
@@ -92,7 +94,12 @@ export function buildPrReviewPayload(
   if (review.summaryBody?.trim()) parts.push(review.summaryBody.trim());
   if (unanchored.length) {
     const lines = unanchored.map((f) => {
-      const block = [followUpLead(f, review.currentRound), findingNarrative(f, review.currentRound)]
+      // 锚点必须写进正文:摘要条目脱离了 inline 的位置,少了 file:line 作者无从判断说的是哪儿。
+      const block = [
+        followUpLead(f, review.currentRound),
+        f.file ? `\`${findingAnchorText(f)}\`` : '',
+        findingNarrative(f, review.currentRound),
+      ]
         .filter(Boolean)
         .join('\n\n');
       const head = `- ${headline(f)}`;
