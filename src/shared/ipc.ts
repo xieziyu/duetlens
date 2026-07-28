@@ -344,7 +344,10 @@ export interface DuetlensApi {
      * reason 只在剔除时有意义(可选),会注入下一轮复审让 agent 不再报同类问题;恢复时自动清空。
      */
     setTriage(reviewId: string, findingId: string, triage: Triage, reason?: string | null): Promise<Finding>;
-    /** 改一条 finding 的行锚点(提交屏修 422 失效锚点):line>0 改锚,line=0 脱锚(降级为摘要)。 */
+    /**
+     * 改一条 finding 的行锚点(提交屏修 422 失效锚点):line>0 改锚(并撤销降级),line=0 脱锚
+     * (降级为摘要);脱锚保留原行号,故传回原 line 即可把它改回行评论。
+     */
     setFindingAnchor(reviewId: string, findingId: string, line: number): Promise<Finding>;
     /** 用户手动新增一条锚定 finding(origin=manual),同 agent finding 的 schema/提交路径。 */
     addFinding(reviewId: string, input: AddFindingInput): Promise<Finding>;

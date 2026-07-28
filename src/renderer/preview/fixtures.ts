@@ -15,7 +15,7 @@ import type {
 } from '@shared/ipc';
 import type { PrSummary } from '@shared/source-discovery';
 import { scanDoneStatus } from '@shared/domain';
-import { isSubmittable } from '@shared/github-review';
+import { hasAnchor, isSubmittable } from '@shared/github-review';
 import type { Discussion, Finding, FindingProposal, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
 import { mergeLayers } from '@shared/prompt';
 import { APP_VERSION } from '@shared/version';
@@ -163,6 +163,7 @@ function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'titl
     category: null,
     body: '',
     suggestion: null,
+    anchorDropped: false,
     triage: 'open',
     dismissReason: null,
     submission: 'unsubmitted',
@@ -253,6 +254,8 @@ const FINDINGS: Finding[] = [
     body: 'appVersion 比较未校验格式,非法值被静默视为相等;文件不在本次改动内,agent 顺 import 读到并 off-diff 提出。',
     file: 'src/shared/config.ts',
     line: 42,
+    // 已在提交屏降级为摘要条目:锚点不在 diff 新增侧,作为 inline 会让整份被 422 拒
+    anchorDropped: true,
   }),
   // 第 1 轮就提交给 author、第 2 轮复核仍存在 —— 提交屏据此追发一条带复核说明的评论
   mkFinding({
@@ -862,7 +865,11 @@ export function installPreviewApi(): void {
       },
       setFindingAnchor: async (_r, findingId, line) => {
         const f = findings.find((x) => x.id === findingId)!;
-        const next = { ...f, line, updatedAt: Date.now() };
+        // 与后端同一口径:line=0 只置降级位,原行号留着(摘要要写出 file:line,也才能改回行评论)
+        const next =
+          line > 0
+            ? { ...f, line, anchorDropped: false, updatedAt: Date.now() }
+            : { ...f, anchorDropped: true, updatedAt: Date.now() };
         emit(next);
         return next;
       },
@@ -883,6 +890,7 @@ export function installPreviewApi(): void {
           file: input.file,
           line: input.line,
           suggestion: input.suggestion ?? null,
+          anchorDropped: false,
           triage: 'open',
           dismissReason: null,
           submission: 'unsubmitted',
@@ -928,6 +936,7 @@ export function installPreviewApi(): void {
           file: d.file!,
           line: d.line!,
           suggestion: null,
+          anchorDropped: false,
           triage: 'open',
           dismissReason: null,
           submission: 'unsubmitted',
@@ -973,7 +982,7 @@ export function installPreviewApi(): void {
           };
           emit(next);
         }
-        return { status: 'success', url, submittedCount: pending.filter((f) => f.file && f.line > 0).length };
+        return { status: 'success', url, submittedCount: pending.filter(hasAnchor).length };
       },
       openInBrowser: async () => {
         const url = 'https://github.com/xieziyu/podcast-go/pull/482';

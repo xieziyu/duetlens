@@ -203,7 +203,15 @@ CREATE INDEX idx_proposals_review ON finding_proposals(review_id);
 CREATE INDEX idx_proposals_discussion ON finding_proposals(discussion_id);
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
+// 「降级为摘要评论」从此记在独立一格,不再靠把 line 清成 0 来表达 —— 摘要条目要写出 file:line
+// 给作者定位,清掉行号等于把这信息扔了,也让降级不可回退。存量的 line=0 行只能按脱锚回填,
+// 原行号已不可追溯(findingAnchorText 对它只给文件名)。
+const V14 = `
+ALTER TABLE findings ADD COLUMN anchor_dropped INTEGER NOT NULL DEFAULT 0;
+UPDATE findings SET anchor_dropped = 1 WHERE line <= 0;
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

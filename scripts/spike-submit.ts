@@ -9,6 +9,7 @@ import { ReviewStore } from '../src/backend/db/review-store';
 import { ReviewManager } from '../src/backend/review/review-manager';
 import {
   buildPrReviewPayload,
+  hasAnchor,
   isAnchorLive,
   isStaleAnchor,
   isSubmittable,
@@ -259,9 +260,11 @@ async function main() {
     const manager = new ReviewManager(store, undefined, {
       submitter: new FakeSubmitter({ status: 'success', url: 'u', submittedCount: 0 }),
     });
-    // 降级为摘要:line=0 脱锚 → 从 inline 移到 review body
+    // 降级为摘要:line=0 只脱锚 → 从 inline 移到 review body,行号留着给摘要写锚点
     manager.setFindingAnchor(review.id, stale.id, 0);
-    assert.equal(store.getFinding(stale.id)!.line, 0, 'line 置 0');
+    assert.equal(store.getFinding(stale.id)!.line, 99, '降级不清行号');
+    assert.equal(store.getFinding(stale.id)!.anchorDropped, true, '记为已脱锚');
+    assert.equal(hasAnchor(store.getFinding(stale.id)!), false, '脱锚后不再作为 inline 提交');
     const degraded = buildPrReviewPayload(
       store.getReview(review.id)!,
       [store.getFinding(live.id)!, store.getFinding(stale.id)!],
@@ -269,6 +272,12 @@ async function main() {
     );
     assert.equal(degraded.comments.length, 1, '降级后只剩 1 条 inline');
     assert.match(degraded.body, /失效锚点/, '降级项并入 review body');
+    assert.match(degraded.body, /`src\/p\.ts:99`/, '摘要条目自带 file:line,否则作者无从定位');
+
+    // 改回行评论:降级留着的行号原样传回即可复原
+    manager.setFindingAnchor(review.id, stale.id, store.getFinding(stale.id)!.line);
+    assert.equal(hasAnchor(store.getFinding(stale.id)!), true, '传回原行号即撤销降级');
+    manager.setFindingAnchor(review.id, stale.id, 0);
 
     // 改锚点:把另一条改到最近活行 → 回到 inline
     const stale2 = store.addFinding(review.id, { severity: 'low', title: '再失效', body: 'x', file: 'src/p.ts', line: 88 });

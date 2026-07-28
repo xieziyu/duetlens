@@ -41,6 +41,7 @@ function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'titl
     category: null,
     body: '',
     suggestion: null,
+    anchorDropped: false,
     triage: 'open',
     dismissReason: null,
     submission: 'unsubmitted',

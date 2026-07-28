@@ -80,6 +80,7 @@ interface FindingRow {
   body: string;
   file: string;
   line: number;
+  anchor_dropped: number;
   suggestion: string | null;
   triage: string;
   dismiss_reason: string | null;
@@ -190,6 +191,7 @@ function toFinding(r: FindingRow): Finding {
     body: r.body,
     file: r.file,
     line: r.line,
+    anchorDropped: r.anchor_dropped === 1,
     suggestion: r.suggestion,
     triage: (r.triage === 'keep' ? 'open' : r.triage) as Triage,
     dismissReason: r.dismiss_reason,
@@ -759,10 +761,21 @@ export class ReviewStore {
     });
   }
 
-  /** 改锚点行(提交屏修锚点 / 降级为摘要):line=0 表示脱锚,归入 review 摘要。 */
+  /**
+   * 改锚点行(提交屏修锚点 / 降级为摘要):line=0 表示脱锚,归入 review 摘要。
+   * 脱锚只置 anchor_dropped,原行号照留 —— 摘要条目要写出 file:line,且据此可改回行评论。
+   */
   setFindingAnchor(findingId: string, line: number): void {
     this.withReviewTouch({ finding: findingId }, (ts) => {
-      this.db.prepare('UPDATE findings SET line = ?, updated_at = ? WHERE id = ?').run(line, ts, findingId);
+      if (line > 0) {
+        this.db
+          .prepare('UPDATE findings SET line = ?, anchor_dropped = 0, updated_at = ? WHERE id = ?')
+          .run(line, ts, findingId);
+        return;
+      }
+      this.db
+        .prepare('UPDATE findings SET anchor_dropped = 1, updated_at = ? WHERE id = ?')
+        .run(ts, findingId);
     });
   }
 

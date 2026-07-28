@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { findingNarrative, findingSuggestion, type Finding, type Review } from '@shared/domain';
+import {
+  findingAnchorText,
+  findingNarrative,
+  findingSuggestion,
+  type Finding,
+  type Review,
+} from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { SubmitReviewResult } from '@shared/ipc';
 import {
@@ -90,6 +96,8 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     [findings, diff, round],
   );
   const inlineCount = pending.filter(hasAnchor).length;
+  // 降级 / 无锚点的条目走 review body 的「整体意见」,与草稿正文一起构成摘要
+  const summaryCount = pending.filter((f) => !hasAnchor(f)).length;
   const keptCount = findings.filter((f) => f.triage !== 'dismiss').length;
   const staleList = useMemo(() => findings.filter((f) => staleIds.has(f.id)), [findings, staleIds]);
   const reAnchorableCount = staleList.filter((f) => nearestLiveLine(f.file, f.line, diff) != null).length;
@@ -112,6 +120,10 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   }, [diff]);
 
   const degradeToSummary = (f: Finding) => void window.duetlens.review.setFindingAnchor(reviewId, f.id, 0);
+  /** 撤销降级:行号在降级时留着没清,原样传回即恢复为行评论。 */
+  const restoreAnchor = (f: Finding) => {
+    if (f.line > 0) void window.duetlens.review.setFindingAnchor(reviewId, f.id, f.line);
+  };
   const reAnchor = (f: Finding) => {
     const line = nearestLiveLine(f.file, f.line, diff);
     if (line != null) void window.duetlens.review.setFindingAnchor(reviewId, f.id, line);
@@ -171,7 +183,8 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   const btnLabel = (() => {
     const parts: string[] = [];
     if (inlineCount > 0) parts.push(`${inlineCount} 行评论`);
-    if (summary.trim()) parts.push('摘要');
+    if (summaryCount > 0) parts.push(`摘要(含 ${summaryCount} 条)`);
+    else if (summary.trim()) parts.push('摘要');
     return `提交到 GitHub · ${parts.length ? parts.join(' + ') : `仅 ${EVENT_META[event].label}`} →`;
   })();
 
@@ -291,8 +304,17 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                   </div>
                   <div className="f-top">
                     <span className="f-anchor">
-                      📍 <b>{f.file}</b>:{f.line}
+                      📍 <b>{f.file}</b>
+                      {f.line > 0 ? `:${f.line}` : ''}
                     </span>
+                    {f.anchorDropped && !isDismissed && (
+                      <span className="f-degraded">
+                        并入摘要
+                        {!locked && f.line > 0 && (
+                          <button onClick={() => restoreAnchor(f)}>改回行评论</button>
+                        )}
+                      </span>
+                    )}
                     <span className={'origin' + (f.origin === 'agent' ? ' agent' : ' human')}>
                       <span className="d" />
                       {f.origin === 'agent' ? 'agent' : '你 · ' + (f.origin === 'promoted' ? '由 discussion 提升' : '手动新增')}
@@ -325,9 +347,11 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
                   )}
                   {isSubmitted && (
                     <div className={'f-status ' + (canFollowUp ? 'followup' : 'done')}>
-                      {canFollowUp
-                        ? `↻ 上一轮已提交 · 本轮复核仍存在,将追发一条复核评论 · inline ${f.file}:${f.line}`
-                        : `已提交 · inline ${f.file}:${f.line}`}
+                      {(canFollowUp
+                        ? '↻ 上一轮已提交 · 本轮复核仍存在,将追发一条复核评论 · '
+                        : '已提交 · ') +
+                        (hasAnchor(f) ? 'inline ' : '摘要内 ') +
+                        findingAnchorText(f)}
                     </div>
                   )}
                   {isStale && !isDismissed && !locked && (

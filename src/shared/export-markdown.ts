@@ -4,6 +4,7 @@
  */
 import {
   SEVERITY_EMOJI,
+  findingAnchorText,
   findingNarrative,
   findingSuggestion,
   type Finding,
@@ -67,7 +68,7 @@ function findingBlock(
 ): string {
   const cat = f.category ? ` · ${f.category}` : '';
   let block = `${heading} ${SEVERITY_EMOJI[f.severity]} ${f.severity}${cat} — ${f.title}\n\n`;
-  block += `\`${f.file}:${f.line}\`\n\n`;
+  block += `\`${findingAnchorText(f)}\`\n\n`;
   const narrative = findingNarrative(f, currentRound);
   if (narrative) block += `${narrative}\n\n`;
   const suggestion = findingSuggestion(f, currentRound);
@@ -115,7 +116,7 @@ export function buildReviewMarkdown(
     md += `## 已剔除（${dropped.length}）\n\n`;
     for (const f of dropped) {
       const cat = f.category ? ` · ${f.category}` : '';
-      md += `- ~~${f.title}~~（${f.severity}${cat} · ${f.file}:${f.line}）\n`;
+      md += `- ~~${f.title}~~（${f.severity}${cat} · ${findingAnchorText(f)}）\n`;
     }
     md += '\n';
   }

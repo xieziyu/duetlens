@@ -256,6 +256,11 @@ export interface Finding {
   body: string;
   file: string;
   line: number;
+  /**
+   * 提交屏把这条从 inline 行评论降级为摘要条目(见 {@link hasAnchor})。
+   * 锚点值本身留着不清 —— 摘要里要写出 `file:line`,失效锚点也还能改回行评论。
+   */
+  anchorDropped: boolean;
   suggestion: string | null;
   triage: Triage;
   /** reviewer 剔除时可选填的理由;复审时注入,让 agent 不再报同类问题 */
@@ -315,6 +320,14 @@ export function findingSuggestion(f: Finding, currentRound: number): string | nu
   // 首行缩进是补丁的一部分(会被逐字替换进代码),只能削首尾空行与行尾空白,不能 trim
   const s = f.suggestion?.replace(/^[ \t]*\n+/, '').replace(/\s+$/, '') ?? '';
   return s || null;
+}
+
+/**
+ * 锚点的人读形式 `file:line`,提交摘要 / 导出 / 提交屏共用。
+ * 行号缺失(存量脱锚数据把行号清成了 0)时只给文件名,别写出 `path:0` 这种假位置。
+ */
+export function findingAnchorText(f: Finding): string {
+  return f.line > 0 ? `${f.file}:${f.line}` : f.file;
 }
 
 export interface Message {
