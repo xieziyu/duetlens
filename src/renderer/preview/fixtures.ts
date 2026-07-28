@@ -391,12 +391,14 @@ const promptLayers: Record<EditablePromptLayer, Partial<Record<PromptSectionKey,
 };
 
 function buildPromptView(cwd?: string): ReviewPromptView {
-  const { sections } = mergeLayers(promptLayers.project, promptLayers.global);
-  // 预览恒返回 project 路径(免选目录直接编辑);真实后端仍按 cwd 门控
+  // 无 cwd 时后端读不到 project 层文件,合并里就不该有 project 覆盖
+  const { sections } = mergeLayers(cwd ? promptLayers.project : {}, promptLayers.global);
   return {
     sections,
-    projectPath: `${cwd ?? '/repo'}/.duetlens/review.md`,
-    globalPath: '~/.duetlens/review.md',
+    // 与后端同样按 cwd 门控:demo review 带 repoPath,规则屏继承它;`?source=github` 则落到未选态
+    projectPath: cwd ? `${cwd}/.duetlens/review.md` : null,
+    // 后端返回绝对路径,`~` 折叠是渲染层的事;fixture 跟着给绝对路径才测得到折叠
+    globalPath: '/Users/dev/.duetlens/review.md',
   };
 }
 
@@ -517,7 +519,11 @@ export function installPreviewApi(): void {
     review: {
       list: async () => [review],
       listRecent: async () => (params.has('empty') ? [] : RECENT_REVIEWS),
-      get: async () => review,
+      // ?review=error 模拟读库失败,自查依赖它的屏不会卡在加载态
+      get: async () => {
+        if (params.get('review') === 'error') throw new Error('database is locked');
+        return review;
+      },
       findings: async () => findings,
       diff: async () => diff,
       // ?submit=invalid 时最新 diff 已推进(锚点落空),?latest=error 模拟 gh 读不到
@@ -983,6 +989,9 @@ export function installPreviewApi(): void {
           ],
         };
         const base = { repoPath, repoName: 'podcast-go', isGit: true, gitbutler: null, degraded: null } as const;
+        // ?repo=gone 演示目录已被移走/删除(git rev-parse 失败即 isGit=false)
+        if (params.get('repo') === 'gone')
+          return { ...base, isGit: false, head: null, mode: 'local' };
         if (state === 'no-gb' || state === 'no-branches' || state === 'many-branches')
           return { ...base, head: 'feat/stream-transcode', mode: 'local' };
         if (state === 'gb-degraded')
@@ -993,7 +1002,12 @@ export function installPreviewApi(): void {
     },
     prompt: {
       get: async (cwd) => buildPromptView(cwd),
+      // ?prompt=save-error 模拟写盘失败(目录只读 / 磁盘满),自查失败态与 draft 保留
       save: async (input) => {
+        if (params.get('prompt') === 'save-error')
+          throw new Error("EACCES: permission denied, open '/repo/.duetlens/review.md'");
+        // ?prompt=slow-save 撑开写盘窗口:保存在途时切层另开编辑器的竞态,只有异步才复现得出来
+        if (params.get('prompt') === 'slow-save') await new Promise((r) => setTimeout(r, 8000));
         promptLayers[input.layer] = { ...input.sections };
         return buildPromptView(input.cwd);
       },

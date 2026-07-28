@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   parseKeyedFields,
   serializeKeyedFields,
@@ -44,6 +44,15 @@ const sameTarget = (a: EditTarget | null, key: PromptSectionKey, field?: string)
 /** 字段 id → CSS 安全的档位标签类名(severity 的 high/low 命中配色;focus 类别名带空格,归一为中性 chip)。 */
 const fieldClass = (id: string): string => `pr-lvl ${id.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
+/** 后端给的是绝对路径;home 从 globalPath(`<home>/.duetlens/review.md`)反推,不为拿 homedir 另开一条 IPC。 */
+function tildify(p: string, globalPath: string): string {
+  const home = globalPath.slice(0, globalPath.lastIndexOf('/.duetlens/'));
+  return home && p.startsWith(`${home}/`) ? `~${p.slice(home.length)}` : p;
+}
+
+const repoDirOf = (projectPath: string): string => projectPath.replace(/\/\.duetlens\/review\.md$/, '');
+const basename = (p: string): string => p.slice(p.lastIndexOf('/') + 1);
+
 /** 某节在指定层之下最近一层的继承文本(供「＋ 覆盖此节」起编与继承提示)。 */
 function belowText(s: PromptLayerSection, layer: EditablePromptLayer): { layer: PromptLayer; text: string } {
   if (layer === 'project' && s.global != null) return { layer: 'global', text: s.global };
@@ -88,22 +97,92 @@ function layerOverrides(
   return out;
 }
 
-export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JSX.Element {
-  const [view, setView] = useState<ReviewPromptView | null>(null);
+export function PromptRulesScreen({
+  reviewId = null,
+  onBack,
+}: { reviewId?: string | null; onBack?: () => void }): React.JSX.Element {
+  // view 必须自证属于哪个 cwd:切仓库时旧请求可能后到,而 persistLayer 是拿 view 的整层覆盖 map
+  // 往当前 cwd 写的 —— 错配一次就是把 A 仓库的规则批量写进 B 仓库的文件。
+  const [loaded, setLoaded] = useState<{ cwd: string | null; view: ReviewPromptView } | null>(null);
   const [cwd, setCwd] = useState<string | null>(null);
+  // 仓库是继承来的而非手选 —— 只用于在仓库条上标明来源,手动切换后失效
+  const [fromReview, setFromReview] = useState(false);
+  // 继承没成时的原因,空态卡要说清「为什么没自动带上」
+  const [inheritNote, setInheritNote] = useState<string | null>(null);
+  // 继承未落定前不加载:否则先按「无仓库」拉一次视图,继承到仓库再拉一次,project 层闪一下空态
+  const [inheritDone, setInheritDone] = useState(reviewId == null);
+  const view = loaded && loaded.cwd === cwd ? loaded.view : null;
   const [curLayer, setCurLayer] = useState<PromptLayer>('project');
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  // 记下失败发生在哪一层:横幅拼 curLayer 的话,切个层就把排查方向指到另一个文件上
+  const [saveError, setSaveError] = useState<{ layer: EditablePromptLayer; message: string } | null>(
+    null,
+  );
+  // 读不到规则时 view 恒为 null,整屏都渲染不出来 —— 没有这条就只剩一个不会结束的「加载中」
+  const [loadError, setLoadError] = useState<string | null>(null);
 
+  const cwdRef = useRef(cwd);
+  cwdRef.current = cwd;
+  // 写盘是异步的,回来时 UI 可能已经换了仓库、换了编辑目标,或就在同一个框里继续打字;
+  // 三处都要按「发起时」的身份收尾
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  // 开头清 loadError 兼作「重试」的反馈:错误面板立刻换回加载态,失败再挂回来。
   const load = useCallback(async (dir: string | null) => {
-    const v = await window.duetlens.prompt.get(dir ?? undefined);
-    setView(v);
+    setLoadError(null);
+    try {
+      const v = await window.duetlens.prompt.get(dir ?? undefined);
+      if (cwdRef.current !== dir) return; // 已切到别的仓库,这条响应作废
+      setLoaded({ cwd: dir, view: v });
+    } catch (e) {
+      if (cwdRef.current !== dir) return;
+      setLoadError(e instanceof Error ? e.message : String(e));
+    }
   }, []);
 
+  // 缺省编辑「当前审核那个仓库」的规则;审核无本地仓库(如 github-pr)时不继承,留给用户手选。
   useEffect(() => {
+    if (reviewId == null) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const r = await window.duetlens.review.get(reviewId);
+        if (!alive || !r) return;
+        if (!r.repoPath) {
+          setInheritNote('当前审核没有本地仓库目录,没法自动带上。');
+          return;
+        }
+        // 历史审核的 repoPath 可能已被移动或删除:后端读不到只当作「无覆盖」,但保存时
+        // mkdir -p 会把规则写进一个已经不是仓库的位置,所以继承前先确认它还是个 git 仓库。
+        const repo = await window.duetlens.source.inspectRepo(r.repoPath);
+        if (!alive) return;
+        if (!repo.isGit) {
+          setInheritNote(`当前审核的仓库目录已不可用:${r.repoPath}`);
+          return;
+        }
+        setCwd(repo.repoPath);
+        setFromReview(true);
+      } catch {
+        if (alive) setInheritNote('读取当前审核失败,没法自动带上仓库。');
+      } finally {
+        // 失败也要放行,否则 prompt.get 永远被门控,连 global / builtin 层都看不了
+        if (alive) setInheritDone(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [reviewId]);
+
+  useEffect(() => {
+    if (!inheritDone) return;
     void load(cwd);
-  }, [load, cwd]);
+  }, [load, cwd, inheritDone]);
 
   const overrideCount = useMemo(() => {
     if (!view) return { project: 0, global: 0 };
@@ -117,6 +196,9 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
     const dir = await window.duetlens.dialog.pickDirectory();
     if (dir) {
       setEditing(null);
+      setFromReview(false);
+      setInheritNote(null);
+      setSaveError(null);
       setCwd(dir);
     }
   };
@@ -131,19 +213,38 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
   };
 
   // 整层重写:以当前层覆盖 map 为基,应用一处增删,落库并回读合并视图。
+  // closeAfter 指名成功后该收起哪个编辑器;重置类操作不由编辑框发起,传 null。
   const persistLayer = async (
     layer: EditablePromptLayer,
     mutate: (o: Partial<Record<PromptSectionKey, string>>) => void,
+    closeAfter: EditTarget | null = null,
   ): Promise<void> => {
     if (!view || saving) return;
+    const dir = cwd;
+    const sentDraft = draft;
     const sections = layerOverrides(view, layer);
     mutate(sections);
     setSaving(true);
+    setSaveError(null);
     try {
-      const next = await window.duetlens.prompt.save({ layer, cwd: cwd ?? undefined, sections });
-      setView(next);
-      setEditing(null);
-      setDraft('');
+      const next = await window.duetlens.prompt.save({ layer, cwd: dir ?? undefined, sections });
+      if (cwdRef.current !== dir) return;
+      setLoaded({ cwd: dir, view: next });
+      // 只收起发起这次保存的那个编辑框,且草稿一字未动(失败时也不收,draft 原样留着重试)。
+      // 写盘期间用户可能切层另开编辑器,也可能就在这个框里继续打字 —— 后者不改 editing,
+      // 只认目标就会把请求发出后新增、并未落盘的那几个字吞掉。
+      if (
+        closeAfter &&
+        sameTarget(editingRef.current, closeAfter.key, closeAfter.field) &&
+        draftRef.current === sentDraft
+      ) {
+        setEditing(null);
+        setDraft('');
+      }
+    } catch (e) {
+      // 目录只读 / 磁盘满 / 仓库挂载失效都从这里出来;吞掉就只剩「点了没反应」
+      if (cwdRef.current === dir)
+        setSaveError({ layer, message: e instanceof Error ? e.message : String(e) });
     } finally {
       setSaving(false);
     }
@@ -151,10 +252,14 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
 
   const commitSection = (layer: EditablePromptLayer, key: PromptSectionKey): void => {
     const text = draft.trim();
-    void persistLayer(layer, (o) => {
-      if (text) o[key] = draft;
-      else delete o[key];
-    });
+    void persistLayer(
+      layer,
+      (o) => {
+        if (text) o[key] = draft;
+        else delete o[key];
+      },
+      { key },
+    );
   };
   const resetSection = (layer: EditablePromptLayer, key: PromptSectionKey): void => {
     void persistLayer(layer, (o) => {
@@ -170,19 +275,50 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
     text: string | null,
   ): void => {
     const ids = (s.fields ?? []).map((f) => f.id);
-    void persistLayer(layer, (o) => {
-      const values = parseKeyedFields(o[s.key] ?? '', ids);
-      if (text?.trim()) values[field] = text.trim();
-      else delete values[field];
-      const next = serializeKeyedFields(values, ids);
-      if (next) o[s.key] = next;
-      else delete o[s.key];
-    });
+    void persistLayer(
+      layer,
+      (o) => {
+        const values = parseKeyedFields(o[s.key] ?? '', ids);
+        if (text?.trim()) values[field] = text.trim();
+        else delete values[field];
+        const next = serializeKeyedFields(values, ids);
+        if (next) o[s.key] = next;
+        else delete o[s.key];
+      },
+      text != null ? { key: s.key, field } : null,
+    );
   };
 
-  if (!view) return <div className="pr-loading">加载审核规则…</div>;
+  // 换仓库期间 view 归 null(而不是继续显示上一个仓库的规则),编辑与保存一并被挡在门外
+  if (!view) {
+    // 读失败时 rail 也渲染不出来,返回/换仓库这两条出路得在这张卡里自带,否则整屏是死的
+    if (loadError != null)
+      return (
+        <div className="pr-loadfail">
+          <div className="msg">✕ 没能读到审核规则:{loadError}</div>
+          <div className="acts">
+            <button className="pr-btn" onClick={() => void load(cwd)}>
+              重试
+            </button>
+            {/* 无 cwd 时失败的只可能是 global 侧,换仓库救不了,就别给这个按钮 */}
+            {cwd != null && (
+              <button className="pr-btn" onClick={() => void pickRepo()}>
+                选择其他仓库目录…
+              </button>
+            )}
+            {onBack && (
+              <button className="pr-btn" onClick={onBack}>
+                ← 返回
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    return <div className="pr-loading">加载审核规则…</div>;
+  }
 
   const projectDisabled = view.projectPath == null;
+  const repoDir = view.projectPath ? repoDirOf(view.projectPath) : null;
 
   /** 编辑框 + 取消/保存;free 节与 structured 字段共用。 */
   const editor = (onCommit: () => void, rows: number): React.JSX.Element => (
@@ -321,8 +457,9 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
                 覆盖 {overrideCount.project} 节
               </span>
             </div>
-            <div className="path">
-              {view.projectPath ? '.duetlens/review.md · 本仓库' : '未选仓库'}
+            {/* 落点文件路径由编辑器头部的仓库条给全,这里只认仓库 */}
+            <div className="path" title={repoDir ?? undefined}>
+              {repoDir ? basename(repoDir) : '未选仓库'}
             </div>
             <div className="cnt">随仓库提交,团队共享</div>
           </button>
@@ -340,7 +477,7 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
                 覆盖 {overrideCount.global} 节
               </span>
             </div>
-            <div className="path">~/.duetlens/review.md · 你</div>
+            <div className="path">{tildify(view.globalPath, view.globalPath)} · 你</div>
             <div className="cnt">个人偏好,跨所有仓库</div>
           </button>
           <button
@@ -373,15 +510,41 @@ export function PromptRulesScreen({ onBack }: { onBack?: () => void }): React.JS
               {curLayer} 层
             </div>
             <div className="s">{LAYER_DESC[curLayer]}</div>
+            {curLayer === 'project' && repoDir && (
+              <div className="pr-repo">
+                <span className="ic">⌂</span>
+                <span className="nm">{basename(repoDir)}</span>
+                {fromReview && <span className="src">来自当前审核</span>}
+                <span className="dir" title={repoDir}>
+                  {tildify(repoDir, view.globalPath)}
+                </span>
+                <code className="rel">.duetlens/review.md</code>
+                {/* 保存在途时不许换仓库:那笔写入认的是切换前的 cwd */}
+                <button className="pr-btn" onClick={() => void pickRepo()} disabled={saving}>
+                  切换…
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* 失败的动作可能在任意卡片上(整节 / 单字段 / 重置),所以错误挂在栏顶而不是某张卡里 */}
+          {saveError && (
+            <div className="pr-err">
+              ✕ 没能保存到 {saveError.layer} 层:{saveError.message}
+            </div>
+          )}
 
           {curLayer === 'project' && projectDisabled ? (
             <div className="pr-pick">
+              {inheritNote && <div className="why">{inheritNote}</div>}
               project 层规则随某个仓库提交,需先指定该仓库目录。
               <br />
               选定后编辑落 <code>&lt;仓库&gt;/.duetlens/review.md</code>。
               <div>
-                <button onClick={() => void pickRepo()}>选择仓库目录…</button>
+                {/* 与仓库条的「切换…」同理:保存在途时不许选仓库,那笔写入认的是切换前的 cwd */}
+                <button onClick={() => void pickRepo()} disabled={saving}>
+                  选择仓库目录…
+                </button>
               </div>
             </div>
           ) : (

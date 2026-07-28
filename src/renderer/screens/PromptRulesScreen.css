@@ -106,7 +106,9 @@
   font-size: 10px;
   color: var(--text-faint);
   margin-top: 5px;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* 选中层的底色被 --agent-soft 抬亮,faint 在上面掉到 4.25:1;选中态本就该更显眼,一并提档 */
 .pr-layer.on .path { color: var(--text-dim); }
@@ -130,6 +132,61 @@
   border-radius: 4px;
 }
 
+/* 已选仓库时的标识条:仓库名 + 目录 + 落点文件 + 切换。project 色系与 rail 选中态一致 */
+.pr-repo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 7px 8px 7px 11px;
+  border: 1px solid var(--agent-line);
+  background: var(--agent-soft);
+  border-radius: 9px;
+}
+.pr-repo .ic { color: var(--agent-2); font-size: 12px; }
+.pr-repo .nm { font-size: 13px; font-weight: 600; color: var(--text); }
+/* 目录尾段就是仓库名,已在 .nm 里粗体重复一次,所以尾部截断丢的信息最少 */
+.pr-repo .dir {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pr-repo .rel {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--surface-3);
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex: none;
+}
+.pr-repo .src {
+  font-size: 10px;
+  color: var(--agent-2);
+  border: 1px solid var(--agent-line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  flex: none;
+}
+.pr-repo .pr-btn { flex: none; }
+
+.pr-err {
+  margin-bottom: 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--del-gutter);
+  background: var(--del-bg);
+  border-radius: 9px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--sev-high);
+  overflow-wrap: anywhere;
+}
+
 /* project 层未选仓库时的选目录卡 */
 .pr-pick {
   border: 1px dashed var(--border);
@@ -141,6 +198,11 @@
   line-height: 1.7;
 }
 .pr-pick code { font-family: var(--mono); color: var(--text-dim); }
+.pr-pick .why {
+  color: var(--text);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
 .pr-pick button {
   margin-top: 12px;
   background: var(--accent-solid);
@@ -152,6 +214,7 @@
   font-weight: 600;
   cursor: pointer;
 }
+.pr-pick button:disabled { opacity: 0.5; cursor: not-allowed; }
 .pr-pick .cur {
   margin-top: 10px;
   font-family: var(--mono);
@@ -357,3 +420,16 @@
 .pr-mg-legend .d { width: 8px; height: 8px; border-radius: 50%; }
 
 .pr-loading { padding: 40px; color: var(--text-faint); font-size: 12px; }
+
+.pr-loadfail { padding: 40px; max-width: 620px; }
+.pr-loadfail .msg {
+  padding: 10px 13px;
+  border: 1px solid var(--del-gutter);
+  background: var(--del-bg);
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--sev-high);
+  overflow-wrap: anywhere;
+}
+.pr-loadfail .acts { display: flex; gap: 8px; margin-top: 12px; }

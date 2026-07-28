@@ -130,7 +130,9 @@ export function App({
           {screen === 'submit' && (
             <SubmitExportScreen reviewId={activeReviewId} onBack={() => setScreen('review')} />
           )}
-          {screen === 'prompt' && <PromptRulesScreen onBack={() => setScreen('entry')} />}
+          {screen === 'prompt' && (
+            <PromptRulesScreen reviewId={activeReviewId} onBack={() => setScreen('entry')} />
+          )}
           {screen === 'history' && <HistoryScreen onOpen={openReview} />}
           {screen === 'settings' && <SettingsScreen onOpenPrompt={() => setScreen('prompt')} />}
         </main>
