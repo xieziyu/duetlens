@@ -3663,12 +3663,6 @@
   color: var(--text-faint);
   margin-bottom: 9px;
 }
-.sb-head .sb-edit {
-  color: var(--agent-2);
-  cursor: pointer;
-  text-transform: none;
-  letter-spacing: 0;
-}
 .sb-head .sb-by {
   margin-left: auto;
   color: var(--text-faint);
@@ -3714,12 +3708,6 @@
 }
 .sb-prose.empty {
   color: var(--text-faint);
-  cursor: text;
-}
-.sb-editor .sb-ta {
-  min-height: 150px;
-  line-height: 1.7;
-  font-size: 12.5px;
 }
 .theme {
   display: flex;
@@ -3777,6 +3765,51 @@
   border-radius: 5px;
   padding: 0 6px;
   flex: none;
+}
+/* 总结停在更早的轮次:不藏内容,只把「这不是本轮结论」说出来 */
+.sb-head .sb-by.stale {
+  color: var(--sev-med);
+}
+.sb-head .sb-by.stale .gl {
+  background: var(--sev-med);
+  box-shadow: none;
+}
+/* 重点关注文件:理由是整句话,故两行排(路径在上、理由换行铺满),不与 .theme 的单行版共用 */
+.focus-file {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+  margin-bottom: 7px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+.focus-file:hover:not(:disabled) {
+  border-color: var(--agent-line);
+  background: var(--surface-2);
+}
+.focus-file:disabled {
+  cursor: default;
+}
+.focus-file .ff-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+  font-weight: 500;
+  word-break: break-all;
+}
+.focus-file:disabled .ff-path {
+  color: var(--text-dim);
+}
+.focus-file .ff-note {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.55;
 }
 .sum-cov {
   font-family: var(--mono);

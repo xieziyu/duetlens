@@ -74,11 +74,15 @@ const indentContinuation = (s: string): string =>
 /**
  * 组装请求体。findings 应为「保留且未提交」的待提交集(由调用方过滤)。
  * 有锚点 → inline;无锚点(整体/架构类)→ 并入 review body。
+ *
+ * body 是 reviewer 在提交屏手填的意见,**不取 review.summaryBody** ——
+ * agent 的总结只呈现给 reviewer 自己,发给 PR 作者的话得由人自己写下。
  */
 export function buildPrReviewPayload(
   review: Review,
   findings: Finding[],
   event: GhReviewEvent,
+  body: string,
 ): PrReviewPayload {
   const anchored = findings.filter(hasAnchor);
   const unanchored = findings.filter((f) => !hasAnchor(f));
@@ -91,7 +95,7 @@ export function buildPrReviewPayload(
   }));
 
   const parts: string[] = [];
-  if (review.summaryBody?.trim()) parts.push(review.summaryBody.trim());
+  if (body.trim()) parts.push(body.trim());
   if (unanchored.length) {
     const lines = unanchored.map((f) => {
       // 锚点必须写进正文:摘要条目脱离了 inline 的位置,少了 file:line 作者无从判断说的是哪儿。

@@ -19,6 +19,14 @@ Review (一次审核会话)
 
 **findings 经 MCP 工具回传,不再 watch 文件。** app 向 codex 暴露 `report_finding` / `update_finding` / `resolve_finding` / `get_file` / `get_diff`,agent 实时、结构化地上报,并可在对话中随时修正。这取代了 1.0 用 chokidar 盯 `findings.json` 的做法 —— 数据实时、有明确 schema、天然契合多轮对话。
 
+**总结同样走 MCP 回传,不从回复文本里捞。** agent 收尾调 `write_summary` 写下总结正文与重点关注文件。重点文件要被机械消费(点击跳到 diff 对应文件),从自由文本里解析出来的东西担不起这个;正文与它同一次产出,一并走工具。总结每轮**整份重写**而非追加 —— 上一轮的重点挂在新一轮的结论上只会误导。
+
+**总结只读,且不外发。** 它是 agent 给 reviewer 的判断材料,不是 reviewer 的产出:故 Summary 屏不开编辑入口,提交到 GitHub 的 review 意见由 reviewer 在提交屏手填(不填即空、也不落库 —— 它属于那一次提交动作,不是 review 的属性),导出报告同样不含它。**一句 agent 写的话要发给 PR 作者或贴到别处,得由人自己写下**;让机器的结论顺着"复用"悄悄流出去,是把署名和责任一起转移了。
+
+**总结记下写于第几轮,过期只标不清。** 总结是 review 级的单份值、重跑不清空,所以第 2 轮漏调 `write_summary`(模型跳过 / 被叫停 / 没写完就收尾)时,第 1 轮的结论会原样冒充本轮结论。要拦的是**冒充**,不是数据本身:开新轮就清空会让一份大体仍成立的总结凭空作废,把「本轮写过总结」当收轮硬门槛又会让一轮真 findings 因为漏写而判失败(且 `stopped` 定义上就没有总结)。故记 `summary_round`,Summary 屏标出过期,由 reviewer 决定还认不认。正文与重点文件共用这一个轮次:两者只可能被同一次 `write_summary` 写入,没有第二个写入者能让它们错开。
+
+**`summary_round` 顺带成了来源判据。** 该列出现之前 agent 没有任何写入总结的通道,故升级后「有正文却没有轮次」只可能是当年人工编辑框写下的。这类正文不清空(那是用户写的话),但也不挂在 agent 名下 —— **把人的话署到机器名下,与把机器的结论当人的话发出去是同一种错**。下次机审会连正文带轮次一并覆盖,自愈回正常路径。
+
 **finding id 由 MCP `report_finding` 生成回传**,codex 侧 id 与存储 id 一致,`update_finding` / `resolve_finding` 据此定位。每条 finding 落库时同时建出**承载 discussion**,且必须随事件一起外发,否则本轮会话内 Discussion 栏是空的。
 
 ## finding 的状态与字段

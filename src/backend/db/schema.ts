@@ -1,6 +1,9 @@
 /**
  * SQLite schema 迁移。用 `PRAGMA user_version` 记录版本,顺序应用。
- * 新增变更 = 往 MIGRATIONS 追加一条,勿改历史条目。
+ * 新增变更 = 往 MIGRATIONS 追加一条,勿改历史条目 —— **哪怕它还没合并**:
+ * 只要在任何一台机器上跑过一次,那台的 user_version 就记住了序号。事后合并/删除条目会让
+ * 数组变短,而 `for (v = current; v < length)` 对 current > length 的库直接空转:
+ * 眼下靠列恰好对得上而不报错,下一条新迁移却会被静默跳过。
  */
 import type { Database } from 'better-sqlite3';
 
@@ -211,7 +214,25 @@ ALTER TABLE findings ADD COLUMN anchor_dropped INTEGER NOT NULL DEFAULT 0;
 UPDATE findings SET anchor_dropped = 1 WHERE line <= 0;
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14];
+// agent 经 write_summary 回写的重点关注文件。JSON 存一列而非独立成表:
+// 每轮整份重写、只随 review 一起读,没有单查或外键的用法,拆表只多一次 join。
+const V15 = `
+ALTER TABLE reviews ADD COLUMN summary_files TEXT NOT NULL DEFAULT '[]';
+`;
+
+// 总结写于第几轮。总结是 review 级单份值、重跑不清空,没有这一列就分不出屏上这份是
+// 本轮结论还是上一轮的旧结论(见 isSummaryStale)。
+//
+// 存量行留 NULL,这同时成了**来源判据**:本列出现之前 agent 没有任何写入通道
+// (总结只在回复文本里,从不落库),故 `summary_body 非空 + summary_round 为 NULL`
+// 必是 reviewer 手写的旧数据。不清空、也不当作 agent 产出展示,见 isLegacySummary。
+const V16 = `
+ALTER TABLE reviews ADD COLUMN summary_round INTEGER;
+`;
+
+const MIGRATIONS: string[] = [
+  V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16,
+];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

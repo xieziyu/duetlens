@@ -1,5 +1,7 @@
 /**
- * 把一次 review 的保留 findings + 摘要生成一份 Markdown 报告(本地/vbranch source 的终点)。
+ * 把一次 review 的保留 findings 生成一份 Markdown 报告(本地/vbranch source 的终点)。
+ * 刻意不含 agent 的总结与重点关注文件:那两样是给 reviewer 在 app 里判断用的,
+ * 报告是他要发出去的东西,内容该由他自己定。
  * 纯函数:仅依赖入参,便于单测与「预览=复制=保存」内容一致。见 docs/design/findings-submit.md。
  */
 import {
@@ -14,8 +16,6 @@ import {
 } from './domain';
 
 export interface ExportOptions {
-  /** 含 codex 审核摘要 */
-  summary: boolean;
   /** 含 suggestion 代码块(渲染为 ```suggestion,GitHub 外无一键采纳但保留格式) */
   suggestion: boolean;
   /** 末尾以删除线列出已剔除项 */
@@ -24,7 +24,6 @@ export interface ExportOptions {
 }
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
-  summary: true,
   suggestion: true,
   dismissed: false,
   group: 'severity',
@@ -89,10 +88,6 @@ export function buildReviewMarkdown(
 
   let md = `# Review — ${title}\n\n`;
   md += `> Duetlens · ${SOURCE_LABEL[review.source]} · \`${review.sourceRef}\` · ${isoDate(review.createdAt)}\n\n`;
-
-  if (opts.summary && review.summaryBody?.trim()) {
-    md += `## 摘要\n\n${review.summaryBody.trim()}\n\n`;
-  }
 
   md += `## Findings（保留 ${kept.length}）\n\n`;
   if (kept.length === 0) {

@@ -360,7 +360,10 @@ export function buildRerunPrompt(input: RerunPromptInput): string {
       '已在上面出现过的条目一律不要再 report_finding —— ' +
       '唯一例外是已结案的问题在最新代码里回归了,那算新问题。',
   );
-  steps.push('审完给一句话总结:本轮修复了多少、仍存在多少、新发现多少。');
+  steps.push(
+    '审完调用一次 `write_summary` 重写总结(整份取代上一轮那份):' +
+      '本轮修复了多少、仍存在多少、新发现多少,以及现在还有哪些文件需要人工重点复核。',
+  );
   out.push(steps.map((s, i) => `${i + 1}. ${s}`).join('\n'));
 
   return out.join('\n');

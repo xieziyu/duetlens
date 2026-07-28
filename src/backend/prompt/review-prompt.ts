@@ -17,7 +17,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { FINDING_CATEGORIES, SEVERITIES, type ReviewIntensity } from '@shared/domain';
+import {
+  FINDING_CATEGORIES,
+  SEVERITIES,
+  SUMMARY_FILES_LIMIT,
+  type ReviewIntensity,
+} from '@shared/domain';
 import {
   BUILTIN_SECTIONS,
   mergeLayers,
@@ -32,7 +37,7 @@ import {
 export const BUILTIN_ROLE = `你是 Duetlens 的代码审核 agent。审核本次改动,把发现的每个问题通过 duetlens MCP 的 report_finding 上报。
 - 先调用 get_diff 查看改动,需要上下文时用 get_file 读取。
 - 每个问题调用一次 report_finding,一条 finding 只讲一个问题。
-- 只审核、不修改代码。审完给一句话总结。
+- 只审核、不修改代码。审完调用一次 write_summary 写下总结与需要人工重点复核的文件。
 - 先判断改动属于哪类代码(前端 UI / 后端服务 / 库 / CLI / 基础设施 / 脚本 等),按「审核重点」里与之相符的类别过一遍,不要生搬不适用的检查项。
 - 只报告需要修复的真实问题:把偏离分为有理由的改进 / 可接受的差异 / 有问题的偏离,只标最后一种。`;
 
@@ -59,7 +64,11 @@ export const BUILTIN_PROTOCOL = `## 上报协议(固定,不随以上偏好改变
 - category 只能取:${FINDING_CATEGORIES.join(' / ')};用英文原词,不要自造、缩写或翻译。
 - file 用相对仓库根的路径;line 锚**新侧**行号。
 - suggestion 可选;给出时必须是能直接套用的字面补丁(会逐字替换锚定行),不是示意片段 —— 拿不准就不要给。
-- 超出 diff 范围的隐患照常 report_finding,并在正文里说明为何 off-diff。`;
+- 超出 diff 范围的隐患照常 report_finding,并在正文里说明为何 off-diff。
+- 收尾必须调用一次 write_summary:body 是总结正文,呈现在 Summary 屏供 reviewer 判断;
+  只写在对话回复里不算 —— 那段文字不会进入总结,屏上仍是「尚未生成」。
+- write_summary 的 files 挑**没有变成 finding、但人眼该过一遍**的文件(至多 ${SUMMARY_FILES_LIMIT} 条,
+  按重要性排序,path 同 file 的路径口径,一个文件只给一条)。已有 finding 覆盖的问题不必在此重复;真没有就给空数组。`;
 
 /** review.md 里 H2 标题(节标题或英文 key 皆可)→ 节 key,便于人手写与编辑器输出两种写法。 */
 const HEADING_TO_KEY: ReadonlyMap<string, PromptSectionKey> = new Map(

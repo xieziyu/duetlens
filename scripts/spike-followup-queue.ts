@@ -109,6 +109,8 @@ function fixture() {
     title: 'followup-queue spike',
     status: 'scanning',
     summaryBody: null,
+    summaryFiles: [],
+    summaryRound: null,
     currentRound: 1,
     createdAt: 0,
     updatedAt: 0,

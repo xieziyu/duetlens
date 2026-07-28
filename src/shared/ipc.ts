@@ -65,7 +65,6 @@ export const IpcChannels = {
   reviewAddFinding: 'review:add-finding',
   reviewPromoteDiscussion: 'review:promote-discussion',
   reviewUpdateFinding: 'review:update-finding',
-  reviewUpdateSummary: 'review:update-summary',
   reviewSubmit: 'review:submit',
   reviewOpenInBrowser: 'review:open-in-browser',
   reviewGetUiState: 'review:get-ui-state',
@@ -208,10 +207,13 @@ export interface LiveCapacity {
   busy: BusyReview[];
 }
 
-/** 提交一次 GitHub PR review 的入参(summaryBody 传入即先落库为 review body)。 */
+/**
+ * 提交一次 GitHub PR review 的入参。body 是 reviewer 手填的意见,**不落库** ——
+ * 它属于这一次提交动作,不是 review 的属性(agent 的总结另存,且不参与提交)。
+ */
 export interface SubmitReviewInput {
   event: GhReviewEvent;
-  summaryBody?: string;
+  body?: string;
 }
 
 /**
@@ -356,7 +358,6 @@ export interface DuetlensApi {
     /** 用户就地编辑 finding 可编辑字段(与 codex update_finding 同一落库路径)。 */
     updateFinding(reviewId: string, input: FindingEditInput): Promise<Finding>;
     /** 编辑审核总结正文(提交屏 review body 来源);落库后返回并经 `review` 事件回推。 */
-    updateSummary(reviewId: string, body: string): Promise<Review>;
     /** 把保留且未提交的 findings 组成一次 GitHub PR review 原子提交(仅 github-pr source)。 */
     submit(reviewId: string, input: SubmitReviewInput): Promise<SubmitReviewResult>;
     /** 用系统默认浏览器打开该 review 的来源页面(目前仅 github-pr 有网页可开)。 */

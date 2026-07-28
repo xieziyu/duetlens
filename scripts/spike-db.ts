@@ -4,7 +4,9 @@
  */
 import { strict as assert } from 'node:assert';
 import { openDatabase } from '../src/backend/db/database';
+import { SCHEMA_VERSION } from '../src/backend/db/schema';
 import { ReviewStore } from '../src/backend/db/review-store';
+import { isLegacySummary, isSummaryStale } from '../src/shared/domain';
 
 function log(msg: string) {
   process.stdout.write(`[db] ${msg}\n`);
@@ -151,6 +153,30 @@ function main() {
   assert.equal(store.listFindings(review.id).length, 0);
   assert.equal(store.listMessages(f1.discussionId).length, 0);
   log('级联删除 ok');
+
+  // ---- 迁移序号只增不减 ----
+  // 条目一旦在任何机器上跑过,那台的 user_version 就记住了序号;事后收合会让数组变短,
+  // 而 migrate 的 `for (v = current; v < length)` 对 current > length 的库直接空转 ——
+  // 当下靠列恰好对得上而不报错,下一条新迁移却会被静默跳过。
+  assert.ok(SCHEMA_VERSION >= 16, `迁移条目不得回缩(当前 ${SCHEMA_VERSION});要改只能往后追加`);
+  assert.equal(db.pragma('user_version', { simple: true }), SCHEMA_VERSION, '新库应跑到最新版本');
+
+  // ---- 旧版本人工写的总结:保留内容,但不得冒充 agent 产出 ----
+  // summary_round 出现之前 agent 没有写入通道,故「有正文没轮次」必是当年人工编辑框写的。
+  const legacyId = store.createReview({ source: 'local-branch', sourceRef: 'b' }).id;
+  db.prepare('UPDATE reviews SET summary_body = ? WHERE id = ?').run('我当年手写的意见', legacyId);
+  const legacy = store.getReview(legacyId)!;
+  assert.equal(legacy.summaryBody, '我当年手写的意见', '旧正文不得被迁移清空');
+  assert.equal(legacy.summaryRound, null);
+  assert.equal(isLegacySummary(legacy), true, '有正文没轮次 → 判为旧版人工总结');
+  assert.equal(isSummaryStale(legacy), false, '它不属于任何一轮,谈不上过期');
+
+  // agent 一写就连正文带轮次覆盖,自愈回正常路径
+  store.writeAgentSummary(legacyId, 'agent 的结论', []);
+  const healed = store.getReview(legacyId)!;
+  assert.equal(isLegacySummary(healed), false, 'write_summary 后不再是遗留数据');
+  assert.equal(healed.summaryRound, 1);
+  log('迁移序号单调 + 旧人工总结不冒充 agent 产出 ok');
 
   log('────────────────────────');
   log('✅ PASS — 持久化层读写/迁移/级联全通过');

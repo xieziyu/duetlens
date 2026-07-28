@@ -5,6 +5,8 @@ import type { DB } from './database';
 import {
   DEFAULT_UI_SETTINGS,
   isAutoClosedFixed,
+  summaryFileSchema,
+  SUMMARY_FILES_LIMIT,
   type Discussion,
   type Finding,
   type FindingProposal,
@@ -24,6 +26,7 @@ import {
   type RoundStatus,
   type SourceKind,
   type Submission,
+  type SummaryFile,
   type Triage,
   type UiSettings,
   type UpdateFindingInput,
@@ -46,6 +49,8 @@ interface ReviewRow {
   title: string | null;
   status: string;
   summary_body: string | null;
+  summary_files: string;
+  summary_round: number | null;
   current_round: number;
   created_at: number;
   updated_at: number;
@@ -143,6 +148,8 @@ function toReview(r: ReviewRow): Review {
     title: r.title,
     status: r.status as ReviewStatus,
     summaryBody: r.summary_body,
+    summaryFiles: parseSummaryFiles(r.summary_files),
+    summaryRound: r.summary_round,
     currentRound: r.current_round,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -167,6 +174,20 @@ function toRound(r: RoundRow): ReviewRound {
     startedAt: r.started_at,
     endedAt: r.ended_at,
   };
+}
+
+/** 同 parseChangedFiles:坏值退化成空列表,不让一列脏 JSON 把整个 review 读不出来。 */
+function parseSummaryFiles(raw: string): SummaryFile[] {
+  try {
+    const v: unknown = JSON.parse(raw || '[]');
+    if (!Array.isArray(v)) return [];
+    return v.flatMap((x) => {
+      const parsed = summaryFileSchema.safeParse(x);
+      return parsed.success ? [parsed.data] : [];
+    });
+  } catch {
+    return [];
+  }
 }
 
 /** 手改过库或旧版本写坏都不该让整屏轮次读不出来,坏值退化成空列表。 */
@@ -290,14 +311,16 @@ export class ReviewStore {
       title: input.title ?? null,
       status: 'scanning',
       summary_body: null,
+      summary_files: '[]',
+      summary_round: null,
       current_round: 1,
       created_at: ts,
       updated_at: ts,
     };
     this.db
       .prepare(
-        `INSERT INTO reviews (id, source, source_ref, repo_path, codex_thread_id, model, reasoning_effort, intensity, title, status, summary_body, current_round, created_at, updated_at)
-         VALUES (@id, @source, @source_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @current_round, @created_at, @updated_at)`,
+        `INSERT INTO reviews (id, source, source_ref, repo_path, codex_thread_id, model, reasoning_effort, intensity, title, status, summary_body, summary_files, summary_round, current_round, created_at, updated_at)
+         VALUES (@id, @source, @source_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @summary_files, @summary_round, @current_round, @created_at, @updated_at)`,
       )
       .run(row);
     return toReview(row);
@@ -409,10 +432,17 @@ export class ReviewStore {
       .run(status, now(), reviewId);
   }
 
-  setReviewSummary(reviewId: string, body: string): void {
+  /**
+   * agent 经 write_summary 回写:正文与重点文件同一次落库,两者本就是一次收尾的两半。
+   * 总结没有人工编辑入口,故这是它唯一的写入者 —— summary_round 就地取 current_round
+   * (同一条 UPDATE 内,不经应用层往返),之后靠它判断屏上这份是不是本轮的结论。
+   */
+  writeAgentSummary(reviewId: string, body: string, files: readonly SummaryFile[]): void {
     this.db
-      .prepare('UPDATE reviews SET summary_body = ?, updated_at = ? WHERE id = ?')
-      .run(body, now(), reviewId);
+      .prepare(
+        'UPDATE reviews SET summary_body = ?, summary_files = ?, summary_round = current_round, updated_at = ? WHERE id = ?',
+      )
+      .run(body, JSON.stringify(files.slice(0, SUMMARY_FILES_LIMIT)), now(), reviewId);
   }
 
   /** 调整审核强度(重跑时可改档;续接与后续轮次沿用)。 */

@@ -19,7 +19,7 @@ diff-review 是工作面,submit 是终点步骤,靠**顶栏常驻主 CTA** 连�
 保留项组成**一次 GitHub PR review**:
 
 - 有 `file:line` 锚点的 → **inline 行评论**(带 `suggestion` 的用 suggestion 块)。
-- 没有行锚点、或被降级的(见下) → 并入 **review 摘要 body**,连同 codex 审核总结。**摘要条目自带 `file:line`** —— 它脱离了 inline 的位置,不写出锚点,作者就只剩一段不知道说的是哪儿的结论,而这些条目往往正是锚在改动之外、最需要按图索骥的那批。
+- 没有行锚点、或被降级的(见下) → 并入 **review 摘要 body**,接在 reviewer 手填的意见之后。**摘要条目自带 `file:line`** —— 它脱离了 inline 的位置,不写出锚点,作者就只剩一段不知道说的是哪儿的结论,而这些条目往往正是锚在改动之外、最需要按图索骥的那批。
 - 用户选 **event**:`Comment` / `Request changes` / `Approve`。
 - **零 finding 也可提交** —— event 本身就是表态。仅照搬 GitHub 的硬约束:`Comment` / `Request changes` 至少要有 body 或一条行评论。
 
@@ -72,6 +72,6 @@ GitHub 的 422 只说整份被拒、**不告知是哪条**,得由我们自己指
 `local-branch` / `gitbutler-vbranch` 无 PR 可提交,顶栏 CTA 换成「导出 review」。同一条 triage 管线,终点从「提交到 GitHub」换成「生成一份 Markdown 报告」。
 
 - **布局倒置**:导出屏以**报告本身为主场** —— 左侧宽栏是实时预览(渲染 / 源码可切),右侧窄栏是配置。对照 submit 屏的「左筛选 / 右 finish」。
-- **包含项开关**(审核摘要 / 无锚点 finding 并入摘要 / suggestion 代码块 / 已剔除项)与分组(按严重度 | 按文件)**实时改写预览与将导出的内容**,所见即所得 —— Markdown 由数据模型实时生成,保证预览 = 复制 = 保存。
+- **包含项开关**(suggestion 代码块 / 已剔除项)与分组(按严重度 | 按文件)**实时改写预览与将导出的内容**,所见即所得 —— Markdown 由数据模型实时生成,保证预览 = 复制 = 保存。
 - **无 event 选择**:`Comment / Request changes / Approve` 是 GitHub review 概念,导出屏不涉及。
 - 保存经 Electron 原生保存对话框写本地文件。

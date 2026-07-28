@@ -110,6 +110,8 @@ const RAW_DIFF_MOVED = RAW_DIFF.replace('@@ -14,9 +14,11 @@', '@@ -30,9 +30,11 @
 
 const now = Date.now();
 
+const SUMMARY_MODE = new URLSearchParams(window.location.search).get('summary');
+
 const REVIEW: Review = {
   id: 'demo',
   // 本地分支 source:无 PR 可提交,终点走导出 Markdown(便于自查导出屏)
@@ -123,6 +125,18 @@ const REVIEW: Review = {
   title: 'feat: streaming transcode pipeline',
   status: 'completed',
   summaryBody: '本次改动引入并发编码管线,整体方向合理,但并发计数存在数据竞争,需修正。',
+  summaryFiles: [
+    {
+      path: 'src/worker.rs',
+      note: '并发计数与 channel 关闭时序改动大,静态读不出竞态,建议人工推一遍或加压测。',
+    },
+    {
+      path: 'src/shared/config.ts',
+      note: '改了对外默认值,影响面取决于调用方,需确认没有依赖旧默认的部署。',
+    },
+  ],
+  // ?summary=stale 留在第 1 轮(重跑后 agent 漏写);?summary=legacy 无轮次(旧版人工写的)
+  summaryRound: SUMMARY_MODE === 'legacy' ? null : SUMMARY_MODE === 'stale' ? 1 : 2,
   currentRound: 2,
   createdAt: now,
   updatedAt: now,
@@ -956,12 +970,6 @@ export function installPreviewApi(): void {
         fire({ reviewId: 'demo', type: 'finding', payload: finding });
         fire({ reviewId: 'demo', type: 'discussion', payload: discussions[di] });
         return finding;
-      },
-      updateSummary: async (_r, body) => {
-        const next = { ...review, summaryBody: body, updatedAt: Date.now() };
-        Object.assign(review, next);
-        fire({ reviewId: 'demo', type: 'review', payload: next });
-        return next;
       },
       // 模拟原子 PR review 提交:success 标记待提交项 submitted 并回推;invalid/failed 不改状态
       submit: async () => {

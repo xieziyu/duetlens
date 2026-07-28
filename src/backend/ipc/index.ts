@@ -120,9 +120,6 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
   ipcMain.handle(IpcChannels.reviewUpdateFinding, (_e, reviewId: string, input: FindingEditInput) =>
     manager.updateFinding(reviewId, input),
   );
-  ipcMain.handle(IpcChannels.reviewUpdateSummary, (_e, reviewId: string, body: string) =>
-    manager.updateSummary(reviewId, body),
-  );
   ipcMain.handle(IpcChannels.reviewSubmit, (_e, reviewId: string, input: SubmitReviewInput) =>
     manager.submitReview(reviewId, input),
   );

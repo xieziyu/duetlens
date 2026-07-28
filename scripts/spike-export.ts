@@ -28,6 +28,8 @@ const review: Review = {
   title: null,
   status: 'completed',
   summaryBody: '并发方向合理,需收口共享状态的线程安全。',
+  summaryFiles: [],
+  summaryRound: 1,
   currentRound: 1,
   createdAt: T0,
   updatedAt: T0,
@@ -96,11 +98,10 @@ function main() {
   assert.equal(exportFileName({ ...review, title: 'Fix: 并发 Bug!!' }), 'review-fix-bug.md');
   log('exportFileName slug ok');
 
-  // ---- 默认选项:摘要 + 保留项按严重度 + suggestion,不含剔除项 ----
+  // ---- 默认选项:保留项按严重度 + suggestion,不含剔除项 ----
   const md = buildReviewMarkdown(review, findings);
   assert.match(md, /^# Review — feat\/streaming-transcode/);
   assert.match(md, /2026-07-20/);
-  assert.match(md, /## 摘要\n\n并发方向合理/);
   assert.match(md, /## Findings（保留 2）/);
   // 按严重度:high(f1)应在 medium 之前;f3 已剔除不出现在保留区
   assert.ok(md.indexOf('Cell 跨 spawn') < md.indexOf('变量名 c'), '按严重度排序 high 在 low 前');
@@ -109,15 +110,25 @@ function main() {
   assert.match(md, /`src\/pipeline\.rs:121`/, '锚点行');
   log('默认导出结构 ok');
 
-  // ---- 关闭 summary / suggestion ----
+  // ---- agent 的总结与重点文件一律不进报告 ----
+  // 它们是给 reviewer 在 app 里判断用的;报告是他要发出去的东西,内容该由他自己定。
+  const withSummary = buildReviewMarkdown(
+    { ...review, summaryFiles: [{ path: 'src/worker.rs', note: '时序要人推' }] },
+    findings,
+  );
+  assert.ok(!withSummary.includes('## 摘要'), 'agent 总结不导出');
+  assert.ok(!withSummary.includes('并发方向合理'), '总结正文不得以任何形式出现');
+  assert.ok(!withSummary.includes('需要重点关注的文件'), '重点关注文件不导出');
+  assert.ok(!withSummary.includes('src/worker.rs'), '重点文件路径不得出现');
+  log('总结与重点文件不进导出 ok');
+
+  // ---- 关闭 suggestion ----
   const md2 = buildReviewMarkdown(review, findings, {
     ...DEFAULT_EXPORT_OPTIONS,
-    summary: false,
     suggestion: false,
   });
-  assert.ok(!md2.includes('## 摘要'), 'summary=false 去摘要');
   assert.ok(!md2.includes('```suggestion'), 'suggestion=false 去代码块');
-  log('开关 summary/suggestion ok');
+  log('开关 suggestion ok');
 
   // ---- 复核过的条目:正文取复核说明,首轮正文与首轮 suggestion 一并作废 ----
   const rechecked = findings.map((f) =>
