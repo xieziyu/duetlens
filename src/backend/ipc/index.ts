@@ -93,6 +93,16 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
   ipcMain.handle(IpcChannels.reviewClearDiscussion, (_e, reviewId: string, discussionId: string) =>
     manager.clearDiscussion(reviewId, discussionId),
   );
+  ipcMain.handle(IpcChannels.reviewProposals, (_e, reviewId: string) => manager.getProposals(reviewId));
+  ipcMain.handle(IpcChannels.reviewApplyProposal, (_e, reviewId: string, proposalId: string) =>
+    manager.applyProposal(reviewId, proposalId),
+  );
+  ipcMain.handle(IpcChannels.reviewSkipProposal, (_e, reviewId: string, proposalId: string) =>
+    manager.skipProposal(reviewId, proposalId),
+  );
+  ipcMain.handle(IpcChannels.reviewUndoProposal, (_e, reviewId: string, proposalId: string) =>
+    manager.undoProposal(reviewId, proposalId),
+  );
   ipcMain.handle(
     IpcChannels.reviewSetTriage,
     (_e, reviewId: string, findingId: string, triage: Triage, reason?: string | null) =>

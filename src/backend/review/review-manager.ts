@@ -1,10 +1,16 @@
 import { EventEmitter } from 'node:events';
-import { REVIEW_RETENTION_MS } from '@shared/domain';
+import { isProposalUndoBlocked, REVIEW_RETENTION_MS } from '@shared/domain';
 import type {
   CodexModelInfo,
   Discussion,
   Finding,
+  FindingProposal,
   Message,
+  ProposalBefore,
+  ProposalStatus,
+  ProposalTriageBefore,
+  ProposalUpdateBefore,
+  ProposalUpdatePatch,
   Review,
   ReviewIntensity,
   ReviewRound,
@@ -47,6 +53,33 @@ import type {
 } from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
 import { AgentTurnError, DEFAULT_SCAN_PROMPT, ReviewSession, type ReviewSessionEvents } from './review-session';
+
+/**
+ * 已提交到 GitHub 的 finding,正文类字段锁定。UI 早就按这条画(卡片的 `writable` 排除 submitted),
+ * 但提案是条**没有界面把关**的写路径 —— 不在权威层拦一道,本地记录会与已发出去的评论对不上。
+ *
+ * 只锁内容,不锁裁决:剔除/恢复是 reviewer 对「这条要不要继续追」的判断,
+ * 已提交的追评项照样可以剔(见 findings-submit.md)。
+ */
+function assertContentWritable(f: Finding, action: string): void {
+  if (f.submission === 'submitted')
+    throw new Error(`这条 finding 已提交到 GitHub,内容已锁定,无法${action}对它的修改提案。`);
+}
+
+/**
+ * 只拍 patch 真正动过的那几个字段的旧值。
+ * 拍全量的话,撤销会把应用之后 reviewer 自己的编辑一并回滚 —— 提案只降了个 severity,
+ * 撤销却连带把他重写过的正文换回旧版。
+ */
+function snapshotPatched(before: Finding, patch: ProposalUpdatePatch): ProposalUpdateBefore {
+  const snapshot: ProposalUpdateBefore = {};
+  if (patch.severity !== undefined) snapshot.severity = before.severity;
+  if (patch.category !== undefined) snapshot.category = before.category;
+  if (patch.title !== undefined) snapshot.title = before.title;
+  if (patch.body !== undefined) snapshot.body = before.body;
+  if (patch.suggestion !== undefined) snapshot.suggestion = before.suggestion;
+  return snapshot;
+}
 
 /** 首轮扫描指令:有附加上下文时拼在缺省指令之后一并注入,否则用缺省。 */
 function buildScanPrompt(context?: string): string | undefined {
@@ -99,6 +132,7 @@ const SESSION_FORWARDERS: {
   finding: (reviewId, payload) => ({ reviewId, type: 'finding', payload }),
   discussion: (reviewId, payload) => ({ reviewId, type: 'discussion', payload }),
   message: (reviewId, payload) => ({ reviewId, type: 'message', payload }),
+  'finding-proposal': (reviewId, payload) => ({ reviewId, type: 'finding-proposal', payload }),
   status: (reviewId, payload) => ({ reviewId, type: 'status', payload }),
   'agent-event': (reviewId, payload) => ({ reviewId, type: 'agent', payload }),
 };
@@ -321,6 +355,161 @@ export class ReviewManager extends EventEmitter {
     if (!finding) throw new Error(`finding 不存在: ${findingId}`);
     this.forward({ reviewId, type: 'finding', payload: finding });
     return finding;
+  }
+
+  /** 一次 review 名下的全部回写提案(进 review 屏时随讨论一起拉)。 */
+  getProposals(reviewId: string): FindingProposal[] {
+    return this.store.listProposals(reviewId);
+  }
+
+  /**
+   * 采纳一条 agent 提案:按 kind 走既有的落库路径(与用户手动操作同一条),
+   * 并把旧值记进提案供「↩ 撤销」还原。
+   *
+   * 剔除刻意**不**记 autoClosed —— 那一格的语义是「复核判定代码里已经没有了」,
+   * 而这里是 reviewer 看过 agent 的论证后点的头,属他自己的判断,下一轮不该被回归逻辑翻掉
+   * (见 isAutoClosedFixed)。理由存 agent 的原话,照常注入下一轮复审。
+   */
+  applyProposal(reviewId: string, proposalId: string): FindingProposal {
+    const p = this.requireProposal(reviewId, proposalId);
+    if (p.status === 'applied') return p;
+
+    // finding 的改动与提案的落定必须同进同退:分两次提交的话,第二步一挂就留下
+    // 「finding 已改、卡片还写着待确认」的半状态,重试还会拿这个错误现状去拍新快照。
+    // 事件一律等事务提交后再发 —— 回滚掉的改动不该先一步上屏。
+    const written = this.store.transaction(() => {
+      if (p.kind === 'create') {
+        const input = p.patch;
+        // 提案出自哪条讨论就落在哪条:另起一条新讨论会把这段论证过程与 finding 拆散。
+        // 但只在**同一个文件**上才提升 —— 锚到别处的提案与这条讨论无关,提升会把它挂错地方。
+        const disc = this.store.getDiscussion(p.discussionId);
+        const promotable = disc?.kind === 'user' && disc.file === input.file && disc.line != null;
+        const finding = promotable
+          ? this.store.promoteDiscussion(p.discussionId, {
+              severity: input.severity,
+              category: input.category ?? null,
+              title: input.title,
+              body: input.body,
+              suggestion: input.suggestion ?? null,
+            })
+          : this.store.addFinding(reviewId, input, 'agent');
+        // promoteDiscussion 用的是 discussion 的行号,而卡片上写的是提案里的 —— agent 常会在
+        // 框选范围内给出更准的一行。以卡片所示为准,否则采纳到手的锚点和看到的不是一个。
+        // 只在提案给了真实行号时改:setFindingAnchor 的 0 是「脱锚降级为摘要」(见 anchorDropped),
+        // 而 report_finding 的 schema 允许 line=0,照传就会把一条新 finding 直接降级掉。
+        if (promotable && input.line > 0 && finding.line !== input.line)
+          this.store.setFindingAnchor(finding.id, input.line);
+        const created = this.store.getFinding(finding.id) ?? finding;
+        return {
+          finding: created,
+          discussion: this.store.getDiscussion(created.discussionId),
+          proposal: this.resolveProposal(proposalId, 'applied', { findingId: created.id }),
+        };
+      }
+
+      const before = this.store.getFinding(p.findingId);
+      if (!before) throw new Error(`finding 不存在: ${p.findingId}`);
+      if (p.kind === 'update') {
+        assertContentWritable(before, '应用');
+        this.store.updateFinding({ findingId: p.findingId, ...p.patch });
+      } else {
+        this.store.setTriage(
+          p.findingId,
+          p.kind === 'dismiss' ? 'dismiss' : 'open',
+          p.kind === 'dismiss' ? p.patch.reason : null,
+        );
+      }
+      const before_ =
+        p.kind === 'update'
+          ? snapshotPatched(before, p.patch)
+          : { triage: before.triage, dismissReason: before.dismissReason, autoClosed: before.autoClosed };
+      return {
+        finding: this.store.getFinding(p.findingId),
+        discussion: null,
+        proposal: this.resolveProposal(proposalId, 'applied', { before: before_ }),
+      };
+    });
+    return this.publish(reviewId, written);
+  }
+
+  /**
+   * 忽略一条提案:只落定去向,不碰 finding。卡片留在对话里,之后仍可重新应用。
+   *
+   * 已应用的必须走 {@link undoProposal}:在这里直接标成 skipped 的话,改动仍留在 finding 里,
+   * 卡片却写着「已忽略」并给出「重新应用」—— 那一下还会把已经被它改过的当前值拍成新快照,
+   * 从此撤销回的是它自己写下的东西,留痕与撤销一起失真。
+   */
+  skipProposal(reviewId: string, proposalId: string): FindingProposal {
+    const p = this.requireProposal(reviewId, proposalId);
+    if (p.status === 'applied')
+      throw new Error('该提案已应用,要收回改动请点「撤销」,不能直接标为已忽略。');
+    // 只落定提案自己,没有 finding 侧的写,单条 UPDATE 本身即原子
+    const next = this.resolveProposal(proposalId, 'skipped');
+    this.forward({ reviewId, type: 'finding-proposal', payload: next });
+    return next;
+  }
+
+  /**
+   * 撤销一条已采纳的提案:按落库的旧值还原,提案退回「已忽略」(仍可重新应用)。
+   * create 无从撤销 —— 新建的 finding 由用户自己剔除/删除,别在这里替他决定。
+   */
+  undoProposal(reviewId: string, proposalId: string): FindingProposal {
+    const p = this.requireProposal(reviewId, proposalId);
+    if (p.status !== 'applied' || p.kind === 'create' || !p.before || !p.findingId)
+      throw new Error('该提案无法撤销');
+    const written = this.store.transaction(() => {
+      const current = this.store.getFinding(p.findingId);
+      // 应用之后又被改过就不再撤:撤销写的是应用前的旧值,那会把后来的判断一起顶掉,
+      // 而这既不是提案的功劳也不是他要的。要回退就手动改,别在这里替他做主。
+      if (isProposalUndoBlocked(p, current))
+        throw new Error('这条 finding 在应用之后又被改过,撤销会覆盖那次改动 —— 请手动调整。');
+      if (p.kind === 'update') {
+        if (current) assertContentWritable(current, '撤销');
+        // 快照只含该提案动过的字段,所以这一还原不会碰 reviewer 在应用之后自己改的其他字段
+        this.store.updateFinding({ findingId: p.findingId, ...(p.before as ProposalUpdateBefore) });
+      } else {
+        // 走 restoreTriage 而非 setTriage:后者会把 auto_closed 清零,复核自动结案的条目
+        // 撤销后就变成「reviewer 亲手剔的」,下一轮回归不再自动恢复
+        this.store.restoreTriage(p.findingId, p.before as ProposalTriageBefore);
+      }
+      return {
+        finding: this.store.getFinding(p.findingId),
+        discussion: null,
+        proposal: this.resolveProposal(proposalId, 'skipped'),
+      };
+    });
+    return this.publish(reviewId, written);
+  }
+
+  private requireProposal(reviewId: string, proposalId: string): FindingProposal {
+    const p = this.store.getProposal(proposalId);
+    if (!p) throw new Error(`提案不存在: ${proposalId}`);
+    // 串号会把改动写到另一条 review 名下的 finding 上,两边数据都被污染(同 sendMessage 的校验)
+    if (p.reviewId !== reviewId) throw new Error(`提案不属于本次审核: ${proposalId}`);
+    return p;
+  }
+
+  /** 落定提案状态(纯写,不发事件)—— 调用方在事务内用它,提交后再统一外发。 */
+  private resolveProposal(
+    proposalId: string,
+    status: ProposalStatus,
+    opts: { before?: ProposalBefore; findingId?: string } = {},
+  ): FindingProposal {
+    const next = this.store.setProposalStatus(proposalId, status, opts);
+    if (!next) throw new Error(`提案不存在: ${proposalId}`);
+    return next;
+  }
+
+  /** 事务提交之后再把这一批改动外发。回滚掉的东西不该先一步上屏。 */
+  private publish(
+    reviewId: string,
+    written: { finding: Finding | null; discussion: Discussion | null; proposal: FindingProposal },
+  ): FindingProposal {
+    if (written.finding) this.forward({ reviewId, type: 'finding', payload: written.finding });
+    if (written.discussion)
+      this.forward({ reviewId, type: 'discussion', payload: written.discussion });
+    this.forward({ reviewId, type: 'finding-proposal', payload: written.proposal });
+    return written.proposal;
   }
 
   /**

@@ -42,6 +42,7 @@
     "spike:stop-scan": "tsx scripts/spike-stop-scan.ts",
     "spike:session-busy": "tsx scripts/spike-session-busy.ts",
     "spike:followup-queue": "tsx scripts/spike-followup-queue.ts",
+    "spike:proposals": "tsx scripts/spike-proposals.ts",
     "codex:gen-types": "codex app-server generate-ts --out src/backend/agent/codex/generated"
   },
   "keywords": [],

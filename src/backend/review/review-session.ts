@@ -2,6 +2,8 @@ import { EventEmitter } from 'node:events';
 import {
   DuetlensMcpServer,
   type McpContentProviders,
+  type ProposalOutcome,
+  type ProposedFindingChange,
   type ReportedFinding,
   type ReportedFindingResolution,
   type ReportedFindingUpdate,
@@ -14,6 +16,7 @@ import {
   updateFindingSchema,
   type Discussion,
   type Finding,
+  type FindingProposal,
   type Message,
   type Review,
   type ReviewIntensity,
@@ -78,6 +81,15 @@ export const ADVERSARIAL_SELFCHECK_PROMPT = `现在做一轮对抗式自检,站�
 2. 更重要的是审你**没报**的地方:哪个函数、边界或错误分支你只是扫过、并未真正构造反例去验证?对这些补一次证伪 —— 发现真实且可复现的新问题就用 report_finding 上报,已报过的不要重复。
 3. 给一句话小结:本轮自检补报了几条、降级/撤回了几条。`;
 
+/**
+ * 一个 turn 的「提案而非落库」上下文。收集篮由**调用方**持有:同一线程可以并发追问,
+ * 记在 session 上会被后一条清掉,提案就再也挂不上产生它的那句回复。
+ */
+interface ProposeContext {
+  discussionId: string;
+  collected: string[];
+}
+
 type TurnOutcome =
   | { kind: 'ok'; reply: string }
   | { kind: 'stopped' }
@@ -116,6 +128,37 @@ interface StopTarget {
 
 /** 追问时重述的历史条数上限;够唤起线程脉络,又不至于把整条对话再喂一遍。 */
 const FOLLOWUP_RECAP = 6;
+
+/** 注入追问的 finding 现状快照(正文截断,够对齐口径即可)。 */
+const STATE_EXCERPT = 600;
+
+function findingStateBlock(f: Finding): string {
+  const body = f.body.trim();
+  const lines = [
+    `- 当前严重度:${f.severity}${f.category ? ` · ${f.category}` : ''}`,
+    `- 当前正文:${body.length > STATE_EXCERPT ? `${body.slice(0, STATE_EXCERPT)}…` : body || '(空)'}`,
+  ];
+  if (f.triage === 'dismiss')
+    lines.push(`- 状态:已剔除${f.dismissReason ? `,理由:${f.dismissReason}` : ''}`);
+  return lines.join('\n');
+}
+
+/**
+ * 追问轮的回写口径。与旧版相反 —— 旧版要求「除非我明确说回写,否则别动」,
+ * 于是 agent 每次都以「按规则我不回写」收尾,一件本可以一键完成的事要人再说一遍。
+ * 现在这些工具在追问轮不落库,只生成待确认卡片,所以让它想到就提,由 reviewer 点。
+ */
+const FOLLOWUP_WRITEBACK_RULE = (findingId: string, dismissed: boolean): string =>
+  [
+    `请直接回答。如果讨论下来你认为这条 finding 该改,不必等我开口,就调用对应工具提出来 ——`,
+    `追问期间这些调用**不会**直接改动 finding,只会在对话里生成一张待我确认的卡片:`,
+    `- 内容/严重度写得不准 → update_finding(finding_id="${findingId}", 只传要改的字段)`,
+    dismissed
+      ? `- 它其实成立、不该被剔除 → restore_finding(finding_id="${findingId}", reason=...)`
+      : `- 整条不成立(误报 / 前提不存在 / 代码不可达)→ dismiss_finding(finding_id="${findingId}", reason=...),` +
+        `理由单独存,标题与正文原样保留 —— 不要用 update_finding 把剔除理由写进 body。`,
+    `没有要改的就什么也别调,正常回答即可。`,
+  ].join('\n');
 
 /** 把一条 discussion 的既往往来压成一段可注入的回顾;无历史返回空串。 */
 function recap(history: readonly Message[]): string {
@@ -157,6 +200,8 @@ export interface ReviewSessionEvents {
   message: Message;
   /** 归一后的 agent 流事件(原样转发) */
   'agent-event': AgentEvent;
+  /** 讨论里 agent 提出的待确认回写提案(新建 / 挂上消息后重发) */
+  'finding-proposal': FindingProposal;
   status: 'scanning' | 'reviewing' | 'completed' | 'failed';
 }
 
@@ -204,6 +249,11 @@ export class ReviewSession {
   private readonly conversationReady: Promise<void>;
   private openConversation!: () => void;
   private failConversation!: (reason: unknown) => void;
+  /**
+   * 正在跑的那个 turn 的提案上下文;非空即表示写 finding 的工具应转成提案。
+   * 只在 {@link runTurn} 的队列内部设置与清除 —— turn 是串行的,故同一时刻至多一个。
+   */
+  private proposeCtx: ProposeContext | null = null;
 
   constructor(
     private readonly reviewId: string,
@@ -351,8 +401,14 @@ export class ReviewSession {
 
     // 过了这一行,问题已经落库并推给了 UI:此后再失败都是「没等到回复」,不是「没发出去」。
     // 两者对用户的下一步截然相反,故换上识别串(见 FollowupReplyError)。
+    // 本轮提案的收集篮由调用方持有并原样传进 turn:同一线程可以有多条追问并发,
+    // 记在 session 上的话,后一条会把前一条的篮子清掉,提案就再也挂不上那句回复。
+    const collected: string[] = [];
     try {
-      const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text, history));
+      const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text, history), {
+        discussionId,
+        collected,
+      });
       if (outcome.kind === 'failed')
         throw new AgentTurnError(`追问失败: ${outcome.error}`, outcome.errorKind, outcome.error);
       if (outcome.kind === 'stopped') return userMsg;
@@ -361,9 +417,23 @@ export class ReviewSession {
       if (!reply) return userMsg;
       const agentMsg = this.store.addMessage(discussionId, 'agent', reply);
       this.emit('message', agentMsg);
+      this.bindProposals(collected, agentMsg.id);
       return agentMsg;
     } catch (e) {
       throw new FollowupReplyError(e);
+    }
+  }
+
+  /**
+   * 把本轮的提案挂到刚落库的那条 agent 回复上,并重发一次事件让 UI 归位。
+   * 提案先于回复文本产生(工具调用在前、回复在 turn 收尾才落库),不回挂就会排在解释它的那句话上面。
+   */
+  private bindProposals(ids: readonly string[], messageId: string): void {
+    if (ids.length === 0) return;
+    this.store.attachProposalsToMessage(ids, messageId);
+    for (const id of ids) {
+      const p = this.store.getProposal(id);
+      if (p) this.emit('finding-proposal', p);
     }
   }
 
@@ -446,6 +516,29 @@ export class ReviewSession {
       const updated = this.store.updateFinding(parsed.data);
       if (updated) this.emit('finding', updated); // 复用 finding 事件;renderer upsert
     });
+    // outcome 由本处就地填(emit 同步),让 MCP 侧按真实受理结果作答 —— 丢弃却回「已呈现」的话,
+    // agent 会照此向 reviewer 复述,而界面上没有那张卡。
+    this.mcp.on('finding-proposal', (raw: ProposedFindingChange, outcome: ProposalOutcome) => {
+      const ctx = this.proposeCtx;
+      if (!ctx) return; // 没有讨论上下文的提案无处呈现(理论上不会到:propose 模式只在追问轮开)
+      const finding = raw.findingId ? this.store.getFinding(raw.findingId) : null;
+      // 只认本 review 名下的 id,防 agent 编造 / 串号提到别处(同 finding-resolution)
+      if (raw.kind !== 'create' && (!finding || finding.reviewId !== this.reviewId)) {
+        outcome.reason = `finding_id 在本次审核里不存在: ${raw.findingId ?? '(空)'}`;
+        return;
+      }
+      const proposal = this.store.addProposal({
+        reviewId: this.reviewId,
+        discussionId: ctx.discussionId,
+        findingId: finding?.id ?? null,
+        kind: raw.kind,
+        patch: raw.patch,
+        baseUpdatedAt: finding?.updatedAt ?? null,
+      });
+      ctx.collected.push(proposal.id);
+      outcome.accepted = true;
+      this.emit('finding-proposal', proposal);
+    });
     this.mcp.on('finding-resolution', (raw: ReportedFindingResolution) => {
       const parsed = resolveFindingSchema.safeParse(raw);
       if (!parsed.success) return;
@@ -493,6 +586,9 @@ export class ReviewSession {
    * 把追问拼上锚点/finding 上下文,让 agent 知道在聊哪一处。
    * 讨论历史一并重述:每轮复审都换新 thread,且 codex 会 auto-compact ——
    * 都不能指望会话自身还记得这条线程之前说过什么。
+   *
+   * finding 的**当前**字段也一并给出:它可能已被 reviewer 就地编辑、被剔除、或被上一条提案改过,
+   * agent 记着的还是自己首次上报的那份 —— 不重述就会拿过时的正文当依据继续讨论。
    */
   private buildFollowupPrompt(discussion: Discussion, text: string, history: Message[]): string {
     const loc = discussion.file
@@ -503,18 +599,23 @@ export class ReviewSession {
       const finding = this.store.getFindingByDiscussion(discussion.id);
       if (finding) {
         return (
-          `关于你上报的 finding「${finding.title}」(${finding.file}:${finding.line}):\n` +
+          `关于 finding「${finding.title}」(${finding.file}:${finding.line}):\n` +
+          `${findingStateBlock(finding)}\n\n` +
           prior +
-          `${text}\n` +
-          `请在对话中直接回答,默认不要改动这条 finding。` +
-          `只有当我明确要求「更新 / 回写 finding」时,才调用 update_finding(finding_id="${finding.id}", ...)。`
+          `${text}\n\n` +
+          FOLLOWUP_WRITEBACK_RULE(finding.id, finding.triage === 'dismiss')
         );
       }
     }
     // 无锚点 = reviewer 在问整体(架构 / 取舍 / 某个跨文件的疑问),得说清范围是本次改动全体,
     // 否则 agent 容易拿上一条讨论的锚点当上下文接着答。
     const head = loc ? `关于 ${loc} 处的代码:\n` : '关于本次改动整体(未锚定到具体代码位置):\n';
-    return `${head}${prior}${text}`;
+    const tail =
+      discussion.file && discussion.line != null
+        ? `\n\n如果讨论下来这确实是一个该记录的问题,调用 report_finding 提议记一条(锚点用 ${discussion.file}:${discussion.line});` +
+          `它同样只生成待我确认的卡片,不会直接落库。`
+        : '';
+    return `${head}${prior}${text}${tail}`;
   }
 
   /**
@@ -542,25 +643,33 @@ export class ReviewSession {
    * 跑一轮 turn(串行入队):累积 message-delta 作为 agent 回复文本,resolve 于 turn 结束。
    * 前一轮失败不阻断后续轮(链上 catch)。
    */
-  private runTurn(text: string): Promise<TurnOutcome> {
+  private runTurn(text: string, propose?: ProposeContext): Promise<TurnOutcome> {
     const run = async (): Promise<TurnOutcome> => {
       // 排在队里的那些:轮到自己时会话可能已经拆了,别再发一轮出去等终局
       if (this.disposed) throw new SessionDisposedError();
       const conversationId = this.conversationId!;
-      // 订阅要先于发起:极快的 turn(乃至 stub)会在 turn/start 应答之前就把 delta 与终局发出来
-      const waiter = this.awaitTurnEnd();
+      // 提案模式必须开在**队列之内**:开在外面的话,排队期间跑着的扫描 turn 会把它的
+      // report_finding 记成这条讨论的提案,而扫描收尾时的复位又会让排在后面的这一问
+      // 退回直接落库 —— 一次绕过 reviewer 确认的静默改动。
+      this.enterTurnMode(propose);
       try {
-        waiter.identify(await this.agent.sendMessage(conversationId, text));
-      } catch (e) {
-        waiter.cancel(); // turn 根本没起来,别把订阅留在那儿等一个不会来的终局
-        throw e;
+        // 订阅要先于发起:极快的 turn(乃至 stub)会在 turn/start 应答之前就把 delta 与终局发出来
+        const waiter = this.awaitTurnEnd();
+        try {
+          waiter.identify(await this.agent.sendMessage(conversationId, text));
+        } catch (e) {
+          waiter.cancel(); // turn 根本没起来,别把订阅留在那儿等一个不会来的终局
+          throw e;
+        }
+        const outcome = await waiter.end;
+        if (outcome.kind === 'disposed') throw new SessionDisposedError();
+        if (outcome.kind === 'stopped') return { kind: 'stopped' };
+        if (outcome.kind === 'turn-failed')
+          return { kind: 'failed', error: outcome.error, errorKind: outcome.errorKind };
+        return { kind: 'ok', reply: waiter.reply() };
+      } finally {
+        this.exitTurnMode();
       }
-      const outcome = await waiter.end;
-      if (outcome.kind === 'disposed') throw new SessionDisposedError();
-      if (outcome.kind === 'stopped') return { kind: 'stopped' };
-      if (outcome.kind === 'turn-failed')
-        return { kind: 'failed', error: outcome.error, errorKind: outcome.errorKind };
-      return { kind: 'ok', reply: waiter.reply() };
     };
     // 排队期间也算忙:队里还压着一轮的会话被拆掉,和跑到一半被拆没有区别。
     this.inFlight += 1;
@@ -569,6 +678,17 @@ export class ReviewSession {
     });
     this.turnChain = result.catch(() => undefined);
     return result;
+  }
+
+  /** 进入本 turn 的写语义;缺省(机审/自检)即直接落库。 */
+  private enterTurnMode(propose?: ProposeContext): void {
+    this.proposeCtx = propose ?? null;
+    this.mcp?.setWriteMode(propose ? 'propose' : 'apply');
+  }
+
+  private exitTurnMode(): void {
+    this.proposeCtx = null;
+    this.mcp?.setWriteMode('apply');
   }
 
   private setStatus(status: 'scanning' | 'reviewing' | 'completed' | 'failed'): void {

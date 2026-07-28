@@ -180,7 +180,30 @@ ALTER TABLE findings ADD COLUMN auto_closed INTEGER NOT NULL DEFAULT 0;
 UPDATE findings SET auto_closed = 1 WHERE triage = 'dismiss' AND resolution = 'fixed';
 `;
 
-const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12];
+// 讨论里 agent 对 finding 的回写提案(update / dismiss / restore / create)。
+// 独立成表而非挂在 finding 上:一条 finding 可以先后有多个提案,且应用/忽略之后要留在对话里 ——
+// 「谁在什么时候把这条改成了什么」除此之外没有第二处凭据。
+// message_id 可空:该 turn 没有回复文本时提案就地接在线程末尾;消息被清空(clearMessages)时置空而非连坐删除。
+const V13 = `
+CREATE TABLE finding_proposals (
+  id             TEXT PRIMARY KEY,
+  review_id      TEXT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+  discussion_id  TEXT NOT NULL REFERENCES discussions(id) ON DELETE CASCADE,
+  message_id     TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  finding_id     TEXT REFERENCES findings(id) ON DELETE CASCADE,
+  kind           TEXT NOT NULL,
+  patch          TEXT NOT NULL,
+  before_snapshot TEXT,
+  base_updated_at INTEGER,
+  status         TEXT NOT NULL DEFAULT 'pending',
+  created_at     INTEGER NOT NULL,
+  resolved_at    INTEGER
+);
+CREATE INDEX idx_proposals_review ON finding_proposals(review_id);
+CREATE INDEX idx_proposals_discussion ON finding_proposals(discussion_id);
+`;
+
+const MIGRATIONS: string[] = [V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
 
 export function migrate(db: Database): void {
   const current = db.pragma('user_version', { simple: true }) as number;

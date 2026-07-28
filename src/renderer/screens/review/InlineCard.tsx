@@ -113,6 +113,7 @@ function DismissedCard({
   onTriage?: (finding: Finding, triage: Triage, reason?: string | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [showOriginal, setShowOriginal] = useState(false);
   const [reason, setReason] = useState(finding.dismissReason ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -170,6 +171,21 @@ function DismissedCard({
           <button className="dm-save" onClick={save}>
             保存
           </button>
+        </div>
+      )}
+      {/* 剔除只写 triage 与理由,原文一直都在库里 —— 但收起态只剩一个划掉的标题,
+          于是「当初到底报的是什么」在屏上无处可查。展开即可,不必先恢复再剔一遍。 */}
+      {finding.body.trim() && (
+        <div className="dm-src">
+          <button onClick={() => setShowOriginal((v) => !v)}>
+            {showOriginal ? '▴ 收起原文' : '▾ 展开原文'}
+          </button>
+          {/* 标题已在上面那行(划掉的那条)给过,这里只补正文 —— 再印一遍就是同一句话说两次 */}
+          {showOriginal && (
+            <div className="dm-orig">
+              <div className="c-prose">{renderMarkdown(finding.body)}</div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -16,7 +16,7 @@ import type {
 import type { PrSummary } from '@shared/source-discovery';
 import { scanDoneStatus } from '@shared/domain';
 import { isSubmittable } from '@shared/github-review';
-import type { Discussion, Finding, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, FindingProposal, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
 import { mergeLayers } from '@shared/prompt';
 import { APP_VERSION } from '@shared/version';
 import type { UpdateStatus } from '@shared/update';
@@ -370,8 +370,108 @@ const SEED_MESSAGES: Record<string, Message[]> = {
       text: '这里 done += 1 在并发下会不会丢更新?想听听 agent 的意见。',
       createdAt: now + 500,
     },
+    {
+      id: 'm-user-seed-2',
+      discussionId: 'd-user-seed',
+      role: 'agent',
+      text: '会。读-改-写三步之间可被另一个 task 打断,统计值会偏小。这值得单独记一条。',
+      createdAt: now + 1500,
+    },
+  ],
+  'd-f5': [
+    {
+      id: 'm-seed-f5-q',
+      discussionId: 'd-f5',
+      role: 'user',
+      text: '这个函数在本次改动里还有调用点吗?',
+      createdAt: now + 3000,
+    },
+    {
+      id: 'm-seed-f5',
+      discussionId: 'd-f5',
+      role: 'agent',
+      text: '没有了 —— 最后一处引用随本次改动一并删除,这条 finding 描述的路径不可达。',
+      createdAt: now + 3200,
+    },
   ],
 };
+
+/**
+ * 回写提案 fixture:三种状态各一,便于自查提案卡的 pending / applied / skipped 三态。
+ * update 挂在 d-f1 的 agent 回复上;dismiss 走 d-f3(那条本就是剔除态,可自查恢复档)。
+ */
+const SEED_PROPOSALS: FindingProposal[] = [
+  {
+    id: 'p-update',
+    reviewId: 'demo',
+    discussionId: 'd-f1',
+    messageId: 'm-seed-2',
+    findingId: 'f1',
+    kind: 'update',
+    patch: {
+      severity: 'medium',
+      title: 'counter 跨 spawn 共享:近似进度下可放宽为 Relaxed 原子',
+      body: '仍需原子类型(跨线程),但只求近似进度时 Ordering::Relaxed 即可,开销接近裸加。原文按「必须加锁」写,过重了。',
+    },
+    before: null,
+    baseUpdatedAt: now,
+    status: 'pending',
+    createdAt: now + 2500,
+    resolvedAt: null,
+  },
+  {
+    id: 'p-dismiss',
+    reviewId: 'demo',
+    discussionId: 'd-f5',
+    messageId: 'm-seed-f5',
+    findingId: 'f5',
+    kind: 'dismiss',
+    patch: { reason: '这条路径的调用点已随本次改动删除,代码不可达;原文描述的场景在当前分支上不存在。' },
+    before: null,
+    baseUpdatedAt: now,
+    status: 'pending',
+    createdAt: now + 3500,
+    resolvedAt: null,
+  },
+  {
+    // 已提交的 finding:内容锁定,提案不可应用。同时 d-f7 没有消息,顺带自查「挂不上消息的提案」那条路
+    id: 'p-locked',
+    reviewId: 'demo',
+    discussionId: 'd-f7',
+    messageId: null,
+    findingId: 'f7',
+    kind: 'update',
+    patch: { severity: 'medium', body: '重试耗尽后返回 null,建议改为抛出最后一次错误。' },
+    before: null,
+    baseUpdatedAt: now,
+    status: 'pending',
+    createdAt: now + 3800,
+    resolvedAt: null,
+  },
+  {
+    id: 'p-done',
+    reviewId: 'demo',
+    discussionId: 'd-user-seed',
+    messageId: 'm-user-seed-2',
+    findingId: null,
+    kind: 'create',
+    patch: {
+      severity: 'high',
+      category: 'Correctness',
+      title: 'done += 1 在并发下丢更新',
+      body: '多个 task 并发自增同一个非原子计数器,读-改-写之间可被打断,统计值会偏小。',
+      file: 'src/pipeline.ts',
+      line: 19,
+      // 带 suggestion:它会随新 finding 落库并最终发给 author,卡上必须看得见
+      suggestion: '      counter.fetch_add(1, Ordering::Relaxed);',
+    },
+    before: null,
+    baseUpdatedAt: null,
+    status: 'pending',
+    createdAt: now + 4000,
+    resolvedAt: null,
+  },
+];
 
 // 三层审核规则 fixture:内置基线与合并逻辑直接复用 @shared/prompt(不再抄一份,免得与后端漂移),
 // 这里只预置若干层覆盖,供三层编辑器双主题自查。
@@ -455,6 +555,8 @@ export function installPreviewApi(): void {
     asClean || asStream ? [] : asRoundFailed ? [{ ...ROUNDS[0] }, { ...FAILED_ROUND }] : ROUNDS.map((r) => ({ ...r }));
   const discussions = asClean || asStream ? [] : DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
+  const proposals: FindingProposal[] =
+    asClean || asStream ? [] : structuredClone(SEED_PROPOSALS);
   const listeners = new Set<(e: ReviewEvent) => void>();
   const startListeners = new Set<(p: ReviewStartProgress) => void>();
   const fire = (e: ReviewEvent) => {
@@ -541,6 +643,7 @@ export function installPreviewApi(): void {
       },
       fileContent: async (_r, path) => (path === 'src/pipeline.ts' ? PIPELINE_SRC : null),
       discussions: async () => discussions,
+      proposals: async () => proposals,
       messages: async (discussionId) => msgStore[discussionId] ?? [],
       // ?start 模拟大 PR 的慢启动(阶段按真实顺序推进,diff 停够久能看到「拉取偏慢」提示);
       // ?start=error 在 diff 阶段失败,自查浮层的错误态
@@ -700,6 +803,51 @@ export function installPreviewApi(): void {
       clearDiscussion: async (_r, discussionId) => {
         msgStore[discussionId] = [];
         fire({ reviewId: 'demo', type: 'messages-cleared', discussionId });
+      },
+      // 提案三个去向:与后端同样真的改内存态并回推,便于在预览里走完「应用 → 卡片刷新 → 撤销」
+      applyProposal: async (_r, proposalId) => {
+        const i = proposals.findIndex((p) => p.id === proposalId);
+        const p = proposals[i];
+        const f = p.findingId ? findings.find((x) => x.id === p.findingId) : null;
+        // 旧值快照与后端同步落下 —— 不记的话预览里永远走不到「↩ 撤销」那条路
+        let before: FindingProposal['before'] = null;
+        if (p.kind === 'update' && f) {
+          // 与后端同口径:只拍 patch 动过的字段,拍全量会让撤销顺手回滚应用之后的编辑
+          before = Object.fromEntries(
+            Object.keys(p.patch).map((k) => [k, (f as unknown as Record<string, unknown>)[k]]),
+          );
+          emit({ ...f, ...p.patch, updatedAt: Date.now() });
+        } else if ((p.kind === 'dismiss' || p.kind === 'restore') && f) {
+          before = { triage: f.triage, dismissReason: f.dismissReason, autoClosed: f.autoClosed };
+          emit({
+            ...f,
+            triage: p.kind === 'dismiss' ? 'dismiss' : 'open',
+            dismissReason: p.kind === 'dismiss' ? p.patch.reason : null,
+            autoClosed: false,
+            updatedAt: Date.now(),
+          });
+        }
+        const next = { ...p, before, status: 'applied' as const, resolvedAt: Date.now() } as FindingProposal;
+        proposals[i] = next;
+        fire({ reviewId: 'demo', type: 'finding-proposal', payload: next });
+        return next;
+      },
+      skipProposal: async (_r, proposalId) => {
+        const i = proposals.findIndex((p) => p.id === proposalId);
+        const next = { ...proposals[i], status: 'skipped' as const, resolvedAt: Date.now() };
+        proposals[i] = next;
+        fire({ reviewId: 'demo', type: 'finding-proposal', payload: next });
+        return next;
+      },
+      undoProposal: async (_r, proposalId) => {
+        const i = proposals.findIndex((p) => p.id === proposalId);
+        const p = proposals[i];
+        const f = p.findingId ? findings.find((x) => x.id === p.findingId) : null;
+        if (f && p.before) emit({ ...f, ...p.before, updatedAt: Date.now() });
+        const next = { ...p, status: 'skipped' as const, resolvedAt: Date.now() };
+        proposals[i] = next;
+        fire({ reviewId: 'demo', type: 'finding-proposal', payload: next });
+        return next;
       },
       setTriage: async (_r, findingId, triage, reason) => {
         const f = findings.find((x) => x.id === findingId)!;

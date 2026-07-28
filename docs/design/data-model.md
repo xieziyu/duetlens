@@ -25,7 +25,7 @@ Review (一次审核会话)
 
 finding 是一类 discussion,但同时是一条**可提交到 GitHub 的记录**,带两组**正交**状态:
 
-- **triage**:`open` → `keep` / `dismiss`(用户裁决;剔除可附 `dismissReason`,复审时注入以抑制同类)
+- **triage**:`open` → `keep` / `dismiss`(用户裁决;剔除可附 `dismissReason`,复审时注入以抑制同类)。剔除**只写 triage 与理由**,标题/正文/suggestion 原样保留 —— agent 在讨论里提出的剔除同走这条路径,见 [discussion-proposals](discussion-proposals.md)
 - **submission**:`unsubmitted` → `submitted`(记录 GitHub 链接)
 
 只有 `keep` 进提交集;`submitted` 后内容锁定只读,不因 triage 变化而回退(唯一例外是复核追评,见 [findings-submit](findings-submit.md))。

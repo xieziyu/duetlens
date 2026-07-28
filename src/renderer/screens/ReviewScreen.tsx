@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Discussion, Finding, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, FindingProposal, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
 import { DEFAULT_UI_SETTINGS } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
@@ -70,6 +70,7 @@ export function ReviewScreen({
     findings,
     discussions,
     messages,
+    proposals,
     diff,
     diffReady,
     status,
@@ -354,6 +355,22 @@ export function ReviewScreen({
       if (!reviewId) return;
       void window.duetlens.review.updateFinding(reviewId, input);
     },
+    [reviewId],
+  );
+  // agent 回写提案的三个去向。同写路径:落库后经事件回推,失败原样抛出由提案卡就地回显。
+  const onApplyProposal = useCallback(
+    (proposalId: string) =>
+      reviewId ? window.duetlens.review.applyProposal(reviewId, proposalId) : Promise.resolve(),
+    [reviewId],
+  );
+  const onSkipProposal = useCallback(
+    (proposalId: string) =>
+      reviewId ? window.duetlens.review.skipProposal(reviewId, proposalId) : Promise.resolve(),
+    [reviewId],
+  );
+  const onUndoProposal = useCallback(
+    (proposalId: string) =>
+      reviewId ? window.duetlens.review.undoProposal(reviewId, proposalId) : Promise.resolve(),
     [reviewId],
   );
   // DiffPane 展开 diff 外上下文时按需拉取文件新侧全文(读不到返回 null)
@@ -650,6 +667,10 @@ export function ReviewScreen({
             ensureMessages={ensureMessages}
             onPromote={onPromote}
             onClearMessages={onClearMessages}
+            proposals={proposals}
+            onApplyProposal={onApplyProposal}
+            onSkipProposal={onSkipProposal}
+            onUndoProposal={onUndoProposal}
             categoryFilter={categoryFilter}
             onClearCategory={() => setCategoryFilter(null)}
             onEditSummary={onEditSummary}
@@ -742,6 +763,10 @@ function RightPanel({
   ensureMessages,
   onPromote,
   onClearMessages,
+  proposals,
+  onApplyProposal,
+  onSkipProposal,
+  onUndoProposal,
   categoryFilter,
   onClearCategory,
   onEditSummary,
@@ -773,6 +798,10 @@ function RightPanel({
   ensureMessages: (id: string) => void;
   onPromote: (discussionId: string) => void;
   onClearMessages: (discussionId: string) => void;
+  proposals: FindingProposal[];
+  onApplyProposal: (proposalId: string) => Promise<unknown>;
+  onSkipProposal: (proposalId: string) => Promise<unknown>;
+  onUndoProposal: (proposalId: string) => Promise<unknown>;
   categoryFilter: string | null;
   onClearCategory: () => void;
   onEditSummary: (body: string) => void;
@@ -987,6 +1016,10 @@ function RightPanel({
           ensureMessages={ensureMessages}
           onPromote={onPromote}
           onClearMessages={onClearMessages}
+          proposals={proposals}
+          onApplyProposal={onApplyProposal}
+          onSkipProposal={onSkipProposal}
+          onUndoProposal={onUndoProposal}
         />
       )}
       {tab === 'summary' &&
