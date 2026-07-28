@@ -39,7 +39,6 @@ class FakeSubmitter implements GitHubSubmitter {
 
 function seed(store: ReviewStore) {
   const review = store.createReview({ source: 'github-pr', sourceRef: 'acme/repo#7', title: 't' });
-  store.setReviewSummary(review.id, '整体方向 OK,收口并发。');
   const f1 = store.addFinding(review.id, {
     severity: 'high',
     category: 'Correctness',
@@ -68,14 +67,14 @@ async function main() {
     const { review, f1, f2 } = seed(store);
     const fresh = store.getReview(review.id)!;
     const findings = [store.getFinding(f1.id)!, store.getFinding(f2.id)!];
-    const payload = buildPrReviewPayload(fresh, findings, 'request_changes');
+    const payload = buildPrReviewPayload(fresh, findings, 'request_changes', '整体方向 OK,收口并发。');
     assert.equal(payload.event, 'REQUEST_CHANGES');
     assert.equal(payload.comments.length, 2, '两条有锚点 → 两条 inline');
     assert.equal(payload.comments[0].side, 'RIGHT');
     assert.equal(payload.comments[0].line, 20);
     // 缩进是补丁的一部分:被削掉的话 author 一键采纳就把那行的缩进也改了
     assert.match(payload.comments[0].body, /```suggestion\n {4}const c = new Atomic\(0\);\n```/, 'suggestion 块逐字保留缩进');
-    assert.match(payload.body, /整体方向 OK/, 'review body = summary');
+    assert.match(payload.body, /整体方向 OK/, 'review body = reviewer 手填的意见');
     log('payload 组装 ok');
   }
 
@@ -89,9 +88,11 @@ async function main() {
     const events: ReviewEvent[] = [];
     manager.on('review-event', (e: ReviewEvent) => events.push(e));
 
-    const res = await manager.submitReview(review.id, { event: 'comment', summaryBody: '改后的摘要' });
+    const res = await manager.submitReview(review.id, { event: 'comment', body: '我写的意见' });
     assert.equal(res.status, 'success');
-    assert.equal(fake.last!.payload.body, '改后的摘要', 'summaryBody 提交前落库并进 payload');
+    assert.equal(fake.last!.payload.body, '我写的意见', '手填正文进 payload');
+    // 手填意见属于这一次提交,不是 review 的属性 —— 落库就会和 agent 的总结抢同一格
+    assert.equal(store.getReview(review.id)!.summaryBody, null, '手填正文不得落库');
     assert.equal(store.getFinding(f1.id)!.submission, 'submitted');
     assert.equal(store.getFinding(f1.id)!.submittedUrl, 'https://gh/x#r1');
     assert.equal(store.getFinding(f2.id)!.submission, 'submitted');
@@ -99,14 +100,18 @@ async function main() {
     assert.ok(events.some((e) => e.type === 'status' && e.payload === 'submitted'), 'status 事件');
     log('success 锁定 + 状态 + 事件 ok');
 
-    // 增量:已提交项不再进待提交集 → 二次提交只发 review body,不重发任何 inline 评论。
-    // (review body 本身就是一次合法的 GitHub review,故这里是 success 而非 failed)
-    const again = await manager.submitReview(review.id, { event: 'comment' });
+    // 手填正文不落库,故二次提交是空手的:没有待提交项、也没有正文 → 无内容可发,应被拦。
+    // (总结不再自动充当 body 之后,这里从 success 变成 failed —— 空 COMMENT 本就没有意义)
+    const empty = await manager.submitReview(review.id, { event: 'comment' });
+    assert.equal(empty.status, 'failed', '无待提交项且未手填正文 → 拦下');
+
+    // 增量:已提交项不再进待提交集 → 二次提交只发这次手填的 body,不重发任何 inline 评论
+    const again = await manager.submitReview(review.id, { event: 'comment', body: '再补一句' });
     assert.equal(again.status, 'success');
     assert.equal(fake.last!.payload.comments.length, 0, '已提交项不得重发为 inline 评论');
-    assert.equal(fake.last!.payload.body, '改后的摘要', 'body 仍取落库的 summary');
+    assert.equal(fake.last!.payload.body, '再补一句', 'body 只取这一次手填的');
     assert.equal(store.getFinding(f1.id)!.submittedUrl, 'https://gh/x#r1', '首次提交的链接不被覆盖');
-    log('增量:已提交锁定不重发,body 单独成立 ok');
+    log('增量:已提交锁定不重发,手填 body 单独成立 ok');
   }
 
   // ---- 复核追评:上一轮已提交、本轮复核仍存在 → 追发一条以复核说明为主体的评论 ----
@@ -164,7 +169,7 @@ async function main() {
       file: 'src/p.ts',
       line: 0,
     });
-    const payload = buildPrReviewPayload(store.getReview(review.id)!, [store.getFinding(f.id)!], 'comment');
+    const payload = buildPrReviewPayload(store.getReview(review.id)!, [store.getFinding(f.id)!], 'comment', '');
     const tail = payload.body.split('### 整体意见')[1];
     const orphan = tail
       .split('\n')
@@ -251,7 +256,6 @@ async function main() {
     const db = openDatabase(':memory:');
     const store = new ReviewStore(db);
     const review = store.createReview({ source: 'github-pr', sourceRef: 'acme/repo#7' });
-    store.setReviewSummary(review.id, '整体 OK。');
     const live = store.addFinding(review.id, { severity: 'high', title: '活锚点', body: 'b', file: 'src/p.ts', line: 21 });
     const stale = store.addFinding(review.id, { severity: 'medium', title: '失效锚点', body: '架构点', file: 'src/p.ts', line: 99 });
     assert.equal(isStaleAnchor(store.getFinding(live.id)!, diff, 1), false, '活锚点不算 stale');
@@ -269,6 +273,7 @@ async function main() {
       store.getReview(review.id)!,
       [store.getFinding(live.id)!, store.getFinding(stale.id)!],
       'comment',
+      '',
     );
     assert.equal(degraded.comments.length, 1, '降级后只剩 1 条 inline');
     assert.match(degraded.body, /失效锚点/, '降级项并入 review body');

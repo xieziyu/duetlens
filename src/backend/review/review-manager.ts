@@ -564,15 +564,6 @@ export class ReviewManager extends EventEmitter {
     return finding;
   }
 
-  /** 编辑审核总结正文(提交屏 review body 来源);落库后外发 `review` 事件。 */
-  updateSummary(reviewId: string, body: string): Review {
-    this.store.setReviewSummary(reviewId, body);
-    const review = this.store.getReview(reviewId);
-    if (!review) throw new Error(`review 不存在: ${reviewId}`);
-    this.forward({ reviewId, type: 'review', payload: review });
-    return review;
-  }
-
   /**
    * 把待提交的 findings(未提交的 + 欠一条复核追评的)组成一次 GitHub PR review 原子提交。
    * 成功后记下提交轮次(增量:下次只发新的 delta 与新的复核追评);失败/被拒不改任何状态。
@@ -583,22 +574,17 @@ export class ReviewManager extends EventEmitter {
     if (review.source !== 'github-pr') {
       return { status: 'failed', message: '仅 github-pr source 可提交到 GitHub;本地/vbranch 请用导出。' };
     }
-    // summary 若有改动,先落库(review body 来源),再一并回推
-    if (input.summaryBody !== undefined && input.summaryBody !== review.summaryBody) {
-      this.updateSummary(reviewId, input.summaryBody);
-    }
-    const fresh = this.store.getReview(reviewId)!;
-    const pending = this.store.listFindings(reviewId).filter((f) => isSubmittable(f, fresh.currentRound));
+    const pending = this.store.listFindings(reviewId).filter((f) => isSubmittable(f, review.currentRound));
 
     // 无 finding 也可提交:Comment/Approve/Request changes 本身就是表态
-    const payload = buildPrReviewPayload(fresh, pending, input.event);
+    const payload = buildPrReviewPayload(review, pending, input.event, input.body ?? '');
     const blocked = submitBlocker(payload);
     if (blocked) return { status: 'failed', message: blocked };
-    const result = await this.submitter.submit(fresh, payload);
+    const result = await this.submitter.submit(review, payload);
 
     if (result.status === 'success') {
       for (const f of pending) {
-        this.store.setSubmission(f.id, 'submitted', result.url, fresh.currentRound);
+        this.store.setSubmission(f.id, 'submitted', result.url, review.currentRound);
         const updated = this.store.getFinding(f.id);
         if (updated) this.forward({ reviewId, type: 'finding', payload: updated });
       }

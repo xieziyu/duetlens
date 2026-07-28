@@ -18,7 +18,9 @@ import {
   RESOLUTIONS_REQUIRING_NOTE,
   resolveFindingSchema,
   restoreFindingSchema,
+  SUMMARY_FILES_LIMIT,
   updateFindingSchema,
+  writeSummarySchema,
   type ProposalKind,
   type ProposalPatch,
 } from '@shared/domain';
@@ -233,6 +235,41 @@ const TOOLS = [
     },
   },
   {
+    name: 'write_summary',
+    description:
+      '写下本次审核的总结,收尾时调用一次(复审 / 自检轮同样在收尾时重写,整份取代上一次)。' +
+      '总结呈现在 Summary 屏供 reviewer 判断(不会自动发给 PR 作者);' +
+      'files 是你判断值得人工重点复核的文件 —— 只挑真正需要人眼的,不要把改动文件列表誊一遍。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        body: {
+          type: 'string',
+          description:
+            '总结正文(Markdown)。讲改动做了什么、整体判断、以及最需要作者注意的地方;' +
+            '不要罗列已上报的 finding —— 它们在别处逐条呈现。',
+        },
+        files: {
+          type: 'array',
+          description:
+            `值得人工重点复核的文件,最多 ${SUMMARY_FILES_LIMIT} 条,按重要性排序;没有就给空数组。` +
+            '一个文件只给一条(同一路径要说的话合成一句 note,重复路径只有第一条生效)。' +
+            '这里放的是**没有变成 finding、但人眼该过一遍**的地方:' +
+            '改动面大到难以静态判断、时序 / 并发要靠人推、需要实机或数据验证、外部契约变更影响面未知。',
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: '相对仓库根的路径,与 diff 里一致' },
+              note: { type: 'string', description: '一句话:为什么需要人工看、具体看什么' },
+            },
+            required: ['path', 'note'],
+          },
+        },
+      },
+      required: ['body'],
+    },
+  },
+  {
     name: 'get_diff',
     description: '获取本次审核的完整 diff。',
     inputSchema: { type: 'object', properties: {} },
@@ -257,7 +294,7 @@ const TOOLS = [
  *
  * 事件:'finding' (ReportedFinding) · 'finding-update' (ReportedFindingUpdate)
  * · 'finding-resolution' (ReportedFindingResolution) · 'finding-proposal' (ProposedFindingChange)
- * · 'tool-call' (name, args)。
+ * · 'summary' (WriteSummaryInput) · 'tool-call' (name, args)。
  */
 export class DuetlensMcpServer extends EventEmitter {
   private httpServer?: http.Server;
@@ -487,6 +524,28 @@ export class DuetlensMcpServer extends EventEmitter {
         this.emit('finding-resolution', resolution);
         return {
           content: [{ type: 'text', text: `finding resolved as ${resolution.status}, id=${resolution.findingId}` }],
+        };
+      }
+      if (name === 'write_summary') {
+        // 总结是机审那一轮的收尾结论,记着它写于第几轮;讨论轮放行会让一句追问顶掉
+        // 本轮的总结,还把轮次刷成"已重写"。这一轮的看法说进回复即可。
+        if (this.writeMode === 'propose') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'write_summary 只在机审收尾时调用。讨论中请把结论写进回复,由 reviewer 决定是否改总结。',
+              },
+            ],
+            isError: true,
+          };
+        }
+        const parsed = writeSummarySchema.safeParse(args);
+        if (!parsed.success) return reject('write_summary', parsed.error);
+        this.emit('summary', parsed.data);
+        const n = parsed.data.files.length;
+        return {
+          content: [{ type: 'text', text: `summary recorded${n ? `, ${n} file(s) flagged` : ''}` }],
         };
       }
       if (name === 'get_diff') {

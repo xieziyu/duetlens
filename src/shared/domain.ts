@@ -173,6 +173,62 @@ export const resolveFindingSchema = z
   });
 export type ResolveFindingInput = z.infer<typeof resolveFindingSchema>;
 
+/**
+ * 一条「值得人工重点看」的文件线索;path 相对仓库根,与 diff 的文件路径同一套,点击即跳。
+ * 先 trim 再校验非空:纯空白能过 `min(1)`,而落库前又会被 trim 掉 ——
+ * 那样一次全空白的上报会以「成功」之姿把已有总结覆盖成空(同 resolve_finding 的 note)。
+ */
+export const summaryFileSchema = z.object({
+  path: z.string().trim().min(1),
+  note: z.string().trim().min(1),
+});
+export type SummaryFile = z.infer<typeof summaryFileSchema>;
+
+/** 同一文件只保留最先给出的那条(agent 按重要性排序),使 path 成为可作 React key 的唯一键。 */
+function dedupeByPath(files: readonly SummaryFile[]): SummaryFile[] {
+  const byPath = new Map<string, SummaryFile>();
+  for (const f of files) if (!byPath.has(f.path)) byPath.set(f.path, f);
+  return [...byPath.values()];
+}
+
+/**
+ * write_summary:审核收尾时 agent 回写总结正文 + 重点关注文件。
+ * files 整份取代旧值(每轮重写而非追加),缺省即清空 —— 上一轮的重点不该挂在新一轮的结论上。
+ * 一个文件一条:重复路径在此收敛,下游(Summary 列表、提交正文)才不必各自防重。
+ */
+export const writeSummarySchema = z
+  .object({
+    body: z.string().trim().min(1),
+    files: z.array(summaryFileSchema).default([]),
+  })
+  .transform((v) => ({ ...v, files: dedupeByPath(v.files) }));
+export type WriteSummaryInput = z.infer<typeof writeSummarySchema>;
+
+/** 重点关注文件的条数上限;超出的截断。够覆盖一次改动的要害,又不至于退化成第二份文件列表。 */
+export const SUMMARY_FILES_LIMIT = 8;
+
+/**
+ * 总结停在更早的轮次 = 本轮没重写过它。总结是 review 级的单份值、重跑不清空,
+ * 所以第 2 轮漏调 write_summary(模型跳过 / 被叫停 / 没写完就收尾)时,Summary 屏上仍是
+ * 第 1 轮的结论。不清掉它(一份大体成立的总结不该因新一轮开跑就作废),但要标出来 ——
+ * 要拦的是**冒充当前轮**误导 reviewer 的判断。
+ */
+export function isSummaryStale(review: Pick<Review, 'summaryRound' | 'currentRound'>): boolean {
+  return review.summaryRound != null && review.summaryRound < review.currentRound;
+}
+
+/**
+ * 这份总结是**旧版本里 reviewer 自己写的**,不是 agent 产出。
+ *
+ * 判据不必另存一列:`summary_round` 出现之前,agent 根本没有写入总结的通道(它只存在于
+ * 回复文本里,从不落库),所以「有正文却没有轮次」只可能来自那时的人工编辑框。
+ * 不清空(那是用户写下的话),但也不能挂在 agent 名下 —— 把人的话署到机器名下,
+ * 与把机器的结论当人的话发出去是同一种错。下次机审 write_summary 会连正文带轮次一起覆盖。
+ */
+export function isLegacySummary(review: Pick<Review, 'summaryBody' | 'summaryRound'>): boolean {
+  return Boolean(review.summaryBody?.trim()) && review.summaryRound == null;
+}
+
 // ---- 存储实体 ----
 export interface Review {
   id: string;
@@ -191,8 +247,12 @@ export interface Review {
   intensity: ReviewIntensity;
   title: string | null;
   status: ReviewStatus;
-  /** codex 生成、用户可编辑的总结正文(提交屏 review body 来源) */
+  /** codex 生成的总结正文;只读呈现给 reviewer,不参与提交与导出 */
   summaryBody: string | null;
+  /** codex 挑出的、值得人工重点复核的文件(每轮机审整份重写) */
+  summaryFiles: SummaryFile[];
+  /** 总结写于第几轮(write_summary 时记下);从未写过为 null。见 {@link isSummaryStale} */
+  summaryRound: number | null;
   /** 已跑到第几轮机审(首轮=1;每次重跑 +1) */
   currentRound: number;
   createdAt: number;

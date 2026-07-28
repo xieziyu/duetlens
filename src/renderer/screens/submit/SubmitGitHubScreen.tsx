@@ -56,14 +56,13 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   const [event, setEvent] = useState<GhReviewEvent>('comment');
   const [sub, setSub] = useState<SubState>('ready');
   const [result, setResult] = useState<SubmitReviewResult | null>(null);
-  const [summary, setSummary] = useState(review.summaryBody ?? '');
+  // reviewer 手填的 review 意见:只属于这一次提交,不落库、也不取 agent 的总结
+  const [body, setBody] = useState('');
   const [diff, setDiff] = useState<DiffFile[]>([]);
   const [fresh, setFresh] = useState<Freshness>({ state: 'snapshot' });
   /** 上次被 422 拒后、按最新 diff 定位到的失效锚点条数(null=尚未定位/拉取失败)。 */
   const [rejectStale, setRejectStale] = useState<number | null>(null);
 
-  // review body 若被别处(diff 屏 Summary tab)改动,同步进草稿(未编辑时)
-  useEffect(() => setSummary(review.summaryBody ?? ''), [review.summaryBody]);
   // 先用审核时的 diff 快照即时预判哪条行锚点已失效(GitHub 422 不告知是哪条)
   useEffect(() => {
     void window.duetlens.review.diff(reviewId).then(setDiff);
@@ -139,20 +138,16 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     void window.duetlens.review.setTriage(reviewId, f.id, f.triage === 'dismiss' ? 'open' : 'dismiss');
   };
 
-  const saveSummary = () => {
-    if (summary !== (review.summaryBody ?? '')) void window.duetlens.review.updateSummary(reviewId, summary);
-  };
-
-  // 按钮可用性走后端同一套判定(草稿 summary 先并进去,与实际提交内容一致)
+  // 按钮可用性走后端同一套判定(手填正文一并传进去,与实际提交内容一致)
   const blocked = useMemo(
-    () => submitBlocker(buildPrReviewPayload({ ...review, summaryBody: summary }, pending, event)),
-    [review, summary, pending, event],
+    () => submitBlocker(buildPrReviewPayload(review, pending, event, body)),
+    [review, pending, event, body],
   );
 
   const submit = async () => {
     if (blocked || sub === 'submitting') return;
     setSub('submitting');
-    const res = await window.duetlens.review.submit(reviewId, { event, summaryBody: summary });
+    const res = await window.duetlens.review.submit(reviewId, { event, body });
     setResult(res);
     setSub(res.status);
     // 被 422 拒说明本地依据的 diff 已过期 —— 现拉最新的重判,把「是哪条」指出来。
@@ -184,7 +179,7 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     const parts: string[] = [];
     if (inlineCount > 0) parts.push(`${inlineCount} 行评论`);
     if (summaryCount > 0) parts.push(`摘要(含 ${summaryCount} 条)`);
-    else if (summary.trim()) parts.push('摘要');
+    else if (body.trim()) parts.push('摘要');
     return `提交到 GitHub · ${parts.length ? parts.join(' + ') : `仅 ${EVENT_META[event].label}`} →`;
   })();
 
@@ -438,10 +433,9 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
             <div className="field-lbl">Review 意见</div>
             <textarea
               className="summary"
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              onBlur={saveSummary}
-              placeholder="可选"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="可选 · 你写给作者的话(agent 的总结不会发出去)"
               rows={5}
             />
 

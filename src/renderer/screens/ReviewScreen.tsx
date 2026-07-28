@@ -282,14 +282,6 @@ export function ReviewScreen({
     [activeDiscussionId, runSend, startGlobalDiscussion, keepFailed],
   );
 
-  const onEditSummary = useCallback(
-    (body: string) => {
-      if (!reviewId) return;
-      void window.duetlens.review.updateSummary(reviewId, body);
-    },
-    [reviewId],
-  );
-
   // 清空某条 discussion 的往来消息(finding 卡保留),重开讨论;落库后经事件流回推清空。
   const onClearMessages = useCallback(
     (discussionId: string) => {
@@ -673,8 +665,8 @@ export function ReviewScreen({
             onUndoProposal={onUndoProposal}
             categoryFilter={categoryFilter}
             onClearCategory={() => setCategoryFilter(null)}
-            onEditSummary={onEditSummary}
             onPickCategory={onPickCategory}
+            onOpenFile={revealFile}
           />
         </div>
       </div>
@@ -769,8 +761,8 @@ function RightPanel({
   onUndoProposal,
   categoryFilter,
   onClearCategory,
-  onEditSummary,
   onPickCategory,
+  onOpenFile,
 }: {
   tab: RightTab;
   onTab: (t: RightTab) => void;
@@ -804,8 +796,8 @@ function RightPanel({
   onUndoProposal: (proposalId: string) => Promise<unknown>;
   categoryFilter: string | null;
   onClearCategory: () => void;
-  onEditSummary: (body: string) => void;
   onPickCategory: (cat: string) => void;
+  onOpenFile: (path: string) => void;
 }) {
   const filtered = useMemo(
     () => (categoryFilter ? findings.filter((f) => (f.category ?? '未分类') === categoryFilter) : findings),
@@ -1035,8 +1027,8 @@ function RightPanel({
             findings={findings}
             discussionCount={discussions.length}
             diff={diff}
-            onEditSummary={onEditSummary}
             onPickCategory={onPickCategory}
+            onOpenFile={onOpenFile}
           />
         ))}
     </div>

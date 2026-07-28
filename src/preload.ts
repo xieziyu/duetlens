@@ -55,8 +55,6 @@ const api: DuetlensApi = {
       ipcRenderer.invoke(IpcChannels.reviewPromoteDiscussion, reviewId, discussionId),
     updateFinding: (reviewId, input) =>
       ipcRenderer.invoke(IpcChannels.reviewUpdateFinding, reviewId, input),
-    updateSummary: (reviewId, body) =>
-      ipcRenderer.invoke(IpcChannels.reviewUpdateSummary, reviewId, body),
     submit: (reviewId, input) => ipcRenderer.invoke(IpcChannels.reviewSubmit, reviewId, input),
     openInBrowser: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewOpenInBrowser, reviewId),
     getUiState: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewGetUiState, reviewId),

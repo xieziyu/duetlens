@@ -20,6 +20,7 @@ import {
   type Message,
   type Review,
   type ReviewIntensity,
+  type WriteSummaryInput,
 } from '@shared/domain';
 import { findDuplicate } from '@shared/finding-dedupe';
 import { FOLLOWUP_REPLY_FAILED_CODE } from '@shared/ipc';
@@ -79,7 +80,7 @@ export class SessionDisposedError extends Error {
 export const ADVERSARIAL_SELFCHECK_PROMPT = `现在做一轮对抗式自检,站到刚才结论的对立面复核一遍:
 1. 回看你**已上报**的每条 finding:有没有哪条其实站不住(反例不成立 / 是可接受差异 / 属误报)?站不住的用 update_finding 降级严重度,或在 body 里明确标注不确定,不要留下过度自信的结论。
 2. 更重要的是审你**没报**的地方:哪个函数、边界或错误分支你只是扫过、并未真正构造反例去验证?对这些补一次证伪 —— 发现真实且可复现的新问题就用 report_finding 上报,已报过的不要重复。
-3. 给一句话小结:本轮自检补报了几条、降级/撤回了几条。`;
+3. 最后重新调用一次 write_summary,把自检后的结论写成总结(整份取代扫描时那次),并在回复里说明本轮补报了几条、降级/撤回了几条。`;
 
 /**
  * 一个 turn 的「提案而非落库」上下文。收集篮由**调用方**持有:同一线程可以并发追问,
@@ -549,6 +550,12 @@ export class ReviewSession {
       this.store.setFindingResolution(findingId, this.currentRound(), status, note);
       const updated = this.store.getFinding(findingId);
       if (updated) this.emit('finding', updated);
+    });
+    this.mcp.on('summary', (raw: WriteSummaryInput) => {
+      // raw 是 writeSummarySchema 的产物:已 trim、已按 path 去重,落库不再二次加工
+      this.store.writeAgentSummary(this.reviewId, raw.body, raw.files);
+      const review = this.store.getReview(this.reviewId);
+      if (review) this.emit('review', review);
     });
     const mcpUrl = await this.mcp.listen();
     this.unsubscribe = this.agent.streamEvents((e) => this.emit('agent-event', e));
