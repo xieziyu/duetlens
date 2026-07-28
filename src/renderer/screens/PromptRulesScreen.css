@@ -1,4 +1,5 @@
-/* 审核规则三层编辑器:优先级 ribbon + 层选 rail + 分节编辑 + 常驻合并预览。 */
+/* 审核规则三层编辑器:优先级 ribbon + 层选 rail + 分节编辑。
+   不设合并预览栏:编辑区已是所见即所得(本层正文 / 继承正文 + 节头生效层标记)。 */
 .prompt-rules {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -48,10 +49,10 @@
 .pr-ribbon .note { margin-left: auto; color: var(--text-faint); font-size: 11px; }
 .pr-ribbon .note code { font-family: var(--mono); color: var(--text-dim); }
 
-/* layout: layer rail + editor + merged */
+/* layout: layer rail + editor */
 .pr-main {
   display: grid;
-  grid-template-columns: 216px minmax(0, 1fr) 348px;
+  grid-template-columns: 216px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -120,6 +121,8 @@
 
 /* editor */
 .pr-editor { overflow: auto; padding: 18px 22px 60px; }
+/* 独占主区后单行会拉得过长:限宽保住 mono 正文的可读行长,而不是让卡片顶满窗口 */
+.pr-editor > * { max-width: 960px; }
 .pr-ed-head { margin-bottom: 16px; }
 .pr-ed-head .t { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
 .pr-ed-head .t .pr-tag { width: 9px; height: 9px; }
@@ -187,40 +190,51 @@
   overflow-wrap: anywhere;
 }
 
-/* project 层未选仓库时的选目录卡 */
+/* 未选仓库:与已选时的仓库条同位置同形状,虚线示意落点未定 */
 .pr-pick {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 7px 8px 7px 11px;
   border: 1px dashed var(--border);
-  border-radius: 12px;
-  padding: 22px 20px;
-  text-align: center;
-  color: var(--text-dim);
-  font-size: 12.5px;
-  line-height: 1.7;
+  border-radius: 9px;
 }
-.pr-pick code { font-family: var(--mono); color: var(--text-dim); }
-.pr-pick .why {
-  color: var(--text);
-  font-size: 12px;
-  margin-bottom: 8px;
+.pr-pick .ic { color: var(--text-faint); font-size: 12px; }
+.pr-pick .nm { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.pr-pick .msg { flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-faint); }
+.pr-pick .rel {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--surface-3);
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex: none;
 }
 .pr-pick button {
-  margin-top: 12px;
+  flex: none;
   background: var(--accent-solid);
   color: var(--on-solid);
   border: 0;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 12px;
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
 }
 .pr-pick button:disabled { opacity: 0.5; cursor: not-allowed; }
-.pr-pick .cur {
-  margin-top: 10px;
-  font-family: var(--mono);
-  font-size: 10.5px;
+
+/* 只读态(builtin 层 / 未选仓库)的说明条:解释这一栏为什么没有编辑按钮 */
+.pr-ronote {
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: var(--surface);
+  font-size: 11.5px;
+  line-height: 1.6;
   color: var(--text-faint);
-  word-break: break-all;
 }
 
 .pr-card {
@@ -359,65 +373,6 @@
   cursor: pointer;
 }
 .pr-save:disabled { opacity: 0.5; cursor: not-allowed; }
-
-/* merged preview */
-.pr-merged {
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  overflow: auto;
-}
-.pr-mg-head {
-  position: sticky;
-  top: 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 13px 16px;
-  z-index: 1;
-}
-.pr-mg-head .t { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-.pr-mg-head .s { color: var(--text-faint); font-size: 11px; margin-top: 4px; line-height: 1.5; }
-.pr-mg-head .s code { font-family: var(--mono); color: var(--text-dim); }
-.pr-mg-body { padding: 14px 16px 40px; }
-.pr-mblock { margin-bottom: 16px; padding-left: 11px; border-left: 2px solid var(--border); }
-.pr-mblock.project { border-color: var(--agent); }
-.pr-mblock.global { border-color: var(--human); }
-.pr-mblock.builtin { border-color: var(--text-deco); }
-.pr-mblock .mt {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 5px;
-}
-.pr-mblock .mt .src { font-family: var(--mono); font-size: 9.5px; color: var(--text-faint); margin-left: auto; }
-.pr-mblock .mt .src.project { color: var(--agent-2); }
-.pr-mblock .mt .src.global { color: var(--human); }
-.pr-mblock .mtx {
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.65;
-  color: var(--text-dim);
-  white-space: pre-wrap;
-}
-.pr-mblock .mtx.empty { color: var(--text-faint); font-style: italic; }
-.pr-mblock .mlvl { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; }
-.pr-mblock .mlvl .lv { flex: 1; min-width: 0; }
-/* 逐档 provenance:整节徽标看不出「只改了 high」,故每档再标一个点 */
-.pr-mblock .mlvl .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--text-deco); }
-.pr-mblock .mlvl .dot.project { background: var(--agent); }
-.pr-mblock .mlvl .dot.global { background: var(--human); }
-.pr-mg-legend {
-  display: flex;
-  gap: 14px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--border-soft);
-  font-size: 10.5px;
-  color: var(--text-faint);
-  flex-wrap: wrap;
-}
-.pr-mg-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.pr-mg-legend .d { width: 8px; height: 8px; border-radius: 50%; }
 
 .pr-loading { padding: 40px; color: var(--text-faint); font-size: 12px; }
 

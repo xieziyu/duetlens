@@ -16,9 +16,12 @@ import './PromptRulesScreen.css';
 // project 层落 `<cwd>/.duetlens/review.md`,需先选仓库目录;global 层落 `~/.duetlens/review.md`。
 //
 // 这里只呈现**可配置节**。与 MCP 契约绑定的锁定段(角色/工具流程/字段协议)由后端拼进
-// baseInstructions,不下发也不展示 —— 故右栏标题是「合并后的审核规则」而非「最终 prompt」。
+// baseInstructions,不下发也不展示。
 // structured 节(审核重点 / 严重度)按字段编辑:字段名锁死,只有各字段正文可改。
 // 审核重点的字段就是 finding 分类(FINDING_CATEGORIES),逐类别独立覆盖。
+//
+// 不另开一栏做合并预览:编辑区本身就是所见即所得 —— 每张卡要么显示本层覆盖的正文,要么显示
+// 「继承自 X」的实际继承文本,节头再标出生效层,合并结果读这一栏即可。
 
 const LAYER_DESC: Record<PromptLayer, string> = {
   project: '本仓库的审核规则,随代码提交、团队共享;覆盖 global 与 builtin。',
@@ -317,8 +320,9 @@ export function PromptRulesScreen({
     return <div className="pr-loading">加载审核规则…</div>;
   }
 
-  const projectDisabled = view.projectPath == null;
   const repoDir = view.projectPath ? repoDirOf(view.projectPath) : null;
+  // 只读的两种情形:内置基线本就不可改;project 层未选仓库则没有落点文件,只能看不能改
+  const readOnly = curLayer === 'builtin' || (curLayer === 'project' && repoDir == null);
 
   /** 编辑框 + 取消/保存;free 节与 structured 字段共用。 */
   const editor = (onCommit: () => void, rows: number): React.JSX.Element => (
@@ -424,6 +428,43 @@ export function PromptRulesScreen({
     </div>
   );
 
+  /**
+   * 只读卡。两种取值口径:builtin 层看内置默认;project 层未选仓库时看「global ▸ builtin」的
+   * 生效值 —— 没有落点文件就编辑不了,但规则本身照样要能读到。
+   */
+  const readOnlyCard = (s: PromptLayerSection, source: 'builtin' | 'effective'): React.JSX.Element => {
+    const eff = source === 'effective';
+    const text = eff ? winnerText(s) : s.builtin;
+    return (
+      <div className="pr-card builtinlock" key={s.key}>
+        {sectionHead(s)}
+        <div className={`sb${s.kind === 'structured' ? ' structured' : ''}`}>
+          {s.kind === 'structured' ? (
+            (s.fields ?? []).map((f) => (
+              <div className="pr-frow" key={f.id}>
+                <div className="fk">
+                  <span className={fieldClass(f.id)}>{f.label}</span>
+                  {/* 整节徽标看不出「只改了 high」,逐档标出来源;内置层三档同源,不必标 */}
+                  {eff && f.winner !== 'builtin' && (
+                    <span className={`win ${f.winner}`}>{SRC_LABEL[f.winner]}</span>
+                  )}
+                </div>
+                <div className="fv">
+                  <div className="txt">{eff ? fieldWinnerText(f) : f.builtin}</div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="txt">
+              {text.trim() ||
+                (eff ? '(此节为空,不注入)' : '(无内置默认;由 project 层补充仓库背景)')}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="prompt-rules">
       <div className="pr-ribbon">
@@ -510,21 +551,34 @@ export function PromptRulesScreen({
               {curLayer} 层
             </div>
             <div className="s">{LAYER_DESC[curLayer]}</div>
-            {curLayer === 'project' && repoDir && (
-              <div className="pr-repo">
-                <span className="ic">⌂</span>
-                <span className="nm">{basename(repoDir)}</span>
-                {fromReview && <span className="src">来自当前审核</span>}
-                <span className="dir" title={repoDir}>
-                  {tildify(repoDir, view.globalPath)}
-                </span>
-                <code className="rel">.duetlens/review.md</code>
-                {/* 保存在途时不许换仓库:那笔写入认的是切换前的 cwd */}
-                <button className="pr-btn" onClick={() => void pickRepo()} disabled={saving}>
-                  切换…
-                </button>
-              </div>
-            )}
+            {/* 保存在途时不许换仓库:那笔写入认的是切换前的 cwd */}
+            {curLayer === 'project' &&
+              (repoDir ? (
+                <div className="pr-repo">
+                  <span className="ic">⌂</span>
+                  <span className="nm">{basename(repoDir)}</span>
+                  {fromReview && <span className="src">来自当前审核</span>}
+                  <span className="dir" title={repoDir}>
+                    {tildify(repoDir, view.globalPath)}
+                  </span>
+                  <code className="rel">.duetlens/review.md</code>
+                  <button className="pr-btn" onClick={() => void pickRepo()} disabled={saving}>
+                    切换…
+                  </button>
+                </div>
+              ) : (
+                <div className="pr-pick">
+                  <span className="ic">⌂</span>
+                  <span className="nm">未选仓库</span>
+                  <span className="msg">
+                    {inheritNote ?? 'project 层规则随某个仓库提交,需先指定该仓库目录。'}
+                  </span>
+                  <code className="rel">&lt;仓库&gt;/.duetlens/review.md</code>
+                  <button onClick={() => void pickRepo()} disabled={saving}>
+                    选择仓库目录…
+                  </button>
+                </div>
+              ))}
           </div>
 
           {/* 失败的动作可能在任意卡片上(整节 / 单字段 / 重置),所以错误挂在栏顶而不是某张卡里 */}
@@ -534,148 +588,74 @@ export function PromptRulesScreen({
             </div>
           )}
 
-          {curLayer === 'project' && projectDisabled ? (
-            <div className="pr-pick">
-              {inheritNote && <div className="why">{inheritNote}</div>}
-              project 层规则随某个仓库提交,需先指定该仓库目录。
-              <br />
-              选定后编辑落 <code>&lt;仓库&gt;/.duetlens/review.md</code>。
-              <div>
-                {/* 与仓库条的「切换…」同理:保存在途时不许选仓库,那笔写入认的是切换前的 cwd */}
-                <button onClick={() => void pickRepo()} disabled={saving}>
-                  选择仓库目录…
-                </button>
-              </div>
+          {/* 未选仓库时 project 层无处落盘,但下面照样把各节铺开 —— 此时的生效值就是 global ▸ builtin */}
+          {readOnly && (
+            <div className="pr-ronote">
+              {curLayer === 'builtin'
+                ? '内置基线只读,要调整就在上层覆盖对应的节。'
+                : '未选仓库,project 层无覆盖:以下是当前生效的规则(global ▸ builtin),选定仓库后即可逐节覆盖。'}
             </div>
-          ) : (
-            view.sections.map((s) => {
-              if (curLayer === 'builtin') {
-                return (
-                  <div className="pr-card builtinlock" key={s.key}>
-                    {sectionHead(s)}
-                    <div className="sb">
-                      {s.kind === 'structured' ? (
-                        (s.fields ?? []).map((f) => (
-                          <div className="pr-frow" key={f.id}>
-                            <div className="fk">
-                              <span className={fieldClass(f.id)}>{f.label}</span>
-                            </div>
-                            <div className="fv">
-                              <div className="txt">{f.builtin}</div>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="txt">{s.builtin || '(无内置默认;由 project 层补充仓库背景)'}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              const layer = curLayer as EditablePromptLayer;
-              const overridden = layerText(s, layer) != null;
+          )}
 
-              if (s.kind === 'structured') {
-                return (
-                  <div className={`pr-card${overridden ? ' overridden' : ''}`} key={s.key}>
-                    {sectionHead(s)}
-                    <div className="sb structured">
-                      {(s.fields ?? []).map((f) => fieldRow(s, f, layer))}
-                    </div>
-                  </div>
-                );
-              }
+          {view.sections.map((s) => {
+            if (readOnly) return readOnlyCard(s, curLayer === 'builtin' ? 'builtin' : 'effective');
+            const layer = curLayer as EditablePromptLayer;
+            const overridden = layerText(s, layer) != null;
 
-              const isEditing = sameTarget(editing, s.key);
-              const below = belowText(s, layer);
-              const commit = (): void => commitSection(layer, s.key);
+            if (s.kind === 'structured') {
               return (
                 <div className={`pr-card${overridden ? ' overridden' : ''}`} key={s.key}>
                   {sectionHead(s)}
-                  <div className="sb">
-                    {isEditing ? (
-                      editor(commit, 8)
-                    ) : overridden ? (
-                      <div className="txt">{layerText(s, layer)}</div>
-                    ) : (
-                      inheritBlock(below)
-                    )}
-                  </div>
-                  <div className="sf">
-                    {isEditing ? (
-                      editActions(commit)
-                    ) : overridden ? (
-                      <>
-                        <button
-                          className="pr-btn"
-                          onClick={() => startEdit({ key: s.key }, layerText(s, layer) ?? '')}
-                        >
-                          ✎ 编辑
-                        </button>
-                        <button
-                          className="pr-btn danger"
-                          onClick={() => resetSection(layer, s.key)}
-                          disabled={saving}
-                        >
-                          重置(改回继承)
-                        </button>
-                      </>
-                    ) : (
-                      <button className="pr-btn" onClick={() => startEdit({ key: s.key }, below.text)}>
-                        ＋ 覆盖此节
-                      </button>
-                    )}
+                  <div className="sb structured">
+                    {(s.fields ?? []).map((f) => fieldRow(s, f, layer))}
                   </div>
                 </div>
               );
-            })
-          )}
-        </div>
+            }
 
-        {/* merged preview */}
-        <div className="pr-merged">
-          <div className="pr-mg-head">
-            <div className="t">◈ 生效结果</div>
-            <div className="s">按节取最高优先层,合并后交给审核 agent。</div>
-          </div>
-          <div className="pr-mg-body">
-            {view.sections.map((s) => {
-              if (s.kind === 'structured') {
-                return (
-                  <div className={`pr-mblock ${s.winner}`} key={s.key}>
-                    <div className="mt">
-                      {s.title}
-                      <span className={`src ${s.winner}`}>{SRC_LABEL[s.winner]}</span>
-                    </div>
-                    <div className="mtx">
-                      {(s.fields ?? []).map((f) => (
-                        <div className="mlvl" key={f.id}>
-                          <span className={fieldClass(f.id)}>{f.label}</span>
-                          <span className="lv">{fieldWinnerText(f)}</span>
-                          <span className={`dot ${f.winner}`} title={SRC_LABEL[f.winner]} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              }
-              const text = winnerText(s);
-              return (
-                <div className={`pr-mblock ${s.winner}`} key={s.key}>
-                  <div className="mt">
-                    {s.title}
-                    <span className={`src ${s.winner}`}>{SRC_LABEL[s.winner]}</span>
-                  </div>
-                  <div className={`mtx${text.trim() ? '' : ' empty'}`}>{text.trim() || '(此节为空,不注入)'}</div>
+            const isEditing = sameTarget(editing, s.key);
+            const below = belowText(s, layer);
+            const commit = (): void => commitSection(layer, s.key);
+            return (
+              <div className={`pr-card${overridden ? ' overridden' : ''}`} key={s.key}>
+                {sectionHead(s)}
+                <div className="sb">
+                  {isEditing ? (
+                    editor(commit, 8)
+                  ) : overridden ? (
+                    <div className="txt">{layerText(s, layer)}</div>
+                  ) : (
+                    inheritBlock(below)
+                  )}
                 </div>
-              );
-            })}
-          </div>
-          <div className="pr-mg-legend">
-            <span><span className="d" style={{ background: 'var(--agent)' }} />project</span>
-            <span><span className="d" style={{ background: 'var(--human)' }} />global</span>
-            <span><span className="d" style={{ background: 'var(--text-faint)' }} />builtin</span>
-          </div>
+                <div className="sf">
+                  {isEditing ? (
+                    editActions(commit)
+                  ) : overridden ? (
+                    <>
+                      <button
+                        className="pr-btn"
+                        onClick={() => startEdit({ key: s.key }, layerText(s, layer) ?? '')}
+                      >
+                        ✎ 编辑
+                      </button>
+                      <button
+                        className="pr-btn danger"
+                        onClick={() => resetSection(layer, s.key)}
+                        disabled={saving}
+                      >
+                        重置(改回继承)
+                      </button>
+                    </>
+                  ) : (
+                    <button className="pr-btn" onClick={() => startEdit({ key: s.key }, below.text)}>
+                      ＋ 覆盖此节
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
