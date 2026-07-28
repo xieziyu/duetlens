@@ -10,7 +10,18 @@ import {
   isInitializeRequest,
   type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
-import { FINDING_CATEGORIES, RESOLUTIONS_REQUIRING_NOTE, resolveFindingSchema } from '@shared/domain';
+import type { ZodError } from 'zod';
+import {
+  dismissFindingSchema,
+  FINDING_CATEGORIES,
+  reportFindingSchema,
+  RESOLUTIONS_REQUIRING_NOTE,
+  resolveFindingSchema,
+  restoreFindingSchema,
+  updateFindingSchema,
+  type ProposalKind,
+  type ProposalPatch,
+} from '@shared/domain';
 import { APP_VERSION } from '@shared/version';
 
 const CATEGORY_HINT = `建议取值:${FINDING_CATEGORIES.join(' / ')}`;
@@ -32,7 +43,8 @@ export interface ReportedFinding {
 export interface ReportedFindingUpdate {
   findingId: string;
   severity?: 'high' | 'medium' | 'low';
-  category?: string;
+  /** null = 清空分类(缺省才是「不改」) */
+  category?: string | null;
   title?: string;
   body?: string;
   suggestion?: string | null;
@@ -44,6 +56,65 @@ export interface ReportedFindingResolution {
   status: 'fixed' | 'still_present' | 'wont_fix';
   note?: string;
 }
+
+/** dismiss_finding / restore_finding 的裁决意见(理由必填,会成为剔除理由 / 恢复依据)。 */
+export interface ReportedFindingTriage {
+  findingId: string;
+  reason: string;
+}
+
+/**
+ * 工具调用当下这一 turn 的语义。
+ * - `apply`:机审/自检轮,写 finding 的工具直接落库(reviewer 不在场,拦下来只会卡死自检)。
+ * - `propose`:追问轮,一律先记成待确认提案 —— 回给 agent 的文本也要说清「尚未生效」,
+ *   否则它会在回复里宣称已经改好,而屏上根本没变。
+ */
+export type McpWriteMode = 'apply' | 'propose';
+
+/** propose 模式下一次写 finding 的意图;由 ReviewSession 落成 finding_proposals 的一行。 */
+export interface ProposedFindingChange {
+  kind: ProposalKind;
+  /** kind='create' 时为 null(finding 尚不存在) */
+  findingId: string | null;
+  patch: ProposalPatch;
+}
+
+/**
+ * 提案的受理结果。EventEmitter 没有返回值,故由发起方传一个可写对象、接收方就地填 ——
+ * emit 是同步的,回来即已定。
+ *
+ * 非要有这条回执:接收方会因 finding 不存在 / 不属于本 review 而丢弃提案,而 agent 那边
+ * 收到的却是「卡片已呈现」。它随后会照此向 reviewer 宣称已提议,可界面上根本没有确认入口。
+ */
+export interface ProposalOutcome {
+  accepted: boolean;
+  /** 未受理的原因,原样回给 agent */
+  reason: string;
+}
+
+/** ingress 校验失败的统一应答:把问题原样说给 agent,让它补齐重来,而不是静默丢掉。 */
+const reject = (tool: string, error: ZodError) => ({
+  content: [
+    {
+      type: 'text' as const,
+      text: `${tool} 参数不合法,未记录:${error.issues.map((i) => `${i.path.join('.') || '(根)'} ${i.message}`).join(';')}。请修正后重新调用。`,
+    },
+  ],
+  isError: true,
+});
+
+/** 摘掉值为 undefined 的键(工具入参里「没给」与「给了 undefined」要一视同仁)。 */
+function dropUndefined<T extends object>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
+/**
+ * 提案回给 agent 的应答。措辞要点:说清**没有生效**且**在等 reviewer** ——
+ * 只说「已记录」的话,agent 会在同一条回复里宣称改好了,而屏上的 finding 一个字没动。
+ */
+const PROPOSED = (what: string): string =>
+  `已把「${what}」作为待确认卡片呈现在讨论里,尚未生效,等 reviewer 采纳。` +
+  `请在回复中说明你的判断与依据,不要声称已经改好。`;
 
 /** 供 agent 读取源码/diff 的回调;由 review 会话注入真实数据。 */
 export interface McpContentProviders {
@@ -73,18 +144,56 @@ const TOOLS = [
   {
     name: 'update_finding',
     description:
-      '更新一条已上报 finding 的可编辑字段。仅在用户明确要求回写 finding 时调用;普通追问只需在对话中回答。finding_id 用 report_finding 的返回值。',
+      '更正一条已上报 finding 的可编辑字段(改严重度 / 改写正文 / 换标题 / 调整 suggestion)。' +
+      '讨论中一旦认定原来写的不准,就调用它,不必等用户开口 —— 讨论期间它不会立即改动 finding,' +
+      '只会在对话里生成一张待确认卡片,由 reviewer 一键采纳。只传要改的字段。' +
+      '注意:若结论是「这条根本不成立」,请用 dismiss_finding,不要把剔除理由写进 body。',
     inputSchema: {
       type: 'object',
       properties: {
         finding_id: { type: 'string', description: 'report_finding 返回的 id' },
         severity: { type: 'string', enum: ['high', 'medium', 'low'] },
-        category: { type: 'string', description: CATEGORY_HINT },
+        // 可清空的两个字段声明成 string|null:领域侧 null 就是「清空」,只写 string 的话,
+        // 会校验 JSON Schema 的 client 会把 null 挡掉,已有的 category / suggestion 再也删不掉
+        category: { type: ['string', 'null'], description: `${CATEGORY_HINT};传 null 清空分类` },
         title: { type: 'string' },
         body: { type: 'string' },
-        suggestion: { type: 'string' },
+        suggestion: { type: ['string', 'null'], description: '建议代码;传 null 删掉原有 suggestion' },
       },
       required: ['finding_id'],
+    },
+  },
+  {
+    name: 'dismiss_finding',
+    description:
+      '剔除一条 finding:讨论后认定它不成立(误报 / 前提不存在 / 代码不可达 / 属可接受差异)时调用。' +
+      '只写剔除理由,finding 的标题与正文原样保留 —— 不要改用 update_finding 把理由覆盖进 body。' +
+      '讨论期间同样只生成待确认卡片,由 reviewer 决定是否采纳。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        finding_id: { type: 'string', description: 'report_finding 返回的 id' },
+        reason: {
+          type: 'string',
+          minLength: 1,
+          description:
+            '为什么这条不成立。会存为剔除理由并注入下一轮复审,需自足 —— 写清判据(在哪看到、凭什么),不要只写「误报」。',
+        },
+      },
+      required: ['finding_id', 'reason'],
+    },
+  },
+  {
+    name: 'restore_finding',
+    description:
+      '恢复一条已被剔除的 finding:讨论后确认它其实成立(剔除依据不完整 / 另有路径可达)时调用。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        finding_id: { type: 'string' },
+        reason: { type: 'string', minLength: 1, description: '为什么它其实成立;原剔除理由错在哪。' },
+      },
+      required: ['finding_id', 'reason'],
     },
   },
   {
@@ -142,8 +251,13 @@ const TOOLS = [
 /**
  * Duetlens 对 codex 暴露的 in-process HTTP MCP server(StreamableHTTP)。
  * findings 经 report_finding 实时回传落进 app 状态,取代 1.0 watch 文件。
+ *
+ * 写 finding 的四个工具(report / update / dismiss / restore)在 `propose` 模式下不落库,
+ * 改发 'finding-proposal';语义与模式切换见 {@link McpWriteMode}。
+ *
  * 事件:'finding' (ReportedFinding) · 'finding-update' (ReportedFindingUpdate)
- * · 'finding-resolution' (ReportedFindingResolution) · 'tool-call' (name, args)。
+ * · 'finding-resolution' (ReportedFindingResolution) · 'finding-proposal' (ProposedFindingChange)
+ * · 'tool-call' (name, args)。
  */
 export class DuetlensMcpServer extends EventEmitter {
   private httpServer?: http.Server;
@@ -151,10 +265,36 @@ export class DuetlensMcpServer extends EventEmitter {
   readonly findings: ReportedFinding[] = [];
   /** 本 server 的 bearer 令牌;codex 经 bearer_token_env_var 携带,隔离本地其他进程。 */
   readonly token: string;
+  private writeMode: McpWriteMode = 'apply';
 
   constructor(private readonly providers: McpContentProviders, token: string = randomUUID()) {
     super();
     this.token = token;
+  }
+
+  /**
+   * 切换写 finding 的语义。由 ReviewSession 在每个 turn 前后设置;turn 是串行的
+   * (见 ReviewSession.turnChain),所以单个标志位够用,不会有两个 turn 同时读到对方的模式。
+   */
+  setWriteMode(mode: McpWriteMode): void {
+    this.writeMode = mode;
+  }
+
+  /**
+   * 发一条提案并按**受理结果**作答。接收方会因 finding 不存在 / 不属于本 review 而丢弃它,
+   * 那时必须以 isError 告诉 agent 重来 —— 否则它拿着一句「卡片已呈现」去向 reviewer 复述,
+   * 而界面上根本没有那张卡。
+   */
+  private propose(change: ProposedFindingChange, what: string) {
+    const outcome: ProposalOutcome = { accepted: false, reason: '没有可呈现提案的讨论上下文' };
+    this.emit('finding-proposal', change, outcome);
+    if (!outcome.accepted) {
+      return {
+        content: [{ type: 'text' as const, text: `提案未记录:${outcome.reason}。请核对后重新调用。` }],
+        isError: true,
+      };
+    }
+    return { content: [{ type: 'text' as const, text: PROPOSED(what) }] };
   }
 
   /** 监听在 127.0.0.1 上;端口 0 = 系统分配,返回 codex 用的 url。 */
@@ -242,7 +382,18 @@ export class DuetlensMcpServer extends EventEmitter {
       this.emit('tool-call', name, args);
 
       if (name === 'report_finding') {
-        const f: ReportedFinding = { id: randomUUID(), ...(args as Omit<ReportedFinding, 'id'>) };
+        const input = args as Omit<ReportedFinding, 'id'>;
+        if (this.writeMode === 'propose') {
+          // 提案同样要过 ingress 校验:直接落库那条路由 ReviewSession 兜着,提案这条没有 ——
+          // 不校验的话非法 severity / 缺字段会一路存进 finding_proposals,采纳时才炸。
+          const parsed = reportFindingSchema.safeParse(input);
+          if (!parsed.success) return reject('report_finding', parsed.error);
+          return this.propose(
+            { kind: 'create', findingId: null, patch: parsed.data },
+            '把它记为一条新 finding',
+          );
+        }
+        const f: ReportedFinding = { id: randomUUID(), ...input };
         this.findings.push(f);
         this.emit('finding', f);
         // 回传 id,供后续 update_finding 定位
@@ -253,13 +404,62 @@ export class DuetlensMcpServer extends EventEmitter {
         const update: ReportedFindingUpdate = {
           findingId: String(a.finding_id ?? ''),
           severity: a.severity as ReportedFindingUpdate['severity'],
-          category: a.category as string | undefined,
+          category: a.category as string | null | undefined,
           title: a.title as string | undefined,
           body: a.body as string | undefined,
           suggestion: a.suggestion as string | undefined,
         };
+        if (this.writeMode === 'propose') {
+          // 落库前先把没给的字段摘掉:zod 的 optional 会把显式 undefined 原样带过,
+          // 留着既数不清「到底改了几个字段」,也会在 patch JSON 里存下一串空键。
+          const parsed = updateFindingSchema.safeParse(dropUndefined(update));
+          if (!parsed.success) return reject('update_finding', parsed.error);
+          const { findingId, ...patch } = parsed.data;
+          // 一个字段都没给 = 什么也没提;放行只会在对话里留一张「未改动任何字段」的空卡片
+          if (Object.keys(patch).length === 0) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: 'update_finding 至少要给一个待改字段(severity / category / title / body / suggestion),未记录。',
+                },
+              ],
+              isError: true,
+            };
+          }
+          return this.propose({ kind: 'update', findingId, patch }, '更正这条 finding');
+        }
         this.emit('finding-update', update);
         return { content: [{ type: 'text', text: `finding updated, id=${update.findingId}` }] };
+      }
+      if (name === 'dismiss_finding' || name === 'restore_finding') {
+        const a = args as Record<string, unknown>;
+        const kind = name === 'dismiss_finding' ? 'dismiss' : 'restore';
+        // 剔除/恢复始终是 reviewer 的判断,只在他在场的讨论里作为提案提出。机审轮没有人可确认,
+        // 就地放行等于让 agent 自己关掉自己报的问题(rerun.md:连 wont_fix 都不自动剔除)。
+        if (this.writeMode !== 'propose') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `${name} 只能在与 reviewer 的讨论中使用。本轮请改用 update_finding 降级严重度或在 body 里标注存疑。`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        // 理由是这两个动作的**全部**内容(剔除不改正文,恢复不改任何字段),空理由等于什么也没提;
+        // 且它会注入下一轮复审,静默收下只会让下一轮拿到一条没有依据的抑制项。
+        const schema = kind === 'dismiss' ? dismissFindingSchema : restoreFindingSchema;
+        const parsed = schema.safeParse({
+          findingId: String(a.finding_id ?? ''),
+          reason: String(a.reason ?? '').trim(),
+        } satisfies ReportedFindingTriage);
+        if (!parsed.success) return reject(name, parsed.error);
+        return this.propose(
+          { kind, findingId: parsed.data.findingId, patch: { reason: parsed.data.reason } },
+          kind === 'dismiss' ? '剔除这条 finding' : '恢复这条 finding',
+        );
       }
       if (name === 'resolve_finding') {
         const a = args as Record<string, unknown>;

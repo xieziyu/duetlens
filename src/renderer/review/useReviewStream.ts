@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Discussion, Finding, Message, Review, ReviewRound } from '@shared/domain';
+import type { Discussion, Finding, FindingProposal, Message, Review, ReviewRound } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AgentEvent, TokenUsage } from '@shared/agent-events';
 
@@ -16,6 +16,8 @@ export interface ReviewStreamState {
   diffReady: boolean;
   /** 按 discussionId 聚合的消息(user/agent),随 message 事件增量追加 */
   messages: Record<string, Message[]>;
+  /** agent 在讨论里提出的回写提案(含已落定的,它们是改动来由的凭据) */
+  proposals: FindingProposal[];
   status: Review['status'] | null;
   /** 轮次履历(首轮 + 每次重跑);末条即当前轮 */
   rounds: ReviewRound[];
@@ -53,6 +55,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [diff, setDiff] = useState<DiffFile[]>([]);
   const [diffReady, setDiffReady] = useState(false);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
+  const [proposals, setProposals] = useState<FindingProposal[]>([]);
   const [status, setStatus] = useState<Review['status'] | null>(null);
   const [rounds, setRounds] = useState<ReviewRound[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
@@ -110,6 +113,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     setLastTool(null);
     setRetrying(null);
     setMessages({});
+    setProposals([]);
     setDiff([]);
     setDiffReady(false);
     fetched.current = new Set();
@@ -134,6 +138,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     });
     void window.duetlens.review.findings(reviewId).then((f) => alive && setFindings(f));
     void window.duetlens.review.discussions(reviewId).then((d) => alive && setDiscussions(d));
+    void window.duetlens.review.proposals(reviewId).then((p) => alive && setProposals(p));
     loadDiff();
     void window.duetlens.review.rounds(reviewId).then((r) => alive && setRounds(r));
 
@@ -176,6 +181,18 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
                 ? bucket.filter((x) => !(x.id.startsWith('pending-') && x.text === m.text))
                 : bucket;
             return { ...prev, [m.discussionId]: [...cleaned, m] };
+          });
+          return;
+        }
+        case 'finding-proposal': {
+          // upsert:新提案追加,落定(applied/skipped)或回挂 messageId 后就地替换
+          const p = e.payload;
+          setProposals((prev) => {
+            const i = prev.findIndex((x) => x.id === p.id);
+            if (i < 0) return [...prev, p];
+            const next = prev.slice();
+            next[i] = p;
+            return next;
           });
           return;
         }
@@ -249,6 +266,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     diff,
     diffReady,
     messages,
+    proposals,
     status,
     rounds,
     tokenUsage,

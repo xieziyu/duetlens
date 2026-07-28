@@ -6,6 +6,7 @@ import type {
   CodexModelInfo,
   Discussion,
   Finding,
+  FindingProposal,
   Message,
   ReasoningEffort,
   Review,
@@ -55,6 +56,10 @@ export const IpcChannels = {
   reviewAddDiscussion: 'review:add-discussion',
   reviewSendMessage: 'review:send-message',
   reviewClearDiscussion: 'review:clear-discussion',
+  reviewProposals: 'review:proposals',
+  reviewApplyProposal: 'review:apply-proposal',
+  reviewSkipProposal: 'review:skip-proposal',
+  reviewUndoProposal: 'review:undo-proposal',
   reviewSetTriage: 'review:set-triage',
   reviewSetFindingAnchor: 'review:set-finding-anchor',
   reviewAddFinding: 'review:add-finding',
@@ -267,6 +272,7 @@ export type ReviewEvent =
   | { reviewId: string; type: 'round'; payload: ReviewRound }
   | { reviewId: string; type: 'finding'; payload: Finding }
   | { reviewId: string; type: 'message'; payload: Message }
+  | { reviewId: string; type: 'finding-proposal'; payload: FindingProposal }
   | { reviewId: string; type: 'messages-cleared'; discussionId: string }
   | { reviewId: string; type: 'discussion'; payload: Discussion }
   | { reviewId: string; type: 'review'; payload: Review }
@@ -325,6 +331,14 @@ export interface DuetlensApi {
     sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message>;
     /** 清空一条 discussion 的往来消息(finding 卡保留);经 `messages-cleared` 事件回推。 */
     clearDiscussion(reviewId: string, discussionId: string): Promise<void>;
+    /** 该 review 名下 agent 提出的全部回写提案(pending / applied / skipped 都在)。 */
+    proposals(reviewId: string): Promise<FindingProposal[]>;
+    /** 采纳一条提案:按 kind 走与手动操作同一条落库路径,旧值记进提案供撤销。 */
+    applyProposal(reviewId: string, proposalId: string): Promise<FindingProposal>;
+    /** 忽略一条提案(不碰 finding);卡片留在对话里,之后仍可重新应用。 */
+    skipProposal(reviewId: string, proposalId: string): Promise<FindingProposal>;
+    /** 撤销一条已采纳的提案,按旧值还原;create 类不可撤销。 */
+    undoProposal(reviewId: string, proposalId: string): Promise<FindingProposal>;
     /**
      * 用户裁决某条 finding(保留/剔除/复位);落库后经事件流回推更新。
      * reason 只在剔除时有意义(可选),会注入下一轮复审让 agent 不再报同类问题;恢复时自动清空。

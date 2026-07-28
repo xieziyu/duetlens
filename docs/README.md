@@ -19,6 +19,7 @@ codex app-server 把「一次常驻会话」本身称作 `thread`。为避免冲
 | [architecture.md](design/architecture.md) | 技术栈选型与代价、后端分层、前端状态分层与 UI 持久化、保留自 1.0 的能力 | 动结构 / 加模块前 |
 | [data-model.md](design/data-model.md) | review / round / discussion / finding 的结构与状态,历史保留策略 | 改 schema / 数据流前 |
 | [codex-integration.md](design/codex-integration.md) | app-server 协议的实测结论、MCP HTTP 注入、elicitation / sandbox / 审批 | 碰 codex 集成前 |
+| [discussion-proposals.md](design/discussion-proposals.md) | 讨论里 agent 的回写提案:提案而非直接改、剔除独立成档、卡片挂消息与过期口径 | 碰 discussion 回写 / MCP 写工具前 |
 | [rerun.md](design/rerun.md) | 多轮复审:轮次模型、三态表态、剔除抑制、PR 协作上下文、失败留证 | 碰复审 / 轮次 / 去重前 |
 | [findings-submit.md](design/findings-submit.md) | findings 筛选与提交 PR review / 导出 Markdown,422 失效锚点 | 碰提交流程 / finding 状态前 |
 | [ui.md](design/ui.md) | 各屏的锚点决策与易踩约束 | 做界面前 |
@@ -42,4 +43,5 @@ codex app-server 把「一次常驻会话」本身称作 `thread`。为避免冲
 10. **入口只分 GitHub PR / 本地仓库两档**,本地这档按 HEAD 自动判普通分支还是 GitButler 虚拟分支;落库的 `SourceKind` 仍是三值。→ [ui](design/ui.md#主入口--launcher)
 11. **审核强度两档(标准 / 对抗),只做 L1 只读对抗推理**;L2「拉 worktree 写并执行对抗测试」已明确否决。→ [architecture](design/architecture.md#审核强度)
 12. **审核历史保留 30 天**,按 `updated_at`、启动清一次、不豁免未完成会话。→ [data-model](design/data-model.md#历史保留)
-13. **UI:diff review 是主场**,三栏 + 内联 discussion;duet 双声道(agent 天蓝 / human 琥珀);明暗与配色是两个正交轴。→ [ui](design/ui.md) · [design-system](design/design-system.md)
+13. **讨论里的回写走「提案 + 一键采纳」**:追问轮的写 finding 工具不落库,只生成待确认卡片;剔除是独立一档(`dismiss_finding`),只写理由、保留原文。→ [discussion-proposals](design/discussion-proposals.md)
+14. **UI:diff review 是主场**,三栏 + 内联 discussion;duet 双声道(agent 天蓝 / human 琥珀);明暗与配色是两个正交轴。→ [ui](design/ui.md) · [design-system](design/design-system.md)

@@ -141,6 +141,20 @@ export type UpdateFindingInput = z.infer<typeof updateFindingSchema>;
  */
 export const RESOLUTIONS_REQUIRING_NOTE: readonly FindingResolution[] = ['still_present', 'wont_fix'];
 
+/** dismiss_finding:讨论中 agent 认为该条不成立,给出剔除理由。正文一律不动。 */
+export const dismissFindingSchema = z.object({
+  findingId: z.string().min(1),
+  reason: z.string().min(1),
+});
+export type DismissFindingInput = z.infer<typeof dismissFindingSchema>;
+
+/** restore_finding:讨论中 agent 论证已剔除的那条其实成立,给出恢复原因。 */
+export const restoreFindingSchema = z.object({
+  findingId: z.string().min(1),
+  reason: z.string().min(1),
+});
+export type RestoreFindingInput = z.infer<typeof restoreFindingSchema>;
+
 /** resolve_finding:复审轮次里对上一轮 finding 表态「已修复 / 仍存在」 */
 export const resolveFindingSchema = z
   .object({
@@ -309,6 +323,142 @@ export interface Message {
   role: MessageRole;
   text: string;
   createdAt: number;
+}
+
+// ---- 讨论中的回写提案(见 docs/design/discussion-proposals.md)----
+
+/**
+ * agent 在讨论里想对 finding 做的一件事。追问轮不直接落库 —— 先记成提案,由 reviewer 一键确认。
+ * `create` 是「把这条讨论记成一条 finding」,应用前还没有 finding,故 findingId 为空。
+ */
+export const PROPOSAL_KINDS = ['update', 'dismiss', 'restore', 'create'] as const;
+export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
+
+/** pending 等确认;applied 已落库(可撤销);skipped 被 reviewer 忽略(可重新应用)。 */
+export const PROPOSAL_STATUSES = ['pending', 'applied', 'skipped'] as const;
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+
+/** update 提案要写的字段;缺省即不改,与 {@link UpdateFindingInput} 同口径(null=清空)。 */
+export interface ProposalUpdatePatch {
+  severity?: Severity;
+  category?: string | null;
+  title?: string;
+  body?: string;
+  suggestion?: string | null;
+}
+
+/** dismiss / restore 提案的说明。dismiss 的 reason 会成为 dismissReason,注入下一轮复审。 */
+export interface ProposalReasonPatch {
+  reason: string;
+}
+
+export type ProposalPatch = ProposalUpdatePatch | ProposalReasonPatch | ReportFindingInput;
+
+/**
+ * 应用前的旧值,供「↩ 撤销」还原。应用那一刻才拍,故 pending 期间为 null。
+ *
+ * 只拍**该提案真正改动的那几个字段** —— 拍全量的话,撤销会把应用之后 reviewer 自己的编辑
+ * 一并回滚掉:提案只降了个 severity,撤销却连带把他重写过的正文换回旧版。
+ */
+export type ProposalUpdateBefore = ProposalUpdatePatch;
+
+export interface ProposalTriageBefore {
+  triage: Triage;
+  dismissReason: string | null;
+  autoClosed: boolean;
+}
+
+export type ProposalBefore = ProposalUpdateBefore | ProposalTriageBefore;
+
+interface ProposalBase {
+  id: string;
+  reviewId: string;
+  /** 提案出自哪条讨论 */
+  discussionId: string;
+  /** 挂在哪条 agent 消息之后;该 turn 没有回复文本时为 null,就地接在线程末尾 */
+  messageId: string | null;
+  status: ProposalStatus;
+  createdAt: number;
+  resolvedAt: number | null;
+}
+
+/**
+ * 提案的判别联合:kind 决定 patch / before 的形状,也决定应用时走哪条落库路径。
+ * baseUpdatedAt 是提案那一刻 finding 的 updatedAt —— 与当前值不同即说明这条在提案之后又被改过,
+ * 直接套用会盖掉那次改动(UI 据此给「已过期」提醒,但不拦着应用:判断权仍在 reviewer)。
+ */
+export type FindingProposal =
+  | (ProposalBase & {
+      kind: 'update';
+      findingId: string;
+      patch: ProposalUpdatePatch;
+      before: ProposalUpdateBefore | null;
+      baseUpdatedAt: number;
+    })
+  | (ProposalBase & {
+      kind: 'dismiss';
+      findingId: string;
+      patch: ProposalReasonPatch;
+      before: ProposalTriageBefore | null;
+      baseUpdatedAt: number;
+    })
+  | (ProposalBase & {
+      kind: 'restore';
+      findingId: string;
+      patch: ProposalReasonPatch;
+      before: ProposalTriageBefore | null;
+      baseUpdatedAt: number;
+    })
+  | (ProposalBase & {
+      kind: 'create';
+      /** 应用后回填新建 finding 的 id */
+      findingId: string | null;
+      patch: ReportFindingInput;
+      before: null;
+      baseUpdatedAt: null;
+    });
+
+/**
+ * 这条提案是否已被后来的改动追上(只对 update 有意义 —— 它是唯一会覆盖正文字段的一档)。
+ * dismiss/restore 写的是 triage 一格,重复应用不会丢信息,不必拦。
+ *
+ * `skipped` 与 `pending` 同样要判:忽略过的提案仍给「重新应用」,期间 finding 被编辑过的话,
+ * 那一下照样是覆盖。只有 `applied` 不必判 —— 它已经落过库,当前值本就是它写的。
+ */
+export function isProposalStale(p: FindingProposal, finding: Finding | null): boolean {
+  if (p.status === 'applied' || !finding) return false;
+  if (p.kind === 'update') return finding.updatedAt !== p.baseUpdatedAt;
+  // dismiss 不只是翻一格 triage,它还写理由:这条已被剔除且理由与提案的不同时,套用就是把
+  // reviewer 自己写的那句顶掉。判据取「会不会真的替换掉一条不同的理由」而非 updatedAt ——
+  // 后者会被任何无关写入推高(改个标题就算),那样等于逢点必警。
+  if (p.kind === 'dismiss')
+    return finding.triage === 'dismiss' && (finding.dismissReason ?? '') !== p.patch.reason;
+  // restore 只把 triage 翻回 open 并清掉理由 —— 那正是「恢复」本来的语义(见 setTriage),不算覆盖
+  return false;
+}
+
+/**
+ * 已应用的提案是否**不再能安全撤销** —— finding 在应用之后又被改动过。
+ *
+ * 撤销写的是应用前的旧值,只有当前值仍是这条提案写下的那些值时才成立:
+ * 提案把 severity 降到 medium、reviewer 随后手动改成 low,再撤销就会把它顶回 high,
+ * 而这既不是提案的功劳也不是他要的。判据是逐字段比对而非 updatedAt ——
+ * 后者会被任何无关写入(如另一条提案改标题)推高,一律拦下等于永远不给撤销。
+ *
+ * 与 {@link isProposalStale} 是同一件事的两头:那条管「还没应用的还能不能套上去」,
+ * 这条管「已经应用的还能不能收回来」。
+ */
+export function isProposalUndoBlocked(p: FindingProposal, finding: Finding | null): boolean {
+  if (p.status !== 'applied' || p.kind === 'create' || !p.before) return false;
+  if (!finding) return true;
+  if (p.kind === 'update') {
+    return (Object.keys(p.patch) as (keyof ProposalUpdatePatch)[]).some(
+      (k) => (finding[k] ?? null) !== (p.patch[k] ?? null),
+    );
+  }
+  if (p.kind === 'dismiss')
+    return finding.triage !== 'dismiss' || (finding.dismissReason ?? '') !== p.patch.reason;
+  return finding.triage !== 'open';
 }
 
 // ---- Persisted UI state(见 docs/design/architecture.md 持久化表)----

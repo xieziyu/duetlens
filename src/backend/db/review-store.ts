@@ -7,9 +7,14 @@ import {
   isAutoClosedFixed,
   type Discussion,
   type Finding,
+  type FindingProposal,
   type FindingResolution,
   type Message,
   type MessageRole,
+  type ProposalBefore,
+  type ProposalKind,
+  type ProposalPatch,
+  type ProposalStatus,
   type ReportFindingInput,
   DEFAULT_REVIEW_UI_STATE,
   type Review,
@@ -109,6 +114,21 @@ interface MessageRow {
   created_at: number;
 }
 
+interface ProposalRow {
+  id: string;
+  review_id: string;
+  discussion_id: string;
+  message_id: string | null;
+  finding_id: string | null;
+  kind: string;
+  patch: string;
+  before_snapshot: string | null;
+  base_updated_at: number | null;
+  status: string;
+  created_at: number;
+  resolved_at: number | null;
+}
+
 function toReview(r: ReviewRow): Review {
   return {
     id: r.id,
@@ -184,6 +204,35 @@ function toFinding(r: FindingRow): Finding {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+/**
+ * 提案行 → 领域对象。patch / before 是 JSON 列:坏值不能让整条讨论读不出来,
+ * 故解析失败退化成空 patch(UI 会把它显示成没有改动的提案),而不是抛。
+ */
+function toProposal(r: ProposalRow): FindingProposal {
+  const parse = <T>(raw: string | null): T | null => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
+  };
+  return {
+    id: r.id,
+    reviewId: r.review_id,
+    discussionId: r.discussion_id,
+    messageId: r.message_id,
+    findingId: r.finding_id,
+    kind: r.kind,
+    patch: parse<ProposalPatch>(r.patch) ?? {},
+    before: parse<ProposalBefore>(r.before_snapshot),
+    baseUpdatedAt: r.base_updated_at,
+    status: r.status as ProposalStatus,
+    createdAt: r.created_at,
+    resolvedAt: r.resolved_at,
+  } as FindingProposal;
 }
 
 function toDiscussion(r: DiscussionRow): Discussion {
@@ -830,6 +879,137 @@ export class ReviewStore {
   clearMessages(discussionId: string): void {
     this.withReviewTouch({ discussion: discussionId }, () => {
       this.db.prepare('DELETE FROM messages WHERE discussion_id = ?').run(discussionId);
+    });
+  }
+
+  /**
+   * 把一组写操作收进同一个数据库事务(better-sqlite3 同步执行,故直接传同步闭包)。
+   * 内层的 {@link withReviewTouch} 会以 savepoint 嵌套,不会互相冲突。
+   *
+   * 给编排层用:提案的采纳既要改 finding 又要改提案自己,分两次提交的话,
+   * 第二步一挂就留下「finding 已改、卡片还写着待确认」的半状态。
+   */
+  transaction<T>(run: () => T): T {
+    return this.db.transaction(run)();
+  }
+
+  // ---- 回写提案(讨论里 agent 提出、reviewer 确认后才落库)----
+
+  /**
+   * 记一条待确认提案。message_id 此刻还没有(agent 的回复要等 turn 收尾才落库),
+   * 由 {@link attachProposalsToMessage} 补上。
+   */
+  addProposal(input: {
+    reviewId: string;
+    discussionId: string;
+    findingId: string | null;
+    kind: ProposalKind;
+    patch: ProposalPatch;
+    baseUpdatedAt: number | null;
+  }): FindingProposal {
+    const id = randomUUID();
+    this.withReviewTouch({ discussion: input.discussionId }, (ts) => {
+      this.db
+        .prepare(
+          `INSERT INTO finding_proposals (id, review_id, discussion_id, message_id, finding_id, kind, patch, before_snapshot, base_updated_at, status, created_at, resolved_at)
+           VALUES (?, ?, ?, NULL, ?, ?, ?, NULL, ?, 'pending', ?, NULL)`,
+        )
+        .run(
+          id,
+          input.reviewId,
+          input.discussionId,
+          input.findingId,
+          input.kind,
+          JSON.stringify(input.patch),
+          input.baseUpdatedAt,
+          ts,
+        );
+    });
+    return this.getProposal(id)!;
+  }
+
+  getProposal(id: string): FindingProposal | null {
+    const r = this.db.prepare('SELECT * FROM finding_proposals WHERE id = ?').get(id) as
+      | ProposalRow
+      | undefined;
+    return r ? toProposal(r) : null;
+  }
+
+  listProposals(reviewId: string): FindingProposal[] {
+    const rows = this.db
+      .prepare('SELECT * FROM finding_proposals WHERE review_id = ? ORDER BY created_at ASC')
+      .all(reviewId) as ProposalRow[];
+    return rows.map(toProposal);
+  }
+
+  /**
+   * 把本轮新记的提案挂到刚落库的 agent 回复上。
+   * 提案先于回复文本产生(工具调用在前),不回挂的话它们会排在解释它们的那句话**上面**。
+   */
+  attachProposalsToMessage(ids: readonly string[], messageId: string): void {
+    if (ids.length === 0) return;
+    const stmt = this.db.prepare('UPDATE finding_proposals SET message_id = ? WHERE id = ?');
+    this.db.transaction(() => {
+      for (const id of ids) stmt.run(messageId, id);
+    })();
+  }
+
+  /**
+   * 落定一条提案的去向;applied 时连同旧值快照一起记下,供撤销还原。
+   *
+   * 同样要冒泡 review 的 updated_at:「忽略提案」不伴随任何 finding 写入,不冒泡的话,
+   * 一条刚被处置过的 review 在历史里仍顶着旧时间排序,并可能按旧时间进 30 天清理。
+   */
+  setProposalStatus(
+    id: string,
+    status: ProposalStatus,
+    opts: { before?: ProposalBefore | null; findingId?: string } = {},
+  ): FindingProposal | null {
+    const existing = this.getProposal(id);
+    if (!existing) return null;
+    this.withReviewTouch({ discussion: existing.discussionId }, (ts) => {
+      this.db
+        .prepare(
+          `UPDATE finding_proposals
+              SET status = ?, resolved_at = ?,
+                  before_snapshot = COALESCE(?, before_snapshot),
+                  finding_id = COALESCE(?, finding_id)
+            WHERE id = ?`,
+        )
+        .run(
+          status,
+          status === 'pending' ? null : ts,
+          opts.before == null ? null : JSON.stringify(opts.before),
+          opts.findingId ?? null,
+          id,
+        );
+    });
+    return this.getProposal(id);
+  }
+
+  /**
+   * 原样还原一条 finding 的裁决态(撤销 dismiss/restore 提案用)。
+   *
+   * 不能用 {@link setTriage} 顶替:它会把 auto_closed 一律清零(手动裁决就该如此),
+   * 于是复核自动结案的条目撤销后会变成「reviewer 亲手剔的」,下一轮回归不再自动恢复
+   * (见 {@link isAutoClosedFixed}),真问题就此被一直抑制下去。
+   */
+  restoreTriage(
+    findingId: string,
+    snapshot: { triage: Triage; dismissReason: string | null; autoClosed: boolean },
+  ): void {
+    this.withReviewTouch({ finding: findingId }, (ts) => {
+      this.db
+        .prepare(
+          'UPDATE findings SET triage = ?, dismiss_reason = ?, auto_closed = ?, updated_at = ? WHERE id = ?',
+        )
+        .run(
+          snapshot.triage,
+          snapshot.dismissReason,
+          Number(snapshot.autoClosed),
+          ts,
+          findingId,
+        );
     });
   }
 

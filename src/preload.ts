@@ -39,6 +39,13 @@ const api: DuetlensApi = {
       ipcRenderer.invoke(IpcChannels.reviewSendMessage, reviewId, discussionId, text),
     clearDiscussion: (reviewId, discussionId) =>
       ipcRenderer.invoke(IpcChannels.reviewClearDiscussion, reviewId, discussionId),
+    proposals: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewProposals, reviewId),
+    applyProposal: (reviewId, proposalId) =>
+      ipcRenderer.invoke(IpcChannels.reviewApplyProposal, reviewId, proposalId),
+    skipProposal: (reviewId, proposalId) =>
+      ipcRenderer.invoke(IpcChannels.reviewSkipProposal, reviewId, proposalId),
+    undoProposal: (reviewId, proposalId) =>
+      ipcRenderer.invoke(IpcChannels.reviewUndoProposal, reviewId, proposalId),
     setTriage: (reviewId, findingId, triage, reason) =>
       ipcRenderer.invoke(IpcChannels.reviewSetTriage, reviewId, findingId, triage, reason),
     setFindingAnchor: (reviewId, findingId, line) =>

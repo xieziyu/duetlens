@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Discussion, Finding, Message } from '@shared/domain';
+import type { Discussion, Finding, FindingProposal, Message } from '@shared/domain';
 import { Composer, type UnsentDraft } from './Composer';
 import { renderMarkdown } from './markdown';
+import { ProposalCard } from './ProposalCard';
 import { stripIpcWrapper } from './round-error';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
@@ -38,6 +39,11 @@ export interface DiscussionTabProps {
   onPromote: (discussionId: string) => void;
   /** 清空当前 discussion 的往来消息(finding 卡保留),重开讨论 */
   onClearMessages: (discussionId: string) => void;
+  /** agent 在讨论里提出的回写提案(全 review 范围,按 discussionId 筛) */
+  proposals: FindingProposal[];
+  onApplyProposal: (proposalId: string) => Promise<unknown>;
+  onSkipProposal: (proposalId: string) => Promise<unknown>;
+  onUndoProposal: (proposalId: string) => Promise<unknown>;
 }
 
 /** 一条 discussion 的展示标题:finding 用其标题,user 用首条消息 / 兜底文案 */
@@ -117,6 +123,31 @@ export function DiscussionTab(props: DiscussionTabProps) {
 
   const activeMsgs = active ? messages[active.id] ?? [] : [];
   const rootFinding = active ? findingByDisc.get(active.id) ?? null : null;
+
+  // 当前线程的提案:按消息分组挂到各自那条回复下,挂不上的(无 messageId / 消息已被清空)另收一处。
+  const { proposalsByMessage, looseProposals } = useMemo(() => {
+    const byMessage = new Map<string, FindingProposal[]>();
+    const loose: FindingProposal[] = [];
+    const known = new Set(activeMsgs.map((m) => m.id));
+    for (const p of props.proposals) {
+      if (!active || p.discussionId !== active.id) continue;
+      if (p.messageId && known.has(p.messageId)) {
+        const bucket = byMessage.get(p.messageId);
+        if (bucket) bucket.push(p);
+        else byMessage.set(p.messageId, [p]);
+      } else loose.push(p);
+    }
+    return { proposalsByMessage: byMessage, looseProposals: loose };
+  }, [props.proposals, active, activeMsgs]);
+
+  // 提案要对照的是 finding 的**当前**值(可能已被就地编辑过);create 提案应用前还没有 finding。
+  const findingById = useMemo(() => {
+    const m = new Map<string, Finding>();
+    for (const f of findings) m.set(f.id, f);
+    return m;
+  }, [findings]);
+  const findingOf = (p: FindingProposal): Finding | null =>
+    (p.findingId ? findingById.get(p.findingId) : null) ?? null;
   const anchorLabel = active?.file
     ? `${basename(active.file)}:${active.line ?? ''}${active.lineEnd ? `–${active.lineEnd}` : ''}`
     : null;
@@ -208,8 +239,32 @@ export function DiscussionTab(props: DiscussionTabProps) {
                 role={m.role}
                 name={m.role === 'agent' ? 'agent' : 'reviewer'}
                 text={m.text}
+                proposals={proposalsByMessage.get(m.id)}
+                findingOf={findingOf}
+                onApplyProposal={props.onApplyProposal}
+                onSkipProposal={props.onSkipProposal}
+                onUndoProposal={props.onUndoProposal}
               />
             ))}
+            {/* 还没回挂到消息上的提案(turn 没给回复文本,或消息被清空过)接在线程末尾 ——
+                挂不上就不渲染的话,一张待确认卡片会凭空消失,而它是唯一的确认入口 */}
+            {looseProposals.length > 0 && (
+              <div className="msg">
+                <span className="av agent">◆</span>
+                <div className="body">
+                  {looseProposals.map((p) => (
+                    <ProposalCard
+                      key={p.id}
+                      proposal={p}
+                      finding={findingOf(p)}
+                      onApply={props.onApplyProposal}
+                      onSkip={props.onSkipProposal}
+                      onUndo={props.onUndoProposal}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             {activeAwaiting && (
               <div className="msg">
                 <span className="av agent">◆</span>
@@ -326,11 +381,22 @@ function MessageBubble({
   name,
   meta,
   text,
+  proposals,
+  findingOf,
+  onApplyProposal,
+  onSkipProposal,
+  onUndoProposal,
 }: {
   role: 'agent' | 'user';
   name: string;
   meta?: string;
   text: string;
+  /** 这一轮 agent 顺带提出的回写提案,接在气泡下方 */
+  proposals?: FindingProposal[];
+  findingOf?: (p: FindingProposal) => Finding | null;
+  onApplyProposal?: (id: string) => Promise<unknown>;
+  onSkipProposal?: (id: string) => Promise<unknown>;
+  onUndoProposal?: (id: string) => Promise<unknown>;
 }) {
   return (
     <div className="msg">
@@ -344,7 +410,19 @@ function MessageBubble({
         <div className={`bubble${role === 'agent' ? ' agent' : ''}`}>
           <div className="c-prose">{renderMarkdown(text)}</div>
         </div>
+        {proposals?.map((p) => (
+          <ProposalCard
+            key={p.id}
+            proposal={p}
+            finding={findingOf?.(p) ?? null}
+            onApply={onApplyProposal ?? noop}
+            onSkip={onSkipProposal ?? noop}
+            onUndo={onUndoProposal ?? noop}
+          />
+        ))}
       </div>
     </div>
   );
 }
+
+const noop = async (): Promise<void> => undefined;

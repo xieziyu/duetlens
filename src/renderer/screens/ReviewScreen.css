@@ -4370,3 +4370,261 @@
 .c-actions .f-accept:hover {
   filter: brightness(1.12);
 }
+
+/* ---------- 讨论里的回写提案卡(ProposalCard)----------
+   接在 agent 气泡下方,是「把这条改动落库」的唯一确认入口,故必须比气泡更实 ——
+   用卡面 + agent 左边线;剔除档单独走 sev-high 色,别让两个后果不同的动作长得一样。 */
+.prop {
+  margin-top: 8px;
+  border: 1px solid var(--agent-line);
+  border-left: 2px solid var(--agent);
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--agent) 6%, var(--card));
+  overflow: hidden;
+}
+.prop.drop {
+  border-color: color-mix(in oklab, var(--sev-high) 40%, transparent);
+  border-left-color: var(--sev-high);
+  background: color-mix(in oklab, var(--sev-high) 5%, var(--card));
+}
+/* 已过期:提案之后 finding 又被改过,套用会盖掉那次改动 —— 用 human 色提示「这是你的改动在被威胁」 */
+.prop.stale {
+  border-color: var(--human-line);
+  border-left-color: var(--human);
+  background: var(--human-soft);
+}
+.prop-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.prop-head .pi {
+  color: var(--agent-2);
+}
+.prop.drop .prop-head .pi {
+  color: var(--sev-high);
+}
+.prop.stale .prop-head .pi {
+  color: var(--human);
+}
+.prop-head .pt {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+.prop-warn {
+  padding: 8px 11px 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--human);
+}
+.prop.done .prop-warn,
+.prop.skipped .prop-warn {
+  color: var(--sev-high);
+  padding-bottom: 8px;
+}
+/* 折叠态里的过期提醒不是错误,别跟着上面那条走 sev-high */
+.prop .prop-warn.stale-note {
+  color: var(--human);
+}
+.prop.skipped.stale {
+  border-left-color: var(--human);
+}
+.prop-body {
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+/* 字段级 旧 → 新 */
+.pf {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.pf-k {
+  flex: none;
+  width: 58px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.pf-v {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.pf-old {
+  color: var(--text-deco);
+  text-decoration: line-through;
+}
+.pf-arr {
+  margin: 0 5px;
+  color: var(--text-deco);
+}
+.pf-new {
+  color: var(--text);
+}
+.pf-keep {
+  color: var(--text-faint);
+}
+.pf-sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* 长文本对照:沿用 diff 栏的红绿两档,不必学新的读法 */
+.pf-diff {
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.pf-diff .r {
+  display: flex;
+  gap: 7px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.pf-diff.mono .r {
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+.pf-diff .r.del {
+  background: var(--del-bg);
+  color: var(--text-faint);
+}
+.pf-diff .r.add {
+  background: var(--add-bg);
+  color: var(--text);
+}
+.pf-diff .r .g {
+  flex: none;
+  width: 10px;
+  font-family: var(--mono);
+}
+.pf-diff .r.del .g {
+  color: var(--del);
+}
+.pf-diff .r.add .g {
+  color: var(--add);
+}
+.prop-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0 11px 10px;
+}
+/* 说明较长时(如 create 的「不可撤销」)整句折到下一行,别把按钮压成两行字 */
+.prop-foot .pb {
+  white-space: nowrap;
+}
+.prop-foot .why {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.pb {
+  padding: 4px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.pb:hover:not(:disabled) {
+  color: var(--text);
+}
+.pb:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.pb.go {
+  border-color: transparent;
+  background: var(--accent-solid);
+  color: var(--on-solid);
+  font-weight: 600;
+}
+.pb.go:hover:not(:disabled) {
+  background: var(--accent-solid-hover);
+}
+.pb.drop {
+  border-color: color-mix(in oklab, var(--sev-high) 45%, transparent);
+  background: transparent;
+  color: var(--sev-high);
+  font-weight: 600;
+}
+.pb.drop:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--sev-high) 12%, transparent);
+}
+/* 已落定:卡片不消失,折叠成一行留作改动来由的凭据 */
+.prop.done,
+.prop.skipped {
+  background: transparent;
+  border-color: var(--border-soft);
+}
+.prop.done {
+  border-left-color: var(--add);
+}
+.prop.skipped {
+  border-left-color: var(--text-deco);
+}
+.prop.done .prop-done-row .pi {
+  color: var(--add);
+}
+.prop.skipped .prop-done-row .pi {
+  color: var(--text-deco);
+}
+.prop-done-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+.prop-done-row .u {
+  margin-left: auto;
+  flex: none;
+}
+
+/* 剔除态卡片里的原文:剔除不动正文,但收起态只剩划掉的标题 —— 展开即可查回当初报的是什么 */
+.c-dismissed .dm-src {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border-soft);
+}
+.c-dismissed .dm-src > button {
+  padding: 1px 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: 11px;
+  cursor: pointer;
+}
+.c-dismissed .dm-src > button:hover {
+  color: var(--text-dim);
+}
+.c-dismissed .dm-orig {
+  margin-top: 6px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text-faint);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
