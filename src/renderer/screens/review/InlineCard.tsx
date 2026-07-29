@@ -58,7 +58,7 @@ export function InlineCard({
     (focused ? ' focused' : '') +
     (submitted ? ' submitted' : '') +
     (dismissed && !editing ? ' dismissed' : '') +
-    ((resolution === 'fixed' || resolution === 'wont_fix') && !editing ? ' resolved' : '') +
+    (resolution === 'wont_fix' && !editing ? ' resolved' : '') +
     (editing ? ' editing' : '');
 
   return (
@@ -231,7 +231,9 @@ function CardView({
           {finding.category ? ` · ${finding.category}` : ''}
         </span>
         {isNew && <span className="round-tag new">本轮新增</span>}
-        {resolution === 'fixed' && <span className="round-tag fixed">✓ 本轮已修复</span>}
+        {/* 刻意没有「已修复」一格:判定 fixed 连带自动剔除,那一态由 DismissedCard 呈现。
+            走到这里说明它仍是保留态(reviewer 恢复过 / 他先剔除过),右栏的 isFixedResolved
+            照样把它排进待处理 —— 这边挂徽标就成了两套口径。agent 的结论由下面的「复核」说明照常给出。 */}
         {resolution === 'still_present' && <span className="round-tag still">本轮复核 · 仍存在</span>}
         {resolution === 'wont_fix' && <span className="round-tag wontfix">◇ 作者已回应</span>}
       </div>

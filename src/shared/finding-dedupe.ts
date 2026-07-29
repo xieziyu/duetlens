@@ -21,6 +21,11 @@ const LINE_WINDOW = 12;
 const NEAR_THRESHOLD = 0.5;
 /** 隔得远(代码被挪动):要标题高度一致才敢判为同一条。 */
 const FAR_THRESHOLD = 0.8;
+/**
+ * 「同一条被重述」的门槛:比 NEAR_THRESHOLD 严得多 —— 在 isSameFinding 已命中的前提下,
+ * 再分一次「这是同一条换了个说法」还是「同一处代码上的另一个问题」。两档同值不同政策,各自可动。
+ */
+const RESTATE_THRESHOLD = 0.8;
 
 /** 归一化标题:去掉大小写、空白与标点,只留字母数字与 CJK,让「表述微调」不影响比对。 */
 export function normalizeTitle(s: string): string {
@@ -59,6 +64,15 @@ export function isSameFinding(a: DedupeShape, b: DedupeShape): boolean {
   const sim = titleSimilarity(a.title, b.title);
   const near = Math.abs(a.line - b.line) <= LINE_WINDOW;
   return sim >= (near ? NEAR_THRESHOLD : FAR_THRESHOLD);
+}
+
+/**
+ * 命中之后的二次分档:这条上报是把同一条**换个说法重述**一遍(true),还是同一处代码上的
+ * 另一个问题(false)。给"同一处已有结论、却又被报了一次"的场合定性 —— 前者该纠正原条目,
+ * 后者该新建。调用方须已用 isSameFinding 确认是同一处。
+ */
+export function isRestatedFinding(a: DedupeShape, b: DedupeShape): boolean {
+  return titleSimilarity(a.title, b.title) >= RESTATE_THRESHOLD;
 }
 
 /**

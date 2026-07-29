@@ -22,7 +22,7 @@ import {
   type ReviewIntensity,
   type WriteSummaryInput,
 } from '@shared/domain';
-import { findDuplicate } from '@shared/finding-dedupe';
+import { findDuplicate, isRestatedFinding } from '@shared/finding-dedupe';
 import { FOLLOWUP_REPLY_FAILED_CODE } from '@shared/ipc';
 import type { AgentErrorKind } from '@shared/agent-events';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
@@ -569,21 +569,37 @@ export class ReviewSession {
   /**
    * 重复上报的兜底吸收(prompt 是软约束,这里是硬约束)。
    * 命中 reviewer 剔除项 → 抑制、只计数不落库;命中保留中的项 → 等价于 agent 表态「仍存在」;
-   * 命中「复核已修复」自动结案的项 → 视作回归,恢复保留而不是继续抑制。
+   * 命中「复核已修复」自动结案的项 → 恢复保留而不是继续抑制(回归 / agent 自我推翻)。
    * 返回 true 表示该上报已被吸收,不应新建 finding。
    */
   private absorbDuplicate(candidate: { file: string; line: number; title: string }): boolean {
     const dup = findDuplicate(candidate, this.store.listFindings(this.reviewId));
     if (!dup) return false;
     const round = this.currentRound();
-    // 自动结案不是 reviewer 的判断,不能拿它当黑名单:否则修好又改回来的问题会被静默吞掉
     if (isAutoClosedFixed(dup)) {
-      this.store.setTriage(dup.id, 'open');
+      // 本次扫描里刚判过 fixed、而这条上报又不是把它换个说法重述一遍 —— 那是同一处代码上的
+      // **另一个**问题(dedupe 只看文件、行距与标题相似度,分不开这两者)。按新问题落库,别把
+      // 结案翻回来、顺带把这条上报吞掉(它才是本轮真正的新增)。
+      //
+      // 反过来,标题几乎一致的重报是 agent 自我推翻(对抗档的自检轮就专干这个),按下面的
+      // 「仍存在」纠正回原条目 —— 否则旧条目挂着已修复、旁边再立一条同名的仍存在。
+      //
+      // 「本次扫描」不能只看轮次号:失败轮重试沿用原轮号(startRound 覆盖同一行,并把 startedAt
+      // 刷到重开时刻),上一次尝试判下的 fixed 还留在库里。以轮次的 startedAt 划界 —— 落在它之前
+      // 的表态出自上一次尝试,这一次没表过态,那就照回归处理。
+      const attemptFrom = this.store.getRound(this.reviewId, round)?.startedAt ?? 0;
+      const closedThisAttempt = dup.lastSeenRound === round && dup.updatedAt >= attemptFrom;
+      if (closedThisAttempt && !isRestatedFinding(candidate, dup)) return false;
+      // 自动结案不是 reviewer 的判断,不能拿它当黑名单:否则修好又改回来的问题会被静默吞掉。
+      // 「恢复保留 + 本轮仍存在」必须一次写清:拆成 setTriage + touchFindingSeen 会留缝 ——
+      // 后者按轮次单向推进,同轮静默跳过,于是库里同时留着 fixed 结论与保留态,两套 UI 判据打架。
+      this.store.setFindingResolution(dup.id, round, 'still_present', null);
     } else if (dup.triage === 'dismiss') {
       this.store.bumpSuppressed(this.reviewId, round);
       return true;
+    } else {
+      this.store.touchFindingSeen(dup.id, round);
     }
-    this.store.touchFindingSeen(dup.id, round);
     const updated = this.store.getFinding(dup.id);
     if (updated) this.emit('finding', updated);
     return true;
