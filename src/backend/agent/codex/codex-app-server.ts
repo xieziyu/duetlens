@@ -5,6 +5,7 @@ import { JsonRpcConnection } from './jsonrpc';
 import {
   CodexMethod,
   CodexServerRequest,
+  DECLINE_BY_METHOD,
   type InitializeParams,
   type McpServerElicitationRequestParams,
   type McpServerElicitationRequestResponse,
@@ -108,7 +109,11 @@ export class CodexAppServer extends EventEmitter {
   /**
    * 反向请求处理。**架构必需件**:elicitation 不应答则 turn 卡死。
    * - 自建受信 MCP 工具的 elicitation → 自动 accept。
-   * - exec / applyPatch 审批 → review-only 应用一律 denied(只读 sandbox 下本不该出现)。
+   * - 各类审批 → review-only 应用一律拒绝(只读 sandbox 下本不该出现),并抛给上层观测。
+   *
+   * 拒绝的说法按方法族取自 {@link DECLINE_BY_METHOD};表里没有的(permissions、
+   * 以及将来新增的反向请求)应答形状我们并不知道,**猜一个结构回过去等于回了句听不懂的话** ——
+   * 一律回 JSON-RPC 错误,让 codex 明确收到「这边不接」。
    */
   private handleServerRequest(method: string, params: unknown): unknown {
     if (method === CodexServerRequest.mcpElicitation) {
@@ -121,16 +126,9 @@ export class CodexAppServer extends EventEmitter {
       return decision;
     }
 
-    if (
-      method === CodexServerRequest.execCommandApproval ||
-      method === CodexServerRequest.applyPatchApproval
-    ) {
-      this.emit('unexpected-approval', method, params);
-      return { decision: 'denied' };
-    }
-
-    // 其余反向请求:拒绝,并抛给上层观测
     this.emit('unexpected-approval', method, params);
-    return { decision: 'denied' };
+    const decline = DECLINE_BY_METHOD[method];
+    if (decline === undefined) throw new Error(`只读审核会话不接受反向请求: ${method}`);
+    return decline;
   }
 }

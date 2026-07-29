@@ -23,7 +23,7 @@ import {
   type WriteSummaryInput,
 } from '@shared/domain';
 import { findDuplicate, isRestatedFinding } from '@shared/finding-dedupe';
-import { FOLLOWUP_REPLY_FAILED_CODE } from '@shared/ipc';
+import { FOLLOWUP_REPLY_FAILED_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 import type { AgentErrorKind } from '@shared/agent-events';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
 import type { ReviewStore } from '../db/review-store';
@@ -509,6 +509,14 @@ export class ReviewSession {
   }
 
   /**
+   * codex thread 是否真的建起来过。**没建起来的会话是死的**:追问会被闸门挡下,
+   * 而它照样占着 codex 子进程、MCP server 与一个 live 名额,故建会话失败时要就地拆掉。
+   */
+  isOpen(): boolean {
+    return this.conversationId !== undefined;
+  }
+
+  /**
    * agent 手上是否有活:建/续会话中,或有在跑的 turn。并发上限逐出会话时据此避让 ——
    * 拆掉忙碌会话等于凭空打断别人的机审,那一轮只会以一句莫名其妙的失败收场。
    */
@@ -825,6 +833,22 @@ export class ReviewSession {
 
     cleanup.push(
       this.agent.streamEvents((e) => {
+        // 注入的 approvalPolicy 是 never,codex 本不该来问这类审批;问了就说明只读策略没生效。
+        // 与握手时的读回校验同一个判据,这里是它的兜底。
+        if (e.kind === 'approval' && !e.expected && e.gate === 'policy') {
+          finish({
+            kind: 'turn-failed',
+            turnId: mine ?? '',
+            error: `${SANDBOX_NOT_APPLIED_CODE} codex 在只读会话里请求了 ${e.method} 审批,已拒绝并中止本轮。`,
+            errorKind: 'sandbox-not-applied',
+          });
+          // 定性只结束**我们这边**的等待,codex 的 turn 还在跑 —— 而这条分支的前提正是
+          // 「不知道它在什么策略下跑」。拆掉会话让它真的停手:打断需要对方配合,
+          // 这里已经不能假定对方守规矩;何况会话留着,下一条追问又会喂进同一个坏策略里。
+          // 拆的过程再出错也别变成进程级 unhandled rejection —— 判死已经落下了
+          void this.dispose().catch(() => undefined);
+          return;
+        }
         if (e.kind === 'message-delta') {
           if (!identified) heldDeltas.set(e.turnId, (heldDeltas.get(e.turnId) ?? '') + e.text);
           else if (isMine(e.turnId)) reply += e.text;

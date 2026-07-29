@@ -41,6 +41,7 @@
     "spike:rerun": "tsx scripts/spike-rerun.ts",
     "spike:absorb": "tsx scripts/spike-absorb.ts",
     "spike:stop-scan": "tsx scripts/spike-stop-scan.ts",
+    "spike:sandbox-guard": "tsx scripts/spike-sandbox-guard.ts",
     "spike:session-busy": "tsx scripts/spike-session-busy.ts",
     "spike:followup-queue": "tsx scripts/spike-followup-queue.ts",
     "spike:proposals": "tsx scripts/spike-proposals.ts",
