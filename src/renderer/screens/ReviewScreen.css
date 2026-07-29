@@ -4057,6 +4057,10 @@
 .fg-toggle .fg-folded.wontfix {
   color: var(--agent-2);
 }
+/* 剔除是归档不是信号,不给它色相:轮次标记已把整条色轴让出去了 */
+.fg-toggle .fg-folded.dropped {
+  color: var(--text-faint);
+}
 
 .card.finding.resolved {
   opacity: 0.74;

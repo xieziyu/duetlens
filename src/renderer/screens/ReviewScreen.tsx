@@ -809,12 +809,19 @@ function RightPanel({
     () => filtered.filter((f) => isFixedResolved(f, currentRound)),
     [filtered, currentRound],
   );
+  // 「采纳」会把这组的条目转成剔除态,那一刻它就不再等 reviewer 表态,该走剔除组而不是继续占着这里。
   const wontFix = useMemo(
-    () => filtered.filter((f) => isWontFixThisRound(f, currentRound)),
+    () => filtered.filter((f) => isWontFixThisRound(f, currentRound) && f.triage !== 'dismiss'),
+    [filtered, currentRound],
+  );
+  // reviewer 主动剔除的同理:结论已经下了,划着删除线待在严重度分组里只是占位。
+  // 判定已修复的自动剔除除外 —— 那是 agent 的结论,自有一组。
+  const droppedList = useMemo(
+    () => filtered.filter((f) => f.triage === 'dismiss' && !isFixedResolved(f, currentRound)),
     [filtered, currentRound],
   );
   const shown = useMemo(
-    () => filtered.filter((f) => !isSettled(f, currentRound)),
+    () => filtered.filter((f) => !isSettled(f, currentRound) && f.triage !== 'dismiss'),
     [filtered, currentRound],
   );
   // findings 分组:按严重度(high▸low)或按文件;渲染统一走 groups 列表。
@@ -855,8 +862,8 @@ function RightPanel({
     }
     return main;
   }, [shown, grouping, diff]);
-  const kept = shown.filter((f) => f.triage !== 'dismiss').length;
-  const dropped = shown.filter((f) => f.triage === 'dismiss').length;
+  const kept = shown.length;
+  const dropped = droppedList.length;
   const coverage = useMemo(() => {
     let a = 0;
     let d = 0;
@@ -910,7 +917,7 @@ function RightPanel({
               </button>
             </div>
           )}
-          {shown.length === 0 && fixed.length === 0 && wontFix.length === 0 &&
+          {shown.length === 0 && fixed.length === 0 && wontFix.length === 0 && droppedList.length === 0 &&
             (categoryFilter ? (
               <p className="empty-note">无 {categoryFilter} 分类的 findings。</p>
             ) : scanning ? (
@@ -939,7 +946,7 @@ function RightPanel({
                 </div>
               </div>
             ))}
-          {shown.length > 0 && (
+          {kept + dropped > 0 && (
             <div className="fp-toolbar">
               <span className="fp-tally">
                 保留 <b>{kept}</b> · 剔除 {dropped}
@@ -977,6 +984,17 @@ function RightPanel({
           </FoldedGroup>
           {/* 作者已回应的默认展开:这组还等着 reviewer 决定接不接受作者的说法 */}
           <FoldedGroup label="◇ 作者已回应,未改动" tone="wontfix" findings={wontFix} defaultOpen>
+            {(f) => (
+              <FindingRow
+                key={f.id}
+                finding={f}
+                currentRound={currentRound}
+                onPick={onPickFinding}
+                onTriage={onTriage}
+              />
+            )}
+          </FoldedGroup>
+          <FoldedGroup label="✕ 已剔除" tone="dropped" findings={droppedList}>
             {(f) => (
               <FindingRow
                 key={f.id}
@@ -1035,7 +1053,7 @@ function RightPanel({
   );
 }
 
-/** 本轮已有结论的一组 finding:折叠起来不占主列表,标题上带条数。空组不渲染。 */
+/** 已经有结论(agent 判定或 reviewer 剔除)的一组 finding:折叠起来不占主列表,标题上带条数。空组不渲染。 */
 function FoldedGroup({
   label,
   tone,
@@ -1044,7 +1062,7 @@ function FoldedGroup({
   children,
 }: {
   label: string;
-  tone: 'fixed' | 'wontfix';
+  tone: 'fixed' | 'wontfix' | 'dropped';
   findings: Finding[];
   defaultOpen?: boolean;
   children: (f: Finding) => React.ReactNode;
@@ -1127,8 +1145,9 @@ function FindingRow({
           {f.resolutionNote}
         </div>
       )}
-      {/* 「✓ 已修复 · 自动剔除」标签已经说明了为何剔除,不必再拿理由行重复一遍 */}
-      {dismissed && f.dismissReason && !fixedResolved && (
+      {/* 「✓ 已修复 · 自动剔除」标签已经说明了为何剔除;「采纳」则是把作者的说法原样抄成理由。
+          后者只在上面那条复核结论**当前真的渲染着**时才算重复 —— 它随轮次消失,理由行得接着说下去。 */}
+      {dismissed && f.dismissReason && !fixedResolved && (!resolution || f.dismissReason !== f.resolutionNote) && (
         <div className="fr-note reason">理由:{f.dismissReason}</div>
       )}
       <div className="fr-foot">
