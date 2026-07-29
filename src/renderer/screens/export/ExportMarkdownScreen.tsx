@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { Finding, Review } from '@shared/domain';
 import {
   buildReviewMarkdown,
@@ -7,6 +7,7 @@ import {
   DEFAULT_EXPORT_OPTIONS,
   type ExportOptions,
 } from '@shared/export-markdown';
+import { isSubmittable, needsRecheckFollowUp } from '@shared/github-review';
 import { renderMarkdown } from './markdown';
 import './ExportMarkdownScreen.css';
 
@@ -18,10 +19,14 @@ interface Props {
   onBack: () => void;
   /** 切换某条 finding 的保留/剔除(经 setTriage 落库);同 diff-review triage 管线。 */
   onToggleKeep: (finding: Finding) => void;
+  /** 终点切换分段(github-pr 才有);给了就顶掉面包屑。 */
+  tabs?: ReactNode;
 }
 
 // 左预览(渲染/源码)+ 右导出配置。
-export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep }: Props) {
+export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep, tabs }: Props) {
+  const isGithub = review.source === 'github-pr';
+  const round = review.currentRound;
   const [opts, setOpts] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
   const [mode, setMode] = useState<'rendered' | 'raw'>('rendered');
   const [copied, setCopied] = useState(false);
@@ -33,6 +38,7 @@ export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep }:
 
   const keptCount = findings.filter(isKept).length;
   const dropCount = findings.length - keptCount;
+  const pendingCount = findings.filter((f) => isSubmittable(f, round)).length;
 
   const toggleOpt = (key: keyof ExportOptions) =>
     setOpts((o) => ({ ...o, [key]: !o[key] } as ExportOptions));
@@ -62,12 +68,14 @@ export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep }:
           ← 返回 diff
         </button>
         <span className="src-chip">
-          <span className="ic">⎇</span> {review.title ?? review.sourceRef}
+          <span className="ic">⎇</span> {isGithub ? 'GitHub' : (review.title ?? review.sourceRef)}
           <b>{review.sourceRef}</b>
         </span>
-        <span className="crumb">
-          Review · <b>导出 Markdown</b>
-        </span>
+        {tabs ?? (
+          <span className="crumb">
+            Review · <b>导出 Markdown</b>
+          </span>
+        )}
       </div>
 
       <div className="exp-main">
@@ -101,10 +109,34 @@ export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep }:
         <div className="pane config">
           <div className="cfg-head">
             <div className="t">↓ 导出为 Markdown</div>
-            <div className="s">本地分支无 PR 可提交,把这次 review 导出成一份报告,用于分享 / 存档 / 贴到别处。</div>
+            <div className="s">
+              {isGithub
+                ? '把这次 review 导出成一份报告,用于分享 / 存档 / 贴到别处;发给 PR 作者走「提交到 GitHub」。'
+                : '本地分支无 PR 可提交,把这次 review 导出成一份报告,用于分享 / 存档 / 贴到别处。'}
+            </div>
           </div>
 
           <div className="cfg-body">
+            {isGithub && (
+              <>
+                <div className="sec-lbl">范围</div>
+                <div className="grp-seg">
+                  <button
+                    className={opts.scope === 'all' ? 'on' : ''}
+                    onClick={() => setOpts((o) => ({ ...o, scope: 'all' }))}
+                  >
+                    全部保留项 {keptCount}
+                  </button>
+                  <button
+                    className={opts.scope === 'pending' ? 'on' : ''}
+                    onClick={() => setOpts((o) => ({ ...o, scope: 'pending' }))}
+                  >
+                    仅未提交 {pendingCount}
+                  </button>
+                </div>
+              </>
+            )}
+
             <div className="sec-lbl">包含内容</div>
             <label className={'opt' + (opts.suggestion ? ' on' : '')} onClick={() => toggleOpt('suggestion')}>
               <span className="sw" />
@@ -139,15 +171,20 @@ export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep }:
             <div className="ck-list">
               {findings.map((f) => {
                 const kept = isKept(f);
+                // 已提交即锁定,与提交屏同一判据 —— 从这里改 triage 会把作者已收到的评论
+                // 从待提交集里抹掉(欠一条复核追评的除外,那条发不发仍是 reviewer 的决定)
+                const locked = isGithub && f.submission === 'submitted' && !needsRecheckFollowUp(f, round);
                 return (
                   <div
                     key={f.id}
-                    className={'ck-item' + (kept ? ' on' : ' off')}
-                    onClick={() => onToggleKeep(f)}
+                    className={'ck-item' + (kept ? ' on' : ' off') + (locked ? ' locked' : '')}
+                    onClick={() => !locked && onToggleKeep(f)}
+                    title={locked ? '已提交到 GitHub · 锁定' : undefined}
                   >
                     <span className="ck">✓</span>
                     <span className={`dot ${SEV_DOT[f.severity]}`} />
                     <span className="t">{f.title}</span>
+                    {locked && <span className="sub-flag">已提交</span>}
                     <span className="an">
                       {f.file}:{f.line}
                     </span>

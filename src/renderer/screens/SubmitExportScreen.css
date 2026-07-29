@@ -1,0 +1,43 @@
+/* github-pr 的两个终点(提交 / 导出)在同一屏内切换的外壳。 */
+.se-pane {
+  height: 100%;
+  min-height: 0;
+}
+/* 屏根用了 display:grid,会盖掉 hidden 的 UA 样式 —— 藏不住就是两块屏叠着渲染 */
+.se-pane[hidden] {
+  display: none;
+}
+
+/* 顶栏分段:占位与两块屏原本的面包屑一致 */
+.se-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+}
+.se-tabs button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11.5px;
+  padding: 4px 12px;
+}
+.se-tabs button:hover {
+  color: var(--text);
+}
+.se-tabs button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.se-tabs button:disabled:hover {
+  color: var(--text-dim);
+}
+.se-tabs button.on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--agent-line) inset;
+}

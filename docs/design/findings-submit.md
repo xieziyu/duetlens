@@ -67,11 +67,20 @@ GitHub 的 422 只说整份被拒、**不告知是哪条**,得由我们自己指
 
 口径与 review 屏一致:只有表态轮次 === 当前轮次才算本轮结论。`wont_fix` 不走这条 —— 那条说明是作者的原话,不是对问题的重新描述。
 
-## 非 GitHub source:导出 Markdown
+## 导出 Markdown
 
-`local-branch` / `gitbutler-vbranch` 无 PR 可提交,顶栏 CTA 换成「导出 review」。同一条 triage 管线,终点从「提交到 GitHub」换成「生成一份 Markdown 报告」。
+同一条 triage 管线的另一个终点:把保留项渲染成一份 Markdown 报告。`local-branch` / `gitbutler-vbranch` 无 PR 可提交,这是它们唯一的终点,顶栏 CTA 直接换成「导出 review」。
 
 - **布局倒置**:导出屏以**报告本身为主场** —— 左侧宽栏是实时预览(渲染 / 源码可切),右侧窄栏是配置。对照 submit 屏的「左筛选 / 右 finish」。
 - **包含项开关**(suggestion 代码块 / 已剔除项)与分组(按严重度 | 按文件)**实时改写预览与将导出的内容**,所见即所得 —— Markdown 由数据模型实时生成,保证预览 = 复制 = 保存。
 - **无 event 选择**:`Comment / Request changes / Approve` 是 GitHub review 概念,导出屏不涉及。
 - 保存经 Electron 原生保存对话框写本地文件。
+
+### github-pr 也能导出:两个并列终点
+
+存档、贴周报、发到 PR 之外的地方,与「发给作者」是两件事,提交并不覆盖它。故 `github-pr` 下两个终点在同一屏里以顶栏分段并列,共享同一份 findings 与 triage;**两块屏同时挂载、只藏不卸** —— 提交屏里写到一半的 Review 意见、422 后按最新 diff 定位到的失效锚点都不该因为切过去看一眼报告就没了。
+
+- **提交状态进报告**:作者是否已经在 PR 上看到过这条,是读报告的人最先要分辨的事,故每条标 `✓ 已提交` / `待提交` / 追评。非 GitHub source 不写(恒为一格空标)。
+- **范围开关**(全部保留项 | 仅未提交):后者与提交屏的待提交集同口径,用于「这些发不到 GitHub,贴到别处去」。
+- **已提交项在导出屏同样锁定**:从这里改 triage 会把作者已收到的评论从待提交集里抹掉。欠一条复核追评的除外 —— 那条发不发仍是 reviewer 的决定。
+- 文件名取 PR 号(`review-pr-123.md`):PR 标题常是中文,走 slug 会被清成空串、落成同一个 `review-export.md`。

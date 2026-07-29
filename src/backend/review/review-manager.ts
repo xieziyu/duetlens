@@ -172,6 +172,8 @@ export class ReviewManager extends EventEmitter {
   private shuttingDown = false;
   /** GitHub 提交层;可注入(spike 用假实现,不烧真 PR)。 */
   private readonly submitter: GitHubSubmitter;
+  /** 正在提交的 review;PR review 是原子提交,并发两份就是把同一批评论发给作者两遍。 */
+  private readonly submitting = new Set<string>();
 
   constructor(
     private readonly store: ReviewStore,
@@ -574,24 +576,35 @@ export class ReviewManager extends EventEmitter {
     if (review.source !== 'github-pr') {
       return { status: 'failed', message: '仅 github-pr source 可提交到 GitHub;本地/vbranch 请用导出。' };
     }
-    const pending = this.store.listFindings(reviewId).filter((f) => isSubmittable(f, review.currentRound));
-
-    // 无 finding 也可提交:Comment/Approve/Request changes 本身就是表态
-    const payload = buildPrReviewPayload(review, pending, input.event, input.body ?? '');
-    const blocked = submitBlocker(payload);
-    if (blocked) return { status: 'failed', message: blocked };
-    const result = await this.submitter.submit(review, payload);
-
-    if (result.status === 'success') {
-      for (const f of pending) {
-        this.store.setSubmission(f.id, 'submitted', result.url, review.currentRound);
-        const updated = this.store.getFinding(f.id);
-        if (updated) this.forward({ reviewId, type: 'finding', payload: updated });
-      }
-      this.store.setReviewStatus(reviewId, 'submitted');
-      this.forward({ reviewId, type: 'status', payload: 'submitted' });
+    // 待提交集在请求发出前就定稿,`submitted` 要等 gh 返回才落库 —— 这段窗口里再进来一次,
+    // 读到的是同一份 pending,于是同样的评论发第二遍。守在这里而不是屏上:提交在途照样能
+    // 离开提交屏(顶栏返回、rail 导航),屏一卸载本地的 in-flight 状态就没了。
+    if (this.submitting.has(reviewId)) {
+      return { status: 'failed', message: '这条 review 正在提交中,等它结束再试(别重复发给作者)。' };
     }
-    return result;
+    this.submitting.add(reviewId);
+    try {
+      const pending = this.store.listFindings(reviewId).filter((f) => isSubmittable(f, review.currentRound));
+
+      // 无 finding 也可提交:Comment/Approve/Request changes 本身就是表态
+      const payload = buildPrReviewPayload(review, pending, input.event, input.body ?? '');
+      const blocked = submitBlocker(payload);
+      if (blocked) return { status: 'failed', message: blocked };
+      const result = await this.submitter.submit(review, payload);
+
+      if (result.status === 'success') {
+        for (const f of pending) {
+          this.store.setSubmission(f.id, 'submitted', result.url, review.currentRound);
+          const updated = this.store.getFinding(f.id);
+          if (updated) this.forward({ reviewId, type: 'finding', payload: updated });
+        }
+        this.store.setReviewStatus(reviewId, 'submitted');
+        this.forward({ reviewId, type: 'status', payload: 'submitted' });
+      }
+      return result;
+    } finally {
+      this.submitting.delete(reviewId);
+    }
   }
 
   /** 清空一条 discussion 的往来消息(finding 卡与锚点保留),便于重新讨论。 */
