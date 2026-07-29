@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   findingAnchorText,
   findingNarrative,
@@ -48,12 +48,18 @@ interface Props {
   review: Review;
   findings: Finding[];
   onBack: () => void;
+  /** 终点切换分段(github-pr 有导出这个并列终点);给了就顶掉面包屑。 */
+  tabs?: ReactNode;
+  /** 提交在途时上报,好让外壳一并冻住屏外那些能改 triage 的入口。 */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 // 左 findings 筛选 + 右 Finish your review。
-export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
+export function SubmitGitHubScreen({ review, findings, onBack, tabs, onBusyChange }: Props) {
   const reviewId = review.id;
   const [event, setEvent] = useState<GhReviewEvent>('comment');
+  /** 实际发出去的那次表态;结果 banner 只能说这一个,否则事后改选框会让它改口。 */
+  const [sentEvent, setSentEvent] = useState<GhReviewEvent | null>(null);
   const [sub, setSub] = useState<SubState>('ready');
   const [result, setResult] = useState<SubmitReviewResult | null>(null);
   // reviewer 手填的 review 意见:只属于这一次提交,不落库、也不取 agent 的总结
@@ -101,6 +107,9 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   const staleList = useMemo(() => findings.filter((f) => staleIds.has(f.id)), [findings, staleIds]);
   const reAnchorableCount = staleList.filter((f) => nearestLiveLine(f.file, f.line, diff) != null).length;
 
+  // 派生上报而非在 submit() 里逐条路径手动置位:那样每加一条 return 就漏一次解冻
+  useEffect(() => onBusyChange?.(sub === 'submitting'), [sub, onBusyChange]);
+
   // 进屏即在后台核对一次 PR 最新状态:失效锚点应在提交被拒之前就摆到用户面前。
   const checkedOnce = useRef(false);
   useEffect(() => {
@@ -118,12 +127,24 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
     return (f: Finding) => byKey.get(`${f.file}:${f.line}`);
   }, [diff]);
 
-  const degradeToSummary = (f: Finding) => void window.duetlens.review.setFindingAnchor(reviewId, f.id, 0);
+  /**
+   * 提交在途:后端已按调用那一刻的 findings / event / body 组好 payload 并在发了,
+   * 此后任何改动都进不了这一份,只会让屏上的锚点、正文、表态与 GitHub 上的实际结果对不上。
+   * 三个写锚点的原语与 triage 一起在此拦掉,批量入口走它们、无需各自再挡一遍。
+   */
+  const busy = sub === 'submitting';
+
+  const degradeToSummary = (f: Finding) => {
+    if (busy) return;
+    void window.duetlens.review.setFindingAnchor(reviewId, f.id, 0);
+  };
   /** 撤销降级:行号在降级时留着没清,原样传回即恢复为行评论。 */
   const restoreAnchor = (f: Finding) => {
-    if (f.line > 0) void window.duetlens.review.setFindingAnchor(reviewId, f.id, f.line);
+    if (busy || f.line <= 0) return;
+    void window.duetlens.review.setFindingAnchor(reviewId, f.id, f.line);
   };
   const reAnchor = (f: Finding) => {
+    if (busy) return;
     const line = nearestLiveLine(f.file, f.line, diff);
     if (line != null) void window.duetlens.review.setFindingAnchor(reviewId, f.id, line);
   };
@@ -133,6 +154,7 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   const degradeAllInline = () => pending.filter(hasAnchor).forEach(degradeToSummary);
 
   const toggleKeep = (f: Finding) => {
+    if (busy) return;
     // 已提交即锁定;唯一例外是欠一条复核追评的,用户仍可决定这条追评发不发
     if (f.submission === 'submitted' && !needsRecheckFollowUp(f, round)) return;
     void window.duetlens.review.setTriage(reviewId, f.id, f.triage === 'dismiss' ? 'open' : 'dismiss');
@@ -145,8 +167,9 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
   );
 
   const submit = async () => {
-    if (blocked || sub === 'submitting') return;
+    if (blocked || busy) return;
     setSub('submitting');
+    setSentEvent(event);
     const res = await window.duetlens.review.submit(reviewId, { event, body });
     setResult(res);
     setSub(res.status);
@@ -192,9 +215,11 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
         <span className="pr-chip">
           <span className="gh">⎇ GitHub</span> <b>{review.sourceRef}</b>
         </span>
-        <span className="crumb">
-          Review · <b>提交 findings</b>
-        </span>
+        {tabs ?? (
+          <span className="crumb">
+            Review · <b>提交 findings</b>
+          </span>
+        )}
       </div>
 
       <div className="sg-main">
@@ -386,7 +411,10 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
               <span className="bi">✓</span>
               <div className="bt">
                 <b>review 已提交</b> ·{' '}
-                {result.submittedCount > 0 ? `${result.submittedCount} 行评论 + 摘要` : EVENT_META[event].label} ·{' '}
+                {result.submittedCount > 0
+                  ? `${result.submittedCount} 行评论 + 摘要`
+                  : EVENT_META[sentEvent ?? event].label}{' '}
+                ·{' '}
                 <a href={result.url} target="_blank" rel="noreferrer">
                   在 GitHub 查看 ↗
                 </a>
@@ -437,10 +465,12 @@ export function SubmitGitHubScreen({ review, findings, onBack }: Props) {
               onChange={(e) => setBody(e.target.value)}
               placeholder="可选 · 你写给作者的话(agent 的总结不会发出去)"
               rows={5}
+              disabled={busy}
             />
 
             <div className="field-lbl mt">提交类型</div>
-            <div className="events">
+            {/* 正文与表态同样已随 payload 发出:在途改它们只会让屏上写的与 GitHub 上的对不上 */}
+            <div className={'events' + (busy ? ' frozen' : '')}>
               {GH_REVIEW_EVENTS.map((ev) => {
                 const m = EVENT_META[ev];
                 return (

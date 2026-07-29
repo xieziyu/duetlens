@@ -650,6 +650,10 @@ textarea.summary {
   resize: vertical;
   outline: none;
 }
+textarea.summary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 textarea.summary:focus {
   border-color: var(--agent-line);
 }
@@ -658,6 +662,11 @@ textarea.summary:focus {
   flex-direction: column;
   gap: 8px;
   margin: 0 0 6px;
+}
+/* 提交在途:表态已随 payload 发出,改不动了 */
+.events.frozen {
+  pointer-events: none;
+  opacity: 0.55;
 }
 .event {
   display: flex;

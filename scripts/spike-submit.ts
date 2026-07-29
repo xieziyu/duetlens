@@ -214,6 +214,45 @@ async function main() {
     log('invalid 不改状态 ok');
   }
 
+  // ---- 并发提交:同一 review 只放行一份(第二次不得再 POST 一遍同样的评论)----
+  {
+    const db = openDatabase(':memory:');
+    const store = new ReviewStore(db);
+    const { review, f1 } = seed(store);
+    // 提交挂在这里不返回,模拟「gh 还没回、submitted 还没落库」的那段窗口
+    let release!: () => void;
+    const inFlight = new Promise<void>((r) => (release = r));
+    let posts = 0;
+    const slow: GitHubSubmitter = {
+      async submit() {
+        posts += 1;
+        // 只挂住第一份:两份都挂的话,守卫一旦失灵第二份就死等,main 停在这里静默退出 0 ——
+        // 那是「测试没跑完」,却看着像通过。放行第二份,断言才有机会红。
+        if (posts === 1) await inFlight;
+        return { status: 'success', url: 'https://gh/x#r1', submittedCount: 2 };
+      },
+    };
+    const manager = new ReviewManager(store, undefined, { submitter: slow });
+
+    const first = manager.submitReview(review.id, { event: 'comment', body: '第一次' });
+    await Promise.resolve(); // 让第一份真正走到 submitter
+    // 屏卸载再进来会从 sub='ready' 重来,所以这一次点击在 UI 上完全合法 —— 得由后端拦
+    const second = await manager.submitReview(review.id, { event: 'comment', body: '重复点的' });
+    assert.equal(second.status, 'failed', '在途时的第二次提交要被拒');
+    assert.match(second.message, /正在提交中/);
+    assert.equal(posts, 1, '只能有一份真的发出去');
+    assert.equal(store.getFinding(f1.id)!.submission, 'unsubmitted', '被拒的那次不改任何状态');
+
+    release();
+    assert.equal((await first).status, 'success');
+    assert.equal(posts, 1);
+    assert.equal(store.getFinding(f1.id)!.submission, 'submitted');
+    // 锁在 finally 里释放:第一份结束后这条 review 还能正常再提交(增量/追评)
+    const later = await manager.submitReview(review.id, { event: 'comment', body: '结束后再补一句' });
+    assert.equal(later.status, 'success', '在途锁必须随请求结束释放');
+    log('并发提交:在途只放行一份 + 结束后解锁 ok');
+  }
+
   // ---- 非 github source:拒绝提交 ----
   {
     const db = openDatabase(':memory:');

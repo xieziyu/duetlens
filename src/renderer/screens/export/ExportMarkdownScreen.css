@@ -427,6 +427,26 @@
 .ck-item.off .t {
   text-decoration: line-through;
 }
+/* 已提交到 GitHub:勾选锁定(与提交屏同一语义),不给可点的手感 */
+.ck-item.locked {
+  cursor: default;
+}
+.ck-item.locked:hover {
+  background: transparent;
+}
+.ck-item.locked .ck {
+  background: var(--surface-3);
+  border-color: var(--border);
+  color: var(--text-faint);
+}
+.ck-item .sub-flag {
+  flex: none;
+  font-size: 10px;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
 
 .cfg-foot {
   border-top: 1px solid var(--border);
