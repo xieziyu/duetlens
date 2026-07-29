@@ -121,6 +121,12 @@ interface TurnWaiter {
  * 故由 {@link ReviewSession.stopScan} 取快照逐个通知,而不是置一个全局旗子。
  */
 interface StopTarget {
+  /**
+   * 要打断的那个 turn。**两种「没有」必须分开**,处置相反:
+   *   `undefined` —— turn/start 应答还没回来,稍等就有;
+   *   `''` —— 应答回来了但 agent 不给 id({@link ConversationalAgent.sendMessage} 允许),等下去也不会有。
+   */
+  turnId: () => string | undefined;
   /** 打断已发出、结果未知:此后到达的终局先扣住,等 gate 出结果再定性 */
   begin: (gate: Promise<void>) => void;
   /** 打断成功:本次等待就地按「已停止」收尾,不再等 codex 的终局 */
@@ -456,13 +462,28 @@ export class ReviewSession {
     // 没成就还它本来的面目(那一轮确实是自己挂的/跑完的),别让两边各说一套。
     // 快照也要在此刻取:被叫停的是**现在**在跑的那个 turn,之后新起的追问与这次叫停无关。
     const targets = [...this.stopTargets];
+    // 打断点名到 turn,故快照要连 turnId 一起取。一个能打断的都没有时分三种,处置各不同:
+    //   - 一个 target 都没有:轮次正卡在两个 turn 之间(如对抗档扫描轮与自检轮),
+    //     没有在跑的 turn 可打断 —— 直接算停下,后面那个 turn 由 stopped 旗子拦住。
+    //   - id 还没到手:turn/start 应答在途,这一轮**确实在跑**。谎称已停止的话
+    //     codex 会继续跑到底、继续烧 token,故如实抛回让用户重按 —— 重按一下就好了。
+    //   - agent 压根不给 id:等下去也不会有。同样的「稍等再停」会把用户卡在一个
+    //     永远不成立的重试里,所以要说的是「这一轮停不下来」。
+    const live = targets.map((t) => ({ t, turnId: t.turnId() }));
+    if (live.length > 0 && !live.some((x) => x.turnId))
+      throw new Error(
+        live.some((x) => x.turnId === undefined)
+          ? '本轮刚发出去,还没拿到可打断的 turn id,请稍等一下再停'
+          : 'agent 没有给出 turn id,这一轮打断不了,停不下来',
+      );
+
     let openGate!: () => void;
     const gate = new Promise<void>((resolve) => {
       openGate = resolve;
     });
     for (const t of targets) t.begin(gate);
     try {
-      await this.agent.interrupt(conversationId);
+      for (const { turnId } of live) if (turnId) await this.agent.interrupt(conversationId, turnId);
       this.stopped = true;
       for (const t of targets) t.stop();
     } finally {
@@ -742,6 +763,9 @@ export class ReviewSession {
       settle(e);
     };
 
+    // 本次等待认领的 turn(identify 时填);叫停要拿它点名打断,故声明在 target 之前
+    let mine: string | undefined;
+    let identified = false;
     // 叫停波及本次等待时由 stopScan 填入;没被波及就一直是空 —— 后起的 turn 照自己的终局收尾
     let gate: Promise<void> | null = null;
     let stoppedMe = false;
@@ -750,6 +774,7 @@ export class ReviewSession {
       finish(stoppedMe ? { kind: 'stopped' } : e);
     };
     const target: StopTarget = {
+      turnId: () => (identified ? (mine ?? '') : undefined),
       begin: (g) => {
         gate = g;
       },
@@ -766,8 +791,6 @@ export class ReviewSession {
     this.liveWaiters.add(abort);
     cleanup.push(() => this.liveWaiters.delete(abort));
 
-    let mine: string | undefined;
-    let identified = false;
     /** 认领前无从判断归属的事件,先按 turnId 分组扣住(无 id 的归到 undefined 这组) */
     const heldEnds: TerminalEvent[] = [];
     const heldDeltas = new Map<string | undefined, string>();

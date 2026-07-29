@@ -8,6 +8,10 @@
  * 4. 被叫停那轮**补发**的终局与残余 delta —— 哪怕赶在下一轮 turn/start 应答之前到达,
  *    也不许被追问的等待认领、不许混进追问的回复。
  * 5. delta 不带 turnId(该字段是可选的)—— 归属判不了就得照收,不能把回复吞光。
+ * 6. turn/start 应答还没回来(拿不到 turnId)时按停止 —— 打断点名不到 turn,
+ *    不许谎称已停止(codex 那边还在跑),要如实抛回。
+ * 7. agent 压根不给 turnId —— 与 6 长得一样但等下去也不会有,结论必须不同,
+ *    否则用户被卡在一个永远不成立的「稍等再停」里。
  *   运行:npm run spike:stop-scan
  */
 import { strict as assert } from 'node:assert';
@@ -29,10 +33,16 @@ interface Script {
   onInterrupt: (agent: StubAgent) => Promise<void>;
   /** turn/start 应答返回 turnId 之前做什么 —— 复现「事件早于应答」那段窗口 */
   beforeTurnId?: (agent: StubAgent, turnId: string) => void;
+  /** turn/start 应答挂在这里不返回 —— 复现「turn 已发出、id 还没到手」那段窗口 */
+  holdTurnId?: () => Promise<void>;
+  /** sendMessage 返回空串 —— 接口允许的「这个 agent 不给 turnId」 */
+  emptyTurnId?: boolean;
 }
 
 class StubAgent extends EventEmitter implements ConversationalAgent {
   turn = 0;
+  /** 收到的每次打断:打断点名到哪个 turn 是协议必填项,得断言而不能只看它被调过 */
+  readonly interrupts: { conversationId: string; turnId: string }[] = [];
   constructor(private readonly script: Script) {
     super();
   }
@@ -46,7 +56,8 @@ class StubAgent extends EventEmitter implements ConversationalAgent {
   async sendMessage(): Promise<string> {
     const turnId = `t${++this.turn}`;
     this.script.beforeTurnId?.(this, turnId);
-    return turnId;
+    await this.script.holdTurnId?.();
+    return this.script.emptyTurnId ? '' : turnId;
   }
   emitEvent(e: AgentEvent): void {
     this.emit('event', e);
@@ -55,7 +66,8 @@ class StubAgent extends EventEmitter implements ConversationalAgent {
     this.on('event', handler);
     return () => this.off('event', handler);
   }
-  interrupt(): Promise<void> {
+  interrupt(conversationId: string, turnId: string): Promise<void> {
+    this.interrupts.push({ conversationId, turnId });
     return this.script.onInterrupt(this);
   }
   approve(): void {}
@@ -102,6 +114,11 @@ async function failedDuringInterrupt(): Promise<() => Promise<void>> {
   await f.session.stopScan();
   await scan; // 不该抛:用户按的是「停止」,不是这一轮挂了
   assert.equal(f.session.isStopped(), true, '打断成功即算已停止');
+  assert.deepEqual(
+    f.agent.interrupts,
+    [{ conversationId: 'stub-thread', turnId: 't1' }],
+    '打断要点名到正在跑的那个 turn(turnId 是 codex 的必填项)',
+  );
   assert.notEqual(f.store.getReview(f.review.id)?.status, 'failed', 'review 不该落到失败态');
   log('✓ 打断在途收到 turn-failed → 记为已停止,start 正常 resolve');
   return () => f.session.dispose();
@@ -213,6 +230,60 @@ async function deltaWithoutTurnIdStillCounts(): Promise<() => Promise<void>> {
   return () => f.session.dispose();
 }
 
+/**
+ * 6. turn/start 应答还没回来 —— 打断点名不到 turn(codex 侧 turnId 必填),
+ * 谎称已停止的话 codex 会继续跑到底、继续烧 token,故如实抛回让用户重按。
+ */
+async function stopBeforeTurnIdArrives(): Promise<() => Promise<void>> {
+  let release!: () => void;
+  const held = new Promise<void>((r) => {
+    release = r;
+  });
+  const f = fixture({ onInterrupt: async () => undefined, holdTurnId: () => held });
+  const scan = f.session.start({ cwd: process.cwd(), providers: f.providers, round: 1 });
+  await new Promise((r) => setTimeout(r, 10));
+  // 结论要与用例 7 的「停不下来」互斥 —— 只断言笼统的「turn id」的话,
+  // 两种成因给同一句话也能过,而它们对用户的下一步正好相反(重按 vs 别按了)
+  await assert.rejects(
+    () => f.session.stopScan(),
+    (e: Error) => /稍等/.test(e.message) && !/停不下来/.test(e.message),
+    '应答在途要说「稍等再停」,点名不到 turn 就不算停住了',
+  );
+  assert.equal(f.session.isStopped(), false, '没停成不许记已停止');
+  assert.equal(f.agent.interrupts.length, 0, '没有可打断的对象就不该发打断请求');
+
+  // 应答回来后这一轮照常跑完:那次没成功的叫停不许改写它的终局
+  release();
+  await new Promise((r) => setTimeout(r, 10));
+  f.agent.emitEvent({ kind: 'turn-completed', turnId: 't1' });
+  await scan;
+  log('✓ turnId 未到手时按停止 → 如实抛回,轮次照常跑完');
+  return () => f.session.dispose();
+}
+
+/**
+ * 7. agent 压根不给 turnId(sendMessage 返回空串,接口允许)—— 与「应答未回」不是一回事:
+ * 等下去也不会有,提示「稍等再停」就是把用户卡在一个永远不成立的重试里。
+ */
+async function stopWhenAgentGivesNoTurnId(): Promise<() => Promise<void>> {
+  const f = fixture({ onInterrupt: async () => undefined, emptyTurnId: true });
+  const scan = f.session.start({ cwd: process.cwd(), providers: f.providers, round: 1 });
+  await new Promise((r) => setTimeout(r, 10));
+  await assert.rejects(
+    () => f.session.stopScan(),
+    (e: Error) => /停不下来/.test(e.message) && !/稍等/.test(e.message),
+    '没有 id 可打断要如实说,不能伪装成「等一下就好」',
+  );
+  assert.equal(f.session.isStopped(), false, '没停成不许记已停止');
+  assert.equal(f.agent.interrupts.length, 0, '没有 id 就不该发打断请求');
+
+  // 这一轮照常跑完:停不下来不等于这一轮就此作废
+  f.agent.emitEvent({ kind: 'turn-completed', turnId: 't1' });
+  await scan;
+  log('✓ agent 不给 turnId 时按停止 → 说清停不下来,不提示「稍等再试」');
+  return () => f.session.dispose();
+}
+
 async function main(): Promise<void> {
   const cases = [
     failedDuringInterrupt,
@@ -220,6 +291,8 @@ async function main(): Promise<void> {
     followupStillAnswered,
     lateEventsDoNotLeak,
     deltaWithoutTurnIdStillCounts,
+    stopBeforeTurnIdArrives,
+    stopWhenAgentGivesNoTurnId,
   ];
   for (const t of cases) {
     const dispose = await t();

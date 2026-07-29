@@ -40,10 +40,17 @@ export interface ConversationalAgent {
   startConversation(opts: StartConversationOptions): Promise<ConversationHandle>;
   /** 按 conversationId 从磁盘续接会话(app 重启后追问);须重新注入 MCP。 */
   resumeConversation(opts: ResumeConversationOptions): Promise<ConversationHandle>;
-  /** 发起一轮 turn;返回该 turn 的 id(agent 未给则空串),供调用方只认自己那一轮的终局事件。 */
+  /**
+   * 发起一轮 turn;返回该 turn 的 id,供调用方只认自己那一轮的终局事件。
+   *
+   * 返回空串表示这个 agent 不给 id:终局与 delta 的归属退回「来什么认什么」尚可将就,
+   * 但 {@link interrupt} 点名不到 turn —— 这样的 agent 跑出来的轮次**叫停不了**。
+   * codex 协议里没有 thread 级打断可退,故这不是能补的降级路径;要支持叫停就必须给出非空 id。
+   */
   sendMessage(conversationId: string, text: string): Promise<string>;
   streamEvents(handler: (e: AgentEvent) => void): () => void;
-  interrupt(conversationId: string): Promise<void>;
+  /** 打断指定 turn。turnId 必须是 {@link sendMessage} 给回的那个 —— 打断作用于具体一轮,不是整条会话。 */
+  interrupt(conversationId: string, turnId: string): Promise<void>;
   /** 反向审批的显式应答口子;受信工具默认自动 accept(见 CodexAppServer)。 */
   approve(requestId: string, decision: 'accept' | 'decline'): void;
   dispose(): void;

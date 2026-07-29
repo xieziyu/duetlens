@@ -147,8 +147,8 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
     return () => this.off('event', handler);
   }
 
-  async interrupt(conversationId: string): Promise<void> {
-    await this.server.turnInterrupt(conversationId);
+  async interrupt(conversationId: string, turnId: string): Promise<void> {
+    await this.server.turnInterrupt({ threadId: conversationId, turnId });
   }
 
   // 受信工具的反向审批由 CodexAppServer 自动 accept;此口子留给未来非受信场景。
