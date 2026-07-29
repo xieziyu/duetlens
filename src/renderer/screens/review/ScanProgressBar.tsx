@@ -143,7 +143,7 @@ export function ScanProgressBar({
       </div>
       {stopError && (
         <div className="sb-stoperr">
-          <LaunchError message={stopError} />
+          <LaunchError message={stopError} fallbackTitle="没能停下这一轮" />
         </div>
       )}
 
