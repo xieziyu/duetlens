@@ -66,6 +66,8 @@ Grab the `.dmg` from the [latest release](https://github.com/xieziyu/duetlens/re
 
 The `.zip` on that page is what the updater consumes; you don't need it for a manual install.
 
+See the [changelog](CHANGELOG.en.md) for what each version changed.
+
 ### Run from source
 
 ```bash

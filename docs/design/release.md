@@ -29,6 +29,14 @@ CI 里只是三个字符串加一个文件。
 `APP_VERSION`(见 [CLAUDE.md](../../CLAUDE.md) 单一来源表)。CI 会校验 tag 与它一致后才发布,
 免得出现「v0.2.0 的 release 里装着 0.1.0 的包」。
 
+## release notes 从 CHANGELOG 抽,不在网页上手写
+
+`scripts/release-notes.mjs <version>` 取两份 CHANGELOG 里对应那一节拼成草稿正文(中文在前),
+CI 建草稿时用它。**抽不到就让这一步失败** —— 版本号已经过了 tag 校验,却没人写过这版改了什么,
+那不是可以顺手补的疏漏。中英各要有一节,少一边同样失败:双语 README 只在发布这一处会被忘掉。
+
+手写 notes 的代价不是麻烦,是它会与 CHANGELOG 分叉,而分叉之后没有任何一处能判定谁是对的。
+
 ## 签名的两条路不能混
 
 发布版从钥匙串自动发现 Developer ID Application,开 hardened runtime + 公证。

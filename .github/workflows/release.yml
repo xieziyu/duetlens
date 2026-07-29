@@ -52,6 +52,10 @@ jobs:
             exit 1
           fi
 
+      # notes 与 CHANGELOG 同一份来源。抽不到就在这里失败,别等出完包才发现 notes 是空的。
+      - name: build release notes from CHANGELOG
+        run: node scripts/release-notes.mjs "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
+
       - run: npm run typecheck
       - run: npm run lint
 
@@ -65,7 +69,7 @@ jobs:
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
             gh release create "$GITHUB_REF_NAME" --draft \
-              --title "Duetlens ${GITHUB_REF_NAME#v}" --notes ""
+              --title "Duetlens ${GITHUB_REF_NAME#v}" --notes-file "$RUNNER_TEMP/notes.md"
 
       # electron-builder 的 notarize 只认文件路径,secret 是字符串,得先落盘
       - name: write notarization key

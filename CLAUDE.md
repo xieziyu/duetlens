@@ -39,6 +39,7 @@ Electron 桌面应用:人与 codex agent 协同对话式的 code review。主进
 | 改动面计量 | `but diff <branch>`(入口卡片与 `GitButlerSource.getDiff` 同一条命令,数由构造相等) |
 | 仓库 / issue / 作者外链 | `src/shared/links.ts`(package.json 不重复一份) |
 | 客户端版本号 | `package.json` 的 `version` → 构建期 define 注入 `src/shared/version.ts`;发给 app-server / MCP 的 clientInfo 一律取 `APP_VERSION`,别再写字面量 |
+| 版本改动说明 | `CHANGELOG.md` / `CHANGELOG.en.md`;GitHub release notes 由 `scripts/release-notes.mjs` 抽出对应小节,别在 release 页手写 |
 
 ## 运行与自查
 
