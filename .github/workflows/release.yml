@@ -10,7 +10,7 @@
 #   - 只有 v* tag 能触发。不留 workflow_dispatch —— 那等于允许从任意分支带着密钥跑。
 #   - 挂 release environment,人工审批前 job 不启动,secrets 也就不注入。
 #     供应链投毒因此不能静默拿走密钥,总得有人点一下。
-#   - action 一律钉 commit SHA。@v4 这种可变引用被劫持时会跟着中招。
+#   - action 一律钉 commit SHA。@v6 这种可变引用被劫持时会跟着中招。
 #   - secrets 只出现在真正需要的两步的 env 里,且不经 ${{ }} 插值进 run —— 别改成插值。
 name: release
 
@@ -29,12 +29,12 @@ jobs:
     environment: release
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          # 不把 GITHUB_TOKEN 留在 .git/config —— 同 job 里 npm ci 会跑依赖的安装脚本
+          # 不把 GITHUB_TOKEN 落盘 —— 同 job 里 npm ci 会跑依赖的安装脚本
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: npm
@@ -92,7 +92,7 @@ jobs:
           export APPLE_API_KEY=~/private_keys/AuthKey_${APPLE_API_KEY_ID}.p8
           npm run release
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: always()
         with:
           name: duetlens-macos-arm64
