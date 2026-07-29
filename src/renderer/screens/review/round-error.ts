@@ -122,11 +122,15 @@ export function stripIpcWrapper(message: string): string {
     .trim();
 }
 
-export function describeLaunchError(message: string): LaunchErrorCopy {
+/**
+ * @param fallbackTitle 认不出特征时的兜底结论。默认按「开跑失败」措辞;
+ *   叫停失败复用的是同一份呈现,但说成「没能开跑」正好把因果说反了。
+ */
+export function describeLaunchError(message: string, fallbackTitle = '这一轮没能开跑'): LaunchErrorCopy {
   const raw = stripIpcWrapper(message);
   const hit = LAUNCH_PATTERNS.find((p) => p.match.test(raw));
   return {
-    title: hit?.title ?? '这一轮没能开跑',
+    title: hit?.title ?? fallbackTitle,
     advice: hit?.advice ?? '',
     raw,
   };

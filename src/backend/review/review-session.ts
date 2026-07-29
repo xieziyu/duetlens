@@ -96,6 +96,13 @@ type TurnOutcome =
   | { kind: 'stopped' }
   | { kind: 'failed'; error: string; errorKind: AgentErrorKind };
 
+/**
+ * 一个 turn 是为谁跑的。**叫停只作用于机审那几个** —— 追问 turn 也要等终局、
+ * 也登记在 {@link ReviewSession.stopTargets} 里,但它是用户刚问出去的那句话,不该被
+ * 「停止机审」顺手打断(扫描自然收尾后,队里的追问紧接着就开跑)。
+ */
+type TurnKind = 'scan' | 'followup';
+
 /** turn 的终局:agent 侧的完成/失败,或我们主动叫停/释放会话。 */
 type TurnEnd =
   | Extract<AgentEvent, { kind: 'turn-completed' | 'turn-failed' }>
@@ -121,6 +128,14 @@ interface TurnWaiter {
  * 故由 {@link ReviewSession.stopScan} 取快照逐个通知,而不是置一个全局旗子。
  */
 interface StopTarget {
+  /** 这次等待是为谁跑的;叫停只挑 `scan` 的下手 */
+  kind: TurnKind;
+  /**
+   * 要打断的那个 turn。**两种「没有」必须分开**,处置相反:
+   *   `undefined` —— turn/start 应答还没回来,稍等就有;
+   *   `''` —— 应答回来了但 agent 不给 id({@link ConversationalAgent.sendMessage} 允许),等下去也不会有。
+   */
+  turnId: () => string | undefined;
   /** 打断已发出、结果未知:此后到达的终局先扣住,等 gate 出结果再定性 */
   begin: (gate: Promise<void>) => void;
   /** 打断成功:本次等待就地按「已停止」收尾,不再等 codex 的终局 */
@@ -321,7 +336,7 @@ export class ReviewSession {
     this.recordModel(handle.model);
     this.setStatus('scanning');
 
-    const outcome = await this.runTurn(opts.scanPrompt ?? DEFAULT_SCAN_PROMPT);
+    const outcome = await this.runTurn('scan', opts.scanPrompt ?? DEFAULT_SCAN_PROMPT);
     if (outcome.kind === 'failed') {
       this.setStatus('failed');
       const label = opts.round && opts.round > 1 ? `第 ${opts.round} 轮复审` : '首轮扫描';
@@ -330,7 +345,7 @@ export class ReviewSession {
     // 对抗档:同一 thread 追加一轮自检。已有扫描结论,自检失败不推翻本轮 —— 吞掉错误保留成果。
     // 叫停是"到此为止",自检轮当然也不再跑;扫描 turn 恰好抢在打断前跑完也照样算叫停。
     if (outcome.kind === 'ok' && !this.stopped && opts.intensity === 'adversarial') {
-      await this.runTurn(ADVERSARIAL_SELFCHECK_PROMPT);
+      await this.runTurn('scan', ADVERSARIAL_SELFCHECK_PROMPT);
     }
     const source = this.store.getReview(this.reviewId)?.source;
     this.setStatus(source ? scanDoneStatus(source) : 'reviewing');
@@ -406,10 +421,11 @@ export class ReviewSession {
     // 记在 session 上的话,后一条会把前一条的篮子清掉,提案就再也挂不上那句回复。
     const collected: string[] = [];
     try {
-      const outcome = await this.runTurn(this.buildFollowupPrompt(discussion, text, history), {
-        discussionId,
-        collected,
-      });
+      const outcome = await this.runTurn(
+        'followup',
+        this.buildFollowupPrompt(discussion, text, history),
+        { discussionId, collected },
+      );
       if (outcome.kind === 'failed')
         throw new AgentTurnError(`追问失败: ${outcome.error}`, outcome.errorKind, outcome.error);
       if (outcome.kind === 'stopped') return userMsg;
@@ -455,14 +471,31 @@ export class ReviewSession {
     // 在途期间到达的终局一律先扣住,由打断的成败来定性 —— 成了算「已停止」,
     // 没成就还它本来的面目(那一轮确实是自己挂的/跑完的),别让两边各说一套。
     // 快照也要在此刻取:被叫停的是**现在**在跑的那个 turn,之后新起的追问与这次叫停无关。
-    const targets = [...this.stopTargets];
+    // 只挑机审那几个 turn。追问 turn 同样登记在这里,但扫描自然收尾后队里的追问会
+    // 紧接着开跑 —— 不筛掉的话「停止机审」会把用户刚问出去的那句话打断,还把整轮记成已停止。
+    const targets = [...this.stopTargets].filter((t) => t.kind === 'scan');
+    // 打断点名到 turn,故快照要连 turnId 一起取。一个能打断的都没有时分三种,处置各不同:
+    //   - 一个 target 都没有:轮次正卡在两个 turn 之间(如对抗档扫描轮与自检轮),
+    //     没有在跑的 turn 可打断 —— 直接算停下,后面那个 turn 由 stopped 旗子拦住。
+    //   - id 还没到手:turn/start 应答在途,这一轮**确实在跑**。谎称已停止的话
+    //     codex 会继续跑到底、继续烧 token,故如实抛回让用户重按 —— 重按一下就好了。
+    //   - agent 压根不给 id:等下去也不会有。同样的「稍等再停」会把用户卡在一个
+    //     永远不成立的重试里,所以要说的是「这一轮停不下来」。
+    const live = targets.map((t) => ({ t, turnId: t.turnId() }));
+    if (live.length > 0 && !live.some((x) => x.turnId))
+      throw new Error(
+        live.some((x) => x.turnId === undefined)
+          ? '本轮刚发出去,还没拿到可打断的 turn id,请稍等一下再停'
+          : 'agent 没有给出 turn id,这一轮打断不了,停不下来',
+      );
+
     let openGate!: () => void;
     const gate = new Promise<void>((resolve) => {
       openGate = resolve;
     });
     for (const t of targets) t.begin(gate);
     try {
-      await this.agent.interrupt(conversationId);
+      for (const { turnId } of live) if (turnId) await this.agent.interrupt(conversationId, turnId);
       this.stopped = true;
       for (const t of targets) t.stop();
     } finally {
@@ -666,7 +699,7 @@ export class ReviewSession {
    * 跑一轮 turn(串行入队):累积 message-delta 作为 agent 回复文本,resolve 于 turn 结束。
    * 前一轮失败不阻断后续轮(链上 catch)。
    */
-  private runTurn(text: string, propose?: ProposeContext): Promise<TurnOutcome> {
+  private runTurn(kind: TurnKind, text: string, propose?: ProposeContext): Promise<TurnOutcome> {
     const run = async (): Promise<TurnOutcome> => {
       // 排在队里的那些:轮到自己时会话可能已经拆了,别再发一轮出去等终局
       if (this.disposed) throw new SessionDisposedError();
@@ -677,7 +710,7 @@ export class ReviewSession {
       this.enterTurnMode(propose);
       try {
         // 订阅要先于发起:极快的 turn(乃至 stub)会在 turn/start 应答之前就把 delta 与终局发出来
-        const waiter = this.awaitTurnEnd();
+        const waiter = this.awaitTurnEnd(kind);
         try {
           waiter.identify(await this.agent.sendMessage(conversationId, text));
         } catch (e) {
@@ -726,7 +759,7 @@ export class ReviewSession {
    * 那条迟到的终局会被下一次追问当成自己的(追问提前返回空回复),残余文本还会混进追问的答案。
    * turnId 要到 turn/start 应答才知道,故认领之前先扣住,认领后再逐条比对。
    */
-  private awaitTurnEnd(): TurnWaiter {
+  private awaitTurnEnd(kind: TurnKind): TurnWaiter {
     type TerminalEvent = Extract<AgentEvent, { kind: 'turn-completed' | 'turn-failed' }>;
     const cleanup: (() => void)[] = [];
     let settle!: (end: TurnEnd) => void;
@@ -742,6 +775,9 @@ export class ReviewSession {
       settle(e);
     };
 
+    // 本次等待认领的 turn(identify 时填);叫停要拿它点名打断,故声明在 target 之前
+    let mine: string | undefined;
+    let identified = false;
     // 叫停波及本次等待时由 stopScan 填入;没被波及就一直是空 —— 后起的 turn 照自己的终局收尾
     let gate: Promise<void> | null = null;
     let stoppedMe = false;
@@ -750,6 +786,8 @@ export class ReviewSession {
       finish(stoppedMe ? { kind: 'stopped' } : e);
     };
     const target: StopTarget = {
+      kind,
+      turnId: () => (identified ? (mine ?? '') : undefined),
       begin: (g) => {
         gate = g;
       },
@@ -766,8 +804,6 @@ export class ReviewSession {
     this.liveWaiters.add(abort);
     cleanup.push(() => this.liveWaiters.delete(abort));
 
-    let mine: string | undefined;
-    let identified = false;
     /** 认领前无从判断归属的事件,先按 turnId 分组扣住(无 id 的归到 undefined 这组) */
     const heldEnds: TerminalEvent[] = [];
     const heldDeltas = new Map<string | undefined, string>();

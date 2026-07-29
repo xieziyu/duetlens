@@ -1,5 +1,5 @@
 /**
- * codex app-server 协议的最小子集(手写,对齐 codex-cli 0.144.1 `generate-ts` 导出)。
+ * codex app-server 协议的最小子集(手写,对齐 codex-cli 0.145.0 `generate-ts` 导出)。
  * 只覆盖 Duetlens spike/骨架用到的方法与事件;全量类型可用
  *   `codex app-server generate-ts --out <DIR>`(见 npm script `codex:gen-types`)
  * 重导比对。协议标 experimental,升级 codex 后应重新导出回归。
@@ -100,6 +100,17 @@ export interface TurnStartParams {
 
 export interface TurnStartResponse {
   turn: { id: string; status: string; [k: string]: unknown };
+}
+
+// ---- turn/interrupt ----
+
+/**
+ * 打断是**针对某一个 turn** 的:`turnId` 必填,少了会在参数反序列化阶段就被
+ * `-32600 Invalid request` 顶回来,根本走不到打断逻辑。
+ */
+export interface TurnInterruptParams {
+  threadId: string;
+  turnId: string;
 }
 
 /**

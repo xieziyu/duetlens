@@ -14,6 +14,7 @@ import {
   type ThreadResumeResponse,
   type ThreadStartParams,
   type ThreadStartResponse,
+  type TurnInterruptParams,
   type TurnStartParams,
   type TurnStartResponse,
 } from './protocol';
@@ -90,8 +91,8 @@ export class CodexAppServer extends EventEmitter {
     return this.rpcOrThrow().request<TurnStartResponse>(CodexMethod.turnStart, params);
   }
 
-  async turnInterrupt(threadId: string): Promise<unknown> {
-    return this.rpcOrThrow().request(CodexMethod.turnInterrupt, { threadId });
+  async turnInterrupt(params: TurnInterruptParams): Promise<unknown> {
+    return this.rpcOrThrow().request(CodexMethod.turnInterrupt, params);
   }
 
   stop(): void {
