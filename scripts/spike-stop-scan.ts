@@ -284,6 +284,34 @@ async function stopWhenAgentGivesNoTurnId(): Promise<() => Promise<void>> {
   return () => f.session.dispose();
 }
 
+/**
+ * 8. 追问排在扫描后面:扫描自然收尾、队里的追问接着开跑,此时按停止 ——
+ * 叫停的对象是**本轮机审**,不能顺手把用户的追问打断、更不能把整轮记成已停止。
+ */
+async function stopDoesNotHitFollowup(): Promise<() => Promise<void>> {
+  const f = fixture({ onInterrupt: async () => undefined });
+  const scan = f.session.start({ cwd: process.cwd(), providers: f.providers, round: 1 });
+  await new Promise((r) => setTimeout(r, 10));
+
+  // 扫描还在跑时就排一条追问(UI 允许);它要等扫描 turn 收尾才真正发出
+  const discussion = f.store.addUserDiscussion(f.review.id, { file: 'a.ts', line: 1 });
+  const followup = f.session.sendMessage(discussion.id, '这里为什么这么写?');
+  f.agent.emitEvent({ kind: 'turn-completed', turnId: 't1' }); // 扫描自然收尾
+  await scan;
+  await new Promise((r) => setTimeout(r, 10)); // 追问的 turn 起来并认领 t2
+
+  await f.session.stopScan();
+  assert.deepEqual(f.agent.interrupts, [], '扫描已自然收尾,叫停不该去打断用户的追问');
+
+  f.agent.emitEvent({ kind: 'message-delta', text: '因为要复用同一条流。', turnId: 't2' });
+  f.agent.emitEvent({ kind: 'turn-completed', turnId: 't2' });
+  const msg = await followup;
+  assert.equal(msg.role, 'agent', '追问没被殃及,要照常拿到 agent 回复');
+  assert.equal(msg.text, '因为要复用同一条流。');
+  log('✓ 扫描收尾后叫停不殃及队里的追问');
+  return () => f.session.dispose();
+}
+
 async function main(): Promise<void> {
   const cases = [
     failedDuringInterrupt,
@@ -293,6 +321,7 @@ async function main(): Promise<void> {
     deltaWithoutTurnIdStillCounts,
     stopBeforeTurnIdArrives,
     stopWhenAgentGivesNoTurnId,
+    stopDoesNotHitFollowup,
   ];
   for (const t of cases) {
     const dispose = await t();
