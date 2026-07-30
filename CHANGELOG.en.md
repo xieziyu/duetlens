@@ -4,6 +4,30 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.2.1] - 2026-07-30
+
+### Fixed
+
+- **"Stop the scan" now actually stops it.** The request used to die on `missing field turnId`, so the
+  round kept burning tokens until it finished on its own, while the error card claimed the opposite —
+  that the round had never started. One more defect on the same path went with it: stopping no longer
+  interrupts a follow-up turn queued behind the scan. (#19)
+- **A codex whose protocol no longer matches this build is refused, instead of running on under an
+  unknown policy.** Starting a session injects a read-only sandbox and "never ask for approval", but
+  codex silently ignores fields it does not recognise — rename one and the request still "sends
+  successfully" while the review agent is no longer read-only, with nothing anywhere reporting it. The
+  effective policy is now read back at start-up and a mismatch refuses to launch; any policy approval
+  request during a session is treated as proof of failure, ending the round and tearing the session
+  down. Each of the two failures explains itself rather than surfacing a bare `-32600` behind a
+  "retry" button — retrying either one reproduces it. (#20)
+
+### Upgrade notes
+
+- The database schema is unchanged at v16; 0.2.0 and 0.2.1 can be installed in either direction.
+- This build targets codex 0.145.0. If starting a review reports a protocol mismatch, upgrade the codex
+  on your machine — the change is only that a silent downgrade became an explicit refusal.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.2.0] - 2026-07-29
 
 ### Added
@@ -55,5 +79,6 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.2.1]: https://github.com/xieziyu/duetlens/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/xieziyu/duetlens/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/xieziyu/duetlens/releases/tag/v0.1.0
