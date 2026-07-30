@@ -21,7 +21,8 @@ import type {
 import type { AgentErrorKind } from '@shared/agent-events';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, BusyReview, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
-import { LIVE_SESSION_LIMIT_CODE } from '@shared/ipc';
+import { LIVE_SESSION_LIMIT_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
+import { isCodexProtocolError } from '@shared/codex';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
@@ -141,10 +142,20 @@ const SESSION_FORWARDERS: {
  * 轮次失败的落库形态。turn 失败带得到 agent 归因;编排层自己抛的(source/网络/gh)只有原文,
  * 归到 'other' —— 宁可不分类,也不按 message 猜。
  */
-function describeRoundFailure(cause: unknown): { errorMessage: string; errorKind: AgentErrorKind } {
+export function describeRoundFailure(cause: unknown): {
+  errorMessage: string;
+  errorKind: AgentErrorKind;
+} {
   if (cause instanceof AgentTurnError) return { errorMessage: cause.detail, errorKind: cause.errorKind };
   const message = cause instanceof Error ? cause.message : String(cause ?? '');
-  return { errorMessage: message || '未知错误', errorKind: 'other' };
+  // 建会话阶段抛的是普通 Error(没有 turn,也就没有 codexErrorInfo 可映射)。不在这里认出来的话,
+  // 这两类都落成 'other' —— 文案泛泛,还带 retryable,把用户往「再试一次」上引,而这两类重试必然复现。
+  const kind: AgentErrorKind = message.includes(SANDBOX_NOT_APPLIED_CODE)
+    ? 'sandbox-not-applied'
+    : isCodexProtocolError(message)
+      ? 'codex-version-mismatch'
+      : 'other';
+  return { errorMessage: message || '未知错误', errorKind: kind };
 }
 
 /**
@@ -958,6 +969,10 @@ export class ReviewManager extends EventEmitter {
         (e: unknown) => {
           this.settleRound(review.id, round, 'failed', e);
           this.forward({ reviewId: review.id, type: 'status', payload: 'failed' });
+          // 会话根本没建起来(如握手时的只读校验被拒):它已入表却永远用不了,还攥着
+          // codex 子进程、MCP server、source 与一个 live 名额。就地拆,别等 LRU 或用户手动释放。
+          // 释放本身再失败也不能盖掉上面已落库的原始失败,更不能变成进程级 unhandled rejection
+          if (!session.isOpen()) void this.teardown(review.id).catch(() => undefined);
         },
       );
   }

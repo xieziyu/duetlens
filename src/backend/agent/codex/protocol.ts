@@ -1,5 +1,6 @@
 /**
- * codex app-server 协议的最小子集(手写,对齐 codex-cli 0.145.0 `generate-ts` 导出)。
+ * codex app-server 协议的最小子集(手写,对齐 `generate-ts` 导出;
+ * 对齐到哪个版本见 shared/codex.ts 的 `CODEX_TARGET_VERSION`)。
  * 只覆盖 Duetlens spike/骨架用到的方法与事件;全量类型可用
  *   `codex app-server generate-ts --out <DIR>`(见 npm script `codex:gen-types`)
  * 重导比对。协议标 experimental,升级 codex 后应重新导出回归。
@@ -40,8 +41,18 @@ export interface ThreadStartParams {
   ephemeral?: boolean;
 }
 
-export interface ThreadStartResponse {
-  thread: { id: string; sessionId: string; [k: string]: unknown };
+/**
+ * thread/start 与 thread/resume 都会**回显本次生效的策略**(形状与请求不同:请求送
+ * `sandbox: 'read-only'` 这个 SandboxMode,应答回的是 SandboxPolicy 结构体)。
+ * 这几个字段是只读注入能否被证实的唯一途径,见 {@link SANDBOX_NOT_APPLIED_CODE}。
+ */
+export interface EffectiveThreadPolicy {
+  approvalPolicy?: string;
+  sandbox?: { type?: string; [k: string]: unknown } | null;
+}
+
+export interface ThreadStartResponse extends EffectiveThreadPolicy {
+  thread: { id: string; sessionId: string; cliVersion?: string; [k: string]: unknown };
   model: string;
   cwd: string;
   [k: string]: unknown;
@@ -59,8 +70,8 @@ export interface ThreadResumeParams {
   model?: string;
 }
 
-export interface ThreadResumeResponse {
-  thread: { id: string; [k: string]: unknown };
+export interface ThreadResumeResponse extends EffectiveThreadPolicy {
+  thread: { id: string; cliVersion?: string; [k: string]: unknown };
   model: string;
   cwd: string;
   [k: string]: unknown;
@@ -193,11 +204,26 @@ export const CodexMethod = {
 /** server→client 反向请求(需应答) */
 export const CodexServerRequest = {
   mcpElicitation: 'mcpServer/elicitation/request',
+  /** legacy 命名;v2 turn 走的是 commandExecutionApproval,两套都还在表里,故都要认 */
   execCommandApproval: 'execCommandApproval',
   applyPatchApproval: 'applyPatchApproval',
+  commandExecutionApproval: 'item/commandExecution/requestApproval',
   fileChangeApproval: 'item/fileChange/requestApproval',
   permissionsApproval: 'item/permissions/requestApproval',
 } as const;
+
+/**
+ * 拒绝一次审批要按**该方法自己的应答类型**说,不同族的说法不一样,没有通用的 `denied`:
+ * - legacy(exec/applyPatch)是 `ReviewDecision`,拒绝是对象变体 `{ denied: { rejection } }`;
+ * - v2(commandExecution/fileChange)是各自的 decision 枚举,拒绝一律是 `'decline'`;
+ * - permissions 的应答里**根本没有 decision 字段**(要回一份授权档),表达不了拒绝 —— 只能回错误。
+ */
+export const DECLINE_BY_METHOD: Readonly<Record<string, unknown>> = {
+  [CodexServerRequest.execCommandApproval]: { decision: { denied: { rejection: '只读审核会话' } } },
+  [CodexServerRequest.applyPatchApproval]: { decision: { denied: { rejection: '只读审核会话' } } },
+  [CodexServerRequest.commandExecutionApproval]: { decision: 'decline' },
+  [CodexServerRequest.fileChangeApproval]: { decision: 'decline' },
+};
 
 /** server→client 单向通知(流事件) */
 export const CodexNotification = {

@@ -1,5 +1,6 @@
 import type { AgentErrorKind } from '@shared/agent-events';
-import { FOLLOWUP_REPLY_FAILED_CODE } from '@shared/ipc';
+import { CODEX_TARGET_VERSION, isCodexProtocolError } from '@shared/codex';
+import { FOLLOWUP_REPLY_FAILED_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 
 /**
  * 失败归因 → 用户能读懂的结论与处置。原文一律另行原样呈现 ——
@@ -13,6 +14,19 @@ export interface RoundErrorCopy {
   /** 重试是否有意义(决定「重试本轮」是主按钮还是次按钮) */
   retryable: boolean;
 }
+
+/**
+ * codex 版本相关的两条结论。轮次失败(按 errorKind 分档)与开跑前失败(按特征串认)
+ * 是两条渲染路径,但同一件事只该有一份措辞 —— 故在此定义一次,两张表都引它。
+ */
+const SANDBOX_BREACH = {
+  title: 'codex 没有按只读沙箱起会话,已中止',
+  advice: `本机 codex 与这版 Duetlens 对不上,注入的只读策略没有生效 —— 继续跑等于让审核 agent 在未知策略下动你的仓库,所以直接停了。这版对齐的是 codex ${CODEX_TARGET_VERSION},升级后再跑。`,
+};
+const VERSION_MISMATCH = {
+  title: '本机 codex 版本与这版 Duetlens 对不上',
+  advice: `这版对齐的是 codex ${CODEX_TARGET_VERSION}。在终端跑 codex --version 看看本机是哪个版本,升到相近版本再试。`,
+};
 
 const COPY: Record<AgentErrorKind, RoundErrorCopy> = {
   'usage-limit': {
@@ -45,6 +59,8 @@ const COPY: Record<AgentErrorKind, RoundErrorCopy> = {
     advice: '多为模型名不可用或内容触发策略拦截。换个模型再试;仍失败请看下方原文。',
     retryable: false,
   },
+  'sandbox-not-applied': { ...SANDBOX_BREACH, retryable: false },
+  'codex-version-mismatch': { ...VERSION_MISMATCH, retryable: false },
   other: {
     title: '这一轮机审没能跑完',
     advice: '',
@@ -62,8 +78,22 @@ export function describeRoundError(kind: AgentErrorKind | null): RoundErrorCopy 
 // 因而没有归因可落库 —— 只有底层命令的原文。这里按可辨认的特征串给出人话结论,
 // 认不出就只给通用结论;原文一律照常呈现,不靠猜来替代证据。
 
-/** 特征串 → 结论。顺序即优先级:越具体的排前面。 */
-const LAUNCH_PATTERNS: { match: RegExp; title: string; advice: string }[] = [
+/**
+ * 特征 → 结论。顺序即优先级:越具体的排前面。
+ * 判据多数是特征串;需要「几个条件同时成立」才作数的(如协议错)给谓词。
+ */
+const LAUNCH_PATTERNS: {
+  match: RegExp | ((raw: string) => boolean);
+  title: string;
+  advice: string;
+}[] = [
+  { match: new RegExp(SANDBOX_NOT_APPLIED_CODE), ...SANDBOX_BREACH },
+  {
+    // codex 的 JSON-RPC 参数/方法校验失败。与业务无关,一律是版本对不上 ——
+    // 不认出来的话,用户看到的就是一句「Invalid request: missing field ... (code -32600)」。
+    match: isCodexProtocolError,
+    ...VERSION_MISMATCH,
+  },
   {
     // `but diff <branch>` 解析不出该虚拟分支
     match: /No ID found for entity/i,
@@ -128,7 +158,9 @@ export function stripIpcWrapper(message: string): string {
  */
 export function describeLaunchError(message: string, fallbackTitle = '这一轮没能开跑'): LaunchErrorCopy {
   const raw = stripIpcWrapper(message);
-  const hit = LAUNCH_PATTERNS.find((p) => p.match.test(raw));
+  const hit = LAUNCH_PATTERNS.find((p) =>
+    typeof p.match === 'function' ? p.match(raw) : p.match.test(raw),
+  );
   return {
     title: hit?.title ?? fallbackTitle,
     advice: hit?.advice ?? '',

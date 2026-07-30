@@ -25,6 +25,10 @@ export const AGENT_ERROR_KINDS = [
   'unauthorized',
   /** 请求被拒(参数/策略)—— 重试无用 */
   'bad-request',
+  /** 只读沙箱注入没落地(见 SANDBOX_NOT_APPLIED_CODE)—— 换模型没用,要升 codex */
+  'sandbox-not-applied',
+  /** 本机 codex 与这版对齐的协议对不上(见 CODEX_PROTOCOL_ERROR)—— 重试必然复现 */
+  'codex-version-mismatch',
   'other',
 ] as const;
 export type AgentErrorKind = (typeof AGENT_ERROR_KINDS)[number];
@@ -43,7 +47,20 @@ export type AgentEvent =
   // 不碰我们 DB 里的锚点/finding;不主动 thread/compact/start)。
   | { kind: 'compaction'; phase: 'started' | 'completed' }
   // 反向审批的统一观测面:受信工具 elicitation 自动 accept 为 expected;其余一律拒绝且 expected=false。
-  | { kind: 'approval'; method: string; decision: 'accepted' | 'declined' | 'denied'; expected: boolean; server?: string; message?: string }
+  | {
+      kind: 'approval';
+      method: string;
+      decision: 'accepted' | 'declined' | 'denied';
+      expected: boolean;
+      /**
+       * 这条反向请求把关的是什么。**只有 `policy` 能当沙箱哨兵** —— 它是执行/写入/权限类
+       * 审批,只读会话里根本不该出现;`mcp` 是工具侧的 elicitation,被拒只说明我们没批准
+       * 那次调用(用户自己配的第三方 MCP server 就会走这条),不能据此断定注入失效。
+       */
+      gate: 'policy' | 'mcp';
+      server?: string;
+      message?: string;
+    }
   | { kind: 'turn-completed'; turnId: string }
   | { kind: 'turn-failed'; turnId: string; error: string; errorKind: AgentErrorKind }
   // agent 自己还会重试的中途失败:一轮可能这样静默耗掉几十秒,不外发的话进度条是纯黑盒。

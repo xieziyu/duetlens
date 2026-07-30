@@ -189,6 +189,19 @@ export const LIVE_SESSION_LIMIT_CODE = 'DUETLENS_LIVE_SESSION_LIMIT';
  */
 export const FOLLOWUP_REPLY_FAILED_CODE = 'DUETLENS_FOLLOWUP_REPLY_FAILED';
 
+/**
+ * 只读沙箱注入没有落地 —— **安全性判据,不是普通失败**。
+ *
+ * codex 对请求里的未知字段是**静默忽略**的(实测多送一个字段照常走到业务逻辑),
+ * 所以 thread/start 把 `sandbox` 送出去不等于它生效:字段哪天改名或换枚举,我们会
+ * 「发送成功」而 codex 按自己的默认策略跑,审核 agent 就不再是只读的,且全程无一句报错。
+ * 又因为注入的 `approvalPolicy` 是 never,这种情况下 codex **不会来问**,没有天然的哨兵。
+ *
+ * 故一律失败关闭:握手读回策略、turn 里收到本不该出现的审批请求,两处都判死本轮。
+ * 嵌进 message 的理由同 {@link FOLLOWUP_REPLY_FAILED_CODE}:IPC 只把 message 串过去。
+ */
+export const SANDBOX_NOT_APPLIED_CODE = 'DUETLENS_SANDBOX_NOT_APPLIED';
+
 /** 正在跑的一条审核;满载提示逐条列出,可跳过去看或叫停。 */
 export interface BusyReview {
   reviewId: string;

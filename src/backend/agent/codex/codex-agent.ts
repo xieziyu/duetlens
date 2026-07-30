@@ -4,14 +4,20 @@ import { APP_VERSION } from '@shared/version';
 import {
   CodexItemType,
   CodexNotification,
+  CodexServerRequest,
   codexErrorKind,
   type CodexErrorNotification,
   type CodexModel,
   type CodexTurnError,
   type McpServerElicitationAction,
   type McpServerElicitationRequestParams,
+  type EffectiveThreadPolicy,
   type McpToolCallItem,
+  type ThreadResumeResponse,
+  type ThreadStartResponse,
 } from './protocol';
+import { CODEX_TARGET_VERSION } from '@shared/codex';
+import { SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 import type {
   AgentEvent,
   ConversationHandle,
@@ -22,6 +28,40 @@ import type {
 
 /** 注入 bearer 令牌的 env 变量名(codex config 的 bearer_token_env_var 指向它)。 */
 const MCP_TOKEN_ENV = 'DUETLENS_MCP_TOKEN';
+
+/**
+ * 把关执行/写入/权限的反向审批 —— 只读 + approvalPolicy=never 的会话里一条都不该出现,
+ * 故可当沙箱注入是否失效的哨兵。`mcpElicitation` **不在此列**:那是工具调用的确认,
+ * 用户自己在 config.toml 里配的第三方 MCP server 也会发,被拒不能说明我们的注入没生效。
+ */
+export const POLICY_APPROVALS: ReadonlySet<string> = new Set([
+  CodexServerRequest.execCommandApproval,
+  CodexServerRequest.applyPatchApproval,
+  CodexServerRequest.commandExecutionApproval,
+  CodexServerRequest.fileChangeApproval,
+  CodexServerRequest.permissionsApproval,
+]);
+
+/** 抹平大小写与分隔符再比:`readOnly` / `read-only` / `read_only` 说的是同一件事。 */
+const norm = (v: string | undefined): string => (v ?? '').toLowerCase().replace(/[^a-z]/g, '');
+
+/**
+ * 证实只读注入**真的落地**,否则拒绝开工。见 {@link SANDBOX_NOT_APPLIED_CODE} ——
+ * 请求发出去不算数,codex 会静默吞掉它不认识的字段。
+ *
+ * 读不到策略同样判死(失败关闭):这一侧宁可误伤 —— 误伤是「装不上、去升级」,
+ * 漏判是「审核 agent 在未知策略下对你的仓库动手,且没有任何提示」。
+ */
+function assertReadOnly(res: ThreadStartResponse | ThreadResumeResponse): void {
+  const sandbox = (res as EffectiveThreadPolicy).sandbox?.type;
+  const approval = (res as EffectiveThreadPolicy).approvalPolicy;
+  if (norm(sandbox) === 'readonly' && norm(approval) === 'never') return;
+  const seen = `sandbox=${sandbox ?? '(未回显)'}, approvalPolicy=${approval ?? '(未回显)'}`;
+  throw new Error(
+    `${SANDBOX_NOT_APPLIED_CODE} codex 没有按只读沙箱起会话(${seen})。` +
+      `本机 codex ${res.thread.cliVersion ?? '版本未知'},这版 Duetlens 对齐的是 ${CODEX_TARGET_VERSION}。`,
+  );
+}
 
 export interface CodexAgentOptions {
   codexBin?: string;
@@ -54,13 +94,21 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
         method: 'mcpServer/elicitation/request',
         decision: accepted ? 'accepted' : 'declined',
         expected: accepted,
+        gate: 'mcp',
         server: p.serverName,
         message: p.message,
       });
     });
     this.server.on('unexpected-approval', (method: string, params: unknown) => {
       const server = (params as { serverName?: string } | undefined)?.serverName;
-      this.emitEvent({ kind: 'approval', method, decision: 'denied', expected: false, server });
+      this.emitEvent({
+        kind: 'approval',
+        method,
+        decision: 'denied',
+        expected: false,
+        gate: POLICY_APPROVALS.has(method) ? 'policy' : 'mcp',
+        server,
+      });
     });
   }
 
@@ -98,6 +146,7 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
       model: opts.model || undefined,
       config: this.threadConfig(opts),
     });
+    this.acceptOrStop(res);
     return { conversationId: res.thread.id, model: res.model || undefined };
   }
 
@@ -112,7 +161,21 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
       model: opts.model || undefined,
       config: this.threadConfig(opts),
     });
+    this.acceptOrStop(res);
     return { conversationId: res.thread.id, model: res.model || undefined };
+  }
+
+  /**
+   * 校验不过就顺手把自己起的子进程收掉 —— 这一步已经在 launchServer 之后,
+   * 光抛错的话会留下一个谁也用不了的 codex 进程活到 app 退出。
+   */
+  private acceptOrStop(res: ThreadStartResponse | ThreadResumeResponse): void {
+    try {
+      assertReadOnly(res);
+    } catch (e) {
+      this.dispose();
+      throw e;
+    }
   }
 
   /** 起子进程(带 MCP 令牌 env)并握手。 */
