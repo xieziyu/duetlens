@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { run } from './exec';
+import { butJson } from './but-cli';
 import type { PreparedSource, ReviewTarget, Source } from './source';
 
-/** `but diff --format json` 的最小结构(只取重建 unified diff 所需字段)。 */
+/** `but diff` JSON 输出的最小结构(只取重建 unified diff 所需字段)。 */
 interface ButDiffJson {
   changes: ButChange[];
 }
@@ -17,7 +17,7 @@ interface ButChange {
 }
 
 /**
- * GitButler 虚拟分支 source:diff 走 `but diff <branch> --format json`(重建成标准 unified),
+ * GitButler 虚拟分支 source:diff 走 `but diff <branch>` 的 JSON 输出(重建成标准 unified),
  * 文件读工作区磁盘内容(applied vbranch 的改动已落在 worktree,即新侧)。
  * target.ref = 虚拟分支名;target.repoPath = 已 setup 的 GitButler 项目目录。
  */
@@ -33,11 +33,7 @@ export class GitButlerSource implements Source {
   }
 
   async getDiff(): Promise<string> {
-    const out = await run(
-      'but',
-      ['diff', this.branch(), '--format', 'json', '--no-tui'],
-      this.target.repoPath,
-    );
+    const out = await butJson(['diff', this.branch(), '--no-tui'], this.target.repoPath);
     return toUnifiedDiff(JSON.parse(out) as ButDiffJson);
   }
 

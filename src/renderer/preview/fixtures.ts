@@ -690,7 +690,7 @@ export function installPreviewApi(): void {
       rerun: async (_r, input) => {
         if (params.get('retry') === 'error')
           throw new Error(
-            "Error invoking remote method 'review:rerun': Error: Command failed: but diff feat/entry-branch-picker --format json --no-tui\nNo ID found for entity No ID found for entity\n",
+            "Error invoking remote method 'review:rerun': Error: Command failed: but diff feat/entry-branch-picker --no-tui --json\nNo ID found for entity No ID found for entity\n",
           );
         const round: ReviewRound = {
           reviewId: 'demo',
@@ -728,7 +728,7 @@ export function installPreviewApi(): void {
         // ?retry=error:重跑/重试在**开跑前**就失败(source 没了),自查 LaunchError 的呈现
         if (params.get('retry') === 'error')
           throw new Error(
-            "Error invoking remote method 'review:retry-round': Error: Command failed: but diff feat/entry-branch-picker --format json --no-tui\nNo ID found for entity No ID found for entity\n",
+            "Error invoking remote method 'review:retry-round': Error: Command failed: but diff feat/entry-branch-picker --no-tui --json\nNo ID found for entity No ID found for entity\n",
           );
         const failed = rounds[rounds.length - 1];
         const round: ReviewRound = {

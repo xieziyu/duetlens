@@ -16,6 +16,7 @@ import type {
   RepoRemoteInfo,
   VbranchSummary,
 } from '@shared/source-discovery';
+import { butJson } from './but-cli';
 import { run } from './exec';
 import { parsePrRef } from './github-pr-source';
 
@@ -256,7 +257,7 @@ export async function detectGitButler(repoPath: string): Promise<GitButlerStatus
   const repoName = path.basename(path.resolve(repoPath));
   let json: string;
   try {
-    json = await run('but', ['status', '--format', 'json'], repoPath);
+    json = await butJson(['status'], repoPath);
   } catch {
     return { isWorkspace: false, repoName, branches: [] };
   }
@@ -286,7 +287,7 @@ export async function detectGitButler(repoPath: string): Promise<GitButlerStatus
 /** 虚拟分支相对 base 的净改动文件数;取不到(分支刚被改名 / but 报错)记 0,不阻断列举。 */
 async function countDiffFiles(repoPath: string, branch: string): Promise<number> {
   try {
-    const out = await run('but', ['diff', branch, '--format', 'json', '--no-tui'], repoPath);
+    const out = await butJson(['diff', branch, '--no-tui'], repoPath);
     return (JSON.parse(out) as { changes?: unknown[] }).changes?.length ?? 0;
   } catch {
     return 0;
