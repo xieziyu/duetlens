@@ -4,6 +4,28 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.2.2] - 2026-07-31
+
+### Fixed
+
+- **A real GitButler repository is no longer mistaken for "not a GitButler project".** GitButler 0.22
+  renamed the JSON output switch from `--format json` to `--json`, and all three call sites still
+  passed the old spelling: the entry screen reported "not a GitButler project (not set up)" and fell
+  back to a plain-git review, branch cards showed 0 changed files, and fetching the diff failed once a
+  review actually started. The spelling the installed `but` accepts is now picked automatically, so
+  both the old and the new CLI work. (#22)
+- **The github theme now actually looks like GitHub.** It used to style only the code half, leaving the
+  app chrome on duetlens blue; the syntax colors themselves were stale — several retired values — and
+  grouped by duetlens' idea of grammar, while GitHub counts literals as constants, gives tags their own
+  slot, does not treat attributes as types, and reserves orange for type and class names. Syntax colors
+  are rebuilt on current Primer tokens, and the chrome moves with them: Primer surfaces, 6px radius,
+  GitHub green primary button. The duetlens and parchment themes render exactly as before. (#23)
+
+### Upgrade notes
+
+- The database schema is unchanged at v16; 0.2.0, 0.2.1 and 0.2.2 can be installed in any direction.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.2.1] - 2026-07-30
 
 ### Fixed
@@ -79,6 +101,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.2.2]: https://github.com/xieziyu/duetlens/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/xieziyu/duetlens/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/xieziyu/duetlens/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/xieziyu/duetlens/releases/tag/v0.1.0
