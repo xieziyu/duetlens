@@ -1178,8 +1178,8 @@
 .hunk-label {
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--agent-2);
-  background: var(--agent-soft);
+  color: var(--hunk-fg);
+  background: var(--hunk-bg);
   padding: 5px 16px;
   border-top: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);

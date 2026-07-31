@@ -1,11 +1,17 @@
 /* highlight.js token class → 主题语法色变量(两轴 data-mode × data-theme 已在 tokens.css 定义)。
-   只映射到设计系统里已有的 7 类:--k 关键字 / --fn 函数名 / --s 字符串 / --n 数字 / --c 注释 / --ty 类型 / --mac 元信息。 */
-.src .hljs-keyword,
-.src .hljs-literal,
-.src .hljs-selector-tag,
-.src .hljs-tag,
-.src .hljs-name {
+   主槽 7 类:--k 关键字 / --fn 函数名 / --s 字符串 / --n 数字 / --c 注释 / --ty 类型 / --mac 元信息;
+   跟随槽 4 类:--lit 字面量 / --tag 标签 / --prop 属性 / --re 正则 —— 默认并到主槽,
+   只有文法口味不同的主题(GitHub)才把它们拆开,见 tokens.css。 */
+.src .hljs-keyword {
   color: var(--k);
+}
+.src .hljs-literal {
+  color: var(--lit);
+}
+.src .hljs-tag,
+.src .hljs-name,
+.src .hljs-selector-tag {
+  color: var(--tag);
 }
 .src .hljs-title,
 .src .hljs-title.function_,
@@ -13,7 +19,6 @@
   color: var(--fn);
 }
 .src .hljs-string,
-.src .hljs-regexp,
 .src .hljs-char.escape_,
 .src .hljs-symbol,
 .src .hljs-selector-attr,
@@ -21,22 +26,28 @@
 .src .hljs-quote {
   color: var(--s);
 }
+.src .hljs-regexp {
+  color: var(--re);
+}
 .src .hljs-number,
 .src .hljs-bullet {
   color: var(--n);
 }
 .src .hljs-comment {
   color: var(--c);
-  font-style: italic;
+  font-style: var(--c-style);
 }
 .src .hljs-type,
 .src .hljs-title.class_,
 .src .hljs-built_in,
-.src .hljs-class .hljs-title,
+.src .hljs-class .hljs-title {
+  color: var(--ty);
+}
+/* 必须排在 --ty 那组之后:同特异度,靠顺序把属性从类型档里分出来 */
 .src .hljs-attr,
 .src .hljs-attribute,
 .src .hljs-property {
-  color: var(--ty);
+  color: var(--prop);
 }
 .src .hljs-meta,
 .src .hljs-meta .hljs-keyword,

@@ -4,7 +4,7 @@
      data-mode  = dark | light                    (明暗模式 · 给出 chrome 的默认档)
      data-theme = duetlens | github | parchment   (配色主题 · 成套:语法 token + diff + severity + 代码高亮)
    配色主题跟随 data-mode 自动切子模式(GitHub → Dark/Light)。
-   THEME 默认只管代码那一半,chrome 由 data-mode 给;但**主题可以整套覆写 chrome**(parchment 即如此),
+   THEME 默认只管代码那一半,chrome 由 data-mode 给;但**主题可以整套覆写 chrome**(parchment / github 即如此),
    此时它的选择器带两个属性,特异性高于 data-mode 那档,与书写顺序无关。
    本文件是配色 tokens 的单一来源;勿在各处内联复制这些值。
    ========================================================= */
@@ -18,6 +18,13 @@
      filter 连白字一起作用(白字已到顶,只有底变亮),对比度必然下降 —— 深色 4.92 → 4.32,hover 时重新不达标。
      压深则只会让对比度变好。两个模式各按自己的 --accent-solid 现推,所以只声明一次。 */
   --accent-solid-hover:color-mix(in oklab,var(--accent-solid) 88%,black);
+  /* 语法槽位的可选分档:主题不写就跟着主槽走,写了才分家。
+     配色主题换的不只是色值,还有**文法口味** —— GitHub 把字面量算常量、标签独占一档、
+     属性不与类型同色、注释不斜体;duetlens/parchment 维持原样(默认值即旧行为)。
+     var() 在同一元素上按最终生效的主槽求值,所以主题只改 --k/--ty 时这些跟随槽也跟着变。 */
+  --lit:var(--k); --tag:var(--k); --prop:var(--ty); --re:var(--s); --c-style:italic;
+  /* hunk 头的带子:duetlens 借 agent 档,GitHub 有自己的一条蓝带 */
+  --hunk-bg:var(--agent-soft); --hunk-fg:var(--agent-2);
 }
 
 :root{
@@ -140,24 +147,87 @@
   --c:oklch(62% .022 80);
 }
 /* ---- THEME: GitHub · dark ---- */
+/* 色值一律照抄 Primer 的 prettylights / diffBlob 档,别按印象填 —— 上一版停在退役值上
+   (注释 #8b949e、浅色 entity #8250df),看着像 GitHub 但逐 token 对不上。
+   文法口味也照 GitHub:字面量算常量(蓝)、标签独占绿、属性不与类型同色、`this` 与预处理算关键字、
+   注释不斜体。orange 只留给类型/类名 —— 这是 GitHub 代码页最好认的一处特征。 */
+/* 外壳同样整套换成 Primer:层级排布照 GitHub —— 代码井与画布同为 canvas.default(#0d1117),
+   面板反而**更亮**(#151b23),与 duetlens 深色档的方向相反,照抄时别顺手对齐旧梯度。
+   三处越出"只换色值"的决定:
+   1) 圆角落到 Primer 的 6px。GitHub 的方正感有一半来自这里,只换色留 8px 会一直差一口气。
+   2) 主按钮走 GitHub 自己的绿。它的 primary 从来不是蓝,这是最省力也最好认的一处签名。
+   3) agent 声道改用 Primer 的 done 紫。蓝在 GitHub 的语言里属于链接与导航,agent 继续占蓝
+      就会与满屏链接、与主 accent 撞;紫正是 GitHub 给「机器人 / 已合并」的那一档,
+      让出蓝之后 severity 的 low 也才能安心用蓝。human 保持琥珀(attention),两条声道仍各占一个色相区。
+   环境光(--glow)清零:GitHub 没有氛围光,留着就是 duetlens 的尾巴。 */
 :root[data-mode="dark"][data-theme="github"]{
-  --code-text:#e6edf3;
-  --k:#ff7b72; --fn:#d2a8ff; --s:#a5d6ff; --n:#79c0ff; --c:#8b949e; --ty:#ffa657; --mac:#7ee787;
-  --add:#3fb950; --del:#f85149;
-  --add-bg:rgba(46,160,67,.15); --del-bg:rgba(248,81,73,.13);
-  --add-gutter:rgba(46,160,67,.32); --del-gutter:rgba(248,81,73,.32);
+  --r:6px;
+  --bg:#0d1117; --surface:#151b23; --card:#151b23; --surface-2:#212830; --surface-3:#262c36;
+  --border:#3d444d; --border-soft:#2a313c;
+  --text:#f0f6fc; --text-dim:#9198a1; --text-faint:#9198a1; --text-deco:#656c76;
+  --agent:#ab7df8; --agent-2:#d2a8ff;
+  --agent-soft:color-mix(in oklab,var(--agent) 15%,transparent);
+  --agent-line:color-mix(in oklab,var(--agent) 40%,transparent);
+  --accent-solid:#238636; --on-solid:#fff;
+  --human:#d29922;
+  --human-soft:color-mix(in oklab,var(--human) 14%,transparent);
+  --human-line:color-mix(in oklab,var(--human) 40%,transparent);
+  /* agent / human / sev-high 三档实底在深色下都是浅色,压在上面的字必须近黑 */
+  --on-accent:#0d1117; --hover:rgba(255,255,255,.035);
+  --sel:color-mix(in oklab,var(--agent) 28%,transparent);
+  --scroll:#30363d; --scroll-h:#484f58;
+  --shadow:0 8px 24px -14px rgba(1,4,9,.8);
+  --glow1:transparent; --glow2:transparent;
+  --code-text:#f0f6fc;
+  --k:#ff7b72; --fn:#d2a8ff; --s:#a5d6ff; --n:#79c0ff; --c:#9198a1; --ty:#ffa657; --mac:#ff7b72;
+  --lit:#79c0ff; --tag:#7ee787; --prop:#79c0ff; --re:#7ee787; --c-style:normal;
+  /* --del 与 --sev-high 用 red-3 而不是 Primer 的 danger.fg(#f85149):后者只按 canvas 定标,
+     而这两个值在这里的处境是改动计数与 severity chip —— 落在 --surface-2/-3 与 chip 底色上,
+     #f85149 在那儿是 4.19~4.47,全线差一口气。红档整体提一级,画布上也只是更亮一点。 */
+  --add:#3fb950; --del:#ff7b72;
+  /* diff 底色取 GitHub 实测的**不透明**值:半透明档叠在别的画布上会跟着偏色,
+     而这两条底色正是 GitHub 认人的地方,不该随外壳漂移。 */
+  --add-bg:#12261e; --del-bg:#25171c;
+  --add-gutter:#1c3d28; --del-gutter:#3a1d21;
+  --hunk-bg:#121d2f; --hunk-fg:#4493f8;
   --code-hl:rgba(187,128,9,.28);
   --find-hl:rgba(139,155,255,.34); --find-hl-on:#8b9bff; --find-hl-fg:#0d1117;
-  --sev-high:#f85149; --sev-med:#d29922; --sev-low:#58a6ff;
+  --sev-high:#ff7b72; --sev-med:#d29922; --sev-low:#4493f8;
 }
 /* ---- THEME: GitHub · light ---- */
+/* 浅色档的层级与 duetlens 浅色相反:画布是**纯白**(代码井也是白的),面板反而压暗成 #f6f8fa。
+   卡片仍留白 —— GitHub 的评论卡就是白底 + 一根 1px 实边浮在灰面板上。 */
 :root[data-mode="light"][data-theme="github"]{
+  --r:6px;
+  --bg:#ffffff; --surface:#f6f8fa; --card:#ffffff; --surface-2:#f6f8fa; --surface-3:#eaeef2;
+  --border:#d1d9e0; --border-soft:#d8dee4;
+  --text:#1f2328; --text-dim:#59636e; --text-faint:#59636e; --text-deco:#818b98;
+  --agent:#8250df; --agent-2:#6639ba;
+  --agent-soft:color-mix(in oklab,var(--agent) 10%,transparent);
+  --agent-line:color-mix(in oklab,var(--agent) 30%,transparent);
+  --accent-solid:#1f883d; --on-solid:#fff;
+  /* Primer 的 attention.fg(#9a6700)只在纯白上达标(4.81)。这里的琥珀几乎都落在
+     --human-soft 的 chip 底或 --surface-3 上,在那两处只有 4.0~4.2,故降到 yellow-8。
+     severity 的 med 同一个理由跟着降 —— 两者共用这一档色相。 */
+  --human:#7d4e00;
+  --human-soft:color-mix(in oklab,var(--human) 11%,transparent);
+  --human-line:color-mix(in oklab,var(--human) 32%,transparent);
+  --on-accent:#ffffff; --hover:rgba(31,35,40,.045);
+  --sel:color-mix(in oklab,var(--agent) 15%,transparent);
+  --scroll:#d1d9e0; --scroll-h:#b3bcc5;
+  /* GitHub 浅色几乎不投影:一根 1px 的实边 + 一层极淡的扩散 */
+  --shadow:0 1px 0 rgba(31,35,40,.04),0 1px 3px rgba(66,74,83,.12);
+  --glow1:transparent; --glow2:transparent;
   --code-text:#1f2328;
-  --k:#cf222e; --fn:#8250df; --s:#0a3069; --n:#0550ae; --c:#6e7781; --ty:#953800; --mac:#116329;
-  --add:#1a7f37; --del:#cf222e;
-  --add-bg:#e6ffec; --del-bg:#ffebe9;
-  --add-gutter:rgba(26,127,55,.22); --del-gutter:rgba(207,34,46,.16);
+  --k:#cf222e; --fn:#6639ba; --s:#0a3069; --n:#0550ae; --c:#59636e; --ty:#953800; --mac:#cf222e;
+  --lit:#0550ae; --tag:#0550ae; --prop:#0550ae; --re:#116329; --c-style:normal;
+  /* 同上一条的理由:success.fg(#1a7f37)/ danger.fg(#cf222e)按白底定标,
+     但增删数字与 gutter 字压在 --surface-3 和 --*-gutter 的粉绿底上,各降一级到 green-8 / red-8。 */
+  --add:#116329; --del:#a40e26;
+  --add-bg:#dafbe1; --del-bg:#ffebe9;
+  --add-gutter:#ccffd8; --del-gutter:#ffd7d5;
+  --hunk-bg:#ddf4ff; --hunk-fg:#0550ae;
   --code-hl:rgba(84,174,255,.28);
   --find-hl:color-mix(in oklab,oklch(.52 .17 285) 26%,transparent); --find-hl-on:oklch(.52 .17 285); --find-hl-fg:#fff;
-  --sev-high:#cf222e; --sev-med:#9a6700; --sev-low:#0969da;
+  --sev-high:#cf222e; --sev-med:#7d4e00; --sev-low:#0969da;
 }
