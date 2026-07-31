@@ -3,6 +3,18 @@
 本文件只记**对使用者可见**的变化。内部重构、文档与 CI 调整不单列,查 `git log`。
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/);`0.x` 阶段 minor 位即破坏性变更位。
 
+## [0.2.2] - 2026-07-31
+
+### 修复
+
+- **GitButler 仓库不再被误判成「不是 GitButler 项目」。** `but` 在 0.22 把 JSON 输出开关从 `--format json` 改名成 `--json`,而三处调用还在传旧写法:入口屏因此报「该目录不是 GitButler 项目(未 setup)」并退回纯 git 评审,分支卡片的改动文件数显示为 0,评审真跑起来时取 diff 直接失败。现在会自动挑本机 `but` 认的那种写法,新旧 CLI 都能用。(#22)
+- **github 配色现在真的是 GitHub 的样子。** 之前它只管代码那半边,应用外壳仍是 duetlens 蓝;语法配色本身也停在几个已废弃的旧值上,并且按 duetlens 的语法口味分组 —— 而 GitHub 把字面量算作常量、标签单独占一档、属性不算类型、橙色只留给类型与类名。这版语法色按 Primer 现行 tokens 重做,外壳一并换成 Primer 表面色、6px 圆角与 GitHub 绿主按钮。duetlens 与 parchment 两套配色的渲染结果不变。(#23)
+
+### 升级须知
+
+- 数据库结构不变,仍是 v16,与 0.2.0 / 0.2.1 之间可以来回安装。
+- 更新由应用内 updater 接手,无需重新下载 dmg。
+
 ## [0.2.1] - 2026-07-30
 
 ### 修复
@@ -44,6 +56,7 @@
 
 首个公开版本。
 
+[0.2.2]: https://github.com/xieziyu/duetlens/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/xieziyu/duetlens/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/xieziyu/duetlens/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/xieziyu/duetlens/releases/tag/v0.1.0

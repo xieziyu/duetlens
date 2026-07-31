@@ -1,7 +1,7 @@
 {
   "name": "duetlens",
   "productName": "Duetlens",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Conversational code review — human and agent reviewing together (full rewrite of better-review)",
   "main": "out/main/index.js",
   "private": true,
