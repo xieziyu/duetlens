@@ -7,6 +7,7 @@ import {
   type Triage,
 } from '@shared/domain';
 import type { FindingEditInput } from '@shared/ipc';
+import { imeComposing } from '../../keys';
 import { CategorySelect } from './CategorySelect';
 import { renderMarkdown } from './markdown';
 import { currentResolution, isNewThisRound } from './rounds';
@@ -160,6 +161,7 @@ function DismissedCard({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             onKeyDown={(e) => {
+              if (imeComposing(e)) return;
               if (e.key === 'Enter') save();
               if (e.key === 'Escape') {
                 setReason(finding.dismissReason ?? '');
@@ -347,6 +349,7 @@ function CardEdit({
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (imeComposing(e)) return;
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       save();

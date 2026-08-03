@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { imeComposing } from '../../keys';
 import { GitButlerIcon, LocalBranchIcon } from './icons';
 
 /** 一个可审核目标(普通 git 分支或 GitButler 虚拟分支)在选择器里的展示形态。 */
@@ -95,6 +96,7 @@ export function BranchPicker({
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (imeComposing(e)) return;
     if (e.key === 'Escape') {
       setOpen(false);
       return;

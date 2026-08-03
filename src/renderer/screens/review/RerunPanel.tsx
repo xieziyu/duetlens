@@ -9,6 +9,7 @@ import {
   type ReviewIntensity,
   type ReviewRound,
 } from '@shared/domain';
+import { imeComposing } from '../../keys';
 import { LaunchError } from './LaunchError';
 
 /**
@@ -69,6 +70,7 @@ export function RerunPanel({
         className="rerun-panel"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
+          if (imeComposing(e)) return;
           if (e.key === 'Escape') onClose();
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !running) void run();
         }}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Severity } from '@shared/domain';
+import { imeComposing } from '../../keys';
 import { CategorySelect } from './CategorySelect';
 import { describeSendFailure } from './round-error';
 
@@ -102,6 +103,7 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (imeComposing(e)) return;
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       void submit();

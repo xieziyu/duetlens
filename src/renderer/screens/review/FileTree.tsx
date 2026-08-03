@@ -1,6 +1,7 @@
 import { Fragment, useMemo, type RefObject } from 'react';
 import type { DiffFile, FileStatus } from '@shared/diff';
 import type { Finding } from '@shared/domain';
+import { imeComposing } from '../../keys';
 import { containsHits, matchFilePath, parseFileQuery } from './file-filter';
 
 /** 文件状态字母标记(对齐 GitHub 惯例:A/D/M/R)。 */
@@ -97,6 +98,7 @@ export function FileTree({
 
   // 检索框内的移动键:↵ 跳首个筛选结果,↑/↓ 在筛选结果间挪选中(手不离键盘也能翻过一串候选)
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (imeComposing(e)) return;
     if (e.key === 'Escape') {
       e.stopPropagation();
       if (query) onQueryChange('');
