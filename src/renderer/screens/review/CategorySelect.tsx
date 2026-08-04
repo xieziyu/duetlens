@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FINDING_CATEGORIES } from '@shared/domain';
+import { imeComposing } from '../../keys';
 
 /**
  * finding 的 category 选择器:输入即筛选,但**只认列表里的值** ——
@@ -43,6 +44,7 @@ export function CategorySelect({
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (imeComposing(e)) return;
     if (e.key === 'Escape') {
       // 展开时 Esc 只关下拉;冒到 composer 上会连整张卡一起取消
       if (!open) return;

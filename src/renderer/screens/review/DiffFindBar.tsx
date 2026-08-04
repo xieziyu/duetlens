@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { imeComposing } from '../../keys';
 import type { FindOptions } from './diff-find';
 
 export interface DiffFindBarProps {
@@ -47,6 +48,7 @@ export function DiffFindBar({
       : `${current + 1} / ${total}${capped ? '+' : ''}`;
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (imeComposing(e)) return;
     if (e.key === 'Escape') {
       e.stopPropagation();
       onClose();

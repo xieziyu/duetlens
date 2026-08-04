@@ -9,6 +9,7 @@ import {
   type PromptSectionKey,
   type ReviewPromptView,
 } from '@shared/prompt';
+import { imeComposing } from '../keys';
 import './PromptRulesScreen.css';
 
 // 三层审核规则提示词编辑器。
@@ -333,6 +334,7 @@ export function PromptRulesScreen({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={(e) => {
+        if (imeComposing(e)) return;
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
           e.preventDefault();
           onCommit();
