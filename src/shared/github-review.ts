@@ -42,7 +42,13 @@ export interface PrReviewPayload {
 export const hasAnchor = (f: Finding): boolean =>
   Boolean(f.file) && f.line > 0 && !f.anchorDropped;
 
-/** 严重度圆点 + 加粗的「[severity · category] 标题」,inline 与整体意见共用。 */
+/**
+ * review body 里这批条目的小标题。写给 PR 作者看,不用「锚点 / 降级」这类 app 内部词;
+ * 也不叫「整体意见」—— 上面那段 reviewer 手填的才是,而这里混着有 file:line 的具体条目。
+ */
+export const SUMMARY_HEADING = '### 其他意见(未落在改动行上)';
+
+/** 严重度圆点 + 加粗的「[severity · category] 标题」,inline 条目与摘要条目共用。 */
 function headline(f: Finding): string {
   const cat = f.category ? ` · ${f.category}` : '';
   return `${SEVERITY_EMOJI[f.severity]} **[${f.severity}${cat}] ${f.title}**`;
@@ -109,7 +115,7 @@ export function buildPrReviewPayload(
       const head = `- ${headline(f)}`;
       return block ? `${head}\n\n${indentContinuation(block)}` : head;
     });
-    parts.push(`### 整体意见\n\n${lines.join('\n\n')}`);
+    parts.push(`${SUMMARY_HEADING}\n\n${lines.join('\n\n')}`);
   }
 
   return { event: GH_EVENT_API[event], body: parts.join('\n\n'), comments };
