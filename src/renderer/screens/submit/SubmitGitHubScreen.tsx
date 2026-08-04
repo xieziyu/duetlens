@@ -101,7 +101,7 @@ export function SubmitGitHubScreen({ review, findings, onBack, tabs, onBusyChang
     [findings, diff, round],
   );
   const inlineCount = pending.filter(hasAnchor).length;
-  // 降级 / 无锚点的条目走 review body 的「整体意见」,与草稿正文一起构成摘要
+  // 降级 / 无锚点的条目并进 review body 末尾一节,与草稿正文一起构成摘要
   const summaryCount = pending.filter((f) => !hasAnchor(f)).length;
   const keptCount = findings.filter((f) => f.triage !== 'dismiss').length;
   const staleList = useMemo(() => findings.filter((f) => staleIds.has(f.id)), [findings, staleIds]);

@@ -15,6 +15,7 @@ import {
   isSubmittable,
   nearestLiveLine,
   needsRecheckFollowUp,
+  SUMMARY_HEADING,
 } from '../src/shared/github-review';
 import { parseUnifiedDiff } from '../src/shared/diff';
 import type { GitHubSubmitter } from '../src/backend/review/github-submitter';
@@ -170,7 +171,7 @@ async function main() {
       line: 0,
     });
     const payload = buildPrReviewPayload(store.getReview(review.id)!, [store.getFinding(f.id)!], 'comment', '');
-    const tail = payload.body.split('### 整体意见')[1];
+    const tail = payload.body.split(SUMMARY_HEADING)[1];
     const orphan = tail
       .split('\n')
       .filter((l) => l.trim() && !l.startsWith('- ') && !l.startsWith('  '));
