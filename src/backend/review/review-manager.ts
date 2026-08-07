@@ -24,7 +24,7 @@ import type { AddFindingInput, BusyReview, FindingEditInput, LatestDiffResult, L
 import { LIVE_SESSION_LIMIT_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 import { isCodexProtocolError } from '@shared/codex';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
-import { buildPrReviewPayload, isSubmittable, submitBlocker } from '@shared/github-review';
+import { buildPrReviewPayload, hasAnchor, isSubmittable, submitBlocker } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
@@ -597,8 +597,33 @@ export class ReviewManager extends EventEmitter {
     try {
       const pending = this.store.listFindings(reviewId).filter((f) => isSubmittable(f, review.currentRound));
 
+      // suggestion 要按锚定行补齐缩进(见 alignSuggestion),而 GitHub 是拿 PR head 套这条补丁的
+      // —— 基准只能是 head 上的那一行。审核快照会错两次:作者调过这行的缩进,或 reviewer 已按
+      // 最新 diff 重锚(那个行号在快照里指向的是另一行)。提交屏预览也用最新 diff,取它才对得上。
+      // 没有带 suggestion 的行评论时不拉:摘要条目不带补丁,空手 Approve 更不该为此
+      // 多一次网络往返和一处失败面。
+      let anchorDiff: DiffFile[] = [];
+      let anchorSha: string | null = null;
+      if (pending.some((f) => f.suggestion && hasAnchor(f))) {
+        const latest = await this.getLatestDiff(reviewId);
+        // 拉不到就**不补**,而不是退回快照:快照里的同一个行号可能已指向别的行(reviewer 按最新
+        // diff 重锚过),据它补出来的缩进是凭空捏的。捏错比不补更伤,而拿不到基准就不该猜。
+        if (latest.ok) {
+          anchorDiff = latest.diff;
+          // sha 必须跟着 diff 一起走:提交层据它钉 commit_id,免得再独立读一次 head
+          anchorSha = latest.headSha;
+        }
+      }
+
       // 无 finding 也可提交:Comment/Approve/Request changes 本身就是表态
-      const payload = buildPrReviewPayload(review, pending, input.event, input.body ?? '');
+      const payload = buildPrReviewPayload(
+        review,
+        pending,
+        input.event,
+        input.body ?? '',
+        anchorDiff,
+        anchorSha,
+      );
       const blocked = submitBlocker(payload);
       if (blocked) return { status: 'failed', message: blocked };
       const result = await this.submitter.submit(review, payload);

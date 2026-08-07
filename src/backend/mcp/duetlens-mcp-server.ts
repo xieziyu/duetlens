@@ -138,7 +138,10 @@ const TOOLS = [
         body: { type: 'string', description: '问题说明与影响' },
         file: { type: 'string', description: '相对仓库根的路径' },
         line: { type: 'number', description: '新侧行号' },
-        suggestion: { type: 'string', description: '可选:给 author 的建议代码' },
+        suggestion: {
+          type: 'string',
+          description: '可选:给 author 的建议代码,会逐字替换锚定行 —— 须带该行的前导缩进',
+        },
       },
       required: ['severity', 'title', 'body', 'file', 'line'],
     },
@@ -160,7 +163,10 @@ const TOOLS = [
         category: { type: ['string', 'null'], description: `${CATEGORY_HINT};传 null 清空分类` },
         title: { type: 'string' },
         body: { type: 'string' },
-        suggestion: { type: ['string', 'null'], description: '建议代码;传 null 删掉原有 suggestion' },
+        suggestion: {
+          type: ['string', 'null'],
+          description: '建议代码,须带锚定行的前导缩进;传 null 删掉原有 suggestion',
+        },
       },
       required: ['finding_id'],
     },

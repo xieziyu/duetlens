@@ -64,6 +64,7 @@ export const BUILTIN_PROTOCOL = `## 上报协议(固定,不随以上偏好改变
 - category 只能取:${FINDING_CATEGORIES.join(' / ')};用英文原词,不要自造、缩写或翻译。
 - file 用相对仓库根的路径;line 锚**新侧**行号。
 - suggestion 可选;给出时必须是能直接套用的字面补丁(会逐字替换锚定行),不是示意片段 —— 拿不准就不要给。
+  必须连同锚定行的前导缩进一起给(多行则各行都带自己那一层),顶到行首的补丁会把作者的代码改坏。
 - 超出 diff 范围的隐患照常 report_finding,并在正文里说明为何 off-diff。
 - 收尾必须调用一次 write_summary:body 是总结正文,呈现在 Summary 屏供 reviewer 判断;
   只写在对话回复里不算 —— 那段文字不会进入总结,屏上仍是「尚未生成」。

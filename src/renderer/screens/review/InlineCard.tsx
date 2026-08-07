@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  alignSuggestion,
   isAutoClosedFixed,
   type Finding,
   type FindingResolution,
@@ -261,12 +262,15 @@ function CardView({
                 <span className="csd-code">{originalLine || ' '}</span>
               </div>
             )}
-            {finding.suggestion.split('\n').map((l, i) => (
-              <div className="csd-row add" key={i}>
-                <span className="csd-gut">＋</span>
-                <span className="csd-code">{l || ' '}</span>
-              </div>
-            ))}
+            {/* 与提交/导出同一口径:补丁没写缩进就按锚定行补齐,卡上看到的即将来发出去的 */}
+            {alignSuggestion(finding.suggestion, originalLine)
+              .split('\n')
+              .map((l, i) => (
+                <div className="csd-row add" key={i}>
+                  <span className="csd-gut">＋</span>
+                  <span className="csd-code">{l || ' '}</span>
+                </div>
+              ))}
           </div>
         </div>
       )}
