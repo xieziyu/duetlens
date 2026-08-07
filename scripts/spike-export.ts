@@ -50,6 +50,7 @@ function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'titl
     submittedUrl: null,
     submittedRound: null,
     round: 1,
+    bodyRound: 1,
     lastSeenRound: 1,
     resolution: null,
     resolutionNote: null,

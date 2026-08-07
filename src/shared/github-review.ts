@@ -7,7 +7,8 @@ import {
   findingAnchorText,
   findingNarrative,
   findingSuggestion,
-  recheckNote,
+  hasFreshStatement,
+  isStillPresent,
   type Finding,
   type Review,
 } from './domain';
@@ -161,12 +162,16 @@ export function submitBlocker(payload: PrReviewPayload): string | null {
 }
 
 /**
- * 上一轮已提交、本轮复核判定仍存在且给了说明 → 还欠 author 一条追评。
+ * 上一轮已提交、本轮复核判定仍存在且写下了新话 → 还欠 author 一条追评。
  * `submitted` 之所以不再是"发过就完"的终态:作者据首轮评论改过一版、agent 复核后认定没改对,
  * 这条结论只留在本地等于白复核。同轮内不重复(提交时记下轮次),避免一轮里连发两条同样的评论。
+ *
+ * 「新话」两种落法都算(见 {@link hasFreshStatement}):只认复核说明的话,agent 一改写正文
+ * 就把说明清掉,这条追评随即从待提交集里消失 —— 而它欠着的追评并没有还上。
  */
 export function needsRecheckFollowUp(f: Finding, currentRound: number): boolean {
-  if (f.submission !== 'submitted' || recheckNote(f, currentRound) === null) return false;
+  if (f.submission !== 'submitted' || !isStillPresent(f, currentRound)) return false;
+  if (!hasFreshStatement(f, currentRound)) return false;
   return (f.submittedRound ?? currentRound) < currentRound;
 }
 

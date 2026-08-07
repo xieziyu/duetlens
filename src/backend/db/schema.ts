@@ -230,8 +230,18 @@ const V16 = `
 ALTER TABLE reviews ADD COLUMN summary_round INTEGER;
 `;
 
+// 正文写于第几轮。复核说明会被后来的正文改写作废(见 ReviewStore.updateFinding),此后
+// 「本轮到底有没有给作者新写一句话」就只剩这一列可问 —— 去重兜底命中的条目同样是
+// 「仍存在 + 没有说明」,但它一个字都没新写,不该据此追发一条与已提交评论重复的追评。
+//
+// 存量行按首报轮次回填:改写轮次无从追溯,宁可少发一条追评,也不要凭空重发已在 PR 上的话。
+const V17 = `
+ALTER TABLE findings ADD COLUMN body_round INTEGER;
+UPDATE findings SET body_round = round;
+`;
+
 const MIGRATIONS: string[] = [
-  V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16,
+  V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17,
 ];
 
 export function migrate(db: Database): void {

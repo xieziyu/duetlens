@@ -14,9 +14,9 @@ import type {
   ReviewStartStage,
 } from '@shared/ipc';
 import type { PrSummary } from '@shared/source-discovery';
-import { scanDoneStatus } from '@shared/domain';
+import { isStillPresent, scanDoneStatus } from '@shared/domain';
 import { hasAnchor, isSubmittable } from '@shared/github-review';
-import type { Discussion, Finding, FindingProposal, Message, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
+import type { Discussion, Finding, FindingProposal, Message, ProposalUpdateBefore, ProposalUpdatePatch, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
 import { mergeLayers } from '@shared/prompt';
 import { APP_VERSION } from '@shared/version';
 import type { UpdateStatus } from '@shared/update';
@@ -184,6 +184,7 @@ function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'titl
     submittedUrl: null,
     submittedRound: null,
     round: 1,
+    bodyRound: 1,
     lastSeenRound: 1,
     resolution: null,
     resolutionNote: null,
@@ -519,6 +520,39 @@ function buildPromptView(cwd?: string): ReviewPromptView {
   };
 }
 
+/**
+ * 与 ReviewStore.updateFinding 同一口径的改写:本轮判定仍存在的条目一旦被改写正文,
+ * 旧复核说明与没跟着刷新的旧补丁一并作废,正文轮次推到本轮。
+ *
+ * 就地编辑与采纳提案都得走它 —— 提案那条若图省事直接 `{...f, ...patch}`,预览会留着旧说明与
+ * 旧补丁,给出与实机**相反**的结果,而预览正是人工验收看的那一屏。
+ */
+function editFinding(f: Finding, patch: ProposalUpdatePatch, currentRound: number): Finding {
+  const body = patch.body ?? f.body;
+  const rewritten = body.trim() !== '' && body !== f.body;
+  const supersedes = rewritten && isStillPresent(f, currentRound);
+  return {
+    ...f,
+    severity: patch.severity ?? f.severity,
+    category: patch.category === undefined ? f.category : patch.category,
+    title: patch.title ?? f.title,
+    body,
+    suggestion:
+      patch.suggestion === undefined ? (supersedes ? null : f.suggestion) : patch.suggestion,
+    resolutionNote: supersedes ? null : f.resolutionNote,
+    bodyRound: rewritten ? currentRound : f.bodyRound,
+    updatedAt: Date.now(),
+  };
+}
+
+/** 与 review-manager 的 snapshotPatched 同口径:按前后差异拍,连带作废的那几项也要能撤回来。 */
+function snapshotChanged(before: Finding, after: Finding): ProposalUpdateBefore {
+  const keys = ['severity', 'category', 'title', 'body', 'suggestion', 'resolutionNote', 'bodyRound'] as const;
+  const snapshot: Record<string, unknown> = {};
+  for (const k of keys) if (after[k] !== before[k]) snapshot[k] = before[k];
+  return snapshot as ProposalUpdateBefore;
+}
+
 /** 装一个 stub 到 window.duetlens;写路径(triage/编辑/讨论)真的改内存态并经事件回推,便于自查闭环。 */
 export function installPreviewApi(): void {
   const diff = parseUnifiedDiff(RAW_DIFF);
@@ -842,11 +876,10 @@ export function installPreviewApi(): void {
         // 旧值快照与后端同步落下 —— 不记的话预览里永远走不到「↩ 撤销」那条路
         let before: FindingProposal['before'] = null;
         if (p.kind === 'update' && f) {
-          // 与后端同口径:只拍 patch 动过的字段,拍全量会让撤销顺手回滚应用之后的编辑
-          before = Object.fromEntries(
-            Object.keys(p.patch).map((k) => [k, (f as unknown as Record<string, unknown>)[k]]),
-          );
-          emit({ ...f, ...p.patch, updatedAt: Date.now() });
+          // 与后端同口径:走同一套改写规则,快照按前后差异拍(拍全量会让撤销顺手回滚应用之后的编辑)
+          const next = editFinding(f, p.patch as ProposalUpdatePatch, review.currentRound);
+          before = snapshotChanged(f, next);
+          emit(next);
         } else if ((p.kind === 'dismiss' || p.kind === 'restore') && f) {
           before = { triage: f.triage, dismissReason: f.dismissReason, autoClosed: f.autoClosed };
           emit({
@@ -873,6 +906,7 @@ export function installPreviewApi(): void {
         const i = proposals.findIndex((p) => p.id === proposalId);
         const p = proposals[i];
         const f = p.findingId ? findings.find((x) => x.id === p.findingId) : null;
+        // 逐字写回快照,不过 editFinding —— 回滚不是一次新表态(同后端 ReviewStore.restoreFinding)
         if (f && p.before) emit({ ...f, ...p.before, updatedAt: Date.now() });
         const next = { ...p, status: 'skipped' as const, resolvedAt: Date.now() };
         proposals[i] = next;
@@ -924,6 +958,7 @@ export function installPreviewApi(): void {
           submittedUrl: null,
           submittedRound: null,
           round: 2,
+          bodyRound: 2,
           lastSeenRound: 2,
           resolution: null,
           resolutionNote: null,
@@ -970,6 +1005,7 @@ export function installPreviewApi(): void {
           submittedUrl: null,
           submittedRound: null,
           round: 2,
+          bodyRound: 2,
           lastSeenRound: 2,
           resolution: null,
           resolutionNote: null,
@@ -1016,15 +1052,7 @@ export function installPreviewApi(): void {
       },
       updateFinding: async (_r, input) => {
         const f = findings.find((x) => x.id === input.findingId)!;
-        const next: Finding = {
-          ...f,
-          severity: input.severity ?? f.severity,
-          category: input.category === undefined ? f.category : input.category,
-          title: input.title ?? f.title,
-          body: input.body ?? f.body,
-          suggestion: input.suggestion === undefined ? f.suggestion : input.suggestion,
-          updatedAt: Date.now(),
-        };
+        const next = editFinding(f, input, review.currentRound);
         emit(next);
         return next;
       },

@@ -152,7 +152,9 @@ const TOOLS = [
       '更正一条已上报 finding 的可编辑字段(改严重度 / 改写正文 / 换标题 / 调整 suggestion)。' +
       '讨论中一旦认定原来写的不准,就调用它,不必等用户开口 —— 讨论期间它不会立即改动 finding,' +
       '只会在对话里生成一张待确认卡片,由 reviewer 一键采纳。只传要改的字段。' +
-      '注意:若结论是「这条根本不成立」,请用 dismiss_finding,不要把剔除理由写进 body。',
+      '注意:若结论是「这条根本不成立」,请用 dismiss_finding,不要把剔除理由写进 body。' +
+      '改写 body 会作废本轮 resolve_finding 写下的复核说明与原有 suggestion —— 新 body 要自足,' +
+      '补丁若仍成立请在同一次调用里一并给出。',
     inputSchema: {
       type: 'object',
       properties: {

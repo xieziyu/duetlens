@@ -5,6 +5,7 @@ import type { DB } from './database';
 import {
   DEFAULT_UI_SETTINGS,
   isAutoClosedFixed,
+  isStillPresent,
   summaryFileSchema,
   SUMMARY_FILES_LIMIT,
   type Discussion,
@@ -17,6 +18,7 @@ import {
   type ProposalKind,
   type ProposalPatch,
   type ProposalStatus,
+  type ProposalUpdateBefore,
   type ReportFindingInput,
   DEFAULT_REVIEW_UI_STATE,
   type Review,
@@ -93,6 +95,7 @@ interface FindingRow {
   submitted_url: string | null;
   submitted_round: number | null;
   round: number;
+  body_round: number | null;
   last_seen_round: number;
   resolution: string | null;
   resolution_note: string | null;
@@ -220,6 +223,8 @@ function toFinding(r: FindingRow): Finding {
     submittedUrl: r.submitted_url,
     submittedRound: r.submitted_round,
     round: r.round,
+    // 没改写过就是首报时那份;新建路径不必逐个填这一列
+    bodyRound: r.body_round ?? r.round,
     lastSeenRound: r.last_seen_round,
     resolution: r.resolution as FindingResolution | null,
     resolutionNote: r.resolution_note,
@@ -673,7 +678,20 @@ export class ReviewStore {
     return rows.map(toFinding);
   }
 
-  /** 对话打磨后回写可编辑字段(codex update_finding 与用户就地编辑共用此路径)。 */
+  /**
+   * 对话打磨后回写可编辑字段(codex update_finding 与用户就地编辑共用此路径)。
+   *
+   * 本轮判定「仍存在」的条目一旦被改写正文,旧的复核说明与旧 suggestion 一并作废:两者都写在
+   * 这份正文之前,而提交/导出时复核说明取代正文发出去(见 findingNarrative)。留着的话,屏上
+   * 写着新结论、发出去的却是旧那条;那份补丁更是照着作者已经改过的代码写的,一键采纳就覆盖回去。
+   * 例外是这次更新自带的新 suggestion —— 那才是看过复核之后给的。
+   *
+   * 判据取「本轮判定仍存在」而非「有没有复核说明」:去重兜底命中的条目同样是本轮仍存在,只是
+   * 没附说明(见 touchFindingSeen),按说明问会漏掉它,把首轮补丁留到追评里发出去。
+   *
+   * 只认正文:改严重度 / 换分类 / 单调补丁都不动它 —— 说的仍是同一条问题。
+   * 空正文也不算改写:它取代不了任何东西,清掉只会让这条 finding 什么说明都不剩。
+   */
   updateFinding(input: UpdateFindingInput): Finding | null {
     const existing = this.getFinding(input.findingId);
     if (!existing) return null;
@@ -684,14 +702,66 @@ export class ReviewStore {
       body: input.body ?? existing.body,
       suggestion: input.suggestion === undefined ? existing.suggestion : input.suggestion,
     };
+    const round = this.currentRound(existing.reviewId);
+    const rewritten = next.body.trim() !== '' && next.body !== existing.body;
+    const supersedesRecheck = rewritten && isStillPresent(existing, round);
+    const resolutionNote = supersedesRecheck ? null : existing.resolutionNote;
+    const suggestion =
+      supersedesRecheck && input.suggestion === undefined ? null : next.suggestion;
     this.withReviewTouch({ finding: input.findingId }, (ts) => {
       this.db
         .prepare(
-          `UPDATE findings SET severity = ?, category = ?, title = ?, body = ?, suggestion = ?, updated_at = ? WHERE id = ?`,
+          `UPDATE findings
+              SET severity = ?, category = ?, title = ?, body = ?, suggestion = ?,
+                  resolution_note = ?, body_round = ?, updated_at = ?
+            WHERE id = ?`,
         )
-        .run(next.severity, next.category, next.title, next.body, next.suggestion, ts, input.findingId);
+        .run(
+          next.severity,
+          next.category,
+          next.title,
+          next.body,
+          suggestion,
+          resolutionNote,
+          rewritten ? round : existing.bodyRound,
+          ts,
+          input.findingId,
+        );
     });
     return this.getFinding(input.findingId);
+  }
+
+  /**
+   * 提案撤销专用:把旧值快照**逐字**写回,不走 {@link updateFinding} 的派生规则。
+   *
+   * 撤销是回滚,不是一次新表态。借 updateFinding 写回旧正文的话,那条规则会把这次回滚当成
+   * 「改写正文」重算一遍:应用之后新写下的复核说明会被它一并清掉,而快照里没有那份新值,
+   * 补都补不回来。这里只碰快照点名的列 —— 应用没动过的字段,撤销就不该碰。
+   */
+  restoreFinding(findingId: string, before: ProposalUpdateBefore): void {
+    const COLUMNS: Record<keyof ProposalUpdateBefore, string> = {
+      severity: 'severity',
+      category: 'category',
+      title: 'title',
+      body: 'body',
+      suggestion: 'suggestion',
+      resolutionNote: 'resolution_note',
+      bodyRound: 'body_round',
+    };
+    const sets: string[] = [];
+    const args: (string | number | null)[] = [];
+    for (const [key, column] of Object.entries(COLUMNS) as [keyof ProposalUpdateBefore, string][]) {
+      const value = before[key];
+      if (value === undefined) continue;
+      sets.push(`${column} = ?`);
+      args.push(value);
+    }
+    if (!sets.length) return;
+    this.withReviewTouch({ finding: findingId }, (ts) => {
+      this.db
+        .prepare(`UPDATE findings SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`)
+        .run(...args, ts, findingId);
+    });
   }
 
   /**

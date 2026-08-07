@@ -27,7 +27,7 @@ import type {
   ConversationHandle,
   StartConversationOptions,
 } from '../src/backend/agent/conversational-agent';
-import type { FindingProposal } from '../src/shared/domain';
+import { isProposalUndoBlocked, type FindingProposal } from '../src/shared/domain';
 
 const REVIEW_FILE = 'scripts/seed-demo.js';
 const SRC = `const db = require('../src/db');
@@ -92,6 +92,10 @@ async function main() {
     log('──── C3. 扫描在跑 + 追问排队 ────');
     await assertModeIsPerTurn();
 
+    // ── C4. 改写正文作废复核说明,撤销要把它交还(纯本地)────────────────────
+    log('──── C4. 采纳改写正文 → 复核说明作废;撤销 → 还原 ────');
+    assertUndoRestoresRecheckNote();
+
     // ── A. 扫描 ────────────────────────────────────────────────────────────
     log('──── A. 首轮扫描 ────');
     const findings = await session.start({
@@ -142,11 +146,11 @@ async function main() {
     for (const key of Object.keys(update.patch) as (keyof typeof update.patch)[]) {
       assert.deepEqual(updated[key] ?? null, update.patch[key] ?? null, `${key} 应已按提案落库`);
     }
-    // 快照只含动过的字段 —— 拍全量会让撤销顺手回滚应用之后的编辑
-    assert.deepEqual(
-      Object.keys(applied.before ?? {}).sort(),
-      Object.keys(update.patch).sort(),
-      'before 快照只应包含该提案动过的字段',
+    // 快照只含这次真正改动的字段 —— 拍全量会让撤销顺手回滚应用之后的编辑。
+    // 是 patch 字段的子集:提案把某字段写回了同一个值时不进快照(还原它等于没还原)。
+    assert.ok(
+      Object.keys(applied.before ?? {}).every((k) => k in update.patch),
+      'before 快照不应超出该提案动过的字段',
     );
     log(`✓ 已落库,快照字段: ${Object.keys(applied.before ?? {}).join(',')}`);
 
@@ -241,6 +245,95 @@ function assertApplyRollsBack(): void {
   assert.equal(after.severity, before.severity, '★ 回滚后严重度不应变');
   assert.equal(store.getProposal(proposalId)!.status, 'pending', '★ 回滚后提案仍是待确认');
   log('✓ 第二步失败 → finding 与提案一起回滚,没有半状态');
+}
+
+/**
+ * 采纳一条改写正文的提案时,本轮的复核说明与首轮补丁一并作废(它们写在这份正文之前,
+ * 而复核说明会取代正文发出去)。撤销则要把两者一起交还 —— 它们不在 patch 的字段里,
+ * 快照漏拍的话,撤销交回的是一条被剥掉复核说明的旧 finding。
+ */
+function assertUndoRestoresRecheckNote(): void {
+  const store = new ReviewStore(openDatabase(':memory:'));
+  const manager = new ReviewManager(store);
+  const reviewId = store.createReview({ source: 'local-branch', sourceRef: 'x', title: 't' }).id;
+  const finding = store.addFinding(
+    reviewId,
+    { severity: 'high', title: '数据竞争', body: '原正文', file: 'a.ts', line: 1, suggestion: '  const c = 0;' },
+    'agent',
+  );
+  const NOTE = '第 2 轮复核:换成了 RefCell,跨线程仍不安全。';
+  store.startRound(reviewId, 2, {});
+  store.setFindingResolution(finding.id, 2, 'still_present', NOTE);
+
+  const disc = store.addUserDiscussion(reviewId, { file: 'a.ts', line: 1 });
+  const proposalId = store.addProposal({
+    reviewId,
+    discussionId: disc.id,
+    findingId: finding.id,
+    kind: 'update',
+    patch: { body: '跨线程共享仍需 Mutex。' },
+    baseUpdatedAt: store.getFinding(finding.id)!.updatedAt,
+  }).id;
+
+  const applied = manager.applyProposal(reviewId, proposalId);
+  const after = store.getFinding(finding.id)!;
+  assert.equal(after.resolutionNote, null, '★ 采纳改写正文 → 复核说明作废');
+  assert.equal(after.suggestion, null, '★ 首轮补丁同源作废');
+  assert.equal(after.bodyRound, 2, '正文轮次推到本轮');
+  assert.equal(after.resolution, 'still_present', '判定本身不受影响,只是说明被新正文取代');
+  assert.deepEqual(
+    Object.keys(applied.before ?? {}).sort(),
+    ['body', 'bodyRound', 'resolutionNote', 'suggestion'],
+    '★ 快照要连作废的几项一起拍下,否则撤不回来',
+  );
+
+  // 应用之后 agent 又写了一份新的复核说明 → 撤销会拿旧值把它顶掉,必须先拦下
+  store.setFindingResolution(finding.id, 2, 'still_present', '第 2 轮补充:另一条路径也会踩到。');
+  assert.equal(
+    isProposalUndoBlocked(store.getProposal(proposalId)!, store.getFinding(finding.id)),
+    true,
+    '★ 连带清空的字段被重新写过 → 不给撤销',
+  );
+  assert.throws(() => manager.undoProposal(reviewId, proposalId), /又被改过/, '★ 权威层也要拦');
+
+  // 退回应用后的样子(说明仍是空的),撤销才该放行
+  store.restoreFinding(finding.id, { resolutionNote: null });
+  manager.undoProposal(reviewId, proposalId);
+  const restored = store.getFinding(finding.id)!;
+  assert.equal(restored.body, '原正文', '正文应还原');
+  assert.equal(restored.resolutionNote, NOTE, '★ 复核说明应交还');
+  assert.equal(restored.suggestion, '  const c = 0;', '★ 补丁应交还');
+  assert.equal(restored.bodyRound, 1, '★ 正文轮次应交还 —— 否则旧正文冒充本轮新话再追评一次');
+  log('✓ 改写正文作废复核说明与补丁,撤销一并交还;期间被重写过则拦下');
+
+  // 应用时**没有**说明可清(去重兜底命中那种),于是它进不了快照;此后新写的一份不受任何
+  // 守卫保护,只能靠撤销自己不去派生 —— 借 updateFinding 写回旧正文的话,它会顺手清掉这份新的。
+  const g = store.addFinding(
+    reviewId,
+    { severity: 'high', title: '另一条', body: '原正文', file: 'b.ts', line: 1 },
+    'agent',
+  );
+  store.touchFindingSeen(g.id, 2);
+  const gBefore = store.getFinding(g.id)!;
+  const gProposalId = store.addProposal({
+    reviewId,
+    discussionId: disc.id,
+    findingId: g.id,
+    kind: 'update',
+    patch: { body: '改写过的正文。' },
+    baseUpdatedAt: store.getFinding(g.id)!.updatedAt,
+  }).id;
+  const gApplied = manager.applyProposal(reviewId, gProposalId);
+  assert.ok(!('resolutionNote' in (gApplied.before ?? {})), '本来就没有说明 → 不进快照');
+
+  const LATE = '第 2 轮复核:仍然踩得到。';
+  store.setFindingResolution(g.id, 2, 'still_present', LATE);
+  manager.undoProposal(reviewId, gProposalId);
+  const gRestored = store.getFinding(g.id)!;
+  assert.equal(gRestored.body, '原正文', '正文应还原');
+  assert.equal(gRestored.bodyRound, gBefore.bodyRound, '正文轮次应还原');
+  assert.equal(gRestored.resolutionNote, LATE, '★ 撤销之后写下的说明不得被回滚顺手清掉');
+  log('✓ 撤销只碰快照点名的字段,应用之后新写的复核说明原样留着');
 }
 
 /**

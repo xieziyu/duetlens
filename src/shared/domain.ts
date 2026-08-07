@@ -332,6 +332,8 @@ export interface Finding {
   submittedRound: number | null;
   /** 首次被报出的轮次 */
   round: number;
+  /** 正文最近一次被改写的轮次(没改写过 = 首报轮次);见 {@link hasFreshStatement} */
+  bodyRound: number;
   /** agent 最近一次对它表态或重报的轮次 */
   lastSeenRound: number;
   /** 该次表态的结论;仅当 lastSeenRound === Review.currentRound 时代表本轮判定 */
@@ -353,13 +355,36 @@ export interface Finding {
 export const isAutoClosedFixed = (f: Finding): boolean => f.triage === 'dismiss' && f.autoClosed;
 
 /**
+ * 本轮复核判定「仍存在」。与 UI 同一口径:只有表态轮次 === 当前轮次才代表本轮结论。
+ *
+ * 与 {@link recheckNote} 分开问:说明会被随后的 `update_finding` 作废清掉
+ * (见 ReviewStore.updateFinding),而判定本身不受影响 —— 问题仍然在,追评仍然欠着。
+ */
+export function isStillPresent(f: Finding, currentRound: number): boolean {
+  return f.lastSeenRound === currentRound && f.resolution === 'still_present';
+}
+
+/**
  * 本轮复核判定「仍存在」时 agent 给出的说明。它是看过作者的修改尝试之后写的,
  * 比首次报出的正文更新,故提交/导出时**取代**首轮正文作为评论正文。
- * 与 UI 同一口径:只有表态轮次 === 当前轮次才代表本轮结论。
+ *
+ * 反过来:正文若在这之后又被改写,新正文才是最新的一份,这条说明会在落库时一并清掉,
+ * 此处随即回到正文口径 —— 两份描述同一处的话,不能各说各的。
  */
 export function recheckNote(f: Finding, currentRound: number): string | null {
-  if (f.lastSeenRound !== currentRound || f.resolution !== 'still_present') return null;
+  if (!isStillPresent(f, currentRound)) return null;
   return f.resolutionNote?.trim() || null;
+}
+
+/**
+ * 本轮有没有**新写给作者的话**:一条本轮的复核说明,或一份本轮改写过的正文。
+ *
+ * 两者是同一件事的两种落法,不能只认前者:复核说明会被随后的正文改写清掉,而那次改写
+ * 正是新话本身。也不能只认「本轮仍存在」—— 去重兜底命中的条目同样挂着这个判定却一字未写,
+ * 据它追评就是把已经提交过的原话再发一遍。
+ */
+export function hasFreshStatement(f: Finding, currentRound: number): boolean {
+  return recheckNote(f, currentRound) !== null || f.bodyRound === currentRound;
 }
 
 /**
@@ -393,6 +418,8 @@ export function alignSuggestion(suggestion: string, anchorLine?: string | null):
  * 同上三处共用的一键补丁:复核说明取代首轮正文时,首轮 suggestion 一并作废。
  * 它与首轮正文同源、同样写在作者这次改动之前,而 `resolve_finding` 没有刷新它的入口 ——
  * 挂到当前锚点上就是一键覆盖作者刚改的代码,比一段对不上的描述更伤。
+ * 唯一的刷新入口是 `update_finding`,而它改写正文时会把旧说明与旧补丁一起清掉,
+ * 所以走到这里还留着补丁的,必然是随新正文一起给的那份,不必在此另作区分。
  *
  * `anchorLine` 是锚定行原文(取自 diff 新侧),给了就据它补齐缩进,见 {@link alignSuggestion}。
  */
@@ -457,8 +484,14 @@ export type ProposalPatch = ProposalUpdatePatch | ProposalReasonPatch | ReportFi
  *
  * 只拍**该提案真正改动的那几个字段** —— 拍全量的话,撤销会把应用之后 reviewer 自己的编辑
  * 一并回滚掉:提案只降了个 severity,撤销却连带把他重写过的正文换回旧版。
+ *
+ * 复核说明与正文轮次不在 patch 的字段里,却会随正文改写一并变(见 ReviewStore.updateFinding),
+ * 故也拍进来 —— 否则撤销交回的是一条被剥掉复核说明、正文轮次还停在本轮的旧 finding。
  */
-export type ProposalUpdateBefore = ProposalUpdatePatch;
+export type ProposalUpdateBefore = ProposalUpdatePatch & {
+  resolutionNote?: string | null;
+  bodyRound?: number;
+};
 
 export interface ProposalTriageBefore {
   triage: Triage;
@@ -550,9 +583,20 @@ export function isProposalUndoBlocked(p: FindingProposal, finding: Finding | nul
   if (p.status !== 'applied' || p.kind === 'create' || !p.before) return false;
   if (!finding) return true;
   if (p.kind === 'update') {
-    return (Object.keys(p.patch) as (keyof ProposalUpdatePatch)[]).some(
-      (k) => (finding[k] ?? null) !== (p.patch[k] ?? null),
-    );
+    if (
+      (Object.keys(p.patch) as (keyof ProposalUpdatePatch)[]).some(
+        (k) => (finding[k] ?? null) !== (p.patch[k] ?? null),
+      )
+    )
+      return true;
+    // 快照里 patch 没点名的那几项,是应用改写正文时被**连带清空**的(见 ReviewStore.updateFinding),
+    // 应用之后它们必然是空。此刻不空 = 有人重新写过一份,撤销会拿旧值把那份新的顶掉。
+    // bodyRound 不必单列:它只随正文变,而正文已在上面逐字段比过了。
+    const before = p.before as ProposalUpdateBefore;
+    if (before.resolutionNote !== undefined && finding.resolutionNote !== null) return true;
+    if (before.suggestion !== undefined && p.patch.suggestion === undefined && finding.suggestion !== null)
+      return true;
+    return false;
   }
   if (p.kind === 'dismiss')
     return finding.triage !== 'dismiss' || (finding.dismissReason ?? '') !== p.patch.reason;
