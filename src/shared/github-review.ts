@@ -31,11 +31,16 @@ export interface PrReviewComment {
   body: string;
 }
 
-/** 一次 PR review 的请求体(commit_id 由提交层补,它需要实时 head sha)。 */
 export interface PrReviewPayload {
   event: 'COMMENT' | 'REQUEST_CHANGES' | 'APPROVE';
   body: string;
   comments: PrReviewComment[];
+  /**
+   * 补缩进所依据的那份 diff 属于哪个 head sha。给了就钉成 `commit_id` ——
+   * 否则提交层会再独立读一次 head,两次读之间的推送会让「按 A 的行补的缩进」提交到 B。
+   * 缺省(没用上 diff / 拉不到)时仍由提交层读实时 head。
+   */
+  commitId?: string;
 }
 
 /** finding 是否作为 inline 行评论提交:有新侧行号,且没被提交屏降级为摘要条目。 */
@@ -61,11 +66,23 @@ function followUpLead(f: Finding, currentRound: number): string {
     : '';
 }
 
+/**
+ * 按 file + 新侧行号索引 diff 的行原文。suggestion 要据锚定行补齐缩进(见 alignSuggestion),
+ * 提交、导出与两处预览都要问同一个来源,否则屏上看到的补丁和发出去的不是一份。
+ */
+export function anchorLineIndex(diff: DiffFile[]): (f: Finding) => string | undefined {
+  const byKey = new Map<string, string>();
+  for (const file of diff)
+    for (const hunk of file.hunks)
+      for (const l of hunk.lines) if (l.newLine != null) byKey.set(`${file.path}:${l.newLine}`, l.text);
+  return (f) => byKey.get(`${f.file}:${f.line}`);
+}
+
 /** 一条 finding → inline 评论正文:标题 + 正文 + 可选 suggestion 块。 */
-function commentBody(f: Finding, currentRound: number): string {
+function commentBody(f: Finding, currentRound: number, anchorLine?: string): string {
   const parts = [followUpLead(f, currentRound), headline(f), findingNarrative(f, currentRound)];
   let body = parts.filter(Boolean).join('\n\n');
-  const suggestion = findingSuggestion(f, currentRound);
+  const suggestion = findingSuggestion(f, currentRound, anchorLine);
   if (suggestion) body += '\n\n```suggestion\n' + suggestion + '\n```';
   return body;
 }
@@ -83,21 +100,27 @@ const indentContinuation = (s: string): string =>
  *
  * body 是 reviewer 在提交屏手填的意见,**不取 review.summaryBody** ——
  * agent 的总结只呈现给 reviewer 自己,发给 PR 作者的话得由人自己写下。
+ *
+ * diff 只用来给 suggestion 补齐锚定行的缩进;缺省(取不到 diff)时补丁原样发出。
+ * headSha 是这份 diff 所属的 commit —— 与 diff 同源才有意义,别单独传。
  */
 export function buildPrReviewPayload(
   review: Review,
   findings: Finding[],
   event: GhReviewEvent,
   body: string,
+  diff: DiffFile[] = [],
+  headSha: string | null = null,
 ): PrReviewPayload {
   const anchored = findings.filter(hasAnchor);
   const unanchored = findings.filter((f) => !hasAnchor(f));
+  const anchorLineOf = anchorLineIndex(diff);
 
   const comments: PrReviewComment[] = anchored.map((f) => ({
     path: f.file,
     line: f.line,
     side: 'RIGHT',
-    body: commentBody(f, review.currentRound),
+    body: commentBody(f, review.currentRound, anchorLineOf(f)),
   }));
 
   const parts: string[] = [];
@@ -118,7 +141,12 @@ export function buildPrReviewPayload(
     parts.push(`${SUMMARY_HEADING}\n\n${lines.join('\n\n')}`);
   }
 
-  return { event: GH_EVENT_API[event], body: parts.join('\n\n'), comments };
+  return {
+    event: GH_EVENT_API[event],
+    body: parts.join('\n\n'),
+    comments,
+    ...(headSha ? { commitId: headSha } : {}),
+  };
 }
 
 /**

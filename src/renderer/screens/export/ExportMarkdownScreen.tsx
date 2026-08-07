@@ -1,5 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Finding, Review } from '@shared/domain';
+import type { DiffFile } from '@shared/diff';
 import {
   buildReviewMarkdown,
   exportFileName,
@@ -21,10 +22,23 @@ interface Props {
   onToggleKeep: (finding: Finding) => void;
   /** 终点切换分段(github-pr 才有);给了就顶掉面包屑。 */
   tabs?: ReactNode;
+  /**
+   * 给 suggestion 补缩进所依据的 diff(见 alignSuggestion)。github-pr 下由提交屏转来 ——
+   * 那边会现拉最新 diff 并据它重锚,这里再去读审核快照的话,同一个 file:line 可能是另一行。
+   * 不给则自己读快照:其余 source 没有提交这一步,锚点不会动。
+   */
+  diff?: DiffFile[];
 }
 
 // 左预览(渲染/源码)+ 右导出配置。
-export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep, tabs }: Props) {
+export function ExportMarkdownScreen({
+  review,
+  findings,
+  onBack,
+  onToggleKeep,
+  tabs,
+  diff,
+}: Props) {
   const isGithub = review.source === 'github-pr';
   const round = review.currentRound;
   const [opts, setOpts] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
@@ -32,7 +46,18 @@ export function ExportMarkdownScreen({ review, findings, onBack, onToggleKeep, t
   const [copied, setCopied] = useState(false);
   const [savedPath, setSavedPath] = useState<string | null>(null);
 
-  const md = useMemo(() => buildReviewMarkdown(review, findings, opts), [review, findings, opts]);
+  // 上层没给就自己读审核快照;读不到就原样导出,不挡预览
+  const [ownDiff, setOwnDiff] = useState<DiffFile[]>([]);
+  useEffect(() => {
+    if (diff) return;
+    void window.duetlens.review.diff(review.id).then(setOwnDiff);
+  }, [diff, review.id]);
+
+  const anchorDiff = diff ?? ownDiff;
+  const md = useMemo(
+    () => buildReviewMarkdown(review, findings, opts, anchorDiff),
+    [review, findings, opts, anchorDiff],
+  );
   const fileName = useMemo(() => exportFileName(review), [review]);
   const rendered = useMemo(() => renderMarkdown(md), [md]);
 

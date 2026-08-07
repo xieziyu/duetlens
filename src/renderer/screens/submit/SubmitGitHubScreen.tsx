@@ -10,6 +10,7 @@ import type { DiffFile } from '@shared/diff';
 import type { SubmitReviewResult } from '@shared/ipc';
 import {
   GH_REVIEW_EVENTS,
+  anchorLineIndex,
   buildPrReviewPayload,
   hasAnchor,
   isStaleAnchor,
@@ -52,10 +53,22 @@ interface Props {
   tabs?: ReactNode;
   /** 提交在途时上报,好让外壳一并冻住屏外那些能改 triage 的入口。 */
   onBusyChange?: (busy: boolean) => void;
+  /**
+   * 上报本屏当前据以判定锚点的那份 diff。导出屏要用同一份给 suggestion 补缩进 ——
+   * 它自己读审核快照的话,重锚之后同一个 file:line 指向的可能是另一行(见 alignSuggestion)。
+   */
+  onDiffChange?: (diff: DiffFile[]) => void;
 }
 
 // 左 findings 筛选 + 右 Finish your review。
-export function SubmitGitHubScreen({ review, findings, onBack, tabs, onBusyChange }: Props) {
+export function SubmitGitHubScreen({
+  review,
+  findings,
+  onBack,
+  tabs,
+  onBusyChange,
+  onDiffChange,
+}: Props) {
   const reviewId = review.id;
   const [event, setEvent] = useState<GhReviewEvent>('comment');
   /** 实际发出去的那次表态;结果 banner 只能说这一个,否则事后改选框会让它改口。 */
@@ -109,6 +122,8 @@ export function SubmitGitHubScreen({ review, findings, onBack, tabs, onBusyChang
 
   // 派生上报而非在 submit() 里逐条路径手动置位:那样每加一条 return 就漏一次解冻
   useEffect(() => onBusyChange?.(sub === 'submitting'), [sub, onBusyChange]);
+  // 含 syncLatest 拉到的最新 diff:导出屏据此与本屏看到的补丁保持一致
+  useEffect(() => onDiffChange?.(diff), [diff, onDiffChange]);
 
   // 进屏即在后台核对一次 PR 最新状态:失效锚点应在提交被拒之前就摆到用户面前。
   const checkedOnce = useRef(false);
@@ -118,14 +133,8 @@ export function SubmitGitHubScreen({ review, findings, onBack, tabs, onBusyChang
     void syncLatest();
   }, [inlineCount, syncLatest]);
 
-  // suggestion diff 的「原行」文本:按 file+新侧行号从最新 diff 取,取不到则只渲染增行。
-  const originalLineOf = useMemo(() => {
-    const byKey = new Map<string, string>();
-    for (const file of diff)
-      for (const hunk of file.hunks)
-        for (const l of hunk.lines) if (l.newLine != null) byKey.set(`${file.path}:${l.newLine}`, l.text);
-    return (f: Finding) => byKey.get(`${f.file}:${f.line}`);
-  }, [diff]);
+  // suggestion diff 的「原行」文本:取不到则只渲染增行,且补丁不补缩进。
+  const originalLineOf = useMemo(() => anchorLineIndex(diff), [diff]);
 
   /**
    * 提交在途:后端已按调用那一刻的 findings / event / body 组好 payload 并在发了,
@@ -162,8 +171,8 @@ export function SubmitGitHubScreen({ review, findings, onBack, tabs, onBusyChang
 
   // 按钮可用性走后端同一套判定(手填正文一并传进去,与实际提交内容一致)
   const blocked = useMemo(
-    () => submitBlocker(buildPrReviewPayload(review, pending, event, body)),
-    [review, pending, event, body],
+    () => submitBlocker(buildPrReviewPayload(review, pending, event, body, diff)),
+    [review, pending, event, body, diff],
   );
 
   const submit = async () => {
@@ -298,7 +307,8 @@ export function SubmitGitHubScreen({ review, findings, onBack, tabs, onBusyChang
             const isStale = staleIds.has(f.id);
             // 卡片按实际提交的内容预览:有本轮复核说明就只发它,首轮 suggestion 随首轮正文一起作废
             const narrative = findingNarrative(f, round);
-            const suggestion = findingSuggestion(f, round);
+            const orig = originalLineOf(f);
+            const suggestion = findingSuggestion(f, round, orig);
             const canReAnchor = isStale && nearestLiveLine(f.file, f.line, diff) != null;
             const cls =
               // 前缀不能省:裸 .finding 会漏到审核屏的内联卡与批注 composer(它们也带 .finding)
@@ -347,15 +357,12 @@ export function SubmitGitHubScreen({ review, findings, onBack, tabs, onBusyChang
                         <span className="dia">◇</span> suggestion
                       </div>
                       <div className="f-sugg-diff">
-                        {(() => {
-                          const orig = originalLineOf(f);
-                          return orig != null ? (
-                            <div className="fsd-row del">
-                              <span className="fsd-gut">−</span>
-                              <span className="fsd-code">{orig || ' '}</span>
-                            </div>
-                          ) : null;
-                        })()}
+                        {orig != null && (
+                          <div className="fsd-row del">
+                            <span className="fsd-gut">−</span>
+                            <span className="fsd-code">{orig || ' '}</span>
+                          </div>
+                        )}
                         {suggestion.split('\n').map((l, i) => (
                           <div className="fsd-row add" key={i}>
                             <span className="fsd-gut">＋</span>

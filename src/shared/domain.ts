@@ -371,15 +371,40 @@ export function findingNarrative(f: Finding, currentRound: number): string {
 }
 
 /**
+ * 补齐补丁的前导缩进。suggestion 会被逐字替换进锚定行,而模型给补丁时惯于把语句顶到行首,
+ * 照发下去作者一点「采纳」就抹掉了那一行的缩进 —— TS 里是格式炸掉,Python / YAML 里是改坏语义。
+ * 缩进按锚定行补齐,多行补丁整体右移以保住行间的相对层级。
+ *
+ * 判据只能是「首行写没写缩进」—— 补丁是个字面量,没有别的信号可问。代价是刻意退到第 0 列的补丁
+ * (如把一段挪出缩进块)会被当成漏写补回去。模型漏写是常态、刻意退到顶层是个例,这里按前者取舍;
+ * 写了缩进的一律原样放行,所以「减掉一层但仍在块内」这种照旧表达得出来。
+ */
+export function alignSuggestion(suggestion: string, anchorLine?: string | null): string {
+  if (/^[ \t]/.test(suggestion)) return suggestion;
+  const indent = /^[ \t]+/.exec(anchorLine ?? '')?.[0];
+  if (!indent) return suggestion;
+  return suggestion
+    .split('\n')
+    .map((l) => (l.trim() ? indent + l : l))
+    .join('\n');
+}
+
+/**
  * 同上三处共用的一键补丁:复核说明取代首轮正文时,首轮 suggestion 一并作废。
  * 它与首轮正文同源、同样写在作者这次改动之前,而 `resolve_finding` 没有刷新它的入口 ——
  * 挂到当前锚点上就是一键覆盖作者刚改的代码,比一段对不上的描述更伤。
+ *
+ * `anchorLine` 是锚定行原文(取自 diff 新侧),给了就据它补齐缩进,见 {@link alignSuggestion}。
  */
-export function findingSuggestion(f: Finding, currentRound: number): string | null {
+export function findingSuggestion(
+  f: Finding,
+  currentRound: number,
+  anchorLine?: string | null,
+): string | null {
   if (recheckNote(f, currentRound) !== null) return null;
   // 首行缩进是补丁的一部分(会被逐字替换进代码),只能削首尾空行与行尾空白,不能 trim
   const s = f.suggestion?.replace(/^[ \t]*\n+/, '').replace(/\s+$/, '') ?? '';
-  return s || null;
+  return s ? alignSuggestion(s, anchorLine) : null;
 }
 
 /**

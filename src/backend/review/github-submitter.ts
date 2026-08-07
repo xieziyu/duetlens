@@ -29,21 +29,24 @@ export class GhReviewSubmitter implements GitHubSubmitter {
       return { status: 'failed', message: `无法解析 PR 引用:${(e as Error).message}` };
     }
 
-    // 实时 head sha:review comment 锚到当前 head commit;顺带取 PR url 兜底
-    let commitId: string;
+    // PR url 兜底;head sha 仅在 payload 没带时才用这里读到的
+    let liveHead: string;
     let prUrl: string;
     try {
       const metaJson = await run('gh', [
         'pr', 'view', num, '--repo', nwo, '--json', 'headRefOid,url',
       ]);
       const meta = JSON.parse(metaJson) as { headRefOid: string; url: string };
-      commitId = meta.headRefOid;
+      liveHead = meta.headRefOid;
       prUrl = meta.url;
     } catch (e) {
       return { status: 'failed', message: `读取 PR 元数据失败(认证/网络/PR 已关闭?):${(e as Error).message}` };
     }
 
-    const requestBody = JSON.stringify({ commit_id: commitId, ...payload });
+    // payload 带了 sha 就钉死它:那是 suggestion 补缩进所依据的那份 diff 所属的 commit。
+    // 再读一次实时 head 的话,两次读之间的推送会让「按 A 的行补的缩进」提交到 B。
+    const { commitId, ...apiPayload } = payload;
+    const requestBody = JSON.stringify({ commit_id: commitId ?? liveHead, ...apiPayload });
     try {
       const out = await run(
         'gh',

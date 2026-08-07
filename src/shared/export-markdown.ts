@@ -15,7 +15,8 @@ import {
   type Severity,
   type SourceKind,
 } from './domain';
-import { isSubmittable, needsRecheckFollowUp } from './github-review';
+import type { DiffFile } from './diff';
+import { anchorLineIndex, isSubmittable, needsRecheckFollowUp } from './github-review';
 
 export interface ExportOptions {
   /** 含 suggestion 代码块(渲染为 ```suggestion,GitHub 外无一键采纳但保留格式) */
@@ -84,7 +85,13 @@ function submissionNote(f: Finding, review: Review): string | null {
  * 单条 finding 块;heading 为 finding 标题所用的 markdown 级别(分组下降一级)。
  * 与 GitHub 提交同一口径:本轮复核判定仍存在的,正文取复核说明、首轮 suggestion 一并作废。
  */
-function findingBlock(f: Finding, opts: ExportOptions, heading: string, review: Review): string {
+function findingBlock(
+  f: Finding,
+  opts: ExportOptions,
+  heading: string,
+  review: Review,
+  anchorLine?: string,
+): string {
   const currentRound = review.currentRound;
   const cat = f.category ? ` · ${f.category}` : '';
   let block = `${heading} ${SEVERITY_EMOJI[f.severity]} ${f.severity}${cat} — ${f.title}\n\n`;
@@ -92,18 +99,21 @@ function findingBlock(f: Finding, opts: ExportOptions, heading: string, review: 
   block += `\`${findingAnchorText(f)}\`${note ? ` · ${note}` : ''}\n\n`;
   const narrative = findingNarrative(f, currentRound);
   if (narrative) block += `${narrative}\n\n`;
-  const suggestion = findingSuggestion(f, currentRound);
+  const suggestion = findingSuggestion(f, currentRound, anchorLine);
   if (opts.suggestion && suggestion) {
     block += '```suggestion\n' + suggestion + '\n```\n\n';
   }
   return block;
 }
 
+/** diff 只用来给 suggestion 补齐锚定行的缩进;缺省时补丁原样导出。 */
 export function buildReviewMarkdown(
   review: Review,
   findings: Finding[],
   opts: ExportOptions = DEFAULT_EXPORT_OPTIONS,
+  diff: DiffFile[] = [],
 ): string {
+  const anchorLineOf = anchorLineIndex(diff);
   const pendingOnly = opts.scope === 'pending';
   const kept = findings.filter((f) => (pendingOnly ? isSubmittable(f, review.currentRound) : isKept(f)));
   const dropped = findings.filter((f) => !isKept(f));
@@ -124,10 +134,11 @@ export function buildReviewMarkdown(
     }
     for (const [file, list] of byFile) {
       md += `### ${file}\n\n`;
-      for (const f of list) md += findingBlock(f, opts, '####', review);
+      for (const f of list) md += findingBlock(f, opts, '####', review, anchorLineOf(f));
     }
   } else {
-    for (const f of [...kept].sort(bySeverity)) md += findingBlock(f, opts, '###', review);
+    for (const f of [...kept].sort(bySeverity))
+      md += findingBlock(f, opts, '###', review, anchorLineOf(f));
   }
 
   if (opts.dismissed && dropped.length) {

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { Finding } from '@shared/domain';
+import type { DiffFile } from '@shared/diff';
 import { useReviewStream } from '../review/useReviewStream';
 import { ExportMarkdownScreen } from './export/ExportMarkdownScreen';
 import { SubmitGitHubScreen } from './submit/SubmitGitHubScreen';
@@ -21,6 +22,9 @@ export function SubmitExportScreen({
   const [tab, setTab] = useState<'submit' | 'export'>('submit');
   // 提交在途:待提交集已在后端定稿,这期间任何改 triage 的入口都得冻住
   const [submitting, setSubmitting] = useState(false);
+  // 提交屏据以判定锚点的那份 diff(可能已是现拉的最新);转给导出屏,好让两边给 suggestion
+  // 补的缩进出自同一行。undefined = 提交屏还没报 / 本 source 没有提交这一步,导出屏自己读快照。
+  const [submitDiff, setSubmitDiff] = useState<DiffFile[] | undefined>(undefined);
 
   const onToggleKeep = useCallback(
     (f: Finding) => {
@@ -73,6 +77,7 @@ export function SubmitExportScreen({
             onBack={onBack}
             tabs={tabs}
             onBusyChange={setSubmitting}
+            onDiffChange={setSubmitDiff}
           />
         </div>
         <div className="se-pane" hidden={tab !== 'export'}>
@@ -82,6 +87,7 @@ export function SubmitExportScreen({
             onBack={onBack}
             onToggleKeep={onToggleKeep}
             tabs={tabs}
+            diff={submitDiff}
           />
         </div>
       </>
