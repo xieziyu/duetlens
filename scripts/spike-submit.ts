@@ -158,6 +158,82 @@ async function main() {
     log('复核追评:跨轮追发一次 + 同轮不重复 + 旧说明不复用 ok');
   }
 
+  // ---- 复核之后又改写正文:旧说明与旧补丁一并作废,追评改发新正文 ----
+  {
+    const db = openDatabase(':memory:');
+    const store = new ReviewStore(db);
+    const { review, f1 } = seed(store);
+    const fake = new FakeSubmitter({ status: 'success', url: 'https://gh/x#r1', submittedCount: 2 });
+    const manager = new ReviewManager(store, undefined, { submitter: fake });
+    await manager.submitReview(review.id, { event: 'comment' });
+
+    const NOTE = '第 2 轮复核:换成了 RefCell,跨线程仍不安全。';
+    store.startRound(review.id, 2, {});
+    store.setFindingResolution(f1.id, 2, 'still_present', NOTE);
+
+    // 改元信息不动复核说明:说的还是同一条问题
+    store.updateFinding({ findingId: f1.id, severity: 'medium' });
+    assert.equal(recheckNote(store.getFinding(f1.id)!, 2), NOTE, '只改严重度不作废复核说明');
+
+    // 改写正文:说明被新正文取代,首轮补丁同源作废;判定与追评义务不受影响
+    store.updateFinding({ findingId: f1.id, body: '换 RefCell 没解决:跨线程共享仍需 Mutex。' });
+    const rewritten = store.getFinding(f1.id)!;
+    assert.equal(rewritten.resolutionNote, null, '复核说明随正文改写清空');
+    assert.equal(rewritten.suggestion, null, '首轮补丁没跟着刷新 → 不留给作者一键采纳');
+    assert.equal(rewritten.resolution, 'still_present', '判定本身不因改写而失效');
+    assert.equal(needsRecheckFollowUp(rewritten, 2), true, '★ 追评仍然欠着,不能因说明被清掉就不发');
+    assert.equal(isSubmittable(rewritten, 2), true, '★ 仍在待提交集');
+
+    const res = await manager.submitReview(review.id, { event: 'comment' });
+    assert.equal(res.status, 'success');
+    const body = fake.last!.payload.comments.find((c) => c.line === 20)!.body;
+    assert.match(body, /↻ 第 2 轮复核追评/, '仍是一条复核追评');
+    assert.match(body, /跨线程共享仍需 Mutex/, '正文取最新改写的那份');
+    assert.ok(!body.includes('跨线程仍不安全'), '被取代的复核说明不再发出去');
+    assert.ok(!body.includes('```suggestion'), '作废的首轮补丁不随追评发出');
+
+    // 同一次调用带上新补丁 → 那份是看过复核之后写的,留住
+    store.setFindingResolution(f1.id, 2, 'still_present', '仍然不安全。');
+    store.updateFinding({
+      findingId: f1.id,
+      body: '改用 Mutex。',
+      suggestion: '    const c = new Mutex(0);',
+    });
+    const refreshed = store.getFinding(f1.id)!;
+    assert.equal(refreshed.resolutionNote, null, '复核说明照样作废');
+    assert.equal(refreshed.suggestion, '    const c = new Mutex(0);', '随新正文给出的补丁不作废');
+    log('复核后改写正文:说明与旧补丁作废、追评改发新正文 ok');
+  }
+
+  // ---- 去重兜底命中(仍存在但没附说明)后改写正文:首轮补丁照样作废 ----
+  {
+    const db = openDatabase(':memory:');
+    const store = new ReviewStore(db);
+    const { review, f1 } = seed(store);
+    const fake = new FakeSubmitter({ status: 'success', url: 'https://gh/x#r1', submittedCount: 2 });
+    const manager = new ReviewManager(store, undefined, { submitter: fake });
+    await manager.submitReview(review.id, { event: 'comment' });
+
+    // 第 2 轮被去重兜底命中:本轮仍存在,但一个字都没新写
+    store.startRound(review.id, 2, {});
+    store.touchFindingSeen(f1.id, 2);
+    assert.equal(recheckNote(store.getFinding(f1.id)!, 2), null, '兜底命中不写说明');
+    assert.equal(needsRecheckFollowUp(store.getFinding(f1.id)!, 2), false, '一字未写 → 不追评');
+
+    // agent 随后改写正文:这才是本轮的新话,补丁没跟着刷新就得作废
+    store.updateFinding({ findingId: f1.id, body: '第 2 轮:改动没碰到共享路径,竞态照旧。' });
+    const rewritten = store.getFinding(f1.id)!;
+    assert.equal(rewritten.suggestion, null, '★ 没有复核说明也要作废首轮补丁 —— 它照着旧代码写');
+    assert.equal(needsRecheckFollowUp(rewritten, 2), true, '有了新话 → 欠一条追评');
+
+    const res = await manager.submitReview(review.id, { event: 'comment' });
+    assert.equal(res.status, 'success');
+    const body = fake.last!.payload.comments.find((c) => c.line === 20)!.body;
+    assert.match(body, /改动没碰到共享路径/, '追评发新正文');
+    assert.ok(!body.includes('```suggestion'), '★ 作废的首轮补丁不得随追评发给作者');
+    log('兜底命中后改写正文:补丁作废 + 追评只发新正文 ok');
+  }
+
   // ---- 脱锚 finding 并入摘要:多段正文整体缩进在列表项内 ----
   {
     const db = openDatabase(':memory:');

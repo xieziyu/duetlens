@@ -10,7 +10,6 @@ import type {
   ProposalStatus,
   ProposalTriageBefore,
   ProposalUpdateBefore,
-  ProposalUpdatePatch,
   Review,
   ReviewIntensity,
   ReviewRound,
@@ -68,17 +67,22 @@ function assertContentWritable(f: Finding, action: string): void {
 }
 
 /**
- * 只拍 patch 真正动过的那几个字段的旧值。
+ * 只拍这次应用**真正改动过**的那几个字段的旧值。
  * 拍全量的话,撤销会把应用之后 reviewer 自己的编辑一并回滚 —— 提案只降了个 severity,
  * 撤销却连带把他重写过的正文换回旧版。
+ *
+ * 按前后值比,而不是按 patch 点名的键:改写正文会连带清掉复核说明与过时的 suggestion、
+ * 并把正文轮次推到本轮(见 ReviewStore.updateFinding),这几下没人点名,却同样要能撤回来。
  */
-function snapshotPatched(before: Finding, patch: ProposalUpdatePatch): ProposalUpdateBefore {
+function snapshotPatched(before: Finding, after: Finding): ProposalUpdateBefore {
   const snapshot: ProposalUpdateBefore = {};
-  if (patch.severity !== undefined) snapshot.severity = before.severity;
-  if (patch.category !== undefined) snapshot.category = before.category;
-  if (patch.title !== undefined) snapshot.title = before.title;
-  if (patch.body !== undefined) snapshot.body = before.body;
-  if (patch.suggestion !== undefined) snapshot.suggestion = before.suggestion;
+  if (after.severity !== before.severity) snapshot.severity = before.severity;
+  if (after.category !== before.category) snapshot.category = before.category;
+  if (after.title !== before.title) snapshot.title = before.title;
+  if (after.body !== before.body) snapshot.body = before.body;
+  if (after.suggestion !== before.suggestion) snapshot.suggestion = before.suggestion;
+  if (after.resolutionNote !== before.resolutionNote) snapshot.resolutionNote = before.resolutionNote;
+  if (after.bodyRound !== before.bodyRound) snapshot.bodyRound = before.bodyRound;
   return snapshot;
 }
 
@@ -432,12 +436,13 @@ export class ReviewManager extends EventEmitter {
           p.kind === 'dismiss' ? p.patch.reason : null,
         );
       }
+      const after = this.store.getFinding(p.findingId);
       const before_ =
         p.kind === 'update'
-          ? snapshotPatched(before, p.patch)
+          ? snapshotPatched(before, after ?? before)
           : { triage: before.triage, dismissReason: before.dismissReason, autoClosed: before.autoClosed };
       return {
-        finding: this.store.getFinding(p.findingId),
+        finding: after,
         discussion: null,
         proposal: this.resolveProposal(proposalId, 'applied', { before: before_ }),
       };
@@ -479,7 +484,9 @@ export class ReviewManager extends EventEmitter {
       if (p.kind === 'update') {
         if (current) assertContentWritable(current, '撤销');
         // 快照只含该提案动过的字段,所以这一还原不会碰 reviewer 在应用之后自己改的其他字段
-        this.store.updateFinding({ findingId: p.findingId, ...(p.before as ProposalUpdateBefore) });
+        // 逐字写回,不借 updateFinding —— 那条路会把这次回滚当成一次新的正文改写,
+        // 顺手清掉应用之后新写下的复核说明(见 ReviewStore.restoreFinding)
+        this.store.restoreFinding(p.findingId, p.before as ProposalUpdateBefore);
       } else {
         // 走 restoreTriage 而非 setTriage:后者会把 auto_closed 清零,复核自动结案的条目
         // 撤销后就变成「reviewer 亲手剔的」,下一轮回归不再自动恢复
