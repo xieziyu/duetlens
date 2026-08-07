@@ -324,11 +324,12 @@ export function ReviewScreen({
     },
     [reviewId],
   );
-  // 重跑:立刻返回新轮次记录,扫描后台跑;失败(如上一轮仍在扫描)由面板就地展示
+  // 重跑:立刻返回新轮次记录,扫描后台跑;失败(如上一轮仍在扫描)由面板就地展示。
+  // startId 只为把启动阶段事件回关到发起它的那个面板。
   const onRerun = useCallback(
-    async ({ note, intensity }: { note: string; intensity: ReviewIntensity }) => {
+    async ({ note, intensity, startId }: { note: string; intensity: ReviewIntensity; startId: string }) => {
       if (!reviewId) return;
-      await window.duetlens.review.rerun(reviewId, { note: note || undefined, intensity });
+      await window.duetlens.review.rerun(reviewId, { note: note || undefined, intensity, startId });
     },
     [reviewId],
   );

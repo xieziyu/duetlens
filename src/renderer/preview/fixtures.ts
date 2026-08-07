@@ -579,6 +579,11 @@ export function installPreviewApi(): void {
   const fire = (e: ReviewEvent) => {
     for (const l of listeners) l(e);
   };
+  /** 按给定时刻推进启动阶段(首发浮层与重跑面板的慢启动自查共用) */
+  const stageAt = (startId: string | undefined, stage: ReviewStartStage, ms: number) =>
+    window.setTimeout(() => {
+      for (const l of startListeners) l({ startId: startId ?? '', stage });
+    }, ms);
   // 通知在真实里由 main 派发;preview 用测试钩子(window.__fireInApp)触发应用内提示自查。
   const openReviewListeners = new Set<(p: { reviewId: string }) => void>();
   const inAppListeners = new Set<(n: CompletionNotice) => void>();
@@ -667,11 +672,7 @@ export function installPreviewApi(): void {
       start: async (input) => {
         const mode = params.get('start');
         if (mode === null) return review;
-        const id = input.startId ?? '';
-        const at = (stage: ReviewStartStage, ms: number) =>
-          window.setTimeout(() => {
-            for (const l of startListeners) l({ startId: id, stage });
-          }, ms);
+        const at = (stage: ReviewStartStage, ms: number) => stageAt(input.startId, stage, ms);
         at('resolve', 120);
         at('diff', 1_100);
         if (mode === 'error') {
@@ -686,12 +687,24 @@ export function installPreviewApi(): void {
         return review;
       },
       rounds: async () => rounds,
-      // 开一轮:插入 scanning 记录并回推,4s 后收轮 —— 够看清面板→扫描→收轮的整条视觉链路
+      // 开一轮:插入 scanning 记录并回推,4s 后收轮 —— 够看清面板→扫描→收轮的整条视觉链路。
+      // ?rerun=slow 模拟大 PR 的慢启动(阶段按真实顺序推进,record 停够久能看到「读 PR 评论」提示)
       rerun: async (_r, input) => {
-        if (params.get('retry') === 'error')
+        const slow = params.get('rerun') === 'slow';
+        if (slow) {
+          const at = (stage: ReviewStartStage, ms: number) => stageAt(input?.startId, stage, ms);
+          at('diff', 900);
+          // record 停够久,自查得到「读 PR 评论」那条慢提示(6s 才现)
+          at('record', 3_600);
+          at('agent', 15_000);
+        }
+        if (params.get('retry') === 'error') {
+          if (slow) await new Promise((r) => window.setTimeout(r, 4_000));
           throw new Error(
             "Error invoking remote method 'review:rerun': Error: Command failed: but diff feat/entry-branch-picker --no-tui --json\nNo ID found for entity No ID found for entity\n",
           );
+        }
+        if (slow) await new Promise((r) => window.setTimeout(r, 16_000));
         const round: ReviewRound = {
           reviewId: 'demo',
           round: rounds.length + 1,

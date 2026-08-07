@@ -4213,6 +4213,23 @@
   font-size: 11px;
   color: var(--text-faint);
 }
+/* 开跑后的等待画面。stepper 自带侧边距(那是给无内边距的入口浮层的),
+   这里面板已有内边距,去掉它自己的那份即可对齐。 */
+.rp-run .start-steps {
+  padding-inline: 0;
+}
+.rp-run .start-hint {
+  margin-inline: 0;
+}
+.rp-art {
+  margin-top: 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 100% at 50% 0%, var(--glow1), transparent 70%),
+    var(--surface-2);
+}
 .rp-lede {
   margin: 0 0 14px;
   font-size: 12px;
