@@ -111,8 +111,8 @@ export interface ReviewStartInput {
 }
 
 /**
- * 启动一次审核的阶段。大 PR 卡在 `diff`(gh 下载可达数十秒),入口浮层靠这几档
- * 让等待有真实进度,而不是空转的 spinner。
+ * 起一轮机审的阶段(首次发起与重跑共用)。大 PR 卡在 `diff`(gh 下载可达数十秒),
+ * 等待画面靠这几档让进度是真的,而不是空转的 spinner。
  */
 export type ReviewStartStage = 'resolve' | 'diff' | 'record' | 'agent';
 
@@ -128,6 +128,8 @@ export interface RerunInput {
   note?: string;
   /** 本轮起调整审核强度;缺省沿用 review 现有档。给出即持久化为 review 新档,后续轮次/续接沿用 */
   intensity?: ReviewIntensity;
+  /** renderer 生成的一次性 id;启动阶段事件按它回关,过期的重跑不会污染当前面板 */
+  startId?: string;
 }
 
 /** 交给系统默认浏览器打开的结果;失败原因回前端做提示,不抛异常。 */

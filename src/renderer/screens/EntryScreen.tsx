@@ -24,6 +24,7 @@ import { GhIcon, LocalBranchIcon } from './entry/icons';
 import { RecentReviews } from './entry/RecentReviews';
 import { StartOverlay } from './entry/StartOverlay';
 import { LogoMark } from '../components/LogoMark';
+import { newStartId } from '../components/StartProgress';
 import './EntryScreen.css';
 
 /**
@@ -193,7 +194,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     (tab === 'github-pr' ? ghReady : !!repoPath.trim());
 
   const start = async () => {
-    const startId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+    const startId = newStartId();
     startIdRef.current = startId;
     setBusy(true);
     setError(null);

@@ -74,9 +74,17 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
         : undefined,
     );
   });
-  ipcMain.handle(IpcChannels.reviewRerun, (_e, reviewId: string, input?: RerunInput) =>
-    manager.rerunReview(reviewId, input ?? {}),
-  );
+  ipcMain.handle(IpcChannels.reviewRerun, (_e, reviewId: string, input?: RerunInput) => {
+    const { startId, ...rest } = input ?? {};
+    return manager.rerunReview(
+      reviewId,
+      rest,
+      startId
+        ? (stage) =>
+            broadcast(IpcEvents.reviewStartProgress, { startId, stage } satisfies ReviewStartProgress)
+        : undefined,
+    );
+  });
   ipcMain.handle(IpcChannels.reviewRetryRound, (_e, reviewId: string) => manager.retryRound(reviewId));
   ipcMain.handle(IpcChannels.reviewStopScan, (_e, reviewId: string) => manager.stopScan(reviewId));
   ipcMain.handle(IpcChannels.reviewRounds, (_e, reviewId: string) => manager.getRounds(reviewId));

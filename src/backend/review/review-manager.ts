@@ -789,8 +789,13 @@ export class ReviewManager extends EventEmitter {
    * 重跑一轮机审。每轮**新开 codex thread**、**重新拉取最新 diff 做全量重扫**,
    * 上一轮的产出与 reviewer 的处置靠结构化 prompt 带过来(见 prompt/rerun-prompt.ts)。
    * 立即返回新建的轮次记录,扫描在后台跑、findings 经事件流入。
+   * onStage 逐阶段回调,同首次发起(重跑面板据此显示真实进度)。
    */
-  async rerunReview(reviewId: string, input: RerunInput = {}): Promise<ReviewRound> {
+  async rerunReview(
+    reviewId: string,
+    input: RerunInput = {},
+    onStage?: (s: ReviewStartStage) => void,
+  ): Promise<ReviewRound> {
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
     const current = this.store.getRound(reviewId, review.currentRound);
@@ -808,6 +813,7 @@ export class ReviewManager extends EventEmitter {
       round: review.currentRound + 1,
       note: input.note ?? null,
       intensity,
+      onStage,
     });
   }
 
@@ -858,12 +864,14 @@ export class ReviewManager extends EventEmitter {
       intensity: ReviewIntensity;
       /** 重试同一轮时,该轮首次开跑记下的变更文件基线 */
       priorChanged?: ReviewRound;
+      onStage?: (s: ReviewStartStage) => void;
     },
   ): Promise<ReviewRound> {
     const reviewId = review.id;
     const prevRound = opts.round > 1 ? this.store.getRound(reviewId, opts.round - 1) : null;
 
     // 每轮新 thread:先彻底释放上一轮的会话、MCP 与 source,再重建。
+    opts.onStage?.('resolve');
     await this.teardown(reviewId);
     // 代次在 teardown 之后取:本轮要作废的是这次拆完之后又来的释放/删除。
     const epoch = this.teardownEpoch(reviewId);
@@ -883,7 +891,9 @@ export class ReviewManager extends EventEmitter {
     let baseInstructions: string;
     try {
       prepared = await source.prepare();
+      opts.onStage?.('diff');
       rawDiff = await source.getDiff();
+      opts.onStage?.('record');
       const prevDiff = this.store.getRawDiff(reviewId);
       const changedFiles = [
         ...new Set([...(opts.priorChanged?.changedFiles ?? []), ...changedFilesBetween(prevDiff, rawDiff)]),
@@ -925,6 +935,7 @@ export class ReviewManager extends EventEmitter {
               pr: pr && pr.fetchedAt ? pr : null,
               note: opts.note,
             });
+      opts.onStage?.('agent');
       baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: opts.intensity });
     } catch (e) {
       release();

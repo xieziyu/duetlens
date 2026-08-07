@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReviewStartStage } from '@shared/ipc';
 import { LensScanArt, LENS_ART_ROWS } from '../../components/LensScanArt';
+import { StartSteps, stepIndex, type StartStep } from '../../components/StartProgress';
 import './StartOverlay.css';
 
 /**
  * 发起审核后的等待浮层:期间禁止其他操作。
  *
- * 阶段来自后端真实回调(不是定时器编的),大 PR 卡住的那一档(拉 diff)会自己报时并给出等待预期;
  * 失败原地转错误态,让用户带着上下文改参数重试,而不是把人扔回一片空白的表单。
  */
 
-const STEPS: { stage: ReviewStartStage; label: string; slow: string }[] = [
+const STEPS: StartStep[] = [
   { stage: 'resolve', label: '连接来源 · 读取目标元信息', slow: '正在解析仓库与目标引用' },
   { stage: 'diff', label: '拉取本次改动的 diff', slow: '改动量大时 diff 要下载十几秒,这是正常的' },
   { stage: 'record', label: '解析 diff · 建立审核记录', slow: '正在切分文件与 hunk' },
@@ -32,8 +32,6 @@ export function StartOverlay({
   onBack: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const activeIndex = STEPS.findIndex((s) => s.stage === stage);
-  const elapsed = useStageElapsed(stage, !!error);
 
   useEffect(() => {
     panelRef.current?.focus();
@@ -56,7 +54,7 @@ export function StartOverlay({
       <div className="start-panel" ref={panelRef} tabIndex={-1}>
         <LensScanArt
           className="start-art"
-          lit={Math.min(LENS_ART_ROWS, activeIndex + 1)}
+          lit={Math.min(LENS_ART_ROWS, stepIndex(STEPS, stage) + 1)}
           failed={!!error}
         />
 
@@ -80,40 +78,13 @@ export function StartOverlay({
             </div>
           </>
         ) : (
-          <>
-            <ol className="start-steps">
-              {STEPS.map((s, i) => {
-                const state = i < activeIndex ? 'done' : i === activeIndex ? 'active' : 'pending';
-                return (
-                  <li key={s.stage} className={state}>
-                    <span className="sdot" />
-                    <span className="slabel">{s.label}</span>
-                    {state === 'active' && elapsed >= 1.5 && (
-                      <span className="stime mono">{elapsed.toFixed(0)}s</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-            <p className={elapsed >= 6 ? 'start-hint slow' : 'start-hint'}>
-              {elapsed >= 6 ? STEPS[activeIndex]?.slow : '进入后首轮机审继续在后台跑,不用等它结束'}
-            </p>
-          </>
+          <StartSteps
+            steps={STEPS}
+            stage={stage}
+            hint="进入后首轮机审继续在后台跑,不用等它结束"
+          />
         )}
       </div>
     </div>
   );
-}
-
-/** 当前阶段已耗时(秒)。阶段一变就归零 —— 报的是「这一步卡了多久」,不是总时长。 */
-function useStageElapsed(stage: ReviewStartStage, stopped: boolean): number {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    if (stopped) return;
-    setElapsed(0);
-    const from = performance.now();
-    const id = window.setInterval(() => setElapsed((performance.now() - from) / 1000), 250);
-    return () => window.clearInterval(id);
-  }, [stage, stopped]);
-  return elapsed;
 }
