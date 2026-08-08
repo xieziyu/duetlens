@@ -14,7 +14,7 @@ Electron 桌面应用:人与 codex agent 协同对话式的 code review。主进
 - `but`(GitButler)是版本控制入口,见 gitbutler skill。
 - 每个 fix / feature 走新分支 + PR;只有 release 版本号提交可直接落 `main`。
 - **功能 PR 收成单 commit**;评审后的修复走 `but amend` / `but squash` 保持这个形状。
-- 不 push、不开 PR,除非用户明说。
+- 不 push、不开 PR,除非用户明说。**例外:发版流程里的 release PR** —— 说了发版就是说了要那个 PR,本地闸门全绿就直接 push + 开 PR,别再问一次。
 
 ## 语言
 
