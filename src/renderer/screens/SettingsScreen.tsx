@@ -176,7 +176,9 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
           {/* 审核默认 */}
           <section className="set-sec" data-sec="review">
             <h2><span className="ic">▤</span> 审核默认</h2>
-            <div className="desc">发起与进入审核时的默认选择;单次审核内的临时改动不写回这里。</div>
+            <div className="desc">
+              发起与进入审核时的默认选择。diff 视图与文件列表视图是全局偏好,在审核内切换会写回这里。
+            </div>
             <Row label="默认来源">
               <Choice
                 value={settings.defaultSource === 'github-pr' ? 'github-pr' : 'local-branch'}
@@ -192,6 +194,16 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
                   { v: 'split', label: 'Split' },
                 ]}
                 onPick={(v) => update({ defaultDiffView: v as UiSettings['defaultDiffView'] })}
+              />
+            </Row>
+            <Row label="文件列表视图">
+              <Choice
+                value={settings.fileListView}
+                options={[
+                  { v: 'tree', label: '目录树' },
+                  { v: 'flat', label: '平铺' },
+                ]}
+                onPick={(v) => update({ fileListView: v as UiSettings['fileListView'] })}
               />
             </Row>
             <Row label="默认右栏 Tab">

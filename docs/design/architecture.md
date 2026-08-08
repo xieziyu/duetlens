@@ -56,9 +56,10 @@
 
 | 状态 | 粒度 | 理由 |
 | --- | --- | --- |
-| 主题两轴 / 栏宽 / 默认 tab / 默认 diff 视图 | per-user(`ui_settings`) | 用户级偏好,不随 PR 变;单次审核内的临时覆盖属 ephemeral,不写回默认 |
+| 主题两轴 / 栏宽 / 默认 tab | per-user(`ui_settings`) | 用户级偏好,不随 PR 变;单次审核内的临时覆盖属 ephemeral,不写回默认 |
+| diff 视图 / 文件列表视图 | per-user(`ui_settings`) | 同上,但这两项在审核内切换**即写回** —— 读 diff 的方式是习惯,不是这次 PR 的属性 |
 | per-file viewed / 本次 tab | per-review(`review_ui_state`) | 属这次审核的进度,换 PR 应清零,并要与「N 改动 · M 已看」一致 |
-| diff 折叠 / banner 展开 / 编辑草稿 | 不持久化 | 纯视图态 |
+| diff 折叠 / 目录树折叠 / banner 展开 / 编辑草稿 | 不持久化 | 纯视图态 |
 
 **一律进后端 sqlite,不用 renderer `localStorage`**:领域进度(viewed 是这次 review 的一部分)要能随会话历史一起恢复;外观偏好放同一处是为单一来源,顺带避开多窗口 / 清缓存导致的漂移与两套读写路径。
 

@@ -612,6 +612,8 @@ export interface UiSettings {
   rightWidth: number;
   defaultTab: 'discussion' | 'findings' | 'summary';
   defaultDiffView: 'unified' | 'split';
+  /** 左栏文件列表的视图:平铺分组 / 可逐级折叠的目录树 */
+  fileListView: 'flat' | 'tree';
   /** 发起表单预填的默认来源(入口只分 github-pr / 本地仓库两档,本地档统一存 local-branch) */
   defaultSource: SourceKind;
   /** 本地仓库来源上次用过的仓库路径(发起表单预填) */
@@ -663,6 +665,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
+  fileListView: 'tree',
   defaultSource: 'github-pr',
   lastRepoPath: '',
   findingsGrouping: 'severity',

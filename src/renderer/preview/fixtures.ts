@@ -73,6 +73,22 @@ index 0000000..3333333
 +    w.start();
 +    w
 +}
+diff --git a/src/renderer/screens/review/tree.ts b/src/renderer/screens/review/tree.ts
+index 8888888..9999999 100644
+--- a/src/renderer/screens/review/tree.ts
++++ b/src/renderer/screens/review/tree.ts
+@@ -1,3 +1,4 @@
+ export const depth = 4;
+-export const compact = false;
++export const compact = true;
++// 嵌套够深的一条,用来自查目录树的单链压缩与缩进导引线
+diff --git a/src/renderer/components/KbdHelp.tsx b/src/renderer/components/KbdHelp.tsx
+index aaaaaaa..bbbbbbb 100644
+--- a/src/renderer/components/KbdHelp.tsx
++++ b/src/renderer/components/KbdHelp.tsx
+@@ -1,2 +1,3 @@
+ export const rows = [];
++export const more = true;
 diff --git a/styles/app.css b/styles/app.css
 index 4444444..5555555 100644
 --- a/styles/app.css
@@ -351,6 +367,7 @@ const UI_SETTINGS: UiSettings = {
   rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
+  fileListView: 'tree',
   defaultSource: 'github-pr',
   lastRepoPath: '/Users/dev/podcast-go',
   findingsGrouping: 'severity',

@@ -379,15 +379,59 @@
   font-size: 11px;
   color: var(--text-faint);
 }
+/* 过滤框与视图切换同行:标题行在「128 改动 · 103 已看」这种宽计数下已经没有余量塞控件 */
+.tree .ffind-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin: 0 10px 6px;
+}
 .tree .ffind {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 7px;
-  margin: 0 10px 6px;
   padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--bg);
+}
+.tree .tvsw {
+  display: inline-flex;
+  align-items: stretch;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.tree .tvsw button {
+  flex: none;
+  width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.tree .tvsw button + button {
+  border-left: 1px solid var(--border-soft);
+}
+.tree .tvsw button:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.tree .tvsw button.on {
+  color: var(--agent);
+  background: var(--agent-soft);
+}
+.tree .tvsw svg {
+  width: 13px;
+  height: 13px;
 }
 .tree .ffind:focus-within {
   border-color: var(--agent-line);
@@ -472,6 +516,82 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---------- 目录树视图 ---------- */
+.tree.tv-tree {
+  --tind: 12px; /* 每级缩进 */
+}
+/* 目录行是 button(键盘可达):抹掉 UA 的边框/底色/字体/居中,其余仍走 .tree .dir */
+.tree.tv-tree .dir {
+  position: relative;
+  gap: 4px;
+  padding-left: calc(4px + var(--d, 0) * var(--tind));
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+.tree.tv-tree .dir:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.tree.tv-tree .dir:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--agent-soft);
+  border-color: var(--agent-line);
+}
+/* 过滤态由 expandAll 强行摊开,折叠开关此时无意义:置灰不可点,别让人以为点了没反应 */
+.tree.tv-tree .dir:disabled {
+  cursor: default;
+}
+.tree.tv-tree .dir:disabled .caret {
+  opacity: 0.35;
+}
+.tree.tv-tree .dir .caret {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--text-faint);
+  transition: transform 0.12s ease;
+}
+.tree.tv-tree .dir.open .caret {
+  transform: rotate(90deg);
+}
+.tree.tv-tree .file {
+  padding-left: calc(8px + var(--d, 0) * var(--tind));
+}
+/* 收起时才补的子树汇总 */
+.tree .dir .dsum {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+/* 整棵子树都已看:与 .file.viewed 同一档表达,别再另发明一种 */
+.tree .dir.all-viewed .dir-path {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-soft);
+}
+/* 缩进导引线画在 ::after 上,不能用 background-image ——
+   `.file:hover { background: … }` 是简写,会把 image 一起清掉,hover 时导引线闪断。 */
+.tree.tv-tree .file::after,
+.tree.tv-tree .dir::after {
+  content: '';
+  position: absolute;
+  left: 10px; /* = caret 中心:4px 内缩 + 12px 图标的一半 */
+  top: 0;
+  bottom: 0;
+  width: calc(var(--d, 0) * var(--tind));
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--border-soft) 0 1px,
+    transparent 1px var(--tind)
+  );
+  pointer-events: none;
+}
 .file {
   display: flex;
   align-items: center;
@@ -542,7 +662,9 @@
 .file .stat .d {
   color: var(--del);
 }
-.file .badge {
+/* 收起的目录行借同一枚徽标报子树内的 finding 数 */
+.file .badge,
+.tree .dir .badge {
   font-family: var(--mono);
   font-size: 10px;
   min-width: 16px;
@@ -552,8 +674,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
 }
-.file .badge.f {
+.file .badge.f,
+.tree .dir .badge.f {
   background: var(--del-bg);
   color: var(--sev-high);
   border: 1px solid var(--del-gutter);
