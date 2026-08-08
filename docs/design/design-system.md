@@ -6,7 +6,7 @@
 
 ## 两个正交轴
 
-- `data-mode` = `light | dark` —— 明暗**品牌外壳**(chrome:bg / surface / border / text / brand / 阴影 / 辉光)的**默认档**。
+- `data-mode` = `light | dark` —— 明暗**品牌外壳**(chrome:bg / surface / border / text / brand / 阴影 / 辉光)的**默认档**。用户偏好里还有「跟随系统」一档,由 `SettingsProvider` 解析后才落到属性上,**属性本身永远是这两值之一**,tokens 不必也不该写 `prefers-color-scheme`。
 - `data-theme` = `duetlens | github | parchment` —— **配色主题**,成套打包所有该随主题走的部件:语法 token + 代码正文色、diff 增删的前景 / 背景 / gutter、severity 徽标色、代码内引用与搜索高亮。主题跟随 `data-mode` 自动切子模式。
 
 **主题默认只管代码那一半,chrome 由 `data-mode` 给;但主题可以整套覆写 chrome** —— 纸的色温本身就是羊皮纸这套主题要传达的东西,只换语法色留一块冷灰画布等于没做。覆写档的选择器带两个属性(`[data-mode][data-theme]`),特异性高于 `data-mode` 那档,与书写顺序无关。**duet 双声道 accent(agent 天蓝 / human 琥珀)由 chrome 给出默认值,主题可按自己的画布覆写** —— 要守住的是**两条声道的语义角色与彼此、与 severity / diff 的可辨识度**,不是某个固定色值;把色值锁死等于规定了以后所有配色方案的画布色温。羊皮纸这一版就是照此各选各的:agent 天蓝原样(冷 accent 压在暖纸上最跳,信息层级一点不用重排),human 琥珀微调一档补偿暖纸吃掉的暖意。GitHub 这一版走到了另一头:agent 改用 Primer 的 done 紫,因为**蓝在 GitHub 的语言里属于链接与导航** —— agent 继续占蓝就会与满屏链接、与主 accent 撞,而紫恰是 GitHub 给「机器人 / 已合并」的那一档;让出蓝之后 severity 的 low 才能安心用蓝。屏幕特有的布局变量(如栏宽)留在各屏自己的 CSS。

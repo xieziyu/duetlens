@@ -605,7 +605,8 @@ export function isProposalUndoBlocked(p: FindingProposal, finding: Finding | nul
 
 // ---- Persisted UI state(见 docs/design/architecture.md 持久化表)----
 export interface UiSettings {
-  dataMode: 'light' | 'dark';
+  /** 用户选的档;`system` 需在渲染层解析成 light/dark 才能落到 `data-mode` 上 */
+  dataMode: 'light' | 'dark' | 'system';
   dataTheme: 'duetlens' | 'github' | 'parchment';
   leftWidth: number;
   rightWidth: number;
@@ -631,6 +632,21 @@ export interface UiSettings {
   codexPath: string;
   /** gh 可执行文件路径(空=用 PATH 中的 gh) */
   ghPath: string;
+}
+
+/** 明暗模式各档的显示名与图示;设置屏选项、rail 提示、onboarding 顶栏同源。 */
+export const DATA_MODE_LABELS: Record<UiSettings['dataMode'], string> = {
+  light: '浅色',
+  dark: '深色',
+  system: '跟随系统',
+};
+
+/** rail / onboarding 那颗钮只有一个按点,按此顺序轮换。 */
+export const DATA_MODE_CYCLE: readonly UiSettings['dataMode'][] = ['light', 'dark', 'system'];
+
+export function nextDataMode(current: UiSettings['dataMode']): UiSettings['dataMode'] {
+  const i = DATA_MODE_CYCLE.indexOf(current);
+  return DATA_MODE_CYCLE[(i + 1) % DATA_MODE_CYCLE.length];
 }
 
 /**

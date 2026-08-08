@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppInfo } from '@shared/ipc';
 import type { UpdateStatus } from '@shared/update';
 import type { CodexModelInfo, SourceKind, UiSettings } from '@shared/domain';
-import { DEFAULT_UI_SETTINGS, REASONING_EFFORTS, REVIEW_INTENSITIES } from '@shared/domain';
+import { DATA_MODE_LABELS, DEFAULT_UI_SETTINGS, REASONING_EFFORTS, REVIEW_INTENSITIES } from '@shared/domain';
 import type { EnvironmentReport } from '@shared/environment';
 import { AUTHOR, PROJECT_LINKS, newIssueUrl } from '@shared/links';
 import { useSettings } from '../settings/SettingsProvider';
@@ -10,7 +10,6 @@ import { KbdHelp } from '../components/KbdHelp';
 import './SettingsScreen.css';
 
 // 独立设置屏。左导航分节 + 右内容;改动经 useSettings 即时去抖落库。
-// 明暗只有浅色/深色两档:「跟随系统」未接,需 SettingsProvider 先支持 system 解析。
 
 const NAV: { group: string; items: { id: SectionId; icon: string; label: string }[] }[] = [
   {
@@ -149,13 +148,14 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
           {/* 外观 */}
           <section className="set-sec" data-sec="appearance">
             <h2><span className="ic">◐</span> 外观</h2>
-            <div className="desc">明暗模式与配色主题两个正交轴,应用启动即生效,跨所有审核一致。羊皮纸会连同界面底色一起换。</div>
+            <div className="desc">明暗模式与配色主题两个正交轴,应用启动即生效,跨所有审核一致。「跟随系统」会随系统外观实时切换。羊皮纸会连同界面底色一起换。</div>
             <Row label="明暗模式">
               <Choice
                 value={settings.dataMode}
                 options={[
-                  { v: 'light', label: '☀ 浅色' },
-                  { v: 'dark', label: '☾ 深色' },
+                  { v: 'light', label: `☀ ${DATA_MODE_LABELS.light}` },
+                  { v: 'dark', label: `☾ ${DATA_MODE_LABELS.dark}` },
+                  { v: 'system', label: `◐ ${DATA_MODE_LABELS.system}` },
                 ]}
                 onPick={(v) => update({ dataMode: v as UiSettings['dataMode'] })}
               />
