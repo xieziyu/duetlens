@@ -4,6 +4,59 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.3.0] - 2026-08-08
+
+### Added
+
+- **The file list on the left gains a directory tree view.** It is one click away from the existing
+  flat view and expands and collapses level by level. A chain of single-child directories compacts
+  into one row (`src/backend/store`), and a collapsed directory row carries its subtree file count and
+  finding badge. Filtering force-expands the matching paths without touching what you collapsed by
+  hand, so clearing the filter returns to where you were. The view is a global preference, also
+  available in Settings; the collapse state is kept per review and deliberately not persisted. (#37)
+- **Light/dark gains a "follow system" option.** The button at the bottom of the rail now cycles
+  light → dark → follow system, and following the system switches live with the OS, no restart. A
+  long-standing defect went with it: the renderer had to wait for the stored settings to come back
+  before it knew which theme to paint, so anyone not on dark saw one dark frame at every launch. (#36)
+- **A rerun now shows its start-up progress.** The panel used to sit on a disabled "starting…" button
+  while the backend tore down the previous session, pulled the latest diff and read PR comments — tens
+  of seconds on a large PR, with nothing moving on screen. It now turns into a waiting view in place,
+  with the same four stages as the entry screen, the elapsed time per stage, and a "slower than
+  expected" hint after 6s. A failure still falls back to the form with the note and intensity
+  intact. (#34)
+
+### Fixed
+
+- **Enter and Escape pressed while an IME is composing are no longer taken for real keys.** The Enter
+  that confirms a candidate and the Escape that cancels one are indistinguishable from a deliberate
+  press, and all 8 handlers acted on them: the dismiss-reason box saved half-typed text, and Escape in
+  the composer or the editor threw away whole drafts. (#25)
+- **A stale recheck note no longer reaches the author in place of the body it describes.** A
+  "still present" note is written before the body it ends up next to, so once that body is rewritten
+  the card shows two descriptions of the same problem — and the one sent to the author is the old one.
+  The same held for a suggestion left unrefreshed that round: accepting it would overwrite code the
+  author had just changed. Both are now cleared on a rewrite. A finding whose body was rewritten
+  without a new note also no longer drops out of the submit queue. (#35)
+- **Suggestion patches are re-indented to the line they are anchored to.** Patches from the agent
+  routinely arrive with the leading indentation stripped, and that text is submitted to GitHub
+  verbatim — clicking "Commit suggestion" moved the line to column 0, which is merely ugly in TS and
+  semantic breakage in Python or YAML. Alignment now happens at read time and multi-line patches shift
+  as a block; submission and export align against the current head diff and pin the commit id, instead
+  of drifting from the review-time snapshot. (#31)
+- **The section merged into the PR review body is renamed to "其他意见(未落在改动行上)".** It holds
+  the findings that could not be posted as inline comments, some of which carry a concrete
+  `file:line` — calling it an overall opinion contradicted those, and the reviewer's own prose sitting
+  right above it is the real overall opinion. (#26)
+
+### Upgrade notes
+
+- The database schema moves to v18 (0.2.x was v16) and an existing database migrates on first launch —
+  nothing to do. **Migration is one-way.** Going back to 0.2.x still opens the migrated database, but
+  what is stored in the new columns (the round a body was written in, the file list view preference) is
+  invisible to it and is never written back. Back up
+  `~/Library/Application Support/Duetlens/duetlens.db` before downgrading.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.2.2] - 2026-07-31
 
 ### Fixed
@@ -101,6 +154,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.3.0]: https://github.com/xieziyu/duetlens/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/xieziyu/duetlens/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/xieziyu/duetlens/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/xieziyu/duetlens/compare/v0.1.0...v0.2.0
