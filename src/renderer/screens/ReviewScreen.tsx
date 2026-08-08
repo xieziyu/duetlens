@@ -582,6 +582,8 @@ export function ReviewScreen({
             query={fileQuery}
             onQueryChange={setFileQuery}
             inputRef={fileQueryRef}
+            view={settings.fileListView}
+            onViewChange={(v) => update({ fileListView: v })}
           />
           <Resizer
             cssVar="--left-w"

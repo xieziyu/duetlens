@@ -240,8 +240,13 @@ ALTER TABLE findings ADD COLUMN body_round INTEGER;
 UPDATE findings SET body_round = round;
 `;
 
+// 左栏文件列表视图。留 NULL 让读取回落到 DEFAULT_UI_SETTINGS,新旧库拿到同一个默认。
+const V18 = `
+ALTER TABLE ui_settings ADD COLUMN file_list_view TEXT;
+`;
+
 const MIGRATIONS: string[] = [
-  V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17,
+  V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18,
 ];
 
 export function migrate(db: Database): void {
