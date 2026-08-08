@@ -1,3 +1,4 @@
+import { DATA_MODE_LABELS, nextDataMode } from '@shared/domain';
 import { useSettings } from '../settings/SettingsProvider';
 import './AppRail.css';
 
@@ -16,7 +17,8 @@ export function AppRail({
   onNavigate: (s: RailScreen) => void;
 }): React.JSX.Element {
   const { settings, update } = useSettings();
-  const dark = settings.dataMode === 'dark';
+  const mode = settings.dataMode;
+  const next = nextDataMode(mode);
 
   const item = (id: RailScreen, label: string, icon: React.JSX.Element, disabled = false) => (
     <button
@@ -40,11 +42,11 @@ export function AppRail({
       <span className="rail-gap" />
       <button
         className="rail-btn"
-        onClick={() => update({ dataMode: dark ? 'light' : 'dark' })}
-        title={dark ? '切换为浅色' : '切换为深色'}
-        aria-label="切换明暗"
+        onClick={() => update({ dataMode: next })}
+        title={`明暗:${DATA_MODE_LABELS[mode]} · 切换为${DATA_MODE_LABELS[next]}`}
+        aria-label={`明暗模式:${DATA_MODE_LABELS[mode]}`}
       >
-        {dark ? <MoonIcon /> : <SunIcon />}
+        {mode === 'system' ? <SystemIcon /> : mode === 'dark' ? <MoonIcon /> : <SunIcon />}
       </button>
       {item('settings', '设置', <GearIcon />)}
     </nav>
@@ -101,6 +103,13 @@ const SunIcon = () => (
   <svg {...S}>
     <circle cx="12" cy="12" r="4.2" />
     <path d="M12 2.6v2.2M12 19.2v2.2M4.4 4.4l1.6 1.6M18 18l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.4 19.6 6 18M18 6l1.6-1.6" />
+  </svg>
+);
+
+const SystemIcon = () => (
+  <svg {...S}>
+    <rect x="3" y="4.6" width="18" height="12.4" rx="1.6" />
+    <path d="M8.6 20.4h6.8M12 17v3.4" />
   </svg>
 );
 

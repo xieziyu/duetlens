@@ -8,7 +8,7 @@
 
 - **diff review 是主场** —— 用户交互最多的界面,三栏:文件树 / diff 主区 / 右侧 discussion 或 finding 详情。交互重心从 1.0 的「看 finding」转为「**在 diff 上对话**」。
 - **duet 双声道**:两套色语言贯穿全局区分说话方 —— **agent = 天蓝**、**human = 琥珀**,作用于 gutter 锚点、卡片、头像、文件树徽标。这是 Duetlens 的记忆点,也让「谁发起的」一眼可辨。
-- **明暗模式与配色主题是两个正交轴**:`data-mode`(light / dark,品牌外壳的明暗,**必须做双模式**)× `data-theme`(Duetlens / GitHub,**一整套 code-review 表面配色**,不止语法)。理由是开发者对配色有既有偏好(不少人惯用 GitHub),不该绑死在品牌色上;配色主题跟随明暗自动切子模式,用户不单独锁定。**高频的明暗留在外壳(rail 底部),低频的配色只在设置屏改**。
+- **明暗模式与配色主题是两个正交轴**:`data-mode`(light / dark,品牌外壳的明暗,**必须做双模式**)× `data-theme`(Duetlens / GitHub,**一整套 code-review 表面配色**,不止语法)。理由是开发者对配色有既有偏好(不少人惯用 GitHub),不该绑死在品牌色上;配色主题跟随明暗自动切子模式,用户不单独锁定。**高频的明暗留在外壳(rail 底部),低频的配色只在设置屏改**。明暗**偏好**比 `data-mode` 多一档「跟随系统」:它在渲染层解析成 light / dark 再落到属性上,tokens 与主题永远只面对两档;rail 那颗钮按 浅色 ▸ 深色 ▸ 跟随系统 轮换,不为第三档另加控件。
 - 字体 **IBM Plex Sans + Mono**(工程感,去手写体 / 衬线,避开通用 AI 味);wordmark 为 mono 小写 `duetlens_` 含闪烁光标。
 
 ## 应用外壳

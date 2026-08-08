@@ -26,13 +26,24 @@ const pathReady = hydratePath();
 let manager: ReviewManager;
 let mainWindow: BrowserWindow | null = null;
 
+/** `ready-to-show` 迟迟不来(dev server 没起、渲染进程崩)也得把窗口放出来,否则只剩一个看不见的进程。 */
+const WINDOW_SHOW_TIMEOUT_MS = 5000;
+
 function createWindow(): void {
+  // 主题两轴随查询串交给 renderer:等它自己 IPC 问一遍设置再切,非默认档就先闪一帧默认深色。
+  // 库此刻已开(见 whenReady),这里只是多读 ui_settings 一行,没有额外 I/O。
+  const { dataMode, dataTheme } = manager.getUiSettings();
+  const themeQuery = { mode: dataMode, theme: dataTheme };
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     minWidth: 960,
     minHeight: 600,
-    backgroundColor: '#0b0d12', // 对齐 tokens 深色 --bg,消除加载白闪
+    // 首帧画好再显示。窗口在此之前只有 backgroundColor 一种颜色,而它对不上用户选的档
+    // (对得上就得在这儿抄一份 tokens 的色值,那是第二份真相源)。
+    show: false,
+    backgroundColor: '#0b0d12', // 对齐 tokens 深色 --bg;显示之后只在缩放的重绘间隙露出来
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -41,6 +52,12 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+
+  const showTimer = setTimeout(() => mainWindow?.show(), WINDOW_SHOW_TIMEOUT_MS);
+  mainWindow.once('ready-to-show', () => {
+    clearTimeout(showTimer);
+    mainWindow?.show();
   });
 
   // 应用内外链交系统默认浏览器,不开 Electron 子窗口;应用本身是 SPA,不做整页跳转。
@@ -57,13 +74,16 @@ function createWindow(): void {
   // ELECTRON_RENDERER_URL 由 electron-vite dev 注入
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (!app.isPackaged && devServerUrl) {
-    mainWindow.loadURL(devServerUrl);
+    const url = new URL(devServerUrl);
+    url.search = new URLSearchParams(themeQuery).toString();
+    mainWindow.loadURL(url.toString());
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: themeQuery });
   }
 
   mainWindow.on('closed', () => {
+    clearTimeout(showTimer);
     mainWindow = null;
   });
 }
