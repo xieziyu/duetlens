@@ -478,6 +478,12 @@ code {
 .app-frame button {
   cursor: default;
 }
+/* .mono 工具类定义在 src/renderer/index.css —— 那份还带 html/body/#root 的全局重置,
+   官网不该整份吃进来,所以在这儿按同一个 token 补一条。产品截面里 .srcchip .ref、
+   .anchor-ref .path 这些都只靠这个类拿等宽,缺了会静默退回 sans。 */
+.app-frame .mono {
+  font-family: var(--mono);
+}
 /* 静态占位:应用里是 input / textarea,这里是纯展示的 div */
 .app-frame .composer-input.ph,
 .app-frame .summary.ph,
