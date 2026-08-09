@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="zh-CN" data-mode="dark" data-theme="duetlens">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Duetlens — 和 agent 看透每一处改动</title>
+<meta name="description" content="Duetlens 是一个 macOS 桌面应用:把一次 code review 变成你和 codex agent 的双人对话。每条 finding 都是可以继续追问的讨论线程。">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="module" src="./main.js"></script>
+</head>
+<body>
+
+<div class="lp-aura" aria-hidden="true"></div>
+<div class="lp-grid" aria-hidden="true"></div>
+
+<nav class="lp-nav" id="nav">
+  <div class="lp-nav-in">
+    <a class="lp-brand" href="#top">
+      <svg class="dl-mark" viewBox="0 0 96 96" width="21" height="21" role="img" aria-label="Duetlens"></svg>
+      <span class="wordmark mono">duet<i>lens</i><span class="cur">_</span></span>
+    </a>
+    <div class="lp-nav-r">
+      <a href="#flow">怎么用</a>
+      <a href="#more">功能</a>
+      <a data-link="repo">GitHub</a>
+      <a class="lp-btn solid" data-link="releases">下载</a>
+    </div>
+  </div>
+</nav>
+
+<header class="lp-hero" id="top">
+  <span class="lp-pill up" style="--d:.02s">
+    <span class="glyph" aria-hidden="true"></span> codex · read-only sandbox
+  </span>
+  <h1 class="up" style="--d:.1s">和 agent<br><span class="hl">看透每一处改动</span></h1>
+  <p class="lead up" style="--d:.2s">
+    agent 发现的每处问题都可以被继续讨论<br>
+    让 code review 更加通透彻底
+  </p>
+  <div class="lp-cta up" style="--d:.3s">
+    <a class="lp-btn solid lg" data-link="releases">下载 macOS 版</a>
+    <a class="lp-btn ghost lg" href="#flow">看它怎么工作 ↓</a>
+  </div>
+  <div class="lp-meta up" style="--d:.4s">macOS · Apple Silicon · GPL-3.0 · 需要已 codex login 的 codex CLI</div>
+  <div class="lp-scroll" aria-hidden="true"><i></i>SCROLL</div>
+</header>
+
+<!-- ============ 滚动舞台 ============ -->
+<section class="lp-show" id="flow">
+  <div class="lp-stage">
+    <div class="app-frame">
+      <!-- 顶栏:与应用同一份 .rev-topbar -->
+      <header class="rev-topbar">
+        <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="brand">
+          <svg class="dl-mark" viewBox="0 0 96 96" width="20" height="20" role="img" aria-label="Duetlens"></svg>
+          <span class="wordmark mono">duet<i>lens</i><span class="cur">_</span></span>
+        </span>
+        <span class="tb-sep"></span>
+        <div class="source">
+          <span class="srcchip"><span class="si">⑂</span><span class="mono ref">feat/streaming-transcode</span></span>
+          <span class="title">feat: streaming transcode pipeline</span>
+        </div>
+        <span class="spacer"></span>
+        <button class="rerun-cta" id="rerunCta" type="button">↻ 重跑</button>
+        <button class="submit-cta" type="button">提交 review <span class="cta-badge" id="ctaBadge">5</span></button>
+      </header>
+
+      <div class="app-body">
+
+        <!-- ---------- 幕 1:机审边扫边落 ---------- -->
+        <section class="stage-panel" data-panel="0" aria-hidden="true">
+          <div class="rev-host">
+            <div class="scanbar">
+              <div class="sb-head">
+                <div class="sb-row">
+                  <span class="sb-glyph"></span>
+                  <span class="sb-round">首轮机审</span>
+                  <span class="sb-steps">
+                    <span class="sb-step done"><span class="sb-dot"></span>拉取 diff</span>
+                    <span class="sb-seg done"></span>
+                    <span class="sb-step done"><span class="sb-dot"></span>建立会话</span>
+                    <span class="sb-seg done"></span>
+                    <span class="sb-step active"><span class="sb-dot"></span>通读改动</span>
+                    <span class="sb-seg"></span>
+                    <span class="sb-step"><span class="sb-dot"></span>就绪</span>
+                  </span>
+                  <span class="sb-cnt" id="scanCnt">＋0 findings</span>
+                  <span class="sb-chev"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rev-main two-left">
+              <div class="pane tree">
+                <div class="tree-top">
+                  <div class="head"><h3>Files</h3><span class="count">6 改动 · 1 已看</span></div>
+                  <div class="ffind-row"><div class="ffind"><span class="mag">⌕</span>
+                    <input placeholder="过滤文件 · ⌘⇧F" readonly></div></div>
+                </div>
+                <div class="group">
+                  <div class="dir"><span class="dir-path">src/</span></div>
+                  <div class="file active"><span class="tag">M</span><span class="name">pipeline.ts</span>
+                    <span class="badge f" data-badge="1">2</span>
+                    <span class="stat"><span class="a">+5</span><span class="d">−3</span></span></div>
+                  <div class="file"><span class="tag st-added">A</span><span class="name">worker.rs</span>
+                    <span class="badge f" data-badge="2">1</span>
+                    <span class="stat"><span class="a">+7</span><span class="d">−0</span></span></div>
+                  <div class="file"><span class="tag st-deleted">D</span><span class="name">legacy.ts</span>
+                    <span class="stat dim"><span class="a">+0</span><span class="d">−3</span></span></div>
+                  <div class="file"><span class="tag st-renamed">R</span><span class="name">newname.ts</span>
+                    <span class="stat dim"><span class="a">+0</span><span class="d">−0</span></span></div>
+                  <div class="dir"><span class="dir-path">styles/</span></div>
+                  <div class="file"><span class="tag">M</span><span class="name">app.css</span>
+                    <span class="stat"><span class="a">+3</span><span class="d">−1</span></span></div>
+                </div>
+              </div>
+              <div class="resizer"></div>
+
+              <div class="diff-col">
+                <div class="diff">
+                  <div class="diff-bar">
+                    <span class="db-stat"><span class="a">+15</span><span class="d">−7</span></span>
+                    <span class="db-spacer"></span>
+                    <span class="db-seg"><button class="on" type="button">Unified</button><button type="button">Split</button></span>
+                  </div>
+                  <div class="diff-file">
+                    <div class="file-header">
+                      <div class="fh-id">
+                        <div class="fh-line1"><span class="fh-name">pipeline.ts</span></div>
+                        <div class="fh-path"><bdi>src/</bdi></div>
+                      </div>
+                      <div class="fh-meta">
+                        <span class="fh-fnd" id="fhFnd">⚑ 2</span>
+                        <span class="fh-num"><span class="a">+5</span><span class="d">−3</span></span>
+                      </div>
+                    </div>
+                    <div class="hunk">
+                      <div class="hunk-label">@@ -17,6 +17,8 @@<span class="ctx">class TranscodePipeline</span></div>
+                      <div class="code-scroll scan-host">
+                        <div class="scan-beam" aria-hidden="true"></div>
+                        <table class="code unified"><tbody>
+                          <tr class="row"><td class="ln">17</td><td class="gutter"></td>
+                            <td class="src"><span>  <span class="hljs-keyword">for</span> (<span class="hljs-keyword">const</span> seg <span class="hljs-keyword">of</span> segments) {</span></td></tr>
+                          <tr class="row del"><td class="ln">18</td><td class="gutter">−</td>
+                            <td class="src"><span>    <span class="hljs-keyword">await</span> <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">encode</span>(seg);</span></td></tr>
+                          <tr class="row del"><td class="ln">19</td><td class="gutter">−</td>
+                            <td class="src"><span>    done += <span class="hljs-number">1</span>;</span></td></tr>
+                          <tr class="row add"><td class="ln">18</td><td class="gutter">＋</td>
+                            <td class="src"><span>    <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">spawn</span>(<span class="hljs-keyword">async</span> () =&gt; {</span></td></tr>
+                          <tr class="row add"><td class="ln">19</td><td class="gutter">＋</td>
+                            <td class="src"><span>      <span class="hljs-keyword">await</span> <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">encode</span>(seg);</span></td></tr>
+                          <tr class="row add" data-anchor><td class="ln">20</td>
+                            <td class="gutter"><span class="gsign">＋</span><span class="anchor agent"></span></td>
+                            <td class="src"><span>      counter.<span class="hljs-title function_">set</span>(counter.<span class="hljs-title function_">get</span>() + <span class="hljs-number">1</span>); <span class="hljs-comment">// track progress</span></span></td></tr>
+                          <tr class="row add"><td class="ln">21</td><td class="gutter">＋</td>
+                            <td class="src"><span>    });</span></td></tr>
+                          <tr class="row"><td class="ln">22</td><td class="gutter"></td>
+                            <td class="src"><span>  }</span></td></tr>
+                          <tr class="row"><td class="ln">23</td><td class="gutter"></td>
+                            <td class="src"><span>  <span class="hljs-keyword">async</span> <span class="hljs-title function_">retry</span>(task: <span class="hljs-type">Task</span>) {</span></td></tr>
+                          <tr class="row del"><td class="ln">22</td><td class="gutter">−</td>
+                            <td class="src"><span>    <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) <span class="hljs-keyword">await</span> <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">run</span>(task);</span></td></tr>
+                          <tr class="row add" data-anchor><td class="ln">24</td>
+                            <td class="gutter"><span class="gsign">＋</span><span class="anchor agent"></span></td>
+                            <td class="src"><span>    <span class="hljs-keyword">while</span> (!task.done) <span class="hljs-keyword">await</span> <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">run</span>(task);</span></td></tr>
+                        </tbody></table>
+                      </div>
+                    </div>
+                    <div class="inline drop" data-drop="0">
+                      <article class="card agent finding">
+                        <div class="c-head">
+                          <span class="who"><span class="av agent">◆</span>agent</span>
+                          <span class="tool-tag">report_finding</span>
+                          <span class="sev sev-high">high · correctness</span>
+                        </div>
+                        <div class="c-body">
+                          <b class="c-title">Cell 跨 spawn 共享导致数据竞争</b>
+                          <div class="c-prose"><p>Cell&lt;usize&gt; 不是线程安全的,不能跨 spawn 共享;每个 task 在独立线程执行,counter.set 无原子性也不满足 Sync。</p></div>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- 幕 2:在 diff 上对话 ---------- -->
+        <section class="stage-panel" data-panel="1" aria-hidden="true">
+          <div class="rev-host">
+            <div class="rev-main two-right">
+              <div class="diff-col">
+                <div class="diff">
+                  <div class="diff-bar">
+                    <span class="db-stat"><span class="a">+15</span><span class="d">−7</span></span>
+                    <span class="db-spacer"></span>
+                    <span class="db-seg"><button class="on" type="button">Unified</button><button type="button">Split</button></span>
+                  </div>
+                  <div class="diff-file">
+                    <div class="file-header">
+                      <div class="fh-id">
+                        <div class="fh-line1"><span class="fh-name">pipeline.ts</span></div>
+                        <div class="fh-path"><bdi>src/</bdi></div>
+                      </div>
+                      <div class="fh-meta">
+                        <span class="fh-fnd">⚑ 2</span>
+                        <span class="fh-num"><span class="a">+5</span><span class="d">−3</span></span>
+                      </div>
+                    </div>
+                    <div class="hunk-label">@@ -14,8 +14,12 @@<span class="ctx">class TranscodePipeline</span></div>
+                    <div class="code-scroll">
+                      <table class="code unified"><tbody>
+                        <tr class="row del"><td class="ln">18</td><td class="gutter">−</td>
+                          <td class="src"><span>  <span class="hljs-keyword">await</span> <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">encode</span>(seg);</span></td></tr>
+                        <tr class="row del"><td class="ln">19</td><td class="gutter">−</td>
+                          <td class="src"><span>  done += <span class="hljs-number">1</span>;</span></td></tr>
+                        <tr class="row add"><td class="ln">18</td><td class="gutter">＋</td>
+                          <td class="src"><span>  <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">spawn</span>(<span class="hljs-keyword">async</span> () =&gt; {</span></td></tr>
+                        <tr class="row add"><td class="ln">19</td><td class="gutter">＋</td>
+                          <td class="src"><span>    <span class="hljs-keyword">await</span> <span class="hljs-variable language_">this</span>.<span class="hljs-title function_">encode</span>(seg);</span></td></tr>
+                        <tr class="row add"><td class="ln">20</td>
+                          <td class="gutter"><span class="anchor agent"></span></td>
+                          <td class="src"><span>    counter.<span class="hljs-title function_">set</span>(counter.<span class="hljs-title function_">get</span>() + <span class="hljs-number">1</span>); <span class="hljs-comment">// track progress</span></span></td></tr>
+                      </tbody></table>
+                    </div>
+                    <div class="inline">
+                      <article class="card agent finding focused">
+                        <div class="c-head">
+                          <span class="who"><span class="av agent">◆</span>agent</span>
+                          <span class="round-tag still">本轮复核 · 仍存在</span>
+                          <span class="sev sev-high">high · correctness</span>
+                        </div>
+                        <div class="c-body">
+                          <b class="c-title">Cell 跨 spawn 共享导致数据竞争</b>
+                          <div class="c-prose"><p>Cell&lt;usize&gt; 不是线程安全的,不能跨 spawn 共享;每个 task 在独立线程执行,counter.set 无原子性也不满足 Sync。用 Arc&lt;AtomicUsize&gt; + fetch_add(1, Ordering::Relaxed) 替代。</p></div>
+                          <div class="c-sugg">
+                            <div class="c-sugg-lbl"><span class="dia">◇</span> suggestion</div>
+                            <div class="c-sugg-diff">
+                              <div class="csd-row del"><span class="csd-gut">−</span><span class="csd-code">counter.set(counter.get() + 1);</span></div>
+                              <div class="csd-row add"><span class="csd-gut">＋</span><span class="csd-code">counter.fetch_add(1, Ordering::Relaxed);</span></div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="c-actions">
+                          <button class="btn f-ask" type="button">↳ 追问</button>
+                          <button class="btn f-edit" type="button">✎ 编辑</button>
+                          <button class="btn danger" type="button">✕ 剔除</button>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="resizer"></div>
+
+              <div class="pane right">
+                <div class="tabs">
+                  <span class="tab on">Discussion <span class="tab-count">8</span></span>
+                  <span class="tab">Findings <span class="tab-count">7</span></span>
+                  <span class="tab">Summary</span>
+                </div>
+                <div class="tab-body disc-tab">
+                  <div class="disc-list">
+                    <div class="disc-item on"><span class="di-glyph agent">◆</span>
+                      <span class="di-title">Cell 跨 spawn 共享导致数据竞争</span>
+                      <span class="di-sev sev-high"></span><span class="di-anchor">pipeline.ts:20</span></div>
+                    <div class="disc-item"><span class="di-glyph agent">◆</span>
+                      <span class="di-title">counter 命名可更贴合语义</span>
+                      <span class="di-sev sev-medium"></span><span class="di-anchor">pipeline.ts:16</span></div>
+                    <div class="disc-item"><span class="di-glyph human">✎</span>
+                      <span class="di-title">这里为什么不用 worker pool?</span>
+                      <span class="di-anchor">pipeline.ts:18</span></div>
+                    <div class="disc-new"><span class="dn-plus">＋</span>新讨论<span class="dn-hint">不锚定代码</span></div>
+                  </div>
+                  <div class="anchor-ref"><span class="bar"></span>
+                    <span class="ar-text"><span class="path">src/pipeline.ts</span><span class="lnref">:20 · correctness</span></span></div>
+                  <div class="thread" id="thread">
+                    <div class="msg step" data-step="0">
+                      <span class="av agent">◆</span>
+                      <div class="body">
+                        <div class="nm"><b class="agent-name">agent</b><span class="t">report_finding</span></div>
+                        <div class="bubble">Cell&lt;usize&gt; 不是线程安全的,不能跨 spawn 共享;每个 task 在独立线程执行,counter.set 无原子性也不满足 Sync。</div>
+                      </div>
+                    </div>
+                    <div class="msg step" data-step="1">
+                      <span class="av human">✎</span>
+                      <div class="body">
+                        <div class="nm"><b class="human-name">reviewer</b><span class="t">刚刚</span></div>
+                        <div class="bubble">如果只想要个近似进度、不追求精确,能不能不加锁?</div>
+                      </div>
+                    </div>
+                    <div class="msg step" data-step="2">
+                      <span class="av agent">◆</span>
+                      <div class="body">
+                        <div class="nm"><b class="agent-name">agent</b></div>
+                        <div class="bubble"><span class="typing" id="typingDots"><i></i><i></i><i></i></span><span id="typeOut"></span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="composer">
+                    <div class="box"><div class="composer-input ph">追问 agent…</div></div>
+                    <div class="bar"><span class="scope">◆ read-only sandbox · agent 仅阅读代码,不会改动</span>
+                      <span class="send">发送 ⌘↵</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- 幕 3:重跑复核 ---------- -->
+        <section class="stage-panel" data-panel="2" aria-hidden="true">
+          <div class="rev-host">
+            <div class="scanbar">
+              <div class="sb-head">
+                <div class="sb-row">
+                  <span class="sb-glyph"></span>
+                  <span class="sb-round">第 2 轮机审</span>
+                  <span class="sb-steps">
+                    <span class="sb-step done"><span class="sb-dot"></span>拉取 diff</span>
+                    <span class="sb-seg done"></span>
+                    <span class="sb-step done"><span class="sb-dot"></span>新会话</span>
+                    <span class="sb-seg done"></span>
+                    <span class="sb-step done"><span class="sb-dot"></span>全量重扫</span>
+                    <span class="sb-seg done"></span>
+                    <span class="sb-step active"><span class="sb-dot"></span>对上一轮表态</span>
+                  </span>
+                  <span class="sb-cnt">＋8 findings</span>
+                  <span class="sb-chev"></span>
+                </div>
+              </div>
+            </div>
+            <div class="rev-main one">
+              <div class="pane right wide">
+                <div class="tabs">
+                  <span class="tab">Discussion <span class="tab-count">12</span></span>
+                  <span class="tab on">Findings <span class="tab-count">8</span></span>
+                  <span class="tab">Summary</span>
+                </div>
+                <div class="tab-body">
+                  <div class="fp-toolbar"><span class="fp-tally">第 2 轮 · <b>修复 1</b> · <b>新增 1</b> · 抑制 2 · 仍存在 4</span></div>
+                  <div class="fgroup">
+                    <div class="fg-head"><span class="fg-file">src/pipeline.ts</span><span class="fg-n">3</span></div>
+                    <div class="frow kept step" data-step="0">
+                      <div class="fr-top"><span class="sev sev-high">high</span>
+                        <span class="round-tag still stamp">still_present</span>
+                        <span class="origin agent"><span class="d"></span>agent</span></div>
+                      <div class="fr-title">Cell 跨 spawn 共享导致数据竞争</div>
+                      <div class="fr-foot"><span class="anchor">pipeline.ts:20 · correctness · ◇ suggestion</span></div>
+                    </div>
+                    <div class="frow resolved step" data-step="1">
+                      <div class="fr-top"><span class="sev sev-medium">medium</span>
+                        <span class="round-tag fixed stamp">fixed</span>
+                        <span class="origin agent"><span class="d"></span>agent</span></div>
+                      <div class="fr-title">counter 命名可更贴合语义</div>
+                      <div class="fr-note res"><span class="frn-lbl">已修复</span>第 2 轮复核:已改名为 completedCount。</div>
+                    </div>
+                    <div class="frow dismissed step" data-step="2">
+                      <div class="fr-top"><span class="sev sev-low">low</span>
+                        <span class="round-tag stamp">你已剔除 · 本轮抑制</span></div>
+                      <div class="fr-title">padding 建议用 spacing token</div>
+                      <div class="fr-foot"><span class="anchor">app.css:3 · 两层抑制,不会再冒出来</span></div>
+                    </div>
+                  </div>
+                  <div class="fgroup">
+                    <div class="fg-head"><span class="fg-file">src/worker.rs</span><span class="fg-n">1</span></div>
+                    <div class="frow kept step" data-step="3">
+                      <div class="fr-top"><span class="sev sev-high">high</span>
+                        <span class="round-tag new stamp">本轮新增</span>
+                        <span class="origin agent"><span class="d"></span>agent</span></div>
+                      <div class="fr-title">worker 退出前未 join 子任务,进程可能先于编码结束</div>
+                      <div class="fr-foot"><span class="anchor">worker.rs:41 · correctness</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ---------- 幕 4:提交 / 导出 ---------- -->
+        <section class="stage-panel" data-panel="3" aria-hidden="true">
+          <div class="submit-gh">
+            <div class="sg-topbar">
+              <button class="back" type="button">← 返回 diff</button>
+              <span class="pr-chip"><span class="gh">⎇ GitHub</span> <b>#482</b></span>
+              <span class="crumb">acme/media · <b>feat: streaming transcode pipeline</b></span>
+            </div>
+            <div class="sg-main">
+              <div class="pane curate">
+                <div class="c-head"><h1>筛一遍再提交</h1></div>
+                <div class="bulkbar"><span class="lbl">agent 报告 6</span><span class="muted">· 你新增 2</span>
+                  <div class="tally"><span class="keep" id="keepTally">保留 4</span><span class="drop">剔除 2</span></div></div>
+
+                <div class="sub-fnd kept step" data-step="0">
+                  <span class="chk">✓</span>
+                  <div class="f-main">
+                    <div class="f-top"><span class="sev high">high</span><span class="f-title">Cell 跨 spawn 共享导致数据竞争</span></div>
+                    <div class="f-top"><span class="f-anchor"><b>src/pipeline.ts</b> :20</span>
+                      <span class="origin agent"><span class="d"></span>agent</span></div>
+                    <div class="f-sugg"><div class="f-sugg-lbl"><span class="dia">◇</span> suggestion</div>
+                      <div class="f-sugg-diff">
+                        <div class="fsd-row add"><span class="fsd-gut">＋</span><span class="fsd-code">counter.fetch_add(1, Ordering::Relaxed);</span></div>
+                      </div></div>
+                  </div>
+                </div>
+                <div class="sub-fnd kept step" data-step="1">
+                  <span class="chk">✓</span>
+                  <div class="f-main">
+                    <div class="f-top"><span class="sev high">high</span><span class="f-title">worker 退出前未 join 子任务</span></div>
+                    <div class="f-top"><span class="f-anchor"><b>src/worker.rs</b> :41</span>
+                      <span class="origin agent"><span class="d"></span>agent</span></div>
+                  </div>
+                </div>
+                <div class="sub-fnd kept step" data-step="2">
+                  <span class="chk">✓</span>
+                  <div class="f-main">
+                    <div class="f-top"><span class="sev med">medium</span><span class="f-title">重试没有上限,失败会无限循环</span></div>
+                    <div class="f-top"><span class="f-anchor"><b>src/pipeline.ts</b> :24</span>
+                      <span class="origin human"><span class="d"></span>你</span></div>
+                  </div>
+                </div>
+                <div class="sub-fnd dismissed step" data-step="3">
+                  <span class="chk">✓</span>
+                  <div class="f-main">
+                    <div class="f-top"><span class="sev low">low</span><span class="f-title">padding 建议用 spacing token</span></div>
+                    <div class="f-top"><span class="f-anchor"><b>styles/app.css</b> :3</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pane finish">
+                <div class="h"><div class="t">◆ Finish your review</div></div>
+                <div class="finish-body">
+                  <div class="field-lbl">Review 意见</div>
+                  <div class="summary ph">可选 · 你写给作者的话(agent 的总结不会发出去)</div>
+                  <div class="field-lbl mt">提交类型</div>
+                  <div class="events">
+                    <div class="event on"><span class="radio"></span>
+                      <div><div class="et">💬 Comment</div><div class="ed">只留评论,不表态</div></div></div>
+                    <div class="event"><span class="radio"></span>
+                      <div><div class="et">↻ Request changes</div><div class="ed">要求作者修改后再合并</div></div></div>
+                    <div class="event"><span class="radio"></span>
+                      <div><div class="et">✓ Approve</div><div class="ed">批准这个 PR</div></div></div>
+                  </div>
+                </div>
+                <div class="finish-foot">
+                  <button class="submit" id="submitBtn" type="button">提交 review · 4 条</button>
+                  <div class="foot-note" id="footNote">本地分支没有 PR 可提交时,这里是「导出 Markdown」</div>
+                </div>
+                <div class="sub-banner ok" id="okBanner"><span class="bi">✓</span>
+                  <div class="bt"><b>review 已提交</b> · 4 行评论 + 摘要 · <span class="lk">在 GitHub 查看 ↗</span></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <footer class="rev-statusbar">
+        <span class="sb-status s-reviewing" id="sbStatus"><span class="pulse"></span><span id="sbStatusTx">扫描中</span></span>
+        <span class="sb-item mono" id="sbRound">第 1 轮</span>
+        <span class="sb-sep"></span>
+        <span class="sb-item sb-agent"><span class="glyph"></span>codex<span class="sb-model">gpt-5-codex</span><span class="sb-effort">high</span></span>
+        <span class="sb-sep"></span>
+        <span class="sb-item mono" id="sbCtx">63K / 258K · 24%</span>
+        <span class="sb-spacer"></span>
+        <span class="sb-item mono">⌘ 快捷键</span>
+      </footer>
+    </div>
+
+    <div class="lp-rail">
+      <span class="rn" id="railName">01 — 机审边扫边落</span>
+      <span class="bars"><i class="on"></i><i></i><i></i><i></i></span>
+    </div>
+  </div>
+
+  <div class="lp-script">
+    <article class="lp-act" data-act="0">
+      <span class="lp-eyebrow">01 · 机审</span>
+      <h2>Findings 不是终点，<br>是对话的锚点</h2>
+      <p>Reviewer 和 agent 同步进行审查，agent 扫出的 finding 会逐步落到 diff 上。</p>
+      <ul>
+        <li>三种来源: GitHub PR · 本地 git 分支 · GitButler 虚拟分支</li>
+        <li>两档强度: 标准档单轮直接上报，对抗档追加一轮自检</li>
+        <li class="amber">专注审查: agent 跑在 read-only sandbox 里，不做改动。</li>
+      </ul>
+    </article>
+
+    <article class="lp-act" data-act="1">
+      <span class="lp-eyebrow">02 · 讨论</span>
+      <h2>是误报，<br>还是真漏洞？</h2>
+      <p>每条 finding 都可以被继续讨论；行内 ✎ 或框选一段代码也可新开讨论。彻底搞懂实现细节。</p>
+      <ul>
+        <li>追问: 质疑 agent 的结论或者补齐 agent 不知道的上下文</li>
+        <li>发现: 主动提出代码改进建议，并让 agent 自动补齐意见</li>
+        <li class="amber">修订: 根据讨论结果，agent 会更新自己的建议</li>
+      </ul>
+    </article>
+
+    <article class="lp-act" data-act="2">
+      <span class="lp-eyebrow">03 · 复核</span>
+      <h2>重跑一轮,<br>同时采纳多方意见</h2>
+      <p>每轮换一个新会话全量重扫，复核之前发现的问题，同时对于 Reviewer 或者作者明确表态的意见处置会被保留。</p>
+      <ul>
+        <li>复核: 人工主动的处置会得以保留</li>
+        <li class="amber">追溯: 历史讨论和轮次信息得以保留</li>
+      </ul>
+    </article>
+
+    <article class="lp-act" data-act="3">
+      <span class="lp-eyebrow">04 · 收口</span>
+      <h2>提交成 PR review,<br>或导出 Markdown</h2>
+      <p>人工筛一遍真正要提交的内容，提交成 GitHub PR review。本地分支就导出成一份 Markdown 报告。</p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ 其余功能 ============ -->
+<section class="lp-more" id="more">
+  <div class="lp-wrap">
+    <span class="lp-eyebrow">还有这些</span>
+    <div class="lp-cards">
+      <div class="lp-card">
+        <h4>审核规则三层覆盖</h4>
+        <p><code>builtin</code> ▸ <code>用户全局</code> ▸ <code>仓库级别</code></p>
+      </div>
+      <div class="lp-card">
+        <h4>多主题色搭配明暗模式</h4>
+        <p>多套配色方案，可跟随系统的明暗模式，自由的偏好设置</p>
+      </div>
+      <div class="lp-card">
+        <h4>本地优先</h4>
+        <p>审核历史存本地，保留 30 天</p>
+      </div>
+    </div>
+
+    <div class="lp-final">
+      <h2>下一次 review，带上 agent 一起</h2>
+      <p>macOS · Apple Silicon · 需要已 <code>codex login</code> 的 codex CLI<br>
+        首次启动会逐项自检前置，缺什么给一条可复制的修复命令。</p>
+      <div class="lp-cta">
+        <a class="lp-btn solid lg" data-link="releases">下载最新版本</a>
+        <a class="lp-btn ghost lg" data-link="changelog">CHANGELOG</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="lp-foot">
+  <div class="lp-wrap">
+    <div class="f-id">
+      <span class="f-brand">
+        <svg class="dl-mark" viewBox="0 0 96 96" width="18" height="18" role="img" aria-label="Duetlens"></svg>
+        <span class="wordmark mono">duet<i>lens</i><span class="cur">_</span></span>
+      </span>
+      <span class="f-copy">
+        © <span id="year">2026</span> <a data-link="author">xieziyu</a>
+        · <a data-link="license">GPL-3.0-or-later</a>
+      </span>
+    </div>
+
+    <nav class="f-links" aria-label="项目链接">
+      <a data-link="repo">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+      <a data-link="issues">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/><path fill="currentColor" d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"/></svg>
+        反馈 issue
+      </a>
+      <a data-link="changelog">CHANGELOG</a>
+      <a data-link="releases">下载</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

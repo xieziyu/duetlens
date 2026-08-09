@@ -13,6 +13,8 @@
     "dist": "npm run build && electron-builder --mac --publish never",
     "release": "npm run build && electron-builder --mac --publish always",
     "preview:ui": "vite --config vite.preview.config.ts --port 5177 --strictPort",
+    "site:dev": "vite --config vite.site.config.ts --port 5178 --strictPort",
+    "site:build": "vite build --config vite.site.config.ts",
     "db:snapshot": "bash scripts/db-snapshot.sh",
     "icons:gen": "tsx scripts/gen-icons.ts",
     "rebuild:electron": "npm run rebuild:clean-meta && electron-builder install-app-deps",

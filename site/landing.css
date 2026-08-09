@@ -1,0 +1,1005 @@
+/* 官网自己的版式与动画。
+   产品截面的样式**不在这里** —— 那部分由 main.js 直接 import 应用的
+   theme/tokens.css + ReviewScreen.css + SubmitGitHubScreen.css,
+   本文件只做三件事:页面外壳、把三栏塞进一台展示窗口的少量覆写、滚动驱动的动画。
+   覆写一律限定在 .app-frame 内,别污染被 import 的那几份。 */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+/* 章节吸附:proximity 定"松手后吸到哪",.lp-act 上的 scroll-snap-stop:always 定"一次不能跨过几节"。
+   不用 mandatory —— 它会把页脚也往回吸,读下面的内容会被拽住。 */
+html {
+  scroll-snap-type: y proximity;
+  scroll-behavior: smooth;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+h1,
+h2,
+h3,
+h4,
+p,
+ul {
+  margin: 0;
+}
+ul {
+  padding: 0;
+  list-style: none;
+}
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+/* ---------- 环境光 ---------- */
+.lp-aura,
+.lp-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.lp-aura::before,
+.lp-aura::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(130px);
+}
+.lp-aura::before {
+  width: 860px;
+  height: 860px;
+  left: -240px;
+  top: -300px;
+  background: var(--glow1);
+  opacity: 1.6;
+}
+.lp-aura::after {
+  width: 620px;
+  height: 620px;
+  right: -200px;
+  top: 40vh;
+  background: var(--glow2);
+  opacity: 1.6;
+}
+.lp-grid {
+  opacity: 0.5;
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--text) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--text) 3%, transparent) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000, transparent 72%);
+  mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000, transparent 72%);
+}
+
+/* ---------- 通用件 ---------- */
+.lp-wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 32px;
+  position: relative;
+  z-index: 1;
+}
+.lp-eyebrow {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--agent-2);
+}
+.lp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 13px 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.lp-pill .glyph {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  background: conic-gradient(from 210deg, var(--agent), var(--agent-2), var(--agent));
+  box-shadow: 0 0 0 1px var(--agent-line) inset;
+}
+.lp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--r);
+  border: 1px solid transparent;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+.lp-btn.lg {
+  padding: 11px 22px;
+  font-size: 14.5px;
+}
+.lp-btn.solid {
+  background: var(--accent-solid);
+  color: var(--on-solid);
+}
+.lp-btn.solid:hover {
+  background: var(--accent-solid-hover);
+}
+.lp-btn.ghost {
+  border-color: var(--border);
+  color: var(--text);
+  background: color-mix(in oklab, var(--surface) 60%, transparent);
+}
+.lp-btn.ghost:hover {
+  border-color: var(--agent-line);
+}
+/* ---------- 顶部导航 ---------- */
+.lp-nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 40;
+  backdrop-filter: blur(14px);
+  background: color-mix(in oklab, var(--bg) 74%, transparent);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s ease;
+}
+.lp-nav.stuck {
+  border-bottom-color: var(--border-soft);
+}
+.lp-nav-in {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 13px 32px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lp-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+}
+.lp-nav-r {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+.lp-nav-r a:not(.lp-btn):hover {
+  color: var(--text);
+}
+
+/* ---------- Hero ---------- */
+.lp-hero {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 130px 32px 70px;
+}
+.lp-hero h1 {
+  font-size: clamp(38px, 6.4vw, 76px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+  margin-top: 24px;
+}
+.lp-hero h1 .hl {
+  background: linear-gradient(100deg, var(--agent-2) 10%, var(--human) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lp-hero .lead {
+  max-width: 640px;
+  margin-top: 24px;
+  font-size: 16.5px;
+  color: var(--text-dim);
+}
+.lp-cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 34px;
+}
+.lp-meta {
+  margin-top: 20px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-deco);
+}
+.lp-scroll {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--text-deco);
+}
+.lp-scroll i {
+  width: 1px;
+  height: 38px;
+  background: linear-gradient(var(--agent), transparent);
+  animation: lp-drop 1.9s ease-in-out infinite;
+}
+@keyframes lp-drop {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.2);
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(1);
+  }
+}
+.up {
+  opacity: 0;
+  transform: translateY(16px);
+  animation: lp-up 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: var(--d, 0s);
+}
+@keyframes lp-up {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- 滚动舞台 ---------- */
+.lp-show {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.32fr) minmax(0, 0.68fr);
+  gap: 48px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+.lp-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+}
+.lp-script {
+  padding: 20vh 0 26vh;
+}
+.lp-act {
+  min-height: 88vh;
+  /* always:滚动不得越过任何一个吸附点。缺了它,一次快甩会直接从第 1 节飞到第 3 节,
+     中间那节的动画从没被看见过。 */
+  scroll-snap-stop: always;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  scroll-snap-align: center;
+  opacity: 0.22;
+  transition: opacity 0.45s ease;
+}
+.lp-act.on {
+  opacity: 1;
+}
+.lp-act h2 {
+  font-size: clamp(25px, 2.9vw, 37px);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+  margin: 14px 0 16px;
+}
+.lp-act p {
+  color: var(--text-dim);
+  font-size: 15px;
+}
+.lp-act ul {
+  margin-top: 20px;
+  display: grid;
+  gap: 10px;
+}
+.lp-act li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 13.5px;
+  color: var(--text-faint);
+}
+.lp-act li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--agent);
+}
+.lp-act li.amber::before {
+  background: var(--human);
+}
+
+/* 幕次指示 */
+.lp-rail {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-deco);
+}
+.lp-rail .rn {
+  color: var(--text-dim);
+}
+.lp-rail .bars {
+  margin-left: auto;
+  display: flex;
+  gap: 5px;
+}
+.lp-rail .bars i {
+  width: 26px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.35s ease;
+}
+.lp-rail .bars i.on {
+  background: var(--agent);
+}
+
+/* ---------- 展示窗口:把应用三栏塞进一台"缩微 Mac" ---------- */
+.app-frame {
+  height: min(646px, 78vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow:
+    0 50px 90px -56px rgb(0 0 0 / 0.85),
+    inset 0 0 0 1px color-mix(in oklab, var(--text) 2%, transparent);
+}
+/* 顶栏 / 状态栏在应用里靠外壳网格定位;这里换成 flex 的头尾两条 */
+.app-frame .rev-topbar,
+.app-frame .rev-statusbar,
+.app-frame .rev-host {
+  grid-area: auto;
+}
+.app-frame .rev-topbar {
+  flex: none;
+  height: 42px;
+  padding-left: 74px;
+  position: relative;
+}
+.app-frame .rev-topbar .lights {
+  position: absolute;
+  left: 16px;
+  display: flex;
+  gap: 8px;
+}
+.app-frame .rev-topbar .lights i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.app-frame .rev-topbar .lights i:first-child {
+  background: #ff5f57;
+}
+.app-frame .rev-topbar .lights i:nth-child(2) {
+  background: #febc2e;
+}
+.app-frame .rev-topbar .lights i:nth-child(3) {
+  background: #28c840;
+}
+.app-frame .rev-topbar .title {
+  font-size: 13px;
+}
+/* 窗口比真实应用窄一截,顶栏两枚 CTA 不能折行 */
+.app-frame .rev-topbar .rerun-cta,
+.app-frame .rev-topbar .submit-cta {
+  white-space: nowrap;
+  flex: none;
+}
+.app-frame .rev-statusbar {
+  flex: none;
+}
+.app-frame .rev-host {
+  height: 100%;
+}
+.app-frame .rev-main {
+  --left-w: 196px;
+  --right-w: 300px;
+}
+.app-frame .rev-main.two-left {
+  grid-template-columns: var(--left-w) 5px minmax(0, 1fr);
+}
+.app-frame .rev-main.two-right {
+  grid-template-columns: minmax(0, 1fr) 5px var(--right-w);
+}
+.app-frame .rev-main.one {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* 展示件不该出现滚动条:内容按每一幕裁到刚好 */
+.app-frame .pane,
+.app-frame .diff,
+.app-frame .thread,
+.app-frame .disc-list,
+.app-frame .code-scroll {
+  overflow: hidden;
+}
+.app-frame .right.wide {
+  border-left: 0;
+}
+.app-frame .tab,
+.app-frame .disc-item,
+.app-frame .disc-new,
+.app-frame .file,
+.app-frame .frow,
+.app-frame .gap-bar,
+.app-frame button {
+  cursor: default;
+}
+/* 静态占位:应用里是 input / textarea,这里是纯展示的 div */
+.app-frame .composer-input.ph,
+.app-frame .summary.ph,
+.app-frame .ffind input {
+  color: var(--text-deco);
+  font-size: 12.5px;
+}
+.app-frame .summary.ph {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+  padding: 9px 11px;
+  min-height: 62px;
+}
+.app-frame .ffind input {
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-family: var(--sans);
+  width: 100%;
+}
+.app-frame .ffind .mag {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.app-frame .composer .bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.app-frame .composer .send {
+  margin-left: auto;
+  flex: none;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: var(--accent-solid);
+  color: var(--on-solid);
+  font-size: 10.5px;
+}
+/* 线程贴底,新消息把旧的顶出去 —— 与真实聊天一致,也免得打字时把 composer 挤走 */
+.app-frame .thread {
+  justify-content: flex-end;
+}
+.app-frame .fp-toolbar {
+  display: flex;
+  padding: 10px 12px 6px;
+}
+.app-frame .fg-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.app-frame .tab-body {
+  padding: 0 12px 8px;
+}
+/* 舞台窗口比真实应用矮一截:列表类面板整体收一档行距,否则最后一条正好被切掉 ——
+   而它恰恰是动画最后落位的那条。 */
+.app-frame .frow {
+  padding: 8px 11px;
+  margin-bottom: 5px;
+}
+.app-frame .fg-head {
+  padding: 6px 12px 4px;
+}
+.app-frame .fp-toolbar {
+  padding: 8px 12px 2px;
+}
+.app-frame .sub-fnd {
+  padding: 9px 11px;
+  margin-bottom: 6px;
+}
+/* 右侧 finish 栏在真实应用里是 388px 定宽;窗口窄了一半,让位给左边的筛选列表 */
+.app-frame .sg-main {
+  grid-template-columns: minmax(0, 1fr) 322px;
+}
+.app-frame .curate {
+  padding: 16px 16px 24px;
+}
+.app-frame .summary.ph {
+  min-height: 34px;
+}
+/* 三档表态在矮窗口里会被切掉最后一档;压行距而不是砍掉一档 —— 应用里就是三档 */
+.app-frame .finish-body {
+  padding: 10px 14px;
+}
+.app-frame .field-lbl.mt {
+  margin-top: 8px;
+}
+.app-frame .events {
+  gap: 6px;
+  margin-bottom: 0;
+}
+.app-frame .event {
+  padding: 7px 11px;
+}
+.app-frame .disc-tab {
+  padding: 0;
+}
+.app-frame .sub-banner.ok {
+  margin: 0 14px 14px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
+}
+.app-frame .sub-banner.ok.on {
+  opacity: 1;
+  transform: none;
+}
+.app-frame .sub-banner .lk {
+  color: var(--agent-2);
+  text-decoration: underline;
+}
+.app-frame .submit.done {
+  background: color-mix(in oklab, var(--add) 18%, transparent);
+  border-color: color-mix(in oklab, var(--add) 40%, transparent);
+  color: var(--add);
+}
+
+/* 幕:同一台窗口里叠放,交叉淡入 */
+.app-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.stage-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: scale(0.99) translateY(8px);
+  pointer-events: none;
+  transition:
+    opacity 0.4s ease,
+    transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.stage-panel.on {
+  opacity: 1;
+  transform: none;
+}
+.stage-panel > .rev-host,
+.stage-panel > .submit-gh {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- 动画:扫描光束(沿用 mockup C 的做法,换成 agent 蓝) ---------- */
+.scan-host {
+  position: relative;
+}
+/* 只有一条发光的线,不带渐变宽带:宽带压在 diff 行上会把增删底色一起冲淡,
+   看着像多刷了一层雾。亮度全交给 box-shadow 的辉光。 */
+.scan-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+  opacity: 0;
+  background: var(--agent);
+  box-shadow: 0 0 22px 4px color-mix(in oklab, var(--agent) 55%, transparent);
+  /* unified 表的行号与 gutter 两列是 sticky + z-index:1(横滚时要钉在左侧),
+     不显式抬高的话光束会从它们底下穿过去,只在代码列露出半截。
+     2 够压住这两列,又仍低于 file-header(3)与 diff-bar(4)—— 光束该从常驻列头**底下**扫过。 */
+  z-index: 2;
+}
+.stage-panel.on .scan-beam {
+  /* 匀速直线扫,时长由 JS 写进 --beam-dur —— 幕内各处的落位延时都按"光束几时扫到那一行"
+     从同一个数推出来(见 main.js 的 layoutScan),别在这儿再写死一份时刻表。 */
+  animation: lp-beam var(--beam-dur, 3.2s) linear infinite;
+}
+@keyframes lp-beam {
+  0% {
+    top: 0;
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  94% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+/* 光束扫过之后:gutter 锚点冒出来、内联卡落下来 */
+.stage-panel .code .anchor {
+  opacity: 0;
+}
+.stage-panel.on .code .anchor {
+  animation: lp-dot 0.42s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+.stage-panel.on .code .anchor {
+  animation-delay: var(--d, 0s);
+}
+@keyframes lp-dot {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+/* 锚点圆点冒出来的同时,它顶掉的 ＋ 号淡走 */
+.stage-panel .gutter .gsign {
+  transition: opacity 0.3s ease;
+}
+.stage-panel.on tr[data-anchor] .gsign {
+  opacity: 0;
+  transition-delay: var(--d, 0s);
+}
+.inline.drop {
+  opacity: 0;
+}
+.stage-panel.on .inline.drop {
+  animation: lp-rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: var(--d, 0s);
+}
+@keyframes lp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* 文件行上的 finding 计数徽标随上报点亮 */
+.stage-panel .badge.f {
+  opacity: 0;
+}
+.stage-panel.on .badge.f {
+  animation: lp-pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+  animation-delay: var(--d, 0s);
+}
+.stage-panel .fh-fnd {
+  opacity: 0;
+}
+.stage-panel.on .fh-fnd {
+  animation: lp-pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+  animation-delay: var(--d, 0s);
+}
+@keyframes lp-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 逐条落位:讨论消息 / findings 行 / 待提交行 */
+.stage-panel .step {
+  opacity: 0;
+}
+.stage-panel.on .step {
+  animation: lp-rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.stage-panel.on .step[data-step='0'] {
+  animation-delay: 0.3s;
+}
+.stage-panel.on .step[data-step='1'] {
+  animation-delay: 0.8s;
+}
+.stage-panel.on .step[data-step='2'] {
+  animation-delay: 1.3s;
+}
+.stage-panel.on .step[data-step='3'] {
+  animation-delay: 1.8s;
+}
+/* 剔除/已解决那两条落位后停在归档态,别被 forwards 拉回全不透明 */
+.stage-panel.on .frow.dismissed.step,
+.stage-panel.on .sub-fnd.dismissed.step {
+  animation-name: lp-rise-muted;
+}
+@keyframes lp-rise-muted {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 0.5;
+    transform: none;
+  }
+}
+/* 三态结论晚一步"盖"上去 */
+.stage-panel .stamp {
+  opacity: 0;
+}
+.stage-panel.on .stamp {
+  animation: lp-stamp 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) forwards;
+}
+.stage-panel.on .step[data-step='0'] .stamp {
+  animation-delay: 1.1s;
+}
+.stage-panel.on .step[data-step='1'] .stamp {
+  animation-delay: 1.6s;
+}
+.stage-panel.on .step[data-step='2'] .stamp {
+  animation-delay: 2.1s;
+}
+.stage-panel.on .step[data-step='3'] .stamp {
+  animation-delay: 2.6s;
+}
+@keyframes lp-stamp {
+  from {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- 其余功能 / 收尾 ---------- */
+.lp-more {
+  position: relative;
+  z-index: 1;
+  padding: 110px 0 80px;
+  margin-top: 40px;
+  border-top: 1px solid var(--border-soft);
+}
+.lp-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 34px;
+}
+.lp-card {
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 22px;
+  background: var(--card);
+  transition:
+    border-color 0.22s ease,
+    transform 0.22s ease;
+}
+.lp-card:hover {
+  border-color: var(--agent-line);
+  transform: translateY(-2px);
+}
+.lp-card h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 9px;
+}
+.lp-card p {
+  font-size: 13px;
+  color: var(--text-faint);
+}
+.lp-card code {
+  color: var(--agent-2);
+}
+.lp-final {
+  text-align: center;
+  padding: 100px 0 20px;
+}
+.lp-final h2 {
+  font-size: clamp(27px, 4vw, 45px);
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+.lp-final p {
+  color: var(--text-dim);
+  margin: 16px 0 30px;
+  font-size: 14px;
+}
+.lp-foot {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid var(--border-soft);
+  padding: 28px 0 34px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+.lp-foot .lp-wrap {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.f-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.f-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.f-copy a {
+  color: var(--text-dim);
+  border-bottom: 1px solid transparent;
+}
+.f-copy a:hover {
+  color: var(--agent-2);
+  border-bottom-color: var(--agent-line);
+}
+.f-links {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.f-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 0.18s ease;
+}
+.f-links a:hover {
+  color: var(--text);
+}
+.f-links svg {
+  opacity: 0.85;
+}
+
+/* ---------- 窄屏 ---------- */
+@media (max-width: 1080px) {
+  .lp-show {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .lp-stage {
+    height: auto;
+    top: 54px;
+    padding: 12px 0;
+    background: color-mix(in oklab, var(--bg) 92%, transparent);
+    backdrop-filter: blur(8px);
+  }
+  .app-frame {
+    height: 46vh;
+  }
+  .lp-script {
+    padding: 0 0 20vh;
+  }
+  .lp-act {
+    min-height: 76vh;
+  }
+  .lp-cards {
+    grid-template-columns: 1fr;
+  }
+  .lp-nav-r a:not(.lp-btn) {
+    display: none;
+  }
+  .f-links {
+    margin-left: 0;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 760px) {
+  /* 三栏在手机上没有可读性可言:只留中栏那一栏的截面 */
+  .app-frame .rev-main.two-left {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-frame .rev-main.two-left .tree,
+  .app-frame .rev-main.two-left .resizer,
+  .app-frame .rev-main.two-right .resizer,
+  .app-frame .rev-main.two-right .diff-col {
+    display: none;
+  }
+  .app-frame .rev-main.two-right {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-frame .sg-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-frame .sg-main .finish {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .up,
+  .stage-panel .step,
+  .stage-panel .stamp,
+  .stage-panel .badge.f,
+  .stage-panel .fh-fnd,
+  .stage-panel .code .anchor,
+  .inline.drop,
+  .app-frame .sub-banner.ok {
+    opacity: 1;
+    transform: none;
+  }
+  .stage-panel .code .anchor {
+    transform: translate(-50%, -50%);
+  }
+  .scan-beam {
+    display: none;
+  }
+}
