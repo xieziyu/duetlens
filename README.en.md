@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">简体中文</a> · English
+  <a href="https://xieziyu.github.io/duetlens/">Website</a> · <a href="README.md">简体中文</a> · English
 </p>
 
 Duetlens is a macOS desktop app that turns a code review into a **conversation** between you and a codex agent, instead of a report you read after the fact.

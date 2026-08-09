@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  简体中文 · <a href="README.en.md">English</a>
+  <a href="https://xieziyu.github.io/duetlens/">官网</a> · 简体中文 · <a href="README.en.md">English</a>
 </p>
 
 Duetlens 是一个 macOS 桌面应用:把一次 code review 变成你和 codex agent 的**双人对话**,而不是读一份机审报告。
