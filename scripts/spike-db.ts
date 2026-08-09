@@ -32,11 +32,11 @@ function main() {
   const configured = store.createReview({
     source: 'local-branch',
     sourceRef: 'feat/x',
-    model: 'gpt-5-codex',
+    model: 'gpt-5.6-sol',
     reasoningEffort: 'high',
   });
   const reloaded = store.getReview(configured.id)!;
-  assert.equal(reloaded.model, 'gpt-5-codex');
+  assert.equal(reloaded.model, 'gpt-5.6-sol');
   assert.equal(reloaded.reasoningEffort, 'high');
   db.prepare('DELETE FROM reviews WHERE id = ?').run(configured.id);
   log('review model/effort 往返 ok');

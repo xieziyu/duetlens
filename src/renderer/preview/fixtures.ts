@@ -136,7 +136,7 @@ const REVIEW: Review = {
   sourceRef: 'feat/streaming-transcode',
   repoPath: '/Users/dev/podcast-go',
   codexThreadId: 'thread-demo',
-  model: 'gpt-5-codex',
+  model: 'gpt-5.6-sol',
   reasoningEffort: 'high',
   intensity: 'adversarial',
   title: 'feat: streaming transcode pipeline',
