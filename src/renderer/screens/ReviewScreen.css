@@ -297,7 +297,17 @@
 .rev-main {
   flex: 1;
   display: grid;
-  grid-template-columns: var(--left-w) 5px minmax(0, 1fr) 5px var(--right-w);
+  /* 侧栏宽 = 持久化值经 cap 封顶。cap 与 resizer 列宽只在窄窗退化那两段媒体查询里改,
+     栏数与顺序在这一行说清就够;Resizer 的拖拽预览也读这两个 cap,数字别写回 grid 行 */
+  --left-cap: 9999px; /* 无上限 */
+  --right-cap: 9999px;
+  --left-rz: 5px;
+  grid-template-columns:
+    min(var(--left-w), var(--left-cap))
+    var(--left-rz)
+    minmax(0, 1fr)
+    5px
+    min(var(--right-w), var(--right-cap));
   min-height: 0;
   /* grid item:不加会被自身宽内容(长代码行)撑破、把右栏顶出视口 */
   min-width: 0;
@@ -327,6 +337,44 @@
   width: 2px;
   background: var(--agent);
   box-shadow: 0 0 0 2px var(--agent-soft);
+}
+/* 拖拽预览的虚线与读数:栏宽要到松手才变,拖拽期只改这两个变量喂 transform(见 Resizer.tsx) */
+.resizer-ghost {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  border-left: 2px dashed var(--agent);
+  transform: translateX(calc(-1px + var(--ghost-dx, 0px)));
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 7;
+}
+.resizer.drag .resizer-ghost {
+  visibility: visible;
+}
+.rz-read {
+  position: absolute;
+  left: 8px;
+  top: 0;
+  transform: translateY(calc(var(--ghost-y, 0px) - 50%));
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--agent);
+  color: var(--on-accent);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 指针捕获只改事件走向:不锁光标,划过 diff 就闪回 text 光标,还会顺手选中代码。
+   两条属性都可继承,但后代自己声明的 cursor / user-select 会赢过 body 上的值,只能连后代一起压;
+   拖拽是瞬时态,!important 的作用面随 .rz-dragging 一起消失 */
+body.rz-dragging,
+body.rz-dragging * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 .pane {
   min-height: 0;
@@ -3999,7 +4047,8 @@
 /* 中窄:侧栏按持久化宽度上限收窄给中间 diff 让位;状态栏减噪。断点已计入 rail 的 52px */
 @media (max-width: 1180px) {
   .rev-main {
-    grid-template-columns: min(var(--left-w), 208px) 5px minmax(0, 1fr) 5px min(var(--right-w), 340px);
+    --left-cap: 208px;
+    --right-cap: 340px;
   }
   .rev-statusbar .sb-tool {
     display: none;
@@ -4008,7 +4057,9 @@
 /* 窄:收起文件树(diff 已按文件全量堆叠,树仅作跳转),留 diff + 右栏两栏 */
 @media (max-width: 940px) {
   .rev-main {
-    grid-template-columns: 0 0 minmax(0, 1fr) 5px min(var(--right-w), 300px);
+    --left-cap: 0px;
+    --right-cap: 300px;
+    --left-rz: 0px; /* 文件树收起后它那条 resizer 也不占位 */
   }
   .rev-main > .tree {
     overflow: hidden;
