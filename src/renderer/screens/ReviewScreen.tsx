@@ -587,6 +587,7 @@ export function ReviewScreen({
           />
           <Resizer
             cssVar="--left-w"
+            capVar="--left-cap"
             width={leftW}
             min={LEFT_MIN}
             max={LEFT_MAX}
@@ -624,6 +625,7 @@ export function ReviewScreen({
           />
           <Resizer
             cssVar="--right-w"
+            capVar="--right-cap"
             width={rightW}
             min={RIGHT_MIN}
             max={RIGHT_MAX}
