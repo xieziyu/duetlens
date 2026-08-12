@@ -23,7 +23,7 @@ const IS_MAC = /mac/i.test(
     navigator.platform,
 );
 
-function primaryModifier(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
+export function primaryModifier(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
   return IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
 }
 
