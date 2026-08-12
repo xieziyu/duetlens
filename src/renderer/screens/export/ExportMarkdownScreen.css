@@ -497,6 +497,27 @@
 .btn-save:hover {
   border-color: var(--agent-line);
 }
+/* 导出完的「下一步」:与 diff 屏顶栏的 ↻ 重跑 同一套 agent 色,不抢复制/保存的主态 */
+.btn-rerun {
+  width: 100%;
+  margin-top: 8px;
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  border: 1px solid var(--agent-line);
+  border-radius: 10px;
+  padding: 9px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.btn-rerun:hover {
+  /* 加深 --agent 的这层薄底,别往 --agent-2(即字色)混 —— 明色下会把对比度压到 4.5 以下 */
+  background: color-mix(in oklab, var(--agent) 20%, transparent);
+}
 .cfg-foot .note {
   margin-top: 10px;
   font-size: 11px;

@@ -19,6 +19,7 @@ import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
 import { describeRoundError, describeSendFailure } from './review/round-error';
 import { RerunPanel } from './review/RerunPanel';
+import { isRerunKey } from '../keys';
 import { LogoMark } from '../components/LogoMark';
 import { Wordmark } from '../components/Wordmark';
 import {
@@ -57,6 +58,8 @@ export function ReviewScreen({
   onOpenSubmit,
   focusRequest,
   onFocusHandled,
+  rerunRequest,
+  onRerunHandled,
 }: {
   reviewId: string | null;
   onOpenSubmit?: () => void;
@@ -64,6 +67,10 @@ export function ReviewScreen({
   focusRequest?: { id: string } | null;
   /** 定位已执行,请求方据此清掉它 —— 一条请求只该兑现一次 */
   onFocusHandled?: () => void;
+  /** 外部(提交/导出屏的「返回 diff 并重跑」)请求进屏即弹重跑面板;认 reviewId,不认别人的请求 */
+  rerunRequest?: { reviewId: string } | null;
+  /** 重跑面板已弹出,请求方据此清掉它 —— 同 onFocusHandled */
+  onRerunHandled?: () => void;
 }) {
   const {
     review,
@@ -383,6 +390,8 @@ export function ReviewScreen({
     if (!activePath && diff.length > 0) setActivePath(diff[0].path);
   }, [diff, activePath]);
 
+  const scanning = status === 'scanning' || !status;
+
   // 通知点击带 discussionId 时定位到该线程(切 Discussion 栏);兑现后即刻消费掉这条请求。
   useEffect(() => {
     if (!focusRequest) return;
@@ -390,12 +399,23 @@ export function ReviewScreen({
     onFocusHandled?.();
   }, [focusRequest]);
 
+  // 提交/导出屏按下「返回 diff 并重跑」后进到本屏:直接把重跑面板顶出来,兑现即消费。
+  // 判据用 status 而非 scanning:重挂到 review 到达前 status 还是 undefined,按 scanning
+  // 处理会把请求当"扫描中"吞掉 —— 未知就等下一次,别急着消费。而这段空窗里 review 可能已经换人,
+  // 所以兑现前先核对 reviewId:不是发给这条的就只消费、不弹。
+  useEffect(() => {
+    if (!rerunRequest || !status) return;
+    if (rerunRequest.reviewId === reviewId && status !== 'scanning') setRerunOpen(true);
+    onRerunHandled?.();
+  }, [rerunRequest, reviewId, status]);
+
   // 有模态压在上面时,导航键一律挂起。判据必须是**所有**打开中的模态,不能只认帮助层:
   // 重跑面板同样是带 scrim 的 dialog,漏掉它时在说明输入框里按 ⌘F 会把焦点抢到对话框背后的
   // 检索条,⌘G 还会在背后换命中并滚动 diff。DiffPane 自带的 ⌘G 也吃这同一个判据。
   const modalOpen = helpOpen || rerunOpen;
 
-  // 全局导航快捷键:? 帮助 / ⌘1-3 切 tab / ⌘U 切 diff / ⌘F 查 diff 内容 / ⌘⇧F 聚焦过滤框 / Esc 关闭。
+  // 全局导航快捷键:? 帮助 / ⌘1-3 切 tab / ⌘U 切 diff / ⌘F 查 diff 内容 / ⌘⇧F 聚焦过滤框 /
+  // ⌘E 重跑 / Esc 关闭。
   // 导航键一律带 ⌘,所以打字时也照常生效;只有裸键 ? 要给输入框让位。
   // 编辑/发送的 ⌘↵·Esc·↵ 由各 composer/编辑器自理。
   useEffect(() => {
@@ -411,6 +431,13 @@ export function ReviewScreen({
         if (!helpOpen && modalOpen) return; // 已有别的模态在前,别再叠一层帮助
         e.preventDefault();
         setHelpOpen((v) => !v);
+        return;
+      }
+      // 重跑(键位选型见 isRerunKey)。扫描中无从重跑,与顶栏 CTA 同一判据。
+      if (isRerunKey(e)) {
+        if (modalOpen || scanning) return;
+        e.preventDefault();
+        setRerunOpen(true);
         return;
       }
       if (!mod || e.altKey || modalOpen) return; // 模态打开时不抢导航键
@@ -442,9 +469,8 @@ export function ReviewScreen({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [helpOpen, modalOpen, diffView, update, setActiveTab]);
+  }, [helpOpen, modalOpen, scanning, diffView, update, setActiveTab]);
 
-  const scanning = status === 'scanning' || !status;
   const currentRoundRec = useMemo(
     () => rounds.find((r) => r.round === currentRound) ?? null,
     [rounds, currentRound],
@@ -533,7 +559,7 @@ export function ReviewScreen({
           className="rerun-cta"
           onClick={() => setRerunOpen(true)}
           disabled={scanning}
-          title={scanning ? '本轮扫描进行中,结束后可重跑' : '带上本轮结论与你的处置,再跑一轮机审'}
+          title={scanning ? '本轮扫描进行中,结束后可重跑' : '带上本轮结论与你的处置,再跑一轮机审 (⌘E)'}
         >
           ↻ 重跑
         </button>
