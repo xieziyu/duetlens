@@ -28,6 +28,8 @@ interface Props {
    * 不给则自己读快照:其余 source 没有提交这一步,锚点不会动。
    */
   diff?: DiffFile[];
+  /** 返回 diff 屏并就地开一轮复审;不给(如提交在途 / 仍在扫描)则不出这个入口。 */
+  onRerun?: () => void;
 }
 
 // 左预览(渲染/源码)+ 右导出配置。
@@ -38,6 +40,7 @@ export function ExportMarkdownScreen({
   onToggleKeep,
   tabs,
   diff,
+  onRerun,
 }: Props) {
   const isGithub = review.source === 'github-pr';
   const round = review.currentRound;
@@ -227,6 +230,12 @@ export function ExportMarkdownScreen({
               ↓ 保存为 .md 文件
             </button>
             {savedPath && <div className="note ok">已保存 · {savedPath}</div>}
+            {/* 导出完通常是等作者改完再复审一轮 —— 少走一趟 diff 屏的顶栏 */}
+            {onRerun && (
+              <button className="btn-rerun" onClick={onRerun} title="⌘E">
+                ↻ 返回 diff 并重跑
+              </button>
+            )}
           </div>
         </div>
       </div>

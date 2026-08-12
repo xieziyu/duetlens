@@ -10,3 +10,36 @@ import type { KeyboardEvent } from 'react';
 export function imeComposing(e: KeyboardEvent): boolean {
   return e.nativeEvent.isComposing || e.keyCode === 229;
 }
+
+/**
+ * 平台主修饰键:macOS 只认 ⌘,其余平台只认 Ctrl。
+ *
+ * 不能沿用 `metaKey || ctrlKey` 那种两边都收的写法:macOS 的文本控件把 Ctrl+A / E / F / K 一类
+ * 当行内编辑键(Ctrl+E = 移到行尾),两边都收就会在 composer、finding 编辑框里把它们抢走。
+ * 设置屏显示的 `AppInfo.platform` 走 IPC 异步取,喂不了同步的键盘判据,所以这里读 UA。
+ */
+const IS_MAC = /mac/i.test(
+  (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
+    navigator.platform,
+);
+
+function primaryModifier(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
+  return IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+}
+
+/**
+ * 重跑快捷键 ⌘E(Windows / Linux 为 Ctrl+E)。审核屏与提交/导出屏共用这一份判据。
+ *
+ * 不用 R 这个助记:`⌘R` / `⌘⇧R` 归 Electron 默认菜单的 Reload / Force Reload,按下去整屏重载。
+ * 也不带 ⌥ —— Windows / Linux 的 AltGr 就是以 ctrl+alt 上报的,国际布局下用 AltGr 打字会撞上;
+ * 排除 alt 比事后查 getModifierState('AltGraph') 更彻底,顺带躲开 macOS 上 ⌥ 作为字符合成键的那一面。
+ */
+export function isRerunKey(e: {
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  key: string;
+}): boolean {
+  return primaryModifier(e) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'e';
+}

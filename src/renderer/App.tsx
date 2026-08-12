@@ -48,12 +48,17 @@ export function App({
   // 留着的话,换 review 重挂或离开再回本屏时会被当成新请求再执行一遍,
   // 而那条 discussion 未必属于当下这条 review,composer 就会往一条不存在的线程发。
   const [focusDiscussion, setFocusDiscussion] = useState<{ id: string } | null>(null);
+  // 提交/导出屏的「返回 diff 并重跑」:回到 review 屏后由它弹出重跑面板,兑现一次即消费。
+  // 与 focusDiscussion 同理带上 reviewId —— ReviewScreen 要等 status 到了才兑现,这段空窗里
+  // 若换了 review(rail 走开再从历史/通知开另一条),裸布尔会在别人的 review 上弹出面板。
+  const [rerunRequest, setRerunRequest] = useState<{ reviewId: string } | null>(null);
 
   const openReview = (id: string, discussionId?: string) => {
     setActiveReviewId(id);
     setScreen('review');
     setToast(null);
     setFocusDiscussion(discussionId ? { id: discussionId } : null);
+    setRerunRequest(null);
   };
 
   // 通知点击「聚焦+定位」挂在常驻的 App:onOpenReview 打开 review;onInApp 弹轻提示。
@@ -123,12 +128,22 @@ export function App({
           onOpenSubmit={() => setScreen('submit')}
           focusRequest={focusDiscussion}
           onFocusHandled={() => setFocusDiscussion(null)}
+          rerunRequest={rerunRequest}
+          onRerunHandled={() => setRerunRequest(null)}
         />
       ) : (
         <main className="screen-host">
           {screen === 'entry' && <EntryScreen onOpenReview={openReview} />}
           {screen === 'submit' && (
-            <SubmitExportScreen reviewId={activeReviewId} onBack={() => setScreen('review')} />
+            <SubmitExportScreen
+              reviewId={activeReviewId}
+              onBack={() => setScreen('review')}
+              onRerun={() => {
+                if (!activeReviewId) return;
+                setRerunRequest({ reviewId: activeReviewId });
+                setScreen('review');
+              }}
+            />
           )}
           {screen === 'prompt' && (
             <PromptRulesScreen reviewId={activeReviewId} onBack={() => setScreen('entry')} />

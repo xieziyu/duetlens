@@ -13,6 +13,13 @@ const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
     ],
   },
   {
+    title: '重跑',
+    rows: [
+      { label: '弹出重跑面板(提交 / 导出屏则先返回 diff)', keys: ['⌘', 'E'] },
+      { label: '面板内开跑 · 关闭面板', keys: ['⌘↵', 'Esc'] },
+    ],
+  },
+  {
     title: 'Diff',
     rows: [{ label: 'Unified / Split 切换', keys: ['⌘', 'U'] }],
   },

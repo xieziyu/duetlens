@@ -766,6 +766,20 @@ textarea.summary:focus {
 .submit.retry:hover {
   background: color-mix(in oklab, var(--sev-high) 85%, black);
 }
+/* 提交完成后的「下一步」:与 diff 屏顶栏的 ↻ 重跑 同一套 agent 色,不抢 .submit 的实心主态 */
+.submit.rerun-next {
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  border: 1px solid var(--agent-line);
+}
+.submit.rerun-next:hover {
+  /* 加深 --agent 的这层薄底,别往 --agent-2(即字色)混 —— 明色下会把对比度压到 4.5 以下 */
+  background: color-mix(in oklab, var(--agent) 20%, transparent);
+}
+/* .submit 是通栏按钮,并排两个只能靠上下留白分开 */
+.submit + .submit {
+  margin-top: 8px;
+}
 .foot-note {
   margin-top: 9px;
   font-size: 11px;

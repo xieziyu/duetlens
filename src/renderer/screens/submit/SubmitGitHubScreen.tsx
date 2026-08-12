@@ -53,11 +53,15 @@ interface Props {
   tabs?: ReactNode;
   /** 提交在途时上报,好让外壳一并冻住屏外那些能改 triage 的入口。 */
   onBusyChange?: (busy: boolean) => void;
+  /** 提交成功与否上报;外壳据此判定「这一屏还有没有没发出去的东西」。 */
+  onDoneChange?: (done: boolean) => void;
   /**
    * 上报本屏当前据以判定锚点的那份 diff。导出屏要用同一份给 suggestion 补缩进 ——
    * 它自己读审核快照的话,重锚之后同一个 file:line 指向的可能是另一行(见 alignSuggestion)。
    */
   onDiffChange?: (diff: DiffFile[]) => void;
+  /** 返回 diff 屏并就地开一轮复审;不给(如提交在途 / 仍在扫描)则不出这个入口。 */
+  onRerun?: () => void;
 }
 
 // 左 findings 筛选 + 右 Finish your review。
@@ -67,7 +71,9 @@ export function SubmitGitHubScreen({
   onBack,
   tabs,
   onBusyChange,
+  onDoneChange,
   onDiffChange,
+  onRerun,
 }: Props) {
   const reviewId = review.id;
   const [event, setEvent] = useState<GhReviewEvent>('comment');
@@ -122,6 +128,7 @@ export function SubmitGitHubScreen({
 
   // 派生上报而非在 submit() 里逐条路径手动置位:那样每加一条 return 就漏一次解冻
   useEffect(() => onBusyChange?.(sub === 'submitting'), [sub, onBusyChange]);
+  useEffect(() => onDoneChange?.(sub === 'success'), [sub, onDoneChange]);
   // 含 syncLatest 拉到的最新 diff:导出屏据此与本屏看到的补丁保持一致
   useEffect(() => onDiffChange?.(diff), [diff, onDiffChange]);
 
@@ -502,6 +509,12 @@ export function SubmitGitHubScreen({
           <div className="finish-foot">
             {sub === 'success' ? (
               <>
+                {/* 提交完的下一步通常是等作者改完再复审一轮 —— 少走一趟 diff 屏的顶栏 */}
+                {onRerun && (
+                  <button className="submit rerun-next" onClick={onRerun} title="⌘E">
+                    ↻ 返回 diff 并重跑
+                  </button>
+                )}
                 <button className="submit ghost" onClick={onBack}>
                   完成 · 返回 diff
                 </button>
