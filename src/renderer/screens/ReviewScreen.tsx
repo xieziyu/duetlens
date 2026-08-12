@@ -19,7 +19,7 @@ import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
 import { describeRoundError, describeSendFailure } from './review/round-error';
 import { RerunPanel } from './review/RerunPanel';
-import { isRerunKey } from '../keys';
+import { isRerunKey, primaryModifier } from '../keys';
 import { LogoMark } from '../components/LogoMark';
 import { Wordmark } from '../components/Wordmark';
 import {
@@ -426,8 +426,10 @@ export function ReviewScreen({
         if (helpOpen) setHelpOpen(false);
         return;
       }
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod && !e.altKey && e.key === '?' && !typing) {
+      // 平台主修饰键(判据与选型见 primaryModifier):macOS 上 Ctrl+F / Ctrl+A 一类归文本控件的
+      // 行内编辑,两边都收会把它们从 composer、finding 编辑框里抢走。
+      const mod = primaryModifier(e);
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?' && !typing) {
         if (!helpOpen && modalOpen) return; // 已有别的模态在前,别再叠一层帮助
         e.preventDefault();
         setHelpOpen((v) => !v);

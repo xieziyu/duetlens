@@ -16,6 +16,7 @@ import { AnnotateComposer, type NewFindingDraft } from './AnnotateComposer';
 import { PencilIcon } from './PencilIcon';
 import { SelectionPopover } from './SelectionPopover';
 import { DiffFindBar } from './DiffFindBar';
+import { primaryModifier } from '../../keys';
 import {
   clearMatches,
   findMatches,
@@ -497,7 +498,7 @@ export function DiffPane(props: DiffPaneProps) {
   const findSeed = useRef<string | null>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') return;
+      if (!primaryModifier(e) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') return;
       findSeed.current = selectionSeed(ref.current);
     };
     window.addEventListener('keydown', onKey, true);
@@ -517,7 +518,7 @@ export function DiffPane(props: DiffPaneProps) {
   useEffect(() => {
     if (!findOpen || props.keysSuspended) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.key.toLowerCase() !== 'g') return;
+      if (!primaryModifier(e) || e.altKey || e.key.toLowerCase() !== 'g') return;
       e.preventDefault();
       step(e.shiftKey ? -1 : 1);
     };
