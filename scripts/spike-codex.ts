@@ -119,7 +119,8 @@ async function main() {
     log('codex', `⚠ 意外反向审批: ${method} → denied`),
   );
 
-  codex.start();
+  // MCP server 一律校验 bearer(见 DuetlensMcpServer),令牌不给就是每次工具调用 401
+  codex.start({ DUETLENS_MCP_TOKEN: mcp.token });
 
   try {
     await codex.initialize({ name: 'duetlens', version: APP_VERSION });
@@ -130,7 +131,9 @@ async function main() {
       approvalPolicy: 'never',
       sandbox: 'read-only',
       baseInstructions: BASE_INSTRUCTIONS,
-      config: { mcp_servers: { duetlens: { url: mcpUrl } } },
+      config: {
+        mcp_servers: { duetlens: { url: mcpUrl, bearer_token_env_var: 'DUETLENS_MCP_TOKEN' } },
+      },
     });
     log('codex', `thread/start → ${thread.thread.id}`);
 
