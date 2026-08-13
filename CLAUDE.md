@@ -33,6 +33,7 @@ Electron 桌面应用:人与 codex agent 协同对话式的 code review。主进
 | --- | --- |
 | 配色 tokens | `src/renderer/theme/tokens.css`(`mockup/tokens.css` 是冻结副本) |
 | 提示词内置节与合并逻辑 | `src/shared/prompt.ts`(backend 只留 IO 与锁定段;preview fixture 复用同一份) |
+| MCP 工具名 / 跨层读的参数名 | `src/shared/mcp-contract.ts`(backend 声明与解析、renderer 认事件、preview fixture 三处同源;线上 snake_case 与领域 camelCase 是两套拼法,renderer 读错不报错、只在界面上体现为空文案) |
 | 领域事件名→载荷 | `ReviewSessionEvents`;ReviewManager 转发表与 renderer `useReviewStream` 三处编译期收敛,加事件要一起动 |
 | 快捷键表 | `components/KbdHelp`(设置屏弹同一浮层,别抄摘录) |
 | 强度显示名 / 代价文案 | `shared/domain.ts` 的 `INTENSITY_LABELS` / `INTENSITY_HINTS` |

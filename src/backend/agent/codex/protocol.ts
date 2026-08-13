@@ -244,9 +244,37 @@ export const CodexNotification = {
 /** item/started · item/completed 携带的 ThreadItem 的 type 判别(只列用到的支)。 */
 export const CodexItemType = {
   mcpToolCall: 'mcpToolCall',
+  /** shell 命令。只读会话里全是取证动作,是「agent 在读哪个文件」的主要来源。 */
+  commandExecution: 'commandExecution',
+  webSearch: 'webSearch',
   /** auto-compact 完成/开始经此 item 观测(deprecated `thread/compacted` 通知不再用)。 */
   contextCompaction: 'contextCompaction',
 } as const;
+
+/**
+ * codex 对一条命令的 best-effort 解析:一条 shell 行经管道可拆成多段,故是数组。
+ * 我们不自己解析命令 —— 解析错就是往界面上报假动作。
+ */
+export type CodexCommandAction =
+  | { type: 'read'; command: string; name: string; path: string }
+  | { type: 'listFiles'; command: string; path?: string | null }
+  | { type: 'search'; command: string; query?: string | null; path?: string | null }
+  | { type: 'unknown'; command: string };
+
+export interface CommandExecutionItem {
+  type: 'commandExecution';
+  id: string;
+  command: string;
+  status: string;
+  commandActions?: CodexCommandAction[];
+  durationMs?: number | null;
+}
+
+export interface WebSearchThreadItem {
+  type: 'webSearch';
+  id: string;
+  query: string;
+}
 
 /**
  * item/started · item/completed 携带的 ThreadItem 里,MCP 工具调用这一支的形状。
@@ -259,4 +287,5 @@ export interface McpToolCallItem {
   tool: string;
   status: string;
   arguments?: unknown;
+  durationMs?: number | null;
 }

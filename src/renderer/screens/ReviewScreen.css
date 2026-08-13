@@ -1928,36 +1928,24 @@ body.rz-dragging * {
   padding: 0 14px 12px;
 }
 
-/* 展开区:竖排时间线(完整阶段名 + 计数)+ 扫描期可做什么的提示 */
+/* 展开区两栏:左阶段时间线 │ 右侧(跑着=动作流,断了=失败原因),中间一道竖分割。
+   不换行 —— 两栏是固定结构,折成上下两段会让竖线变成一条横在中间的怪线。 */
 .scanbar .sb-detail {
   display: flex;
-  align-items: flex-start;
-  gap: 28px;
-  flex-wrap: wrap;
-  padding: 2px 16px 14px 14px;
+  align-items: stretch;
+  padding: 2px 16px 12px 14px;
   border-top: 1px solid var(--border-soft);
 }
 .scanbar .sb-detail .timeline {
-  flex: 0 1 360px;
-  min-width: 260px;
+  flex: 0 0 300px;
+  min-width: 0;
+  padding-right: 20px;
 }
-.scanbar .sb-hint {
-  flex: 0 1 420px;
-  min-width: 240px;
-  margin: 14px 0 0;
-  padding: 10px 12px;
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  border: 1px dashed var(--agent-line);
-  border-radius: 9px;
-  background: color-mix(in oklab, var(--agent) 4%, transparent);
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--text-dim);
-}
-.scanbar .sb-hint .ic {
-  color: var(--agent-2);
+.scanbar .sb-side {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--border-soft);
 }
 
 /* 失败态:整条转红并留在原位 —— 断在哪一步、为什么断,都只有这里放得下 */
@@ -2020,6 +2008,247 @@ body.rz-dragging * {
   color: var(--sev-high);
 }
 
+/* ---------- 机审期的实时播报:agent 此刻在读什么 / 搜什么 ---------- */
+/* 常驻第二行。实测首条 finding 中位 169s、p90 302s —— 在它到达之前,
+   横条上除了这一行没有任何东西会变,所以这行必须自己撑起"还活着"的证据。 */
+.scanbar .sb-live {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 7px;
+  min-width: 0;
+}
+.scanbar .sb-live .lv-ic {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 9px;
+  line-height: 1;
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  box-shadow: 0 0 0 1px var(--agent-line) inset;
+}
+.scanbar .sb-live .lv-ic.k-finding {
+  background: color-mix(in oklab, var(--sev-med) 16%, transparent);
+  color: var(--sev-med);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--sev-med) 40%, transparent) inset;
+}
+.scanbar .sb-live .lv-ic.k-idle {
+  background: color-mix(in oklab, var(--text-deco) 16%, transparent);
+  color: var(--text-faint);
+  box-shadow: 0 0 0 1px var(--border) inset;
+}
+.scanbar .sb-live .lv-verb {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.scanbar .sb-live .lv-obj {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scanbar .sb-live .lv-obj em {
+  font-style: normal;
+  color: var(--text-faint);
+}
+/* 本步已耗时:静默期与卡死在界面上长得一样,没有这个数就分不出来 */
+.scanbar .sb-live .lv-el {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.scanbar .sb-live.stale .lv-el,
+.scanbar .sb-live.stale .lv-verb {
+  color: var(--sev-med);
+}
+
+/* 取证覆盖。是覆盖面不是完成度,故只给一根细条,不做主进度(文案与 title 同此口径) */
+.scanbar .sb-cover {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.scanbar .sb-cover .cv-bar {
+  width: 64px;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--text-deco) 30%, transparent);
+  overflow: hidden;
+}
+/* span 默认 inline,宽高一律被忽略 —— 轨道是 flex item 被 blockify 了,填充没这个便宜 */
+.scanbar .sb-cover .cv-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--agent), var(--agent-2));
+  transition: width 0.4s ease;
+}
+.scanbar .sb-cover b {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 动作流:进度条展开区与右栏扫描空态共用同一份列表 ---------- */
+/* 滚动语义写在无前缀的 .ff-list:两处宿主只调 max-height。
+   漏一处 overflow,内容就会溢出压到下面的三栏上。 */
+.ff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.ff-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  min-width: 0;
+}
+.ff-row.now {
+  background: color-mix(in oklab, var(--agent) 8%, transparent);
+}
+.ff-row .ff-t {
+  flex: none;
+  width: 34px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-deco);
+  font-variant-numeric: tabular-nums;
+}
+.ff-row .ff-ic {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 8px;
+  background: var(--agent-soft);
+  color: var(--agent-2);
+}
+.ff-row.k-finding .ff-ic {
+  background: color-mix(in oklab, var(--sev-med) 16%, transparent);
+  color: var(--sev-med);
+}
+.ff-row.k-web .ff-ic {
+  background: var(--human-soft);
+  color: var(--human);
+}
+.ff-row .ff-x {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ff-row.now .ff-x {
+  color: var(--text);
+}
+.ff-row .ff-x em {
+  font-style: normal;
+  font-family: var(--sans);
+  color: var(--text-faint);
+}
+/* 连着做同一件事折成计数,不刷屏 */
+.ff-row .ff-n {
+  flex: none;
+  font-size: 10px;
+  color: var(--text-faint);
+  background: color-mix(in oklab, var(--text-deco) 14%, transparent);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+/* 本次动作耗时(agent 上报的 durationMs):既是真数据,又把右缘收齐 */
+.ff-row .ff-d {
+  flex: none;
+  width: 44px;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-deco);
+  font-variant-numeric: tabular-nums;
+}
+
+.scanbar .sb-acts {
+  margin-top: 12px;
+}
+.scanbar .sb-acts .ff-list {
+  max-height: 168px;
+}
+.scanbar .sa-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.scanbar .sa-head span {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+.scanbar .sa-head .sa-sp {
+  flex: 1;
+}
+.scanbar .sa-empty {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+/* 右栏扫描空态里的那份:这一屏空着最久,给它更高的上限 */
+.fscan .fs-feed {
+  width: 100%;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  text-align: left;
+}
+.fs-feed .ff-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.fs-feed .ff-head b {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.fs-feed .ff-head .ff-sp {
+  flex: 1;
+}
+.fs-feed .ff-list {
+  max-height: 232px;
+}
+
 /* agent 内部退避重试:这几十秒本来是纯黑盒,给它一个明确的"在挣扎"信号 */
 .scanbar .sb-retry {
   flex: none;
@@ -2033,8 +2262,6 @@ body.rz-dragging * {
 
 /* 失败详情卡:结论 → 建议 → 原文 → 重试,一条竖线走完 */
 .scanbar .sb-err {
-  flex: 1 1 460px;
-  min-width: 280px;
   margin: 12px 0 0;
   padding: 11px 13px;
   border: 1px solid color-mix(in oklab, var(--sev-high) 35%, transparent);
