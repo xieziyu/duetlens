@@ -4,6 +4,58 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.4.0] - 2026-08-13
+
+### Added
+
+- **A scan now shows what the agent is doing.** The stage stepper used to sit on "reading the diff"
+  for minutes with a spinner as the only moving thing on screen — and across 203 real scans a round
+  runs 181s at the median and 460s at p90, with the first finding arriving at 169s median, so the
+  findings counter reads 0 for the first few minutes. The scan bar now carries a live row (which file
+  it is reading, what it is searching for, how long this step has been running), the expanded panel
+  and the empty findings pane both carry an action feed, and there is an "N of M changed files
+  evidenced" coverage count. Deliberately no percentage bar: how long the agent will explore cannot be
+  declared in advance, so the denominator would be invented; coverage is coverage, not completion.
+  (#46)
+- **Rerun is now reachable from the submit and export screens, with a `⌘E` shortcut** (`Ctrl+E` off
+  macOS). After submitting a review to GitHub or exporting the report, the next step is usually
+  another round once the author has pushed fixes, and until now that step meant walking back to the
+  diff screen to find the topbar button. For `github-pr` reviews the entry — button *and* shortcut —
+  appears only after a successful submit: leaving the submit screen unmounts it along with any
+  half-written Review comment, and that is not a path worth advertising. (#40)
+- **The local-repo switch lists recently reviewed repos.** The head-row switch button now opens a menu
+  with the current repo on top and ticked, and the directory dialog kept as the last item, so picking
+  another repo no longer means walking the system file dialog every time. With no other candidate it
+  stays the plain button it was. (#42)
+- **There is a website now**: <https://xieziyu.github.io/duetlens/>, linked from the top of both
+  READMEs.
+
+### Fixed
+
+- **Dragging a sidebar divider no longer lags behind the cursor.** The drag was never throttled: every
+  `pointermove` rewrote the three-column grid, and the middle column is the fully rendered,
+  unvirtualised diff — so each event paid a full subtree relayout and the divider separated from the
+  pointer. The drag now moves a 1px dashed ghost line instead (a compositor-only path whose cost does
+  not depend on the size of the diff), writes the real column width once on release, and shows the
+  target width in pixels next to the pointer. Two related defects went with it: the responsive width
+  caps at narrow window widths were invisible to the drag, so the preview and the committed value both
+  ran past what the layout would honour; and releasing the button outside the window left the ghost
+  line on screen forever. (#39)
+- **macOS Ctrl inline-edit keys are no longer eaten by review hotkeys.** The review-screen navigation
+  listener and the diff find listeners all gated on `metaKey || ctrlKey`, while on macOS Ctrl+F/B/A/E/K
+  are text-control inline-edit keys — pressing Ctrl+F inside the composer or a finding editor stole
+  focus into the find bar. Those hotkeys now accept `⌘` only on macOS. (#41)
+- **The branch picker closes properly and announces the highlighted branch.** The menu stayed open
+  after Tab moved focus away, covering the controls below it; Escape and picking now hand focus back
+  to the trigger instead of dropping it on body; and in a long branch list the highlighted row scrolls
+  into view. (#43)
+
+### Upgrade notes
+
+- The database schema is unchanged at v18, so 0.3.0 and this release can be installed either way
+  round.
+- The in-app updater handles this update; there is no need to download the dmg again.
+
 ## [0.3.0] - 2026-08-08
 
 ### Added
@@ -154,6 +206,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.4.0]: https://github.com/xieziyu/duetlens/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/xieziyu/duetlens/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/xieziyu/duetlens/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/xieziyu/duetlens/compare/v0.2.0...v0.2.1
