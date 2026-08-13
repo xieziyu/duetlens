@@ -12,12 +12,16 @@ import {
   type McpServerElicitationAction,
   type McpServerElicitationRequestParams,
   type EffectiveThreadPolicy,
+  type CodexCommandAction,
+  type CommandExecutionItem,
   type McpToolCallItem,
   type ThreadResumeResponse,
   type ThreadStartResponse,
+  type WebSearchThreadItem,
 } from './protocol';
 import { CODEX_TARGET_VERSION } from '@shared/codex';
 import { SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
+import type { CommandAction } from '@shared/agent-events';
 import type {
   AgentEvent,
   ConversationHandle,
@@ -249,6 +253,23 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
             tool: call.tool,
             status: call.status,
             args: call.arguments,
+            durationMs: call.durationMs ?? undefined,
+          });
+        } else if (item?.type === CodexItemType.commandExecution) {
+          const cmd = item as CommandExecutionItem;
+          this.emitEvent({
+            kind: 'command',
+            command: cmd.command,
+            status: cmd.status,
+            actions: (cmd.commandActions ?? []).map(commandAction),
+            durationMs: cmd.durationMs ?? undefined,
+          });
+        } else if (item?.type === CodexItemType.webSearch) {
+          const ws = item as WebSearchThreadItem;
+          this.emitEvent({
+            kind: 'web-search',
+            query: ws.query ?? '',
+            status: method === CodexNotification.itemStarted ? 'inProgress' : 'completed',
           });
         } else if (item?.type === CodexItemType.contextCompaction) {
           this.emitEvent({
@@ -307,6 +328,23 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
         break;
       }
     }
+  }
+}
+
+/**
+ * codex 的动作解析 → 领域档。`listFiles` 换名成 `list`(领域侧不跟 codex 的拼法走),
+ * 其余未知支一律 `other` —— UI 见 other 会退回显示原始命令,不会硬编一个不贴切的动作。
+ */
+function commandAction(a: CodexCommandAction): CommandAction {
+  switch (a.type) {
+    case 'read':
+      return { type: 'read', path: a.path };
+    case 'search':
+      return { type: 'search', query: a.query ?? undefined, path: a.path ?? undefined };
+    case 'listFiles':
+      return { type: 'list', path: a.path ?? undefined };
+    default:
+      return { type: 'other' };
   }
 }
 

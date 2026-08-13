@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useState } from 'react';
 import type { ReviewRound } from '@shared/domain';
 import { deriveScanSteps, activeScanStepLabel, type ScanStep } from './scan-progress';
+import { ScanActivityFeed, ScanLiveRow, type ScanCoverage } from './ScanActivity';
+import type { Activity } from './scan-activity';
 import { describeRoundError } from './round-error';
 import { LaunchError } from './LaunchError';
 
@@ -20,6 +22,12 @@ export interface ScanProgressBarProps {
   onStop?: () => Promise<void>;
   /** 状态栏「查看原因」的定位请求;递增即展开并闪一下。0 表示没请求过 */
   revealNonce: number;
+  /** 本轮 agent 的动作流;空数组即还没有任何动作(会话刚起) */
+  activity: Activity[];
+  /** 改动文件的取证覆盖;无改动(total=0)时不显示 */
+  coverage: ScanCoverage | null;
+  /** 本轮开跑时刻,动作流的时标相对它算 */
+  roundStartedAt: number | null;
 }
 
 /**
@@ -40,6 +48,9 @@ export function ScanProgressBar({
   onRetry,
   onStop,
   revealNonce,
+  activity,
+  coverage,
+  roundStartedAt,
 }: ScanProgressBarProps) {
   const failed = failedRound !== null;
   const [open, setOpen] = useState(failed);
@@ -141,6 +152,7 @@ export function ScanProgressBar({
           </span>
         )}
       </div>
+      {!failed && activity.length > 0 && <ScanLiveRow activity={activity} coverage={coverage} />}
       {stopError && (
         <div className="sb-stoperr">
           <LaunchError message={stopError} fallbackTitle="没能停下这一轮" />
@@ -158,40 +170,52 @@ export function ScanProgressBar({
               </div>
             ))}
           </div>
-          {failedRound ? (
-            <div className="sb-err">
-              <div className="se-head">
-                <span className="ic">✕</span>
-                <b>{copy.title}</b>
+          {/* 右栏是二选一的:跑着的时候讲「在做什么」,断了就讲「为什么断」——
+              失败后没有正在进行的动作可报,把动作流留在那儿只会挤掉原因与重试。 */}
+          <div className="sb-side">
+            {failedRound ? (
+              <div className="sb-err">
+                <div className="se-head">
+                  <span className="ic">✕</span>
+                  <b>{copy.title}</b>
+                </div>
+                {copy.advice && <p className="se-advice">{copy.advice}</p>}
+                <p className="se-keep">
+                  本轮没有产出,此前各轮的 findings 与你的处置都还在 —— 重试沿用第 {failedRound.round}{' '}
+                  轮,不会多算一轮。
+                </p>
+                {failedRound.errorMessage && (
+                  <details className="se-raw">
+                    <summary>agent 返回的原文</summary>
+                    <pre>{failedRound.errorMessage}</pre>
+                  </details>
+                )}
+                {retryError && <LaunchError message={retryError} />}
+                <div className="se-act">
+                  <button
+                    className={copy.retryable ? 'primary' : ''}
+                    onClick={() => void retry()}
+                    disabled={retrySending}
+                  >
+                    {retrySending ? '重试中…' : `↻ 重试第 ${failedRound.round} 轮`}
+                  </button>
+                </div>
               </div>
-              {copy.advice && <p className="se-advice">{copy.advice}</p>}
-              <p className="se-keep">
-                本轮没有产出,此前各轮的 findings 与你的处置都还在 —— 重试沿用第 {failedRound.round}{' '}
-                轮,不会多算一轮。
-              </p>
-              {failedRound.errorMessage && (
-                <details className="se-raw">
-                  <summary>agent 返回的原文</summary>
-                  <pre>{failedRound.errorMessage}</pre>
-                </details>
-              )}
-              {retryError && <LaunchError message={retryError} />}
-              <div className="se-act">
-                <button
-                  className={copy.retryable ? 'primary' : ''}
-                  onClick={() => void retry()}
-                  disabled={retrySending}
-                >
-                  {retrySending ? '重试中…' : `↻ 重试第 ${failedRound.round} 轮`}
-                </button>
+            ) : (
+              <div className="sb-acts">
+                <div className="sa-head">
+                  agent 动作
+                  <span className="sa-sp" />
+                  <span>只读:取文件 / 检索 / 上报,不写你的仓库</span>
+                </div>
+                {activity.length > 0 ? (
+                  <ScanActivityFeed activity={activity} since={roundStartedAt} />
+                ) : (
+                  <p className="sa-empty">会话刚建立,还没有动作 —— 第一条通常在十几秒内到。</p>
+                )}
               </div>
-            </div>
-          ) : (
-            <p className="sb-hint">
-              <span className="ic">◆</span> 扫描会跑一会儿 —— 期间可点开任一 finding,或在左侧框选代码直接向
-              agent 提问,无需等待机审结束。
-            </p>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

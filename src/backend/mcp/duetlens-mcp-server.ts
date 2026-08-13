@@ -25,6 +25,7 @@ import {
   type ProposalPatch,
 } from '@shared/domain';
 import { APP_VERSION } from '@shared/version';
+import { MCP_ARG, MCP_TOOL } from '@shared/mcp-contract';
 
 const CATEGORY_HINT = `建议取值:${FINDING_CATEGORIES.join(' / ')}`;
 
@@ -126,7 +127,7 @@ export interface McpContentProviders {
 
 const TOOLS = [
   {
-    name: 'report_finding',
+    name: MCP_TOOL.reportFinding,
     description:
       '上报一条 code review finding。发现的每个问题都调用一次;锚定到具体文件与行号。',
     inputSchema: {
@@ -147,7 +148,7 @@ const TOOLS = [
     },
   },
   {
-    name: 'update_finding',
+    name: MCP_TOOL.updateFinding,
     description:
       '更正一条已上报 finding 的可编辑字段(改严重度 / 改写正文 / 换标题 / 调整 suggestion)。' +
       '讨论中一旦认定原来写的不准,就调用它,不必等用户开口 —— 讨论期间它不会立即改动 finding,' +
@@ -158,7 +159,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        finding_id: { type: 'string', description: 'report_finding 返回的 id' },
+        [MCP_ARG.findingId]: { type: 'string', description: 'report_finding 返回的 id' },
         severity: { type: 'string', enum: ['high', 'medium', 'low'] },
         // 可清空的两个字段声明成 string|null:领域侧 null 就是「清空」,只写 string 的话,
         // 会校验 JSON Schema 的 client 会把 null 挡掉,已有的 category / suggestion 再也删不掉
@@ -170,11 +171,11 @@ const TOOLS = [
           description: '建议代码,须带锚定行的前导缩进;传 null 删掉原有 suggestion',
         },
       },
-      required: ['finding_id'],
+      required: [MCP_ARG.findingId],
     },
   },
   {
-    name: 'dismiss_finding',
+    name: MCP_TOOL.dismissFinding,
     description:
       '剔除一条 finding:讨论后认定它不成立(误报 / 前提不存在 / 代码不可达 / 属可接受差异)时调用。' +
       '只写剔除理由,finding 的标题与正文原样保留 —— 不要改用 update_finding 把理由覆盖进 body。' +
@@ -182,7 +183,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        finding_id: { type: 'string', description: 'report_finding 返回的 id' },
+        [MCP_ARG.findingId]: { type: 'string', description: 'report_finding 返回的 id' },
         reason: {
           type: 'string',
           minLength: 1,
@@ -190,31 +191,31 @@ const TOOLS = [
             '为什么这条不成立。会存为剔除理由并注入下一轮复审,需自足 —— 写清判据(在哪看到、凭什么),不要只写「误报」。',
         },
       },
-      required: ['finding_id', 'reason'],
+      required: [MCP_ARG.findingId, 'reason'],
     },
   },
   {
-    name: 'restore_finding',
+    name: MCP_TOOL.restoreFinding,
     description:
       '恢复一条已被剔除的 finding:讨论后确认它其实成立(剔除依据不完整 / 另有路径可达)时调用。',
     inputSchema: {
       type: 'object',
       properties: {
-        finding_id: { type: 'string' },
+        [MCP_ARG.findingId]: { type: 'string' },
         reason: { type: 'string', minLength: 1, description: '为什么它其实成立;原剔除理由错在哪。' },
       },
-      required: ['finding_id', 'reason'],
+      required: [MCP_ARG.findingId, 'reason'],
     },
   },
   {
-    name: 'resolve_finding',
+    name: MCP_TOOL.resolveFinding,
     description:
       '复审轮次专用:对上一轮的一条 finding 表态 —— 在最新代码里它是否仍然存在。' +
       '复审时给出的每条待确认 finding 都要调用一次;这不是新问题上报,新问题仍走 report_finding。',
     inputSchema: {
       type: 'object',
       properties: {
-        finding_id: { type: 'string', description: '复审指令里给出的 finding id' },
+        [MCP_ARG.findingId]: { type: 'string', description: '复审指令里给出的 finding id' },
         status: {
           type: 'string',
           enum: ['fixed', 'still_present', 'wont_fix'],
@@ -232,7 +233,7 @@ const TOOLS = [
             '需自带问题是什么、当前代码为何仍不成立,不能只写「仍存在」这类只有对照首轮正文才读得懂的话',
         },
       },
-      required: ['finding_id', 'status'],
+      required: [MCP_ARG.findingId, MCP_ARG.status],
       // 条件必填只是给模型的提示(不少客户端会忽略 if/then);硬约束在 resolveFindingSchema
       allOf: [
         {
@@ -243,7 +244,7 @@ const TOOLS = [
     },
   },
   {
-    name: 'write_summary',
+    name: MCP_TOOL.writeSummary,
     description:
       '写下本次审核的总结,收尾时调用一次(复审 / 自检轮同样在收尾时重写,整份取代上一次)。' +
       '总结呈现在 Summary 屏供 reviewer 判断(不会自动发给 PR 作者);' +
@@ -278,12 +279,12 @@ const TOOLS = [
     },
   },
   {
-    name: 'get_diff',
+    name: MCP_TOOL.getDiff,
     description: '获取本次审核的完整 diff。',
     inputSchema: { type: 'object', properties: {} },
   },
   {
-    name: 'get_file',
+    name: MCP_TOOL.getFile,
     description: '按相对路径读取被审文件的完整内容(只读)。',
     inputSchema: {
       type: 'object',
@@ -426,13 +427,13 @@ export class DuetlensMcpServer extends EventEmitter {
       const { name, arguments: args = {} } = req.params;
       this.emit('tool-call', name, args);
 
-      if (name === 'report_finding') {
+      if (name === MCP_TOOL.reportFinding) {
         const input = args as Omit<ReportedFinding, 'id'>;
         if (this.writeMode === 'propose') {
           // 提案同样要过 ingress 校验:直接落库那条路由 ReviewSession 兜着,提案这条没有 ——
           // 不校验的话非法 severity / 缺字段会一路存进 finding_proposals,采纳时才炸。
           const parsed = reportFindingSchema.safeParse(input);
-          if (!parsed.success) return reject('report_finding', parsed.error);
+          if (!parsed.success) return reject(MCP_TOOL.reportFinding, parsed.error);
           return this.propose(
             { kind: 'create', findingId: null, patch: parsed.data },
             '把它记为一条新 finding',
@@ -444,10 +445,10 @@ export class DuetlensMcpServer extends EventEmitter {
         // 回传 id,供后续 update_finding 定位
         return { content: [{ type: 'text', text: `finding recorded, id=${f.id}` }] };
       }
-      if (name === 'update_finding') {
+      if (name === MCP_TOOL.updateFinding) {
         const a = args as Record<string, unknown>;
         const update: ReportedFindingUpdate = {
-          findingId: String(a.finding_id ?? ''),
+          findingId: String(a[MCP_ARG.findingId] ?? ''),
           severity: a.severity as ReportedFindingUpdate['severity'],
           category: a.category as string | null | undefined,
           title: a.title as string | undefined,
@@ -458,7 +459,7 @@ export class DuetlensMcpServer extends EventEmitter {
           // 落库前先把没给的字段摘掉:zod 的 optional 会把显式 undefined 原样带过,
           // 留着既数不清「到底改了几个字段」,也会在 patch JSON 里存下一串空键。
           const parsed = updateFindingSchema.safeParse(dropUndefined(update));
-          if (!parsed.success) return reject('update_finding', parsed.error);
+          if (!parsed.success) return reject(MCP_TOOL.updateFinding, parsed.error);
           const { findingId, ...patch } = parsed.data;
           // 一个字段都没给 = 什么也没提;放行只会在对话里留一张「未改动任何字段」的空卡片
           if (Object.keys(patch).length === 0) {
@@ -477,9 +478,9 @@ export class DuetlensMcpServer extends EventEmitter {
         this.emit('finding-update', update);
         return { content: [{ type: 'text', text: `finding updated, id=${update.findingId}` }] };
       }
-      if (name === 'dismiss_finding' || name === 'restore_finding') {
+      if (name === MCP_TOOL.dismissFinding || name === MCP_TOOL.restoreFinding) {
         const a = args as Record<string, unknown>;
-        const kind = name === 'dismiss_finding' ? 'dismiss' : 'restore';
+        const kind = name === MCP_TOOL.dismissFinding ? 'dismiss' : 'restore';
         // 剔除/恢复始终是 reviewer 的判断,只在他在场的讨论里作为提案提出。机审轮没有人可确认,
         // 就地放行等于让 agent 自己关掉自己报的问题(rerun.md:连 wont_fix 都不自动剔除)。
         if (this.writeMode !== 'propose') {
@@ -497,7 +498,7 @@ export class DuetlensMcpServer extends EventEmitter {
         // 且它会注入下一轮复审,静默收下只会让下一轮拿到一条没有依据的抑制项。
         const schema = kind === 'dismiss' ? dismissFindingSchema : restoreFindingSchema;
         const parsed = schema.safeParse({
-          findingId: String(a.finding_id ?? ''),
+          findingId: String(a[MCP_ARG.findingId] ?? ''),
           reason: String(a.reason ?? '').trim(),
         } satisfies ReportedFindingTriage);
         if (!parsed.success) return reject(name, parsed.error);
@@ -506,10 +507,10 @@ export class DuetlensMcpServer extends EventEmitter {
           kind === 'dismiss' ? '剔除这条 finding' : '恢复这条 finding',
         );
       }
-      if (name === 'resolve_finding') {
+      if (name === MCP_TOOL.resolveFinding) {
         const a = args as Record<string, unknown>;
         const resolution: ReportedFindingResolution = {
-          findingId: String(a.finding_id ?? ''),
+          findingId: String(a[MCP_ARG.findingId] ?? ''),
           status: a.status as ReportedFindingResolution['status'],
           note: a.note as string | undefined,
         };
@@ -534,7 +535,7 @@ export class DuetlensMcpServer extends EventEmitter {
           content: [{ type: 'text', text: `finding resolved as ${resolution.status}, id=${resolution.findingId}` }],
         };
       }
-      if (name === 'write_summary') {
+      if (name === MCP_TOOL.writeSummary) {
         // 总结是机审那一轮的收尾结论,记着它写于第几轮;讨论轮放行会让一句追问顶掉
         // 本轮的总结,还把轮次刷成"已重写"。这一轮的看法说进回复即可。
         if (this.writeMode === 'propose') {
@@ -549,17 +550,17 @@ export class DuetlensMcpServer extends EventEmitter {
           };
         }
         const parsed = writeSummarySchema.safeParse(args);
-        if (!parsed.success) return reject('write_summary', parsed.error);
+        if (!parsed.success) return reject(MCP_TOOL.writeSummary, parsed.error);
         this.emit('summary', parsed.data);
         const n = parsed.data.files.length;
         return {
           content: [{ type: 'text', text: `summary recorded${n ? `, ${n} file(s) flagged` : ''}` }],
         };
       }
-      if (name === 'get_diff') {
+      if (name === MCP_TOOL.getDiff) {
         return { content: [{ type: 'text', text: await this.providers.getDiff() }] };
       }
-      if (name === 'get_file') {
+      if (name === MCP_TOOL.getFile) {
         const path = String((args as { path?: string }).path ?? '');
         return { content: [{ type: 'text', text: await this.providers.getFile(path) }] };
       }

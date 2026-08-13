@@ -4,6 +4,8 @@
  * 仅 preview 入口引用,不进 app 打包路径。
  */
 import { parseUnifiedDiff } from '@shared/diff';
+import type { AgentEvent } from '@shared/agent-events';
+import { MCP_TOOL } from '@shared/mcp-contract';
 import type {
   BusyReview,
   CompletionNotice,
@@ -589,6 +591,7 @@ export function installPreviewApi(): void {
   // ?scan&round=retrying 模拟 agent 自行退避重试(那几十秒原本没有任何信号)
   const asRetrying = params.get('round') === 'retrying';
   let retrySimulated = false;
+  let activitySimulated = false;
   let usageSimulated = false;
   // 可变:重跑 stub 会改 currentRound / status,模拟后端回推后的新值
   let review: Review = {
@@ -617,7 +620,22 @@ export function installPreviewApi(): void {
   };
   const findings = asClean || asStream ? [] : FINDINGS.map((f) => ({ ...f }));
   const rounds: ReviewRound[] =
-    asClean || asStream ? [] : asRoundFailed ? [{ ...ROUNDS[0] }, { ...FAILED_ROUND }] : ROUNDS.map((r) => ({ ...r }));
+    asClean || asStream
+      // 零 finding + 扫描中 = 首条结论出来之前那几分钟(最难熬的一段),仍然要有在跑的轮次
+      ? asScanning ? [{ ...ROUNDS[1] }] : []
+      : asRoundFailed
+        ? [{ ...ROUNDS[0] }, { ...FAILED_ROUND }]
+        : ROUNDS.map((r) => ({ ...r }));
+  // ?scan:把当前轮改成真的在跑 —— 动作流的时标相对 startedAt 算,
+  // 沿用 fixture 里 25 分钟前那个开始时刻会让每条动作都显示成 25:00+
+  if (asScanning && rounds.length) {
+    rounds[rounds.length - 1] = {
+      ...rounds[rounds.length - 1],
+      status: 'scanning',
+      startedAt: Date.now() - 48_000,
+      endedAt: null,
+    };
+  }
   const discussions = asClean || asStream ? [] : DISCUSSIONS.map((d) => ({ ...d }));
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const proposals: FindingProposal[] =
@@ -1079,6 +1097,31 @@ export function installPreviewApi(): void {
             () => fire({ reviewId: 'demo', type: 'agent', payload: { kind: 'token-usage', used: 62_732, cumulative: 1_161_165, total: 258_400 } }),
             300,
           );
+        }
+        // ?scan:回放一串真实构成的 agent 动作(rollout 里 get_file 占大头,夹着 rg 检索与上报),
+        // 用于自查实时行、动作流与取证覆盖。每条都发 started + completed 两拍,与真实事件流同形。
+        if (asScanning && !activitySimulated) {
+          activitySimulated = true;
+          // 收窄到活动那三支:宽成 AgentEvent 后 { ...ev, status } 会被当成往 turn-started 上塞字段
+          type ActivityEvent = Extract<AgentEvent, { kind: 'tool-call' | 'command' | 'web-search' }>;
+          const acts: ActivityEvent[] = [
+            { kind: 'tool-call', server: 'duetlens', tool: MCP_TOOL.getDiff, status: 'inProgress' },
+            { kind: 'tool-call', server: 'duetlens', tool: MCP_TOOL.getFile, status: 'inProgress', args: { path: 'src/worker.rs' } },
+            { kind: 'command', command: 'rg -n "spawn_blocking" src/', status: 'inProgress', actions: [{ type: 'search', query: 'spawn_blocking', path: 'src/' }] },
+            { kind: 'tool-call', server: 'duetlens', tool: MCP_TOOL.getFile, status: 'inProgress', args: { path: 'src/renderer/screens/review/tree.ts' } },
+            { kind: 'web-search', query: 'tokio spawn_blocking panic semantics', status: 'inProgress' },
+            { kind: 'tool-call', server: 'duetlens', tool: MCP_TOOL.getFile, status: 'inProgress', args: { path: 'styles/app.css' } },
+            { kind: 'tool-call', server: 'duetlens', tool: MCP_TOOL.reportFinding, status: 'inProgress', args: { severity: 'medium', title: '阻塞调用没走 spawn_blocking', file: 'src/worker.rs' } },
+          ];
+          acts.forEach((ev, i) => {
+            const at = 400 + i * 1200;
+            setTimeout(() => fire({ reviewId: 'demo', type: 'agent', payload: ev }), at);
+            const done: ActivityEvent =
+              ev.kind === 'web-search'
+                ? { ...ev, status: 'completed' }
+                : { ...ev, status: 'completed', durationMs: 400 + i * 260 };
+            setTimeout(() => fire({ reviewId: 'demo', type: 'agent', payload: done }), at + 700);
+          });
         }
         // ?scan&round=retrying:扫描期插一串 agent 退避重试事件,自查进度条的重试提示。
         // 只排一次 —— StrictMode 双挂载会订阅两次,不设闸门次数就会翻倍。

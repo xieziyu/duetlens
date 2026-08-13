@@ -12,6 +12,8 @@ import { DiscussionTab } from './review/DiscussionTab';
 import type { UnsentDraft } from './review/Composer';
 import { SummaryTab } from './review/SummaryTab';
 import { ScanProgressBar } from './review/ScanProgressBar';
+import { ScanActivityFeed } from './review/ScanActivity';
+import { coveredFiles, type Activity } from './review/scan-activity';
 import { deriveScanSteps } from './review/scan-progress';
 import { KbdHelp } from '../components/KbdHelp';
 import { LensScanArt } from '../components/LensScanArt';
@@ -84,6 +86,7 @@ export function ReviewScreen({
     rounds,
     tokenUsage,
     lastTool,
+    activity,
     retrying,
     ensureMessages,
     addPendingMessage,
@@ -492,6 +495,7 @@ export function ReviewScreen({
   // 扫描中途退出再从历史进来,进度就会倒退回"建立会话"—— 后端那轮 turn 其实一直在跑。
   const sessionReady =
     lastTool != null ||
+    activity.items.length > 0 ||
     tokenUsage != null ||
     roundFindings.length > 0 ||
     currentRoundRec?.codexThreadId != null;
@@ -505,6 +509,15 @@ export function ReviewScreen({
         failed: failedRound !== null,
       }).filter((s) => s.state === 'done').length,
     [roundFindings.length, diffReady, sessionReady, failedRound],
+  );
+  // 改动文件的取证覆盖。分母是本次 diff 的文件数 —— 这是唯一有诚实分母的量,
+  // 但它是**覆盖面不是完成度**:agent 还会读改动之外的上下文,跑满不代表扫描结束。
+  const coverage = useMemo(
+    () =>
+      diff.length
+        ? { covered: coveredFiles(diff.map((f) => f.path), activity.paths), total: diff.length }
+        : null,
+    [diff, activity.paths],
   );
   // 常驻 CTA:github-pr → 提交 review(徽标=待提交数);其余 → 导出 review(徽标=保留数)
   const isGithub = review?.source === 'github-pr';
@@ -597,6 +610,9 @@ export function ReviewScreen({
             onRetry={onRetryRound}
             onStop={scanning ? onStopScan : undefined}
             revealNonce={revealFailure}
+            activity={activity.items}
+            coverage={coverage}
+            roundStartedAt={currentRoundRec?.startedAt ?? null}
           />
         )}
         <div className="rev-main">
@@ -672,6 +688,9 @@ export function ReviewScreen({
             diff={diff}
             scanning={scanning}
             scanLit={scanLit}
+            activity={activity.items}
+            roundStartedAt={currentRoundRec?.startedAt ?? null}
+            scanCoverage={coverage}
             currentRound={currentRound}
             onPickFinding={focusFinding}
             onTriage={onTriage}
@@ -773,6 +792,9 @@ function RightPanel({
   diff,
   scanning,
   scanLit,
+  activity,
+  roundStartedAt,
+  scanCoverage,
   currentRound,
   onPickFinding,
   onTriage,
@@ -808,6 +830,11 @@ function RightPanel({
   scanning: boolean;
   /** 扫描空态动画点亮的行数 = 已完成的阶段数 */
   scanLit: number;
+  /** 本轮 agent 的动作流;扫描空态那块大空白就靠它说话 */
+  activity: Activity[];
+  roundStartedAt: number | null;
+  /** 取证覆盖(改动文件已被读过的比例);与下面那个 coverage 局部量不是一回事 */
+  scanCoverage: { covered: number; total: number } | null;
   currentRound: number;
   onPickFinding: (f: Finding) => void;
   onTriage: (finding: Finding, triage: Triage, reason?: string | null) => void;
@@ -962,6 +989,22 @@ function RightPanel({
                 <p className="fscan-sub">
                   发现即刻出现在此。不必等它跑完 —— 左侧 diff 全程可读,框选代码就能直接提问。
                 </p>
+                {/* 这一屏空着最久(实测首条 finding 中位 169s),把这块空白让给动作流:
+                    第一条 finding 一出现本块即被 .fscan-strip 取代,所以它只服务于最难熬那几分钟。 */}
+                {activity.length > 0 && (
+                  <div className="fs-feed">
+                    <div className="ff-head">
+                      <b>agent 在做什么</b>
+                      <span className="ff-sp" />
+                      {scanCoverage && scanCoverage.total > 0 && (
+                        <span>
+                          {scanCoverage.covered}/{scanCoverage.total} 改动文件已取证
+                        </span>
+                      )}
+                    </div>
+                    <ScanActivityFeed activity={activity} since={roundStartedAt} />
+                  </div>
+                )}
               </div>
             ) : (
               // 扫描已结束且零 finding = 干净通过:给正向结论 + 覆盖度 + 手动新增引导

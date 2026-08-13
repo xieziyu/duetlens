@@ -44,6 +44,28 @@ codex 通过 **server→client 反向请求**要求授权,client 必须应答,�
 
 反向审批统一归一成 `approval` 领域事件:受信 accept 标记为预期内,其余拒绝并上浮供 UI 审批卡呈现。
 
+## 能观测到什么,不能观测到什么
+
+判据是 203 次真实机审的 rollout(`~/.codex/sessions` 里 originator=`duetlens` 的会话),不是协议文档上写着就算数。
+
+**拿得到,已消费**:
+
+- `item/*` 的 `mcpToolCall` —— **参数那半才是信息**(`get_file` 的 path、`report_finding` 的 file/severity);只说「调用了 get_file」等于没说。
+- `item/*` 的 `commandExecution` —— 只读会话里全是 rg / sed / cat 这类取证动作。**别自己解析 shell**:codex 的 `commandActions` 已按管道逐段解析成 read / search / listFiles + path / query,自己解析一旦错就是往界面上报假动作。
+- `item/*` 的 `webSearch`;以及两者共有的 `durationMs`。
+
+**拿得到,但已决定不做** —— 推理摘要(`item/reasoning/summaryTextDelta`):
+
+原先的现象是 203 次机审 3963 条 reasoning、带 summary 的 0 条,而同机 Codex Desktop 的会话是 58/478。成因是 **per-thread 没注入 `model_reasoning_summary`**(`auto` 在 app-server 这条路上不产出),`npm run spike:reasoning` 的 A/B 已坐实:同一 fixture 同一提示词跑两轮,只差这一个键,对照组 0/6 且无流式增量,`detailed` 组 3/4 且 4 条 delta 到货(codex 0.147.0)。
+
+**明确不开**:摘要恒为英文短标题(`**Inspecting login.js for endpoint origins**`),与「agent 产出的 prose 走简体中文」的约定对不上而我们又控制不了它的语言;信息价值不抵每轮多烧的 output token。界面因此**只报动作、不报意图**。别再重跑这个实验来「看看行不行」—— 行,是不划算。
+
+**协议里有,实测拿不到**:
+
+- **计划 / 待办**(`turn/plan/updated`,能给真正的 N/M):203 次机审里 **0** 次 —— agent 在我们的 review turn 从不调 `update_plan`。
+
+由此:**机审没有诚实的百分比进度**,可给的量化只有「改动文件已取证 N/M」(见 [ui](ui.md))。
+
 ## 上下文压缩
 
 **靠 codex 内置 auto-compact**(按模型的上下文窗百分比默认开启,配置项为 null 表示用模型默认**而非关闭**),它能**在 turn 内触发**,优于只能插在 turn 间的手动 `thread/compact/start` —— 手动那条覆盖不到单 turn 撑爆的场景,故**不主动调用**,也不做「立即压缩」按钮。

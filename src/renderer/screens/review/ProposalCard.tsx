@@ -8,6 +8,7 @@ import {
   type Severity,
 } from '@shared/domain';
 import { stripIpcWrapper } from './round-error';
+import { MCP_TOOL } from '@shared/mcp-contract';
 
 const SEV_LABEL: Record<Severity, string> = { high: 'high', medium: 'med', low: 'low' };
 
@@ -22,10 +23,10 @@ export interface ProposalCardProps {
 
 /** 每档的图标 / 标题 / 工具名。剔除单独用 sev-high 色,免得与「更新」长得一样却后果不同。 */
 const KIND_META = {
-  update: { icon: '◆', title: '建议更新这条 finding', tool: 'update_finding', danger: false },
-  dismiss: { icon: '✕', title: '建议剔除这条 finding', tool: 'dismiss_finding', danger: true },
-  restore: { icon: '↩', title: '建议恢复这条 finding', tool: 'restore_finding', danger: false },
-  create: { icon: '＋', title: '建议记为一条 finding', tool: 'report_finding', danger: false },
+  update: { icon: '◆', title: '建议更新这条 finding', tool: MCP_TOOL.updateFinding, danger: false },
+  dismiss: { icon: '✕', title: '建议剔除这条 finding', tool: MCP_TOOL.dismissFinding, danger: true },
+  restore: { icon: '↩', title: '建议恢复这条 finding', tool: MCP_TOOL.restoreFinding, danger: false },
+  create: { icon: '＋', title: '建议记为一条 finding', tool: MCP_TOOL.reportFinding, danger: false },
 } as const;
 
 /**

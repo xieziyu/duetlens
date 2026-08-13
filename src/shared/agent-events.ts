@@ -34,6 +34,19 @@ export const AGENT_ERROR_KINDS = [
 export type AgentErrorKind = (typeof AGENT_ERROR_KINDS)[number];
 
 /**
+ * agent 跑一条命令时**实际在做什么**。codex 已按管道逐段解析好(`commandActions`),
+ * 我们只做收窄 —— 自己解析 shell 是另一个泥潭,且解析错就是往界面上报假动作。
+ *
+ * 只读会话里 read / search / list 就是全部有意义的动作;其余一律 `other`,
+ * 由 UI 退回显示原始命令,而不是硬塞进一个不贴切的档。
+ */
+export type CommandAction =
+  | { type: 'read'; path: string }
+  | { type: 'search'; query?: string; path?: string }
+  | { type: 'list'; path?: string }
+  | { type: 'other' };
+
+/**
  * 归一后的 agent 领域事件(codex turn/item/* 映射到这里)。
  * 放 shared:backend 产生、renderer 消费,经 IPC 透传。
  */
@@ -41,7 +54,20 @@ export type AgentEvent =
   | { kind: 'turn-started'; turnId: string }
   // turnId 是 agent 可选给的:有就据此把残余 delta 挡在别的 turn 之外(被打断那轮常有补发)
   | { kind: 'message-delta'; text: string; turnId?: string }
-  | { kind: 'tool-call'; server: string; tool: string; status: string; args?: unknown }
+  | { kind: 'tool-call'; server: string; tool: string; status: string; args?: unknown; durationMs?: number }
+  /**
+   * agent 跑的 shell 命令(只读沙箱下就是 rg / sed / cat 这一类取证动作)。
+   * 与 `tool-call` 分开是因为二者的可读单位不同:工具调用问的是「哪个工具、什么参数」,
+   * 命令问的是「它在读哪个文件、在搜什么」—— 后者只有 {@link CommandAction} 答得上来。
+   */
+  | {
+      kind: 'command';
+      command: string;
+      status: string;
+      actions: CommandAction[];
+      durationMs?: number;
+    }
+  | { kind: 'web-search'; query: string; status: string }
   | ({ kind: 'token-usage' } & TokenUsage)
   // 上下文压缩由 codex auto-compact 触发,我们只观测(compaction 只摘要 codex 历史,
   // 不碰我们 DB 里的锚点/finding;不主动 thread/compact/start)。
