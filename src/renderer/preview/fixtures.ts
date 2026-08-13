@@ -1218,7 +1218,12 @@ export function installPreviewApi(): void {
           return { ...base, head: 'gitbutler/workspace', mode: 'local', degraded: 'but-missing' };
         return { ...base, head: 'gitbutler/workspace', mode: 'gitbutler', gitbutler };
       },
-      listRepoPaths: async () => ['/Users/dev/GitHub/backend-podcast-node', '/Users/dev/duetlens'],
+      listRepoPaths: async () => [
+        '/Users/dev/podcast-go',
+        '/Users/dev/GitHub/backend-podcast-node',
+        '/Users/dev/duetlens',
+        '/Users/dev/GitHub/xiaoyuzhou/xyz-web',
+      ],
     },
     prompt: {
       get: async (cwd) => buildPromptView(cwd),
