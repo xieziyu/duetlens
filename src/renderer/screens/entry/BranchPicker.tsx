@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { imeComposing } from '../../keys';
 import { GitButlerIcon, LocalBranchIcon } from './icons';
 
@@ -39,6 +39,11 @@ export function BranchPicker({
   const [place, setPlace] = useState<{ up: boolean; rowsMax: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const trigRef = useRef<HTMLButtonElement>(null);
+  // 焦点留在筛选框里,所以「选中哪一项」只能经 aria-activedescendant 报给读屏
+  const listId = useId();
+  const optId = (i: number) => `${listId}-o${i}`;
 
   const selected = options.find((o) => o.name === value) ?? null;
   const disabled = loading || options.length === 0;
@@ -73,6 +78,11 @@ export function BranchPicker({
 
   useEffect(() => {
     if (!open) return;
+    (rowsRef.current?.children[active] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' });
+  }, [open, active]);
+
+  useEffect(() => {
+    if (!open) return;
     const onDown = (e: PointerEvent) => {
       if (!boxRef.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -80,25 +90,37 @@ export function BranchPicker({
     return () => document.removeEventListener('pointerdown', onDown);
   }, [open]);
 
+  // 收起时把焦点还给触发器:浮层一拆,焦点原本会掉回 body,键盘用户得从头 Tab 一遍
+  const close = (restore = true) => {
+    setOpen(false);
+    if (restore) trigRef.current?.focus();
+  };
+
   const toggle = () => {
     if (disabled) return;
-    const next = !open;
-    setOpen(next);
-    if (next) {
-      setQuery('');
-      setActive(Math.max(0, options.findIndex((o) => o.name === value)));
+    if (open) {
+      close();
+      return;
     }
+    setOpen(true);
+    setQuery('');
+    setActive(Math.max(0, options.findIndex((o) => o.name === value)));
   };
 
   const pick = (name: string) => {
     onChange(name);
-    setOpen(false);
+    close();
+  };
+
+  // 焦点整个离开组件(Tab / 点走)就收起,不把浮层留在屏上遮住后面的控件
+  const onBlur = (e: React.FocusEvent) => {
+    if (!boxRef.current?.contains(e.relatedTarget)) setOpen(false);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (imeComposing(e)) return;
     if (e.key === 'Escape') {
-      setOpen(false);
+      if (open) close();
       return;
     }
     if (!open) {
@@ -121,10 +143,11 @@ export function BranchPicker({
   };
 
   return (
-    <div className={open ? 'bpick open' : 'bpick'} ref={boxRef} onKeyDown={onKeyDown}>
+    <div className={open ? 'bpick open' : 'bpick'} ref={boxRef} onKeyDown={onKeyDown} onBlur={onBlur}>
       <button
         type="button"
         className="bp-trig"
+        ref={trigRef}
         onClick={toggle}
         disabled={disabled}
         aria-haspopup="listbox"
@@ -153,17 +176,23 @@ export function BranchPicker({
               spellCheck={false}
               autoFocus
               placeholder="筛选分支…"
+              role="combobox"
+              aria-expanded
+              aria-controls={listId}
+              aria-autocomplete="list"
+              aria-activedescendant={shown[active] ? optId(active) : undefined}
               onChange={(e) => {
                 setQuery(e.target.value);
                 setActive(0);
               }}
             />
           </div>
-          <div className="bp-rows" role="listbox">
+          <div className="bp-rows" id={listId} role="listbox" ref={rowsRef}>
             {shown.length === 0 && <div className="bp-none">没有匹配的分支。</div>}
             {shown.map((o, i) => (
               <div
                 key={o.name}
+                id={optId(i)}
                 role="option"
                 aria-selected={o.name === value}
                 className={`bp-row${o.name === value ? ' sel' : ''}${i === active ? ' active' : ''}`}
