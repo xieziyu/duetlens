@@ -23,6 +23,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint --ext .ts,.tsx .",
     "spike:codex": "tsx scripts/spike-codex.ts",
+    "spike:reasoning": "tsx scripts/spike-reasoning-summary.ts",
     "spike:db": "tsx scripts/spike-db.ts",
     "spike:diff": "tsx scripts/spike-diff.ts",
     "spike:review": "tsx scripts/spike-review.ts",

@@ -235,6 +235,9 @@ export const CodexNotification = {
   agentMessageDelta: 'item/agentMessage/delta',
   mcpToolCallProgress: 'item/mcpToolCall/progress',
   tokenUsageUpdated: 'thread/tokenUsage/updated',
+  /** 推理摘要的流式文本。协议有,但实测在我们的会话里从不到货 —— 判据见 spike:reasoning。 */
+  reasoningSummaryDelta: 'item/reasoning/summaryTextDelta',
+  reasoningSummaryPartAdded: 'item/reasoning/summaryPartAdded',
   mcpServerStartupStatus: 'mcpServer/startupStatus/updated',
 } as const;
 
