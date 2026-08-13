@@ -21,6 +21,8 @@ import type {
 import { useSettings } from '../settings/SettingsProvider';
 import { BranchPicker, BranchSummary, type BranchOption } from './entry/BranchPicker';
 import { GhIcon, LocalBranchIcon } from './entry/icons';
+import { baseName, parentDir } from './entry/paths';
+import { RepoSwitch } from './entry/RepoSwitch';
 import { RecentReviews } from './entry/RecentReviews';
 import { StartOverlay } from './entry/StartOverlay';
 import { LogoMark } from '../components/LogoMark';
@@ -935,9 +937,7 @@ function RepoPanel({
         <span className="repo-path mono" title={repoPath}>
           {repoPath}
         </span>
-        <button type="button" className="pf-pick" onClick={pickDir}>
-          切换…
-        </button>
+        <RepoSwitch current={repoPath} recents={recentRepos} onPick={pickRepo} onBrowse={pickDir} />
         {/* 模式是自动判定的,普通分支这档也要说出来,否则「为什么不是虚拟分支」无处可查 */}
         {listing && insp && !insp.degraded && (
           <span className="mode-chip mono" title={insp.head ? `HEAD: ${insp.head}` : undefined}>
@@ -1026,9 +1026,6 @@ function PickRepoEmpty({ pickDir, hint }: { pickDir: () => void; hint: string })
     </div>
   );
 }
-
-const baseName = (p: string) => p.replace(/\/+$/, '').split('/').pop() || p;
-const parentDir = (p: string) => p.replace(/\/+$/, '').split('/').slice(0, -1).join('/');
 
 /** 底部 CTA 的目标标签(来源 + 已选 ref)。 */
 function useTargetLabel(source: SourceKind, ref: string): string {

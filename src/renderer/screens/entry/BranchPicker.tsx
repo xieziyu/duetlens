@@ -224,8 +224,8 @@ const ROWS_COMFORT = 108;
 const ROWS_FLOOR = 72;
 const ROWS_MAX = 232;
 
-/** 会裁切内容的各层祖先与视口的交集;取不到边界时不设限(交给 ROWS_MAX 收口)。 */
-function clipBounds(el: HTMLElement): { top: number; bottom: number } {
+/** 会裁切内容的各层祖先与视口的交集;取不到边界时不设限(由调用方的上限收口)。 */
+export function clipBounds(el: HTMLElement): { top: number; bottom: number } {
   let top = 0;
   let bottom = window.innerHeight || document.documentElement.clientHeight || Number.POSITIVE_INFINITY;
   for (let p = el.parentElement; p; p = p.parentElement) {
