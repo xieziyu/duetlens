@@ -2,6 +2,9 @@ import type { RecentReview } from '@shared/ipc';
 import type { ReviewStatus, SourceKind } from '@shared/domain';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './icons';
 
+/** 入口只摆最近这些条,全量翻阅走审核历史屏。 */
+const LIMIT = 20;
+
 /** 最近审核列表:源徽标 + 标题 + 计数/状态元信息;空态给首次引导。 */
 export function RecentReviews({
   reviews,
@@ -10,14 +13,15 @@ export function RecentReviews({
   reviews: RecentReview[];
   onOpen: (id: string) => void;
 }) {
+  const shown = reviews.slice(0, LIMIT);
   return (
     <div className="recent-section">
       <div className="section-head">
         <h3 className="mono">最近的审核</h3>
-        {reviews.length > 0 && <span className="count mono">{reviews.length}</span>}
+        {shown.length > 0 && <span className="count mono">{shown.length}</span>}
       </div>
 
-      {reviews.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="empty-history">
           <div className="eh-ic">◇</div>
           <div className="eh-t">还没有审核记录</div>
@@ -27,7 +31,7 @@ export function RecentReviews({
         </div>
       ) : (
         <div className="recent-list">
-          {reviews.map((r) => (
+          {shown.map((r) => (
             <div key={r.id} className="recent-rev" onClick={() => onOpen(r.id)}>
               <SourceBadge source={r.source} sourceRef={r.sourceRef} />
               <div className="m">
