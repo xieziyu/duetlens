@@ -4,6 +4,30 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.5.0] - 2026-08-18
+
+### Added
+
+- **The home screen now lists only the 20 most recent reviews.** Once records pile up that column
+  just keeps growing, and the home screen is where you pick one thing to start on; anything older
+  belongs in the review history screen on the left rail, which has search, filters and grouping. The
+  count beside the heading now reads the number of rows actually listed, so it can no longer say 35
+  above a list of 20. (#49)
+
+### Fixed
+
+- **Clicking a row in the branch picker selects that branch again.** The rows are non-focusable divs,
+  so mousedown dropped focus out of the filter input, the blur handler saw a null `relatedTarget`,
+  decided focus had left the component and closed the menu, and the row unmounted before mouseup — no
+  click event ever fired. In practice nothing but the auto-selected default branch could be picked,
+  unless you reached for the arrow keys and Enter. A regression since #43 in 0.4.0. (#48)
+
+### Upgrade notes
+
+- The database schema is unchanged at v18, so 0.4.0 and this release can be installed either way
+  round.
+- The in-app updater handles this update; there is no need to download the dmg again.
+
 ## [0.4.0] - 2026-08-13
 
 ### Added
@@ -206,6 +230,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.5.0]: https://github.com/xieziyu/duetlens/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/xieziyu/duetlens/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/xieziyu/duetlens/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/xieziyu/duetlens/compare/v0.2.1...v0.2.2
