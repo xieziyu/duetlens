@@ -112,9 +112,11 @@ export function BranchPicker({
     close();
   };
 
-  // 焦点整个离开组件(Tab / 点走)就收起,不把浮层留在屏上遮住后面的控件
+  // 焦点整个离开组件(Tab / 点走)就收起,不把浮层留在屏上遮住后面的控件。
+  // 焦点掉回 body(relatedTarget 为 null)不算离开:点在浮层自己的空白处也会这样,
+  // 此时收起会把光标下的行拆掉;点到组件外由 document 上的 pointerdown 收口。
   const onBlur = (e: React.FocusEvent) => {
-    if (!boxRef.current?.contains(e.relatedTarget)) setOpen(false);
+    if (e.relatedTarget && !boxRef.current?.contains(e.relatedTarget)) setOpen(false);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -197,6 +199,8 @@ export function BranchPicker({
                 aria-selected={o.name === value}
                 className={`bp-row${o.name === value ? ' sel' : ''}${i === active ? ' active' : ''}`}
                 onMouseEnter={() => setActive(i)}
+                // 行不可聚焦,不拦下 mousedown 的话焦点会掉出筛选框,浮层在 mouseup 前就拆了、click 永不派发
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(o.name)}
               >
                 <BranchIcon kind={o.kind} />
