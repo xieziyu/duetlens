@@ -262,6 +262,8 @@
   height: 7px;
   border-radius: 50%;
   flex: none;
+  /* 无 tone 的中性态也得有点,否则占位却看不见,读起来像文字左边缺了图标 */
+  background: var(--text-deco);
 }
 .settings .stat.ok {
   color: var(--add);
