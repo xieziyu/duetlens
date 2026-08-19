@@ -16,6 +16,7 @@ const GLYPH: Record<ActivityKind, string> = {
   web: '⌘',
   shell: '$',
   tool: '⚙',
+  note: '·',
 };
 
 /**

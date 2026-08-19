@@ -23,6 +23,7 @@ import {
   SUMMARY_FILES_LIMIT,
   type ReviewIntensity,
 } from '@shared/domain';
+import { MCP_TOOL } from '@shared/mcp-contract';
 import {
   BUILTIN_SECTIONS,
   mergeLayers,
@@ -45,11 +46,27 @@ export const BUILTIN_ROLE = `你是 Duetlens 的代码审核 agent。审核本�
  * 对抗强度专用立场段(仅 adversarial 档注入,紧跟角色段之后)。
  * 是审核**方法论**而非字段口径,故归属锁定的角色一侧、不进可配置分层 —— 避免被用户节 override 掉。
  * 只读约束不变:不写盘、不执行代码,反例靠推理构造与手推。
+ *
+ * 取证那条按 source 能否搜索分两版:`search_code` 在 github-pr(无本地代码树)下**根本不声明**,
+ * 给那种会话一句「先调 search_code」等于派了一个做不到的硬性步骤 —— agent 要么反复试一个
+ * 不存在的工具,要么因为交不出这一步而干脆不报。
  */
-export const BUILTIN_ADVERSARIAL = `## 对抗式审核立场
+export function adversarialStance(canSearch: boolean): string {
+  const verify = canSearch
+    ? `- **引用什么就核实什么**:凡是要写进 finding 的调用点、符号、guard,先用 ${MCP_TOOL.searchCode}(字面量搜索)确认它真的存在、再用 ${MCP_TOOL.getFile} 带行区间读回那一段。凭印象写出来的调用路径是这个档位最常见的失败方式,比漏报更坏。
+- 搜索命中不了动态调用、重导出与字符串拼接出来的引用:0 命中只说明文本里没有,不能当作"不存在"或"不可达"的证据。`
+    : `- **引用什么就核实什么**:凡是要写进 finding 的调用点、符号、guard,都用 ${MCP_TOOL.getFile} 带行区间读回那一段确认。凭印象写出来的调用路径是这个档位最常见的失败方式,比漏报更坏。
+- 本次审核的代码来源没有全仓搜索(只能按路径逐个读)。因此**不要**下"没有别的调用点""这段不可达"这类需要全仓视野才成立的结论 —— 查不到就说查不到。`;
+  return BUILTIN_ADVERSARIAL_HEAD + verify + BUILTIN_ADVERSARIAL_TAIL;
+}
+
+const BUILTIN_ADVERSARIAL_HEAD = `## 对抗式审核立场
 本次以对抗强度审核,默认假设这段代码在某个输入下是错的,你的任务是找到那个输入。
 - 不要满足于"看起来没问题" —— 那只说明你还没构造出反例。逐个函数/分支问:什么输入、什么并发时序、什么边界(空 / 越界 / 溢出 / null / 并发 / 部分失败)能让它出错?
 - 主动构造具体反例并手推执行路径,把推演过程写进 finding 的 body,而不是泛泛断言"可能有问题"。
+`;
+
+const BUILTIN_ADVERSARIAL_TAIL = `
 - 同时审"没写的代码":缺失的校验、未处理的错误分支、被静默吞掉的失败。
 - 找不到反例不必硬凑;宁可少报也不要报凑数的猜测。真实、可复现的问题才上报。`;
 
@@ -138,9 +155,10 @@ function composeMergedRules(resolved: readonly ResolvedPromptSection[]): string 
 export function composeBaseInstructions(
   resolved: readonly ResolvedPromptSection[],
   intensity: ReviewIntensity = 'standard',
+  canSearch = false,
 ): string {
   const rules = composeMergedRules(resolved);
-  const stance = intensity === 'adversarial' ? BUILTIN_ADVERSARIAL : '';
+  const stance = intensity === 'adversarial' ? adversarialStance(canSearch) : '';
   return [BUILTIN_ROLE, stance, rules, BUILTIN_PROTOCOL].filter((b) => b.trim()).join('\n\n');
 }
 
@@ -194,6 +212,8 @@ async function readLayerFile(p: string): Promise<string | null> {
 }
 
 export interface LoadReviewPromptOptions {
+  /** 本次 source 有没有全仓搜索能力;决定对抗立场段派哪一版取证步骤(见 adversarialStance)。 */
+  canSearch?: boolean;
   /** 被审代码树目录(project 层从 `<cwd>/.duetlens/review.md` 读);缺省则无 project 层。 */
   cwd?: string;
   /** 覆盖 home(测试隔离用);缺省 os.homedir()。 */
@@ -215,7 +235,7 @@ async function resolvePrompt(
   );
   return {
     view: { sections, projectPath, globalPath },
-    baseInstructions: composeBaseInstructions(resolved, opts.intensity),
+    baseInstructions: composeBaseInstructions(resolved, opts.intensity, opts.canSearch),
   };
 }
 

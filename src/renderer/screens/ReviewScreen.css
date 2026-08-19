@@ -4374,6 +4374,17 @@ body.rz-dragging * {
   border-color: color-mix(in srgb, var(--add) 34%, transparent);
   background: color-mix(in srgb, var(--add) 12%, transparent);
 }
+/* 自检裁决是第五条语义轴,同样不进色相竞争:三档的差别只在字重与底色深浅。
+   「判不成立」要最重 —— 它是唯一一个要求 reviewer 停下来看一眼的。 */
+.round-tag.verdict {
+  color: var(--text-dim);
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+.round-tag.verdict.refuted {
+  color: var(--text);
+  font-weight: 600;
+}
 
 /* 已有结论的行是「归档态」:压低底色而不是整体调透明,状态 chip 仍需保持可读 */
 .frow.resolved {
@@ -4414,6 +4425,21 @@ body.rz-dragging * {
   font-family: var(--mono);
   font-size: 10px;
   color: var(--add);
+  margin-right: 6px;
+}
+/* 判据:与 .res 同构,但不用它那条绿边 —— 那条绿是「这事结了」,判据是待人过目的依据 */
+.fr-note.verdict {
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.fr-note.verdict .frn-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
   margin-right: 6px;
 }
 .fr-note.res.wontfix .frn-lbl {
@@ -4484,6 +4510,13 @@ body.rz-dragging * {
   font-size: 10px;
   color: var(--add);
   margin-right: 7px;
+}
+/* 判据不是「结了」,不该用复核那条绿边;它是一段待人过目的依据。 */
+.c-resnote.verdict {
+  border-left-color: var(--border-strong, var(--border));
+}
+.c-resnote.verdict .crn-lbl {
+  color: var(--text-dim);
 }
 
 /* 已剔除卡改为纵向:第一行动作,第二行(可选)理由 */

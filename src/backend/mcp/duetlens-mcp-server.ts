@@ -14,6 +14,7 @@ import type { ZodError } from 'zod';
 import {
   dismissFindingSchema,
   FINDING_CATEGORIES,
+  judgeFindingSchema,
   reportFindingSchema,
   RESOLUTIONS_REQUIRING_NOTE,
   resolveFindingSchema,
@@ -23,7 +24,9 @@ import {
   writeSummarySchema,
   type ProposalKind,
   type ProposalPatch,
+  type TurnKind,
 } from '@shared/domain';
+import type { CodeSearchInput, CodeSearchResult } from '../source/source';
 import { APP_VERSION } from '@shared/version';
 import { MCP_ARG, MCP_TOOL } from '@shared/mcp-contract';
 
@@ -74,6 +77,13 @@ export interface ReportedFindingTriage {
  */
 export type McpWriteMode = 'apply' | 'propose';
 
+/** 按 turn 类型查表,而不是记一个布尔:新增 turn 类型时,每处闸门都被编译器逼着表态。 */
+const WRITE_MODE: Record<TurnKind, McpWriteMode> = {
+  scan: 'apply',
+  selfcheck: 'apply',
+  followup: 'propose',
+};
+
 /** propose 模式下一次写 finding 的意图;由 ReviewSession 落成 finding_proposals 的一行。 */
 export interface ProposedFindingChange {
   kind: ProposalKind;
@@ -123,9 +133,16 @@ const PROPOSED = (what: string): string =>
 export interface McpContentProviders {
   getDiff: () => string | Promise<string>;
   getFile: (path: string) => string | Promise<string>;
+  /** 缺省表示本 source 搜不了(如 github-pr 无本地代码树),此时 search_code 不会被声明。 */
+  searchCode?: (input: CodeSearchInput) => Promise<CodeSearchResult>;
+  /**
+   * 按 id 取该 finding 锚定的文件路径,供 judge_finding 的取证闸判断「本轮读过它没有」。
+   * 走库而不是本 server 的 findings 数组:复审轮要裁决的是上一轮报的条目,不在本次内存里。
+   */
+  findingFile?: (findingId: string) => string | null;
 }
 
-const TOOLS = [
+const TOOLS: Tool[] = [
   {
     name: MCP_TOOL.reportFinding,
     description:
@@ -285,14 +302,126 @@ const TOOLS = [
   },
   {
     name: MCP_TOOL.getFile,
-    description: '按相对路径读取被审文件的完整内容(只读)。',
+    description:
+      '按相对路径读取被审文件内容(只读)。' +
+      '核实某一处时请给 start/end 只取那一段 —— 逐条全文件重读会把上下文顶到 auto-compact,' +
+      '而 compact 摘要掉的正是你要用来判断的原文。',
     inputSchema: {
       type: 'object',
-      properties: { path: { type: 'string' } },
+      properties: {
+        path: { type: 'string' },
+        start: { type: 'number', description: '起始行(1 起,含);省略则从头' },
+        end: { type: 'number', description: '结束行(含);省略则到尾' },
+      },
       required: ['path'],
     },
   },
-] satisfies Tool[];
+  {
+    name: MCP_TOOL.searchCode,
+    description:
+      '在被审代码树里做**字面量**搜索(非正则,大小写敏感),返回 file:line 与命中行本体。' +
+      '用它核实 finding 里引用的符号、调用点、guard 是否真的存在 —— 拿到行号后用 get_file 取那一段读上下文。' +
+      '注意:文本搜索命中不了动态调用、重导出与字符串拼接出来的引用,0 命中不能当作「不存在」的证据。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        [MCP_ARG.query]: { type: 'string', minLength: 1, description: '要搜的字面量原文' },
+        path_prefix: { type: 'string', description: '可选:限定在某个目录/路径前缀内搜' },
+      },
+      required: [MCP_ARG.query],
+    },
+  },
+  {
+    name: MCP_TOOL.judgeFinding,
+    description:
+      '自检轮专用:对一条**已上报**的 finding 下裁决,说明它到底站不站得住。' +
+      '这是标注不是动作 —— 不会改动 finding 的严重度或去留(剔除权在 reviewer 手里),' +
+      '只把你的判据挂到它旁边给人看。' +
+      '调用前必须先用 get_file / search_code 重新取回该 finding 引用的原文:凭印象下的裁决会被拒绝。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        [MCP_ARG.findingId]: { type: 'string', description: '要裁决的 finding id' },
+        [MCP_ARG.verdict]: {
+          type: 'string',
+          enum: ['confirmed', 'refuted', 'cannot_verify'],
+          description:
+            'confirmed=重读原文后反例仍然成立;' +
+            'refuted=不成立(前提不存在 / 已有 guard / 路径不可达 / 属可接受差异);' +
+            'cannot_verify=取证不足以判定。**查无实据不等于成立**,拿不准就选它,不要凑成 confirmed',
+        },
+        note: {
+          type: 'string',
+          minLength: 1,
+          description:
+            '判据,必须自足:逐字引用你刚读回的关键行(带 file:line),说明它为什么支持这个裁决。' +
+            'refuted 要指出保证这条不成立的那处代码在哪;cannot_verify 要说清缺的是哪一段证据。',
+        },
+      },
+      required: [MCP_ARG.findingId, MCP_ARG.verdict, 'note'],
+    },
+  },
+];
+
+/**
+ * 按 1 起、两端含的行区间截取。越界与倒置一律夹到合法范围(不报错):
+ * agent 拿 search_code 的行号 ±N 算区间,边界附近必然算出 0 或超尾的值,
+ * 为此回一个错误只会让它重试一次拿到同样的内容。
+ *
+ * 截出来的片段带上原始行号,否则 agent 读到的第 1 行其实是文件第 320 行,
+ * 它据此写进 finding 的锚点就会整体偏移。
+ */
+function sliceLines(text: string, start?: number, end?: number): string {
+  if (start == null && end == null) return text;
+  const lines = text.split('\n');
+  const from = Math.max(1, Math.floor(start ?? 1));
+  const to = Math.min(lines.length, Math.floor(end ?? lines.length));
+  if (from > lines.length || to < from) {
+    return `(请求的行区间 ${from}-${to} 超出文件范围:该文件共 ${lines.length} 行)`;
+  }
+  return lines
+    .slice(from - 1, to)
+    .map((l, i) => `${from + i}: ${l}`)
+    .join('\n');
+}
+
+/** search_code 只在 source 搜得了时声明(见 Source.searchCode 的注释)。 */
+function toolsFor(providers: McpContentProviders): Tool[] {
+  return providers.searchCode ? [...TOOLS] : TOOLS.filter((t) => t.name !== MCP_TOOL.searchCode);
+}
+
+/**
+ * 搜索结果 → 给模型读的文本。**护栏做在返回值里,不做在 prompt 里** ——
+ * prompt 层的告诫隔几万 token 就衰减了,返回值里的告诫在它做判断的那一刻被读到。
+ *
+ * 三件事必须回显:搜了什么(让 agent 看见自己的 typo)、总命中 vs 展示数(截断不能被
+ * 误读成「就这么多」)、以及 0 命中时的免责句 —— 「没有调用点 ⇒ dead code」这个推理
+ * 要在它发生的那一刻被拦住。
+ */
+function formatSearchResult(query: string, r: CodeSearchResult): string {
+  const head = `search_code "${query}"(字面量,大小写敏感)`;
+  if (r.total === 0) {
+    return (
+      `${head} — 0 命中。\n` +
+      '注意:文本搜索命中不了动态调用、重导出、字符串拼接出来的引用,也可能是拼写或大小写不一致。' +
+      '不能据此断言该符号不存在、该分支不可达或这段是 dead code。'
+    );
+  }
+  const shown = r.files.reduce((n, f) => n + f.hits.length, 0);
+  const capped = r.files.some((f) => f.hasMore) || r.moreFiles;
+  // 命中数在 git 侧就按每文件截过,说「共 N 处」是假的 —— 截断过就只报展示数,
+  // 别让 agent 把一个被截断的结果集当成全集去推「只有这几个调用点」。
+  const lines = [
+    capped ? `${head} — 以下 ${shown} 处(结果已截断,不是全部):` : `${head} — 共 ${shown} 处命中:`,
+  ];
+  for (const f of r.files) {
+    lines.push(`\n${f.path}`);
+    for (const h of f.hits) lines.push(`  ${h.line}: ${h.text}`);
+    if (f.hasMore) lines.push('  …本文件还有更多命中未展示');
+  }
+  if (r.moreFiles) lines.push('\n…还有更多文件命中,读到上限就停了,请用 path_prefix 缩小范围');
+  return lines.join('\n');
+}
 
 /**
  * Duetlens 对 codex 暴露的 in-process HTTP MCP server(StreamableHTTP)。
@@ -303,7 +432,7 @@ const TOOLS = [
  *
  * 事件:'finding' (ReportedFinding) · 'finding-update' (ReportedFindingUpdate)
  * · 'finding-resolution' (ReportedFindingResolution) · 'finding-proposal' (ProposedFindingChange)
- * · 'summary' (WriteSummaryInput) · 'tool-call' (name, args)。
+ * · 'finding-verdict' (JudgeFindingInput) · 'summary' (WriteSummaryInput) · 'tool-call' (name, args)。
  */
 export class DuetlensMcpServer extends EventEmitter {
   private httpServer?: http.Server;
@@ -311,7 +440,17 @@ export class DuetlensMcpServer extends EventEmitter {
   readonly findings: ReportedFinding[] = [];
   /** 本 server 的 bearer 令牌;codex 经 bearer_token_env_var 携带,隔离本地其他进程。 */
   readonly token: string;
-  private writeMode: McpWriteMode = 'apply';
+  private turn: TurnKind = 'scan';
+  /**
+   * 本 turn 内已实际取证过的文件。**由工具调用记账,不听 agent 自述** ——
+   * 模型可以在散文里伪造一段引用,但伪造不了一次被后端记下的工具调用。
+   * verdict 的硬闸就建在这上面(见 update_finding 的 verdict 分支)。
+   */
+  private readonly evidence = new Set<string>();
+
+  private get writeMode(): McpWriteMode {
+    return WRITE_MODE[this.turn];
+  }
 
   constructor(private readonly providers: McpContentProviders, token: string = randomUUID()) {
     super();
@@ -319,11 +458,14 @@ export class DuetlensMcpServer extends EventEmitter {
   }
 
   /**
-   * 切换写 finding 的语义。由 ReviewSession 在每个 turn 前后设置;turn 是串行的
-   * (见 ReviewSession.turnChain),所以单个标志位够用,不会有两个 turn 同时读到对方的模式。
+   * 切到某一类 turn(写语义、闸门与取证记账都随它)。由 ReviewSession 在每个 turn 前后设置;
+   * turn 是串行的(见 ReviewSession.turnChain),故单个字段够用,不会有两个 turn 互相看到对方的语义。
    */
-  setWriteMode(mode: McpWriteMode): void {
-    this.writeMode = mode;
+  setTurn(kind: TurnKind): void {
+    this.turn = kind;
+    // 取证记账按 turn 重置:自检轮要的是「**本轮**重新读过原文」,
+    // 沿用上一轮的记录等于默许凭记忆写引用,硬闸就白设了。
+    this.evidence.clear();
   }
 
   /**
@@ -421,7 +563,9 @@ export class DuetlensMcpServer extends EventEmitter {
       { capabilities: { tools: {} } },
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: toolsFor(this.providers),
+    }));
 
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { name, arguments: args = {} } = req.params;
@@ -446,6 +590,23 @@ export class DuetlensMcpServer extends EventEmitter {
         return { content: [{ type: 'text', text: `finding recorded, id=${f.id}` }] };
       }
       if (name === MCP_TOOL.updateFinding) {
+        // 自检轮不得改动 finding 本体。取证硬闸设在 judge_finding 上,而这条路能改 severity /
+        // 正文 / suggestion —— 不拦的话,「降个级」「在 body 里补一句存疑」就是一道绕开取证的侧门,
+        // 而且直接改变了 reviewer 待处置与待提交的内容。那正是「裁决是标注不是动作」要护住的东西。
+        //
+        // resolve_finding 有意不在此列:它写的是本轮表态,是复审 turn 的正常产物,
+        // 自检轮补一条漏掉的表态是合理的(note 必填且要求自足),它不碰 finding 本体。
+        if (this.turn === 'selfcheck') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `自检轮不改动 finding 本体。判它不成立请用 ${MCP_TOOL.judgeFinding}(判据会挂在它旁边给 reviewer 看);发现的是**新**问题就用 ${MCP_TOOL.reportFinding} 另报一条。`,
+              },
+            ],
+            isError: true,
+          };
+        }
         const a = args as Record<string, unknown>;
         const update: ReportedFindingUpdate = {
           findingId: String(a[MCP_ARG.findingId] ?? ''),
@@ -488,7 +649,7 @@ export class DuetlensMcpServer extends EventEmitter {
             content: [
               {
                 type: 'text',
-                text: `${name} 只能在与 reviewer 的讨论中使用。本轮请改用 update_finding 降级严重度或在 body 里标注存疑。`,
+                text: `${name} 只能在与 reviewer 的讨论中使用(剔除是 reviewer 的判断)。自检轮请改用 ${MCP_TOOL.judgeFinding} 判 refuted 并写清判据 —— 它会把你的结论挂在 finding 旁边给人看,而不是替人做决定。`,
               },
             ],
             isError: true,
@@ -557,12 +718,125 @@ export class DuetlensMcpServer extends EventEmitter {
           content: [{ type: 'text', text: `summary recorded${n ? `, ${n} file(s) flagged` : ''}` }],
         };
       }
+      if (name === MCP_TOOL.judgeFinding) {
+        // 裁决只在自检轮成立。首轮放行的话,agent 会给自己刚写的 finding 盖一个 confirmed ——
+        // 自我确认的墨水会把「裁决过的条目最终被 reviewer 怎么处置」这份数据整个稀释掉。
+        if (this.turn !== 'selfcheck') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `${MCP_TOOL.judgeFinding} 只在对抗自检轮可用。首轮请专心上报;讨论轮请用 dismiss_finding / update_finding。`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        const a = args as Record<string, unknown>;
+        const parsed = judgeFindingSchema.safeParse({
+          findingId: String(a[MCP_ARG.findingId] ?? ''),
+          verdict: a[MCP_ARG.verdict],
+          note: a.note,
+        });
+        if (!parsed.success) return reject(MCP_TOOL.judgeFinding, parsed.error);
+        // 取证硬闸。散文里的引用可以是编的,一次被记账的 get_file / search_code 不能 ——
+        // 工具错误会回到模型手里,它下一步就会真的去读原文,这正是我们要的。
+        // 解析限定在本 review 内(见 McpContentProviders.findingFile)。查不到就是查不到 ——
+        // 从前这里把「不存在」与「无需取证」都折叠成放行,于是未知 id 既绕过取证闸、又拿到一句
+        // recorded;而**别的 review** 的有效 id 更会一路写到那条 finding 上去。
+        const file = this.providers.findingFile?.(parsed.data.findingId) ?? null;
+        if (!file) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `裁决未记录:本次审核里没有 id=${parsed.data.findingId} 这条 finding。请从自检指令给出的清单里取 id。`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        if (!this.evidence.has(file)) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `裁决未记录:本轮还没有对 ${file} 取证。请先 get_file(带行区间)或 search_code 重新读回该 finding 引用的原文,再下裁决 —— 不要凭首轮的印象。`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        this.emit('finding-verdict', parsed.data);
+        return {
+          content: [
+            { type: 'text', text: `verdict recorded: ${parsed.data.verdict}, id=${parsed.data.findingId}` },
+          ],
+        };
+      }
       if (name === MCP_TOOL.getDiff) {
         return { content: [{ type: 'text', text: await this.providers.getDiff() }] };
       }
       if (name === MCP_TOOL.getFile) {
-        const path = String((args as { path?: string }).path ?? '');
-        return { content: [{ type: 'text', text: await this.providers.getFile(path) }] };
+        const a = args as { path?: string; start?: number; end?: number };
+        const path = String(a.path ?? '');
+        let full: string;
+        try {
+          full = await this.providers.getFile(path);
+        } catch (e) {
+          // 读不到就别记账:取证闸问的是「你真读到原文了吗」,一次失败的读取回答不了这个。
+          return {
+            content: [{ type: 'text', text: `读取失败:${e instanceof Error ? e.message : String(e)}` }],
+            isError: true,
+          };
+        }
+        this.evidence.add(path);
+        return { content: [{ type: 'text', text: sliceLines(full, a.start, a.end) }] };
+      }
+      if (name === MCP_TOOL.searchCode) {
+        const search = this.providers.searchCode;
+        // 工具本就不声明(toolsFor),真调到这里说明 agent 在凭想象调用 —— 说清搜不了,
+        // 别让它把这次失败读成「搜过了,没有」。
+        if (!search) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: '本次审核的代码来源不支持搜索(无本地代码树)。这不是「没搜到」——请改用 get_diff / get_file 取证,不要据此推断符号不存在。',
+              },
+            ],
+            isError: true,
+          };
+        }
+        const a = args as Record<string, unknown>;
+        const query = String(a[MCP_ARG.query] ?? '').trim();
+        if (!query) {
+          return {
+            content: [{ type: 'text', text: 'search_code 需要非空的 query。' }],
+            isError: true,
+          };
+        }
+        const prefix = typeof a.path_prefix === 'string' ? a.path_prefix : undefined;
+        let result: CodeSearchResult;
+        try {
+          result = await search({ query, pathPrefix: prefix });
+        } catch (e) {
+          // 搜索**没跑成**与「搜了没有」必须分开告诉 agent,否则它会拿一次失败当作
+          // 「代码里没有」的证据 —— 那正是这个工具要拦的反向幻觉。
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `${e instanceof Error ? e.message : String(e)}。这不是「没搜到」—— 请用 path_prefix 缩小范围或换更具体的字面量重试,不要据此推断符号不存在。`,
+              },
+            ],
+            isError: true,
+          };
+        }
+        // 命中的文件计入取证:闸门问的是「本轮是否真去查过原文」,不是「读没读全」。
+        // 覆盖面计量是另一回事,在 renderer 的 ActivityLog.paths,那边只认 get_file。
+        for (const f of result.files) this.evidence.add(f.path);
+        return { content: [{ type: 'text', text: formatSearchResult(query, result) }] };
       }
       return { content: [{ type: 'text', text: `未知工具: ${name}` }], isError: true };
     });

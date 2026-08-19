@@ -10,6 +10,8 @@ import {
 } from '../mcp/duetlens-mcp-server';
 import {
   isAutoClosedFixed,
+  judgeFindingSchema,
+  MACHINE_TURN_KINDS,
   reportFindingSchema,
   resolveFindingSchema,
   scanDoneStatus,
@@ -17,9 +19,11 @@ import {
   type Discussion,
   type Finding,
   type FindingProposal,
+  type JudgeFindingInput,
   type Message,
   type Review,
   type ReviewIntensity,
+  type TurnKind,
   type WriteSummaryInput,
 } from '@shared/domain';
 import { findDuplicate, isRestatedFinding } from '@shared/finding-dedupe';
@@ -74,13 +78,71 @@ export class SessionDisposedError extends Error {
 }
 
 /**
- * 对抗强度:扫描/复审 turn 之后追加的自检轮指令。同一 codex thread 内跑,
- * agent 仍记得本轮报过什么,故可就地补漏与给存疑结论降级(codex 侧无删除 finding 的工具)。
+ * 对抗强度:扫描/复审 turn 之后追加的自检轮指令。
+ *
+ * 两处刻意的设计,别改回去:
+ *
+ * 1. **裁决排在补漏之前**。旧版把「审你没报的地方」标成"更重要",于是这一轮的产出压在
+ *    recall 上 —— 而 agent 审核的主要失效模式是幻觉 finding(引用一条并不存在的调用路径),
+ *    不是漏报。噪声比漏报更毒:它训练人忽略整个审核通道。
+ *
+ * 2. **判据要求重新取证,而不是"再想一遍"**。同一个 thread 里让模型推翻自己十分钟前的结论,
+ *    对抗的是承诺一致性偏差,典型产出是"我复核了一遍,结论仍然成立"。但工具返回值是它没法
+ *    对其保持一致的 ground truth —— 被迫重读原文时,编出来的引用会当场塌掉。
+ *    硬闸在 MCP 侧(judge_finding 要求本轮取过证),这里只交代规矩。
+ *
+ * findings 清单**内联注入**而不依赖会话记忆:codex 的 auto-compact 会摘要掉历史,
+ * 连 report_finding 回传的 id 都可能被摘走,那时 agent 凭记忆调 judge_finding 会引用错 id。
+ * 清单内联后这一轮对 compact 免疫 —— 判据来自 prompt,证据来自本轮工具调用。
  */
-export const ADVERSARIAL_SELFCHECK_PROMPT = `现在做一轮对抗式自检,站到刚才结论的对立面复核一遍:
-1. 回看你**已上报**的每条 finding:有没有哪条其实站不住(反例不成立 / 是可接受差异 / 属误报)?站不住的用 update_finding 降级严重度,或在 body 里明确标注不确定,不要留下过度自信的结论。
-2. 更重要的是审你**没报**的地方:哪个函数、边界或错误分支你只是扫过、并未真正构造反例去验证?对这些补一次证伪 —— 发现真实且可复现的新问题就用 report_finding 上报,已报过的不要重复。
-3. 最后重新调用一次 write_summary,把自检后的结论写成总结(整份取代扫描时那次),并在回复里说明本轮补报了几条、降级/撤回了几条。`;
+/**
+ * 本轮自检要裁决哪些 finding。
+ *
+ * 判据是 `lastSeenRound` 而非 `round`(首报轮次):复审轮里 agent 用 `resolve_finding` 判
+ * still_present 的既有条目仍挂着首报轮次,按 round 取就一条都选不中 —— 于是复审轮要么整轮
+ * 跳过自检,要么只裁本轮新报的那几条。而「仍存在」恰恰是最该被证伪的结论:它决定要不要给
+ * 作者追发一条评论。
+ *
+ * 排除已剔除与自动结案的:前者 reviewer 已经判过,后者本轮已认定修好,都没有可裁的东西。
+ */
+export function selfCheckRoster(findings: readonly Finding[], round: number): Finding[] {
+  return findings.filter(
+    (f) => f.lastSeenRound === round && f.triage !== 'dismiss' && !isAutoClosedFixed(f),
+  );
+}
+
+export function selfCheckPrompt(findings: readonly Finding[]): string {
+  const list = findings
+    .map((f) => `- ${f.id} · [${f.severity}] ${f.title}(${f.file}:${f.line})`)
+    .join('\n');
+  return `现在做一轮对抗式自检。**先裁决已报的,再补没报的** —— 顺序别反过来。
+
+## 一、逐条裁决你已上报的 finding
+
+本轮已上报(id · 严重度 · 标题 · 锚点):
+${list}
+
+对**每一条**:先用 get_file(带行区间,只取锚点附近那一段)或 search_code 重新读回它引用的原文,
+再用 judge_finding 下裁决。默认它是假的 —— 逐条回答:这条成立所必需的前提是什么?
+那个前提在代码里由谁保证?找得到保证的那条就不成立。
+
+- confirmed:重读原文后反例仍然站得住,且你能指出具体是哪一行让它成立。
+- refuted:前提不存在 / 已有 guard / 路径不可达 / 属可接受差异 —— 指出那处代码在哪。
+- cannot_verify:取证不足以判定。**查无实据不等于成立**,拿不准就选它,不要凑成 confirmed。
+
+judge_finding 只是给 reviewer 看的标注,不会改动 finding 的严重度或去留 —— 如实裁决即可,
+不必顾虑"判了 refuted 会不会把问题弄没"。
+
+## 二、再补你没报的地方
+
+哪个函数、边界或错误分支你只是扫过、并未真正构造反例去验证?对这些补一次证伪。
+发现真实且可复现的新问题才 report_finding,已报过的不要重复;**没找到就不报**,
+凑数的猜测比漏报更坏。
+
+## 三、收尾
+
+重新调用一次 write_summary(整份取代扫描时那次),写清自检后的结论。`;
+}
 
 /**
  * 一个 turn 的「提案而非落库」上下文。收集篮由**调用方**持有:同一线程可以并发追问,
@@ -101,7 +163,7 @@ type TurnOutcome =
  * 也登记在 {@link ReviewSession.stopTargets} 里,但它是用户刚问出去的那句话,不该被
  * 「停止机审」顺手打断(扫描自然收尾后,队里的追问紧接着就开跑)。
  */
-type TurnKind = 'scan' | 'followup';
+// TurnKind 现在是领域枚举(要落库进 finding 的来源列),定义在 shared/domain。
 
 /** turn 的终局:agent 侧的完成/失败,或我们主动叫停/释放会话。 */
 type TurnEnd =
@@ -218,6 +280,8 @@ export interface ReviewSessionEvents {
   'agent-event': AgentEvent;
   /** 讨论里 agent 提出的待确认回写提案(新建 / 挂上消息后重发) */
   'finding-proposal': FindingProposal;
+  /** 对抗档跳过了自检轮。档位承诺了这一轮,不跑就得说为什么,否则看起来像功能坏了。 */
+  'selfcheck-skipped': { reason: 'no-findings' };
   status: 'scanning' | 'reviewing' | 'completed' | 'failed';
 }
 
@@ -270,6 +334,11 @@ export class ReviewSession {
    * 只在 {@link runTurn} 的队列内部设置与清除 —— turn 是串行的,故同一时刻至多一个。
    */
   private proposeCtx: ProposeContext | null = null;
+  /**
+   * 正在跑的那个 turn 的类型。落库 finding 时要记下它出自哪一类 turn ——
+   * 没有这一列,自检轮补报的条目与首扫的混在一起,「补报的最终被剔除多少」根本问不出来。
+   */
+  private turnKind: TurnKind = 'scan';
 
   constructor(
     private readonly reviewId: string,
@@ -345,7 +414,14 @@ export class ReviewSession {
     // 对抗档:同一 thread 追加一轮自检。已有扫描结论,自检失败不推翻本轮 —— 吞掉错误保留成果。
     // 叫停是"到此为止",自检轮当然也不再跑;扫描 turn 恰好抢在打断前跑完也照样算叫停。
     if (outcome.kind === 'ok' && !this.stopped && opts.intensity === 'adversarial') {
-      await this.runTurn('scan', ADVERSARIAL_SELFCHECK_PROMPT);
+      const round = this.currentRound();
+      const pending = selfCheckRoster(this.store.listFindings(this.reviewId), round);
+      // 真的一条待裁的都没有才跳过。裁决腿无事可裁,补漏腿则是「第二眼硬找茬」的经典失效场景 ——
+      // 对着干净代码再审一遍,产出的恰好是这个档位最想消灭的凑数 finding。
+      //
+      // 跳过必须留痕:档位文案承诺了「扫描后再自检一轮」,静默跳过在用户眼里就是功能坏了。
+      if (pending.length === 0) this.emit('selfcheck-skipped', { reason: 'no-findings' });
+      else await this.runTurn('selfcheck', selfCheckPrompt(pending));
     }
     const source = this.store.getReview(this.reviewId)?.source;
     this.setStatus(source ? scanDoneStatus(source) : 'reviewing');
@@ -471,9 +547,9 @@ export class ReviewSession {
     // 在途期间到达的终局一律先扣住,由打断的成败来定性 —— 成了算「已停止」,
     // 没成就还它本来的面目(那一轮确实是自己挂的/跑完的),别让两边各说一套。
     // 快照也要在此刻取:被叫停的是**现在**在跑的那个 turn,之后新起的追问与这次叫停无关。
-    // 只挑机审那几个 turn。追问 turn 同样登记在这里,但扫描自然收尾后队里的追问会
-    // 紧接着开跑 —— 不筛掉的话「停止机审」会把用户刚问出去的那句话打断,还把整轮记成已停止。
-    const targets = [...this.stopTargets].filter((t) => t.kind === 'scan');
+    // 只挑机审那几个 turn(扫描与自检)。追问 turn 同样登记在这里,但扫描自然收尾后队里的
+    // 追问会紧接着开跑 —— 不筛掉的话「停止机审」会把用户刚问出去的那句话打断,还把整轮记成已停止。
+    const targets = [...this.stopTargets].filter((t) => MACHINE_TURN_KINDS.includes(t.kind));
     // 打断点名到 turn,故快照要连 turnId 一起取。一个能打断的都没有时分三种,处置各不同:
     //   - 一个 target 都没有:轮次正卡在两个 turn 之间(如对抗档扫描轮与自检轮),
     //     没有在跑的 turn 可打断 —— 直接算停下,后面那个 turn 由 stopped 旗子拦住。
@@ -545,12 +621,29 @@ export class ReviewSession {
       if (!parsed.success) return; // 非法上报忽略;后续可回错误内容给 agent
       if (this.absorbDuplicate(parsed.data)) return;
       // 用 MCP 生成的 id 落库,使 codex 侧 id 与存储 id 一致(update_finding 可定位)
-      const finding = this.store.addFinding(this.reviewId, parsed.data, 'agent', raw.id);
+      const finding = this.store.addFinding(this.reviewId, parsed.data, 'agent', raw.id, this.turnKind);
       // 承载 discussion 与 finding 同事务建出;不一并外发的话,本轮会话内 Discussion 栏拿不到它,
       // 要等下次进 review 全量拉取才出现。先发 discussion 再发 finding,保证卡片可点即可用。
       const discussion = this.store.getDiscussion(finding.discussionId);
       if (discussion) this.emit('discussion', discussion);
       this.emit('finding', finding);
+    });
+    // 裁决只落那三列(见 ReviewStore.setFindingVerdict):不动 severity、不动 triage ——
+    // 机器降档等于软剔除,而剔除权只在 reviewer 手里。
+    this.mcp.on('finding-verdict', (raw: JudgeFindingInput) => {
+      const parsed = judgeFindingSchema.safeParse(raw);
+      if (!parsed.success) return;
+      // 纵深:MCP 侧的 findingFile 已限定本 review,这里再挡一次 —— setFindingVerdict 按 id 全局写,
+      // 一旦上游哪天松了,越权写入不会有任何声响。
+      const target = this.store.getFinding(parsed.data.findingId);
+      if (!target || target.reviewId !== this.reviewId) return;
+      const updated = this.store.setFindingVerdict(
+        parsed.data.findingId,
+        parsed.data.verdict,
+        parsed.data.note,
+        this.turnKind,
+      );
+      if (updated) this.emit('finding', updated);
     });
     this.mcp.on('finding-update', (raw: ReportedFindingUpdate) => {
       const parsed = updateFindingSchema.safeParse(raw);
@@ -715,7 +808,7 @@ export class ReviewSession {
       // 提案模式必须开在**队列之内**:开在外面的话,排队期间跑着的扫描 turn 会把它的
       // report_finding 记成这条讨论的提案,而扫描收尾时的复位又会让排在后面的这一问
       // 退回直接落库 —— 一次绕过 reviewer 确认的静默改动。
-      this.enterTurnMode(propose);
+      this.enterTurnMode(kind, propose);
       try {
         // 订阅要先于发起:极快的 turn(乃至 stub)会在 turn/start 应答之前就把 delta 与终局发出来
         const waiter = this.awaitTurnEnd(kind);
@@ -744,15 +837,17 @@ export class ReviewSession {
     return result;
   }
 
-  /** 进入本 turn 的写语义;缺省(机审/自检)即直接落库。 */
-  private enterTurnMode(propose?: ProposeContext): void {
+  /** 进入本 turn:写语义、闸门与取证记账都由 kind 决定(见 DuetlensMcpServer.setTurn)。 */
+  private enterTurnMode(kind: TurnKind, propose?: ProposeContext): void {
     this.proposeCtx = propose ?? null;
-    this.mcp?.setWriteMode(propose ? 'propose' : 'apply');
+    this.turnKind = kind;
+    this.mcp?.setTurn(kind);
   }
 
   private exitTurnMode(): void {
     this.proposeCtx = null;
-    this.mcp?.setWriteMode('apply');
+    this.turnKind = 'scan';
+    this.mcp?.setTurn('scan');
   }
 
   private setStatus(status: 'scanning' | 'reviewing' | 'completed' | 'failed'): void {

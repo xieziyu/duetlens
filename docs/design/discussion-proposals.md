@@ -18,7 +18,7 @@ reviewer 一键采纳。判断权没变,搬运没了。
 
 | turn | 语义 | 理由 |
 | --- | --- | --- |
-| 机审扫描 / 对抗自检 | 直接落库 | reviewer 不在场;自检轮本就靠 `update_finding` 给存疑结论降级,拦下来只会卡死它 |
+| 机审扫描 / 对抗自检 | 直接落库 | reviewer 不在场,拦下来只会卡死这一轮。但 `dismiss_finding` / `restore_finding` 在这两轮**照旧拒收** —— 剔除是 reviewer 的判断;自检轮要表达「这条不成立」走 `judge_finding` 判 refuted,那是挂在 finding 旁边的标注,不替人做决定。自检轮另外**拒收 `update_finding`**:改 severity / 正文是绕开取证闸改动待提交内容,见 [architecture](architecture.md#审核强度) |
 | 追问 | 记成提案 | reviewer 在场,由他点头 |
 
 另开一套 `propose_*` 工具与之并存的方案**已否决**:让模型在「做」和「提议做」两套工具之间选,选错的概率

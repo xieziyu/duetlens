@@ -363,7 +363,7 @@ async function assertScanRejectsDismiss(): Promise<void> {
     log(`✓ 机审轮拒绝剔除:${brief(res.content?.[0]?.text ?? '', 46)}`);
 
     // 顺带验 propose 模式的两道 ingress:空理由、以及 update 一个字段都不给
-    mcp.setWriteMode('propose');
+    mcp.setTurn('followup');
     const noReason = (await client.callTool({
       name: 'dismiss_finding',
       arguments: { finding_id: 'x', reason: '   ' },

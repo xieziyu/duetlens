@@ -1,7 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { butJson } from './but-cli';
-import type { PreparedSource, ReviewTarget, Source } from './source';
+import { gitGrep } from './git-grep';
+import type {
+  CodeSearchInput,
+  CodeSearchResult,
+  PreparedSource,
+  ReviewTarget,
+  Source,
+} from './source';
 
 /** `but diff` JSON 输出的最小结构(只取重建 unified diff 所需字段)。 */
 interface ButDiffJson {
@@ -39,12 +46,20 @@ export class GitButlerSource implements Source {
 
   async getFile(p: string): Promise<string> {
     const full = this.resolveInRepo(p);
-    if (!full) return `// 拒绝越界读取 ${p}`;
+    if (!full) throw new Error(`拒绝越界读取 ${p}`);
     try {
       return await readFile(full, 'utf8');
     } catch {
-      return `// 无法读取 ${p}`;
+      throw new Error(`无法读取 ${p}`);
     }
+  }
+
+  /** 与 {@link getFile} 同口径:搜工作区(vbranch 的改动尚未提交),含未跟踪的新文件。 */
+  async searchCode(input: CodeSearchInput): Promise<CodeSearchResult> {
+    return gitGrep(this.target.repoPath, input.query, {
+      untracked: true,
+      pathPrefix: input.pathPrefix,
+    });
   }
 
   /** 把相对路径限制在 repoPath 内(防 `../` 穿越读盘);越界返回 null。 */

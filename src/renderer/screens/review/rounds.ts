@@ -5,11 +5,26 @@
  * 第 2 轮判定 still_present 的条目,到第 3 轮若 agent 没再表态,就该回到"未表态",而不是一直
  * 挂着旧结论。例外见 isFixedResolved。
  */
-import { isAutoClosedFixed, type Finding, type FindingResolution, type ReviewRound } from '@shared/domain';
+import {
+  isAutoClosedFixed,
+  type Finding,
+  type FindingResolution,
+  type FindingVerdict,
+  type ReviewRound,
+} from '@shared/domain';
 
 /** 本轮对该 finding 的判定;未在本轮表态返回 null。 */
 export function currentResolution(f: Finding, currentRound: number): FindingResolution | null {
   return f.lastSeenRound === currentRound ? f.resolution : null;
+}
+
+/**
+ * 本轮是否还有自检裁决可展示。与 {@link currentResolution} 同一条约定:
+ * 裁决是对**那一轮那份代码**的判断,过了轮次就不再代表当前结论 ——
+ * 否则首轮判「不成立」的条目在下一轮被复审判「仍存在」之后,会同时挂着两个互相矛盾的结论。
+ */
+export function currentVerdict(f: Finding, currentRound: number): FindingVerdict | null {
+  return f.verdictRound === currentRound ? f.verdict : null;
 }
 
 /**

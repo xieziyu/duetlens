@@ -74,7 +74,7 @@ export class GitHubPrSource implements Source {
       ]);
       return Buffer.from(b64.trim(), 'base64').toString('utf8');
     } catch {
-      return `// 无法读取 ${path}`;
+      throw new Error(`无法读取 ${path}(不在 PR head ${this.headSha.slice(0, 7)})`);
     }
   }
 

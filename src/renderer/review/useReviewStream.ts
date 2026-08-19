@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Discussion, Finding, FindingProposal, Message, Review, ReviewRound } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AgentEvent, TokenUsage } from '@shared/agent-events';
-import { pushActivity, EMPTY_ACTIVITY_LOG, type ActivityLog } from '../screens/review/scan-activity';
+import {
+  appendNote,
+  pushActivity,
+  EMPTY_ACTIVITY_LOG,
+  type ActivityLog,
+} from '../screens/review/scan-activity';
 
 export interface ReviewStreamState {
   review: Review | null;
@@ -246,6 +251,11 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
         case 'agent':
           // agent 流是 firehose,只挑要上屏的几支;其余 kind 有意不处理
           applyAgentEvent(e.payload);
+          return;
+        case 'selfcheck-skipped':
+          // 跳过条件是「没有待裁的条目」而非「一条 finding 都没有」(已剔除 / 已结案的不算),
+          // 且首轮与复审轮都会触发 —— 文案两头都不能写死。
+          setActivity((prev) => appendNote(prev, '本轮无待裁 finding,已跳过对抗自检轮', Date.now()));
           return;
         default:
           assertExhaustive(e);
