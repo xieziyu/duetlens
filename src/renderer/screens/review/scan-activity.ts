@@ -9,7 +9,17 @@
 import type { AgentEvent, CommandAction } from '@shared/agent-events';
 import { MCP_ARG, MCP_TOOL } from '@shared/mcp-contract';
 
-export type ActivityKind = 'read' | 'search' | 'list' | 'diff' | 'finding' | 'web' | 'shell' | 'tool';
+export type ActivityKind =
+  | 'read'
+  | 'search'
+  | 'list'
+  | 'diff'
+  | 'finding'
+  | 'web'
+  | 'shell'
+  | 'tool'
+  /** 不是 agent 的动作,是编排层的一句交代(如「对抗档跳过了自检轮」) */
+  | 'note';
 
 export interface Activity {
   kind: ActivityKind;
@@ -61,6 +71,7 @@ const ACTIVITY_VERB: Record<ActivityKind, string> = {
   web: '联网查',
   shell: '执行',
   tool: '调用',
+  note: '',
 };
 
 export const activityVerb = (k: ActivityKind): string => ACTIVITY_VERB[k];
@@ -105,6 +116,15 @@ function fromTool(ev: Extract<AgentEvent, { kind: 'tool-call' }>): Derived | nul
       const parts = [ev.tool, str(a[MCP_ARG.status]), str(a[MCP_ARG.findingId])].filter(Boolean);
       return { ...base, kind: 'finding', text: parts.join(' · ') };
     }
+    case MCP_TOOL.searchCode: {
+      const q = str(a[MCP_ARG.query]);
+      return { ...base, kind: 'search', text: q ? `代码里搜「${q}」` : '代码检索' };
+    }
+    case MCP_TOOL.judgeFinding: {
+      // 裁决本身才是信息(哪条被判不成立);id 排在后面,截断时先丢它
+      const parts = ['裁决', str(a[MCP_ARG.verdict]), str(a[MCP_ARG.findingId])].filter(Boolean);
+      return { ...base, kind: 'finding', text: parts.join(' · ') };
+    }
     case MCP_TOOL.writeSummary:
       return { ...base, kind: 'tool', text: '写入本轮总结' };
     default:
@@ -145,6 +165,19 @@ function derive(ev: AgentEvent): Derived | null {
  * 每个动作会来两次(item/started 与 item/completed),所以 `done` 的那次要去**给在跑的那条收尾**,
  * 而不是再追加一条 —— 否则每个动作在流里都是双份,且「正在做」永远指着已经做完的事。
  */
+/**
+ * 追加一条编排层的注记。走同一条流是因为用户在那里看「这一轮发生了什么」——
+ * 该发生却没发生的事(跳过的自检轮)不摆在这里,就成了一段无从解释的空白。
+ */
+export function appendNote(log: ActivityLog, text: string, now: number): ActivityLog {
+  const item: Activity = { kind: 'note', text, at: now, endedAt: now, count: 1, done: true };
+  const next = [...log.items, item];
+  return {
+    items: next.length > ACTIVITY_LIMIT ? next.slice(next.length - ACTIVITY_LIMIT) : next,
+    paths: log.paths,
+  };
+}
+
 export function pushActivity(log: ActivityLog, ev: AgentEvent, now: number): ActivityLog {
   const d = derive(ev);
   if (!d) return log;

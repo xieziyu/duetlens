@@ -19,6 +19,8 @@ export const MCP_TOOL = {
   writeSummary: 'write_summary',
   getDiff: 'get_diff',
   getFile: 'get_file',
+  searchCode: 'search_code',
+  judgeFinding: 'judge_finding',
 } as const;
 
 export type McpToolName = (typeof MCP_TOOL)[keyof typeof MCP_TOOL];
@@ -31,4 +33,6 @@ export const MCP_ARG = {
   severity: 'severity',
   title: 'title',
   status: 'status',
+  query: 'query',
+  verdict: 'verdict',
 } as const;

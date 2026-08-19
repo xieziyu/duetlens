@@ -12,6 +12,7 @@ import {
   type Finding,
   type FindingProposal,
   type FindingResolution,
+  type FindingVerdict,
   type Message,
   type MessageRole,
   type ProposalBefore,
@@ -28,6 +29,7 @@ import {
   type RoundStatus,
   type SourceKind,
   type Submission,
+  type TurnKind,
   type SummaryFile,
   type Triage,
   type UiSettings,
@@ -100,6 +102,11 @@ interface FindingRow {
   resolution: string | null;
   resolution_note: string | null;
   auto_closed: number;
+  origin_turn: string | null;
+  verdict: string | null;
+  verdict_note: string | null;
+  verdict_turn: string | null;
+  verdict_round: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -229,6 +236,11 @@ function toFinding(r: FindingRow): Finding {
     resolution: r.resolution as FindingResolution | null,
     resolutionNote: r.resolution_note,
     autoClosed: r.auto_closed === 1,
+    originTurn: r.origin_turn as TurnKind | null,
+    verdict: r.verdict as FindingVerdict | null,
+    verdictNote: r.verdict_note,
+    verdictTurn: r.verdict_turn as TurnKind | null,
+    verdictRound: r.verdict_round,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -607,6 +619,8 @@ export class ReviewStore {
     input: ReportFindingInput,
     origin: Finding['origin'] = 'agent',
     id: string = randomUUID(),
+    /** 报出它的 turn 类型;只有 agent 上报路径给得出,手动/提升留 null(origin 列已区分那两者) */
+    originTurn: TurnKind | null = null,
   ): Finding {
     const ts = now();
     const discussionId = randomUUID();
@@ -622,8 +636,8 @@ export class ReviewStore {
         .run(discussionId, reviewId, origin, input.file, input.line, ts);
       this.db
         .prepare(
-          `INSERT INTO findings (id, review_id, discussion_id, origin, severity, category, title, body, file, line, suggestion, triage, dismiss_reason, submission, submitted_url, round, last_seen_round, resolution, resolution_note, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 'unsubmitted', NULL, ?, ?, NULL, NULL, ?, ?)`,
+          `INSERT INTO findings (id, review_id, discussion_id, origin, severity, category, title, body, file, line, suggestion, triage, dismiss_reason, submission, submitted_url, round, last_seen_round, resolution, resolution_note, origin_turn, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NULL, 'unsubmitted', NULL, ?, ?, NULL, NULL, ?, ?, ?)`,
         )
         .run(
           findingId,
@@ -639,6 +653,7 @@ export class ReviewStore {
           input.suggestion ?? null,
           round,
           round,
+          originTurn,
           ts,
           ts,
         );
@@ -708,12 +723,17 @@ export class ReviewStore {
     const resolutionNote = supersedesRecheck ? null : existing.resolutionNote;
     const suggestion =
       supersedesRecheck && input.suggestion === undefined ? null : next.suggestion;
+    // 正文一改,自检判据针对的东西就没了 —— 留着会让一段说着旧正文的判据挂在新正文旁边。
+    // 与上面 resolutionNote 被作废是同一条规矩:改写即作废,不猜它是否仍然成立。
+    const keepVerdict = !rewritten;
     this.withReviewTouch({ finding: input.findingId }, (ts) => {
       this.db
         .prepare(
           `UPDATE findings
               SET severity = ?, category = ?, title = ?, body = ?, suggestion = ?,
-                  resolution_note = ?, body_round = ?, updated_at = ?
+                  resolution_note = ?, body_round = ?,
+                  verdict = ?, verdict_note = ?, verdict_turn = ?, verdict_round = ?,
+                  updated_at = ?
             WHERE id = ?`,
         )
         .run(
@@ -724,11 +744,43 @@ export class ReviewStore {
           suggestion,
           resolutionNote,
           rewritten ? round : existing.bodyRound,
+          keepVerdict ? existing.verdict : null,
+          keepVerdict ? existing.verdictNote : null,
+          keepVerdict ? existing.verdictTurn : null,
+          keepVerdict ? existing.verdictRound : null,
           ts,
           input.findingId,
         );
     });
     return this.getFinding(input.findingId);
+  }
+
+  /**
+   * 记下自检轮对一条 finding 的裁决。**只写这三列**,刻意不走 {@link updateFinding} ——
+   * 裁决是标注不是动作:不动 severity(机器降档等于软剔除)、不动 triage(剔除权在 reviewer)、
+   * 也不碰 body_round(它没有给作者新写一句话,不该据此追发评论)。
+   *
+   * 同一条被反复裁决时后写覆盖先写:一轮内 agent 改主意了,留最后那次即可。
+   */
+  setFindingVerdict(
+    findingId: string,
+    verdict: FindingVerdict,
+    note: string | null,
+    turn: TurnKind,
+  ): Finding | null {
+    const existing = this.getFinding(findingId);
+    if (!existing) return null;
+    const round = this.currentRound(existing.reviewId);
+    this.withReviewTouch({ finding: findingId }, (ts) => {
+      this.db
+        .prepare(
+          `UPDATE findings
+              SET verdict = ?, verdict_note = ?, verdict_turn = ?, verdict_round = ?, updated_at = ?
+            WHERE id = ?`,
+        )
+        .run(verdict, note, turn, round, ts, findingId);
+    });
+    return this.getFinding(findingId);
   }
 
   /**

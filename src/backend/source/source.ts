@@ -40,8 +40,45 @@ export interface Source {
   prepare(): Promise<PreparedSource>;
   /** 本次改动的完整 unified diff */
   getDiff(): Promise<string>;
-  /** 按相对路径读被审文件(新侧内容) */
+  /**
+   * 按相对路径读被审文件(新侧内容)。
+   * 读不到(已删除 / 不在该 ref / 越界)**必须抛**,不要回一句占位文本 ——
+   * 读失败与读到内容不可分的话,MCP 的取证闸会把一次失败的读取记成「已取证」。
+   */
   getFile(path: string): Promise<string>;
+  /**
+   * 全仓字面量搜索。**可选** —— 只有拿得到完整代码树、且能与 {@link getFile} 同口径的
+   * source 才实现它(github-pr 走 `gh api` 逐文件取内容,没有可搜的树,故不实现)。
+   *
+   * 口径必须与 getFile 完全一致(同一 ref / 同一工作区),否则 agent 搜到的行号拿去 getFile
+   * 会读到另一份内容 —— 那比没有搜索更坏:它会拿着对不上的两段代码推出一个像模像样的结论。
+   *
+   * 不实现时 MCP 层**不声明** search_code 工具,而不是声明了再报错 ——
+   * 工具不存在,agent 就不会调用,也就不会把「搜不了」误读成「代码里没有」。
+   */
+  searchCode?(input: CodeSearchInput): Promise<CodeSearchResult>;
   /** 清理临时资源(如临时 checkout) */
   dispose(): Promise<void>;
+}
+
+export interface CodeSearchInput {
+  /** 字面量(非正则);大小写敏感 */
+  query: string;
+  /** 可选的路径前缀过滤(git pathspec),缩小范围用 */
+  pathPrefix?: string;
+}
+
+/** 一个文件里的命中。`hasMore` = 本文件还有未展示的命中(在 git 侧就截了,数不出精确条数)。 */
+export interface CodeSearchFileHits {
+  path: string;
+  hits: { line: number; text: string }[];
+  hasMore: boolean;
+}
+
+export interface CodeSearchResult {
+  files: CodeSearchFileHits[];
+  /** 收集到的命中数。读取阶段就按文件数与每文件条数封了顶,故这不是全仓真实总数 */
+  total: number;
+  /** 还有更多文件的命中没读(读满文件上限就停了,数不出还剩几个 —— 所以是布尔不是计数) */
+  moreFiles: boolean;
 }

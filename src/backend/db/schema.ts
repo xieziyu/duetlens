@@ -245,8 +245,29 @@ const V18 = `
 ALTER TABLE ui_settings ADD COLUMN file_list_view TEXT;
 `;
 
+// 对抗档的取证记账。一次加齐四列,免得「来源」与「裁决」分两次 migration
+// (verdict 的机械闸依赖 origin_turn 分辨轮次,两者本就同生同死)。
+//
+// origin_turn = 这条 finding 由哪一类 turn 报出(scan / selfcheck / ...);
+// verdict 三列 = 自检轮对它的裁决与判据。**存量行一律留 NULL 且不回填**:
+// 本列之前 selfcheck 与 scan 在库里没有任何区分痕迹,硬猜只会造出假数据 ——
+// 分析起点就是本迁移落地那天,报表里写死这条界。
+const V19 = `
+ALTER TABLE findings ADD COLUMN origin_turn TEXT;
+ALTER TABLE findings ADD COLUMN verdict TEXT;
+ALTER TABLE findings ADD COLUMN verdict_note TEXT;
+ALTER TABLE findings ADD COLUMN verdict_turn TEXT;
+`;
+
+// 裁决出自哪一轮。verdict 是对**那一轮那份正文**的判断,过了轮次就不再代表当前结论 ——
+// 没有这一列的话,首轮判「不成立」的条目在下一轮被复审判「仍存在」后,会同时挂着两个
+// 互相矛盾的结论。判定与 resolution 同构(见 currentVerdict / currentResolution)。
+const V20 = `
+ALTER TABLE findings ADD COLUMN verdict_round INTEGER;
+`;
+
 const MIGRATIONS: string[] = [
-  V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18,
+  V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20,
 ];
 
 export function migrate(db: Database): void {

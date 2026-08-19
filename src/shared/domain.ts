@@ -41,6 +41,36 @@ export type FindingCategory = (typeof FINDING_CATEGORIES)[number];
 export const FINDING_ORIGINS = ['agent', 'manual', 'promoted'] as const;
 export type FindingOrigin = (typeof FINDING_ORIGINS)[number];
 
+/**
+ * 一个 agent turn 的性质。机审轮按它分辨「首扫」与「自检」——两者过去同为 'scan',
+ * 于是库里分不出哪条 finding 出自哪一轮,连「自检轮补报的条目最终被剔除多少」都问不出来。
+ * 落库进 Finding.originTurn,故是领域枚举而非会话内部类型。
+ */
+export const TURN_KINDS = ['scan', 'selfcheck', 'followup'] as const;
+export type TurnKind = (typeof TURN_KINDS)[number];
+
+/** 直接落库、reviewer 不在场的那些 turn(与讨论轮的提案语义相对)。 */
+export const MACHINE_TURN_KINDS: readonly TurnKind[] = ['scan', 'selfcheck'];
+
+/**
+ * 自检轮对一条已上报 finding 的裁决。
+ *
+ * `cannot_verify` 不可省,且**不等于 confirmed**:取不到判据只说明没验成,不说明问题成立。
+ * 合并这一档会让「查无实据」在统计与展示上都伪装成「已证实」,正是对抗档要消灭的东西。
+ *
+ * 裁决是**标注而非动作** —— 不自动改 severity、不改 triage、不折叠。机器降 severity 就是
+ * 事实上的软剔除(severity 决定注意力排序),而剔除权只在 reviewer 手里。
+ */
+export const FINDING_VERDICTS = ['confirmed', 'refuted', 'cannot_verify'] as const;
+export type FindingVerdict = (typeof FINDING_VERDICTS)[number];
+
+/** 裁决徽标的显示名;diff 内嵌卡与右栏共用。措辞要留住「这是 agent 的判断,不是定论」。 */
+export const VERDICT_LABELS: Record<FindingVerdict, string> = {
+  confirmed: '自检 · 已核实',
+  refuted: '自检 · 判不成立',
+  cannot_verify: '自检 · 未能证实',
+};
+
 /** 用户裁决:open 保留纳入提交/导出,dismiss 剔除 */
 export const TRIAGES = ['open', 'dismiss'] as const;
 export type Triage = (typeof TRIAGES)[number];
@@ -122,6 +152,17 @@ export const reportFindingSchema = z.object({
   suggestion: z.string().optional(),
 });
 export type ReportFindingInput = z.infer<typeof reportFindingSchema>;
+
+/**
+ * judge_finding 的 ingress。note 必填且不可空白 —— 判据是裁决的**全部**内容,
+ * 一条没有依据的 refuted 与没裁决没有区别,却会在界面上显得像有人查过。
+ */
+export const judgeFindingSchema = z.object({
+  findingId: z.string().min(1),
+  verdict: z.enum(FINDING_VERDICTS),
+  note: z.string().trim().min(1),
+});
+export type JudgeFindingInput = z.infer<typeof judgeFindingSchema>;
 
 /** update_finding:对话打磨后回写,按 findingId 部分更新可编辑字段 */
 export const updateFindingSchema = z.object({
@@ -341,6 +382,15 @@ export interface Finding {
   resolutionNote: string | null;
   /** 这条剔除出自复核自动结案,而非 reviewer 的判断(见 isAutoClosedFixed) */
   autoClosed: boolean;
+  /** 报出它的 turn 类型;本列之前的存量行为 null(见 schema V19),不可回填 */
+  originTurn: TurnKind | null;
+  /** 自检轮的裁决与判据;未经自检为 null */
+  verdict: FindingVerdict | null;
+  verdictNote: string | null;
+  /** 下这条裁决的 turn 类型;区分自检轮与将来的独立证伪轮 */
+  verdictTurn: TurnKind | null;
+  /** 裁决出自第几轮;仅当它等于 Review.currentRound 时代表当前结论(见 currentVerdict) */
+  verdictRound: number | null;
   createdAt: number;
   updatedAt: number;
 }

@@ -34,7 +34,7 @@ import { fetchPrContextForReview } from '../source/github-pr-context';
 import { checkEnvironment } from '../env/environment-check';
 import type { EnvCheckOptions, EnvironmentReport } from '@shared/environment';
 import { setToolPath } from '../config/tool-paths';
-import type { ReviewTarget } from '../source/source';
+import type { ReviewTarget, Source } from '../source/source';
 import {
   checkGhAuth,
   getRepoRemote,
@@ -140,6 +140,11 @@ const SESSION_FORWARDERS: {
   'finding-proposal': (reviewId, payload) => ({ reviewId, type: 'finding-proposal', payload }),
   status: (reviewId, payload) => ({ reviewId, type: 'status', payload }),
   'agent-event': (reviewId, payload) => ({ reviewId, type: 'agent', payload }),
+  'selfcheck-skipped': (reviewId, payload) => ({
+    reviewId,
+    type: 'selfcheck-skipped',
+    reason: payload.reason,
+  }),
 };
 
 /**
@@ -313,11 +318,40 @@ export class ReviewManager extends EventEmitter {
    * 读被审文件新侧完整内容(DiffPane 展开 diff 外上下文)。
    * 活跃会话在场时用其 source(读的是审核时快照);否则按持久化 target 临时重建 source 读一次。
    */
+  /**
+   * 三处建 MCP providers 的共用装配。
+   * searchCode 随 source 有无而定(github-pr 无本地代码树,缺省即让 MCP 不声明该工具);
+   * findingFile 走库而非内存 —— 复审轮要裁决的是上一轮报的条目,不在本次会话的 findings 里。
+   */
+  private buildProviders(
+    reviewId: string,
+    source: Source,
+    getDiff: () => string | Promise<string>,
+  ): McpContentProviders {
+    return {
+      getDiff,
+      getFile: (p) => source.getFile(p),
+      searchCode: source.searchCode ? (input) => source.searchCode!(input) : undefined,
+      findingFile: (id) => {
+        // **必须限定本 review**:两条 review 并存时 agent 给出的 id 未必是自己这条的,
+        // 不限定的话裁决会写到另一次审核的 finding 上(路径重名时连取证闸都挡不住)。
+        const f = this.store.getFinding(id);
+        return f && f.reviewId === reviewId ? f.file : null;
+      },
+    };
+  }
+
   async getFileContent(reviewId: string, filePath: string): Promise<string | null> {
     const live = this.providers.get(reviewId);
     if (live) {
       this.touch(reviewId);
-      return live.getFile(filePath);
+      // source.getFile 现在读不到就抛(取证闸要求可分);这条路是给 DiffPane 展开上下文用的,
+      // 读不到回 null 就是它一直以来的语义,别把异常透到 IPC 去。
+      try {
+        return await live.getFile(filePath);
+      } catch {
+        return null;
+      }
     }
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
@@ -329,6 +363,8 @@ export class ReviewManager extends EventEmitter {
     try {
       await source.prepare();
       return await source.getFile(filePath);
+    } catch {
+      return null; // 同上:这条路读不到就是 null
     } finally {
       await source.dispose();
     }
@@ -409,7 +445,9 @@ export class ReviewManager extends EventEmitter {
               body: input.body,
               suggestion: input.suggestion ?? null,
             })
-          : this.store.addFinding(reviewId, input, 'agent');
+          // 这条是 agent 在追问轮提出、reviewer 采纳后才落库的 —— 报出它的是 followup turn。
+          // 不传就会和迁移前的未知存量一样留 NULL,把真实的追问产出混进「无从判断」那一堆。
+          : this.store.addFinding(reviewId, input, 'agent', undefined, 'followup');
         // promoteDiscussion 用的是 discussion 的行号,而卡片上写的是提案里的 —— agent 常会在
         // 框选范围内给出更准的一行。以卡片所示为准,否则采纳到手的锚点和看到的不是一个。
         // 只在提案给了真实行号时改:setFindingAnchor 的 0 是「脱锚降级为摘要」(见 anchorDropped),
@@ -765,12 +803,14 @@ export class ReviewManager extends EventEmitter {
       // 首轮也建轮次记录:轮次表是完整履历,复审只是往后追加,不是另一套东西。
       this.store.startRound(review.id, 1, { headSha: prepared.headSha, note: target.context });
       onStage?.('agent');
-      const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: review.intensity });
+      const baseInstructions = await loadBaseInstructions({
+        cwd: prepared.cwd,
+        intensity: review.intensity,
+        canSearch: !!source.searchCode,
+      });
       launched = true;
-      this.launch(review, prepared.cwd, {
-        getDiff: () => rawDiff,
-        getFile: (p) => source.getFile(p),
-      }, () => source.dispose(), baseInstructions, buildScanPrompt(target.context), 1,
+      this.launch(review, prepared.cwd, this.buildProviders(review.id, source, () => rawDiff),
+        () => source.dispose(), baseInstructions, buildScanPrompt(target.context), 1,
         // 这条 review 刚建出来,id 还没出过本方法,外部无从释放它;代次只能是初始值。
         this.teardownEpoch(review.id));
       return review;
@@ -943,7 +983,11 @@ export class ReviewManager extends EventEmitter {
               note: opts.note,
             });
       opts.onStage?.('agent');
-      baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: opts.intensity });
+      baseInstructions = await loadBaseInstructions({
+        cwd: prepared.cwd,
+        intensity: opts.intensity,
+        canSearch: !!source.searchCode,
+      });
     } catch (e) {
       release();
       await source.dispose();
@@ -955,7 +999,7 @@ export class ReviewManager extends EventEmitter {
       this.launch(
         { ...review, currentRound: round.round, intensity },
         prepared.cwd,
-        { getDiff: () => rawDiff, getFile: (p) => source.getFile(p) },
+        this.buildProviders(review.id, source, () => rawDiff),
         () => source.dispose(),
         baseInstructions,
         prompt,
@@ -1069,7 +1113,11 @@ export class ReviewManager extends EventEmitter {
       repoPath: review.repoPath ?? '',
     });
     const prepared = await source.prepare();
-    const baseInstructions = await loadBaseInstructions({ cwd: prepared.cwd, intensity: review.intensity });
+    const baseInstructions = await loadBaseInstructions({
+      cwd: prepared.cwd,
+      intensity: review.intensity,
+      canSearch: !!source.searchCode,
+    });
     let session: ReviewSession;
     try {
       session = this.createSession(reviewId, () => source.dispose(), epoch);
@@ -1077,10 +1125,7 @@ export class ReviewManager extends EventEmitter {
       await source.dispose(); // 建不出会话(如满载/已被释放)时 source 还没交给任何清理钩子,自己收
       throw e;
     }
-    const providers: McpContentProviders = {
-      getDiff: () => source.getDiff(),
-      getFile: (p) => source.getFile(p),
-    };
+    const providers = this.buildProviders(reviewId, source, () => source.getDiff());
     this.providers.set(reviewId, providers);
     try {
       await session.resume({

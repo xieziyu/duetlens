@@ -17,7 +17,7 @@ import {
   serializeKeyedFields,
 } from '../src/shared/prompt';
 import {
-  BUILTIN_ADVERSARIAL,
+  adversarialStance,
   BUILTIN_PROTOCOL,
   BUILTIN_ROLE,
   loadBaseInstructions,
@@ -141,16 +141,37 @@ async function main() {
   log('无层文件:锁定段首尾夹住 builtin 各节 + context 略去 ✓');
 
   // ---- 审核强度:对抗档在角色段后追加对抗立场,标准档不含它 ----
-  assert.ok(!base0.includes(BUILTIN_ADVERSARIAL), '标准档不应注入对抗立场段');
-  const baseAdv = await loadBaseInstructions({ cwd: repo, homeDir: home, intensity: 'adversarial' });
-  assert.ok(baseAdv.includes(BUILTIN_ADVERSARIAL), '对抗档应注入对抗立场段');
+  assert.ok(!base0.includes(adversarialStance(true)), '标准档不应注入对抗立场段');
+  const baseAdv = await loadBaseInstructions({
+    cwd: repo,
+    homeDir: home,
+    intensity: 'adversarial',
+    canSearch: true,
+  });
+  assert.ok(baseAdv.includes(adversarialStance(true)), '对抗档应注入对抗立场段');
   assert.ok(baseAdv.startsWith(BUILTIN_ROLE), '对抗档仍以角色段打头');
   assert.ok(baseAdv.endsWith(BUILTIN_PROTOCOL), '对抗档协议段仍在最末');
   assert.ok(
-    baseAdv.indexOf(BUILTIN_ADVERSARIAL) < baseAdv.indexOf('## 审核重点'),
+    baseAdv.indexOf(adversarialStance(true)) < baseAdv.indexOf('## 审核重点'),
     '对抗立场应排在用户可配置节之前(压不过它)',
   );
-  log('审核强度:对抗档注入立场段、标准档不含、位置在角色后可配置节前 ✓');
+
+  // 搜不了的 source(github-pr)拿到的立场段不能派一个它做不到的硬性步骤 ——
+  // search_code 在那种会话里根本不声明,指名要它 = 让 agent 去试一个不存在的工具。
+  const baseNoSearch = await loadBaseInstructions({
+    cwd: repo,
+    homeDir: home,
+    intensity: 'adversarial',
+    canSearch: false,
+  });
+  assert.ok(!baseNoSearch.includes('search_code'), '无搜索能力时立场段不得点名 search_code');
+  assert.ok(baseNoSearch.includes('get_file'), '无搜索能力时仍要求用 get_file 取证');
+  assert.ok(
+    baseNoSearch.includes('没有全仓搜索'),
+    '要明说搜不了,并禁掉需要全仓视野才成立的结论(否则它会照常断言「没有别的调用点」)',
+  );
+  assert.ok(baseAdv.includes('search_code'), '有搜索能力时仍要求先搜索再读回');
+  log('审核强度:对抗档注入立场段、标准档不含、位置正确、取证步骤随 source 能力两版 ✓');
 
   // ---- 锁定段不下发 renderer,也不被用户层覆盖 ----
   const view0 = await loadReviewPrompt({ cwd: repo, homeDir: home });

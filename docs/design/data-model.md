@@ -40,6 +40,8 @@ finding 是一类 discussion,但同时是一条**可提交到 GitHub 的记录**
 
 另有一组随复审轮次演进的字段:`round`(首报轮次)/ `lastSeenRound` / `resolution` / `autoClosed`,语义见 [rerun](rerun.md)。
 
+对抗档另加两组:`originTurn`(由哪一类 turn 报出 —— 没有它,自检轮补报的条目与首扫的混在一起,「补报的最终被剔除多少」根本问不出来)与 `verdict` / `verdictNote` / `verdictTurn` / `verdictRound`(自检轮的裁决、判据与出自哪一轮 —— 按轮判定是否仍代表当前结论,正文被改写时四列一并清空)。**裁决是标注不是动作**:它不改 `severity`、不改 `triage`、也不刷 `bodyRound`,理由见 [architecture](architecture.md#审核强度)。本列之前的存量行一律留 NULL 且**不回填** —— 那时 selfcheck 与 scan 在库里没有任何区分痕迹,硬猜只会造出假数据,分析起点就是该迁移落地那天。
+
 可编辑字段(提交前):`severity` / `title` / `body` / `suggestion`;`category` 与 `file:line` 由 agent 定。`suggestion` 是**给 author 的建议代码**(提交时渲染为 GitHub suggestion 块),Duetlens 不落地执行。`origin: agent | manual | promoted` 区分 agent 上报 / 用户手动新增 / 由 user-discussion 提升而来 —— 三者同 schema、同提交路径。
 
 ## 历史保留

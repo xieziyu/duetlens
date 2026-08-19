@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Discussion, Finding, FindingProposal, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
-import { DEFAULT_UI_SETTINGS } from '@shared/domain';
+import { DEFAULT_UI_SETTINGS, VERDICT_LABELS } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
@@ -26,6 +26,7 @@ import { LogoMark } from '../components/LogoMark';
 import { Wordmark } from '../components/Wordmark';
 import {
   currentResolution,
+  currentVerdict,
   isFixedResolved,
   isNewThisRound,
   isSettled,
@@ -1181,6 +1182,7 @@ function FindingRow({
   const submitted = f.submission === 'submitted';
   const dismissed = f.triage === 'dismiss';
   const resolution = currentResolution(f, currentRound);
+  const verdict = currentVerdict(f, currentRound);
   const isNew = isNewThisRound(f, currentRound);
   const fixedResolved = isFixedResolved(f, currentRound);
   // 已修复组会同时装着历轮结案的条目,给它们把结案轮次点出来,免得看着像本轮刚判的
@@ -1209,6 +1211,8 @@ function FindingRow({
         )}
         {resolution === 'still_present' && <span className="round-tag still">仍存在</span>}
         {resolution === 'wont_fix' && <span className="round-tag wontfix">◇ 作者已回应</span>}
+        {/* 自检裁决:与 InlineCard 同一枚徽标,右栏是逐条处置的主视图,不能只在 diff 里看得到 */}
+        {verdict && <span className={`round-tag verdict ${verdict}`}>{VERDICT_LABELS[verdict]}</span>}
         <span className={`origin ${f.origin === 'agent' ? 'agent' : 'human'}`}>
           <span className="d" />
           {ORIGIN_LABEL[f.origin]}
@@ -1219,6 +1223,13 @@ function FindingRow({
         <div className={`fr-note res${resolution === 'wont_fix' ? ' wontfix' : ''}`}>
           <span className="frn-lbl">{resolution === 'wont_fix' ? '作者' : '复核'}</span>
           {f.resolutionNote}
+        </div>
+      )}
+      {/* 判据与徽标必须成对:只给结论不给依据,reviewer 无从核对,那枚徽标就成了要人盲信的断言。 */}
+      {verdict && f.verdictNote && (
+        <div className={`fr-note verdict ${verdict}`}>
+          <span className="frn-lbl">判据</span>
+          {f.verdictNote}
         </div>
       )}
       {/* 「✓ 已修复 · 自动剔除」标签已经说明了为何剔除;「采纳」则是把作者的说法原样抄成理由。

@@ -43,6 +43,7 @@
     "spike:notify": "tsx scripts/spike-notify.ts",
     "spike:rerun": "tsx scripts/spike-rerun.ts",
     "spike:absorb": "tsx scripts/spike-absorb.ts",
+    "spike:adversarial": "tsx scripts/spike-adversarial.ts",
     "spike:stop-scan": "tsx scripts/spike-stop-scan.ts",
     "spike:sandbox-guard": "tsx scripts/spike-sandbox-guard.ts",
     "spike:session-busy": "tsx scripts/spike-session-busy.ts",

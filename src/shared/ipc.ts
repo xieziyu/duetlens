@@ -294,7 +294,8 @@ export type ReviewEvent =
   | { reviewId: string; type: 'discussion'; payload: Discussion }
   | { reviewId: string; type: 'review'; payload: Review }
   | { reviewId: string; type: 'status'; payload: Review['status'] }
-  | { reviewId: string; type: 'agent'; payload: AgentEvent };
+  | { reviewId: string; type: 'agent'; payload: AgentEvent }
+  | { reviewId: string; type: 'selfcheck-skipped'; reason: 'no-findings' };
 
 /** contextBridge 暴露到 renderer 的 API 形状。 */
 export interface DuetlensApi {

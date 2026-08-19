@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   alignSuggestion,
   isAutoClosedFixed,
+  VERDICT_LABELS,
   type Finding,
   type FindingResolution,
+  type FindingVerdict,
   type Severity,
   type Triage,
 } from '@shared/domain';
@@ -11,9 +13,10 @@ import type { FindingEditInput } from '@shared/ipc';
 import { imeComposing } from '../../keys';
 import { CategorySelect } from './CategorySelect';
 import { renderMarkdown } from './markdown';
-import { currentResolution, isNewThisRound } from './rounds';
+import { currentResolution, currentVerdict, isNewThisRound } from './rounds';
 
 const SEV_LABEL: Record<Severity, string> = { high: 'high', medium: 'med', low: 'low' };
+
 const SEV_OPTIONS: Severity[] = ['high', 'medium', 'low'];
 
 export interface InlineCardProps {
@@ -54,6 +57,7 @@ export function InlineCard({
   const [editing, setEditing] = useState(false);
   const writable = !!(onTriage || onUpdate) && !submitted;
   const resolution = currentResolution(finding, currentRound);
+  const verdict = currentVerdict(finding, currentRound);
 
   const cardClass =
     `card ${isAgent ? 'agent' : 'human'} finding` +
@@ -86,6 +90,7 @@ export function InlineCard({
             offDiff={offDiff}
             originalLine={originalLine}
             resolution={resolution}
+            verdict={verdict}
             isNew={isNewThisRound(finding, currentRound)}
             onEdit={onUpdate ? () => setEditing(true) : undefined}
             onDismiss={onTriage ? () => onTriage(finding, 'dismiss') : undefined}
@@ -203,6 +208,7 @@ function CardView({
   offDiff,
   originalLine,
   resolution,
+  verdict,
   isNew,
   onEdit,
   onDismiss,
@@ -216,6 +222,7 @@ function CardView({
   offDiff?: boolean;
   originalLine?: string;
   resolution: FindingResolution | null;
+  verdict: FindingVerdict | null;
   isNew: boolean;
   onEdit?: () => void;
   onDismiss?: () => void;
@@ -239,6 +246,8 @@ function CardView({
             照样把它排进待处理 —— 这边挂徽标就成了两套口径。agent 的结论由下面的「复核」说明照常给出。 */}
         {resolution === 'still_present' && <span className="round-tag still">本轮复核 · 仍存在</span>}
         {resolution === 'wont_fix' && <span className="round-tag wontfix">◇ 作者已回应</span>}
+        {/* 对抗档的自检裁决。只是标注 —— 判不成立也不动 severity、不动去留,由 reviewer 定夺。 */}
+        {verdict && <span className={`round-tag verdict ${verdict}`}>{VERDICT_LABELS[verdict]}</span>}
       </div>
       <div className="c-body">
         <strong className="c-title">{finding.title}</strong>
@@ -247,6 +256,14 @@ function CardView({
           <div className={`c-resnote${resolution === 'wont_fix' ? ' wontfix' : ''}`}>
             <span className="crn-lbl">{resolution === 'wont_fix' ? '作者' : '复核'}</span>
             {finding.resolutionNote}
+          </div>
+        )}
+        {/* 判据必须跟着裁决一起给:一条没有依据的「判不成立」比没有裁决更坏 ——
+            它看起来像有人查过,而 reviewer 无从核对。 */}
+        {verdict && finding.verdictNote && (
+          <div className={`c-resnote verdict ${verdict}`}>
+            <span className="crn-lbl">判据</span>
+            {finding.verdictNote}
           </div>
         )}
       </div>

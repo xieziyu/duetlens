@@ -255,14 +255,14 @@ async function main() {
   log('write_summary:重跑漏写可判定过期(留内容、只标过期)· 重写刷新轮次 ✓');
 
   // propose 轮(追问)不得写总结:没有待确认卡片可挂,放行等于一句追问静默覆盖 review body
-  mcp.setWriteMode('propose');
+  mcp.setTurn('followup');
   const inPropose = (await client.callTool({
     name: 'write_summary',
     arguments: { body: '追问里偷偷改总结' },
   })) as { isError?: boolean };
   assert.equal(inPropose.isError, true, 'propose 模式应拒收 write_summary');
   assert.equal(store.getReview(review.id)!.summaryBody, '第 2 轮的结论', '被拒后 body 原样不动');
-  mcp.setWriteMode('apply');
+  mcp.setTurn('scan');
   log('write_summary:空 body/缺 note 拒收 · 重写取代 · 超限截断 · propose 轮拒收 ✓');
 
   await client.close();
