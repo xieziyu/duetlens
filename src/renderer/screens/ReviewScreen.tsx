@@ -1199,7 +1199,10 @@ function FindingRow({
   return (
     <div className={rowClass} onClick={() => onPick(f)} title="跳到 diff / 打开 discussion">
       <div className="fr-top">
-        <span className={`sev sev-${f.severity}`}>
+        <span
+          className={`sev sev-${f.severity}`}
+          title={f.category ? `${SEV_LABEL[f.severity]} · ${f.category}` : undefined}
+        >
           {SEV_LABEL[f.severity]}
           {f.category ? ` · ${f.category}` : ''}
         </span>

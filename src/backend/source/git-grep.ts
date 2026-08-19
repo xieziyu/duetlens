@@ -6,8 +6,11 @@
  * 未签名二进制在 electron-builder 翻 fuses 之后是一启动就 SIGKILL。
  *
  * **只做字面量(-F),不给正则**:agent 写错的正则会产生一个看不出破绽的「0 命中」,
- * 而 0 命中恰好是最危险的返回值(见 formatSearchResult 的免责句)。字面量行为可预测,
- * 等真实使用证明不够,再加正则开关。
+ * 而 0 命中恰好是最危险的返回值(见 formatSearchResult 的免责句)。
+ *
+ * 实机跑过之后这条更站得住了:一轮里四成的 query 是 0 命中,但逐条看都是模型在**猜某个写法
+ * 存不存在**(`"verdict 字段"`、`className="big"` 这类),正则一条也救不回来 —— 那是廉价试探,
+ * 不是工具缺陷。要重开这个口子,得先拿出「因为写不出正则而漏掉真调用点」的具体案例。
  */
 import { spawn } from 'node:child_process';
 import { resolveTool } from '../config/tool-paths';

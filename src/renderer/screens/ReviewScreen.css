@@ -1143,10 +1143,12 @@ body.rz-dragging * {
   opacity: 0.55;
   border-style: dashed;
 }
+/* 同 .fr-top:徽标可以一直加下去,窄栏下不换行就会出框。 */
 .card .c-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 9px;
+  gap: 5px 9px;
   padding: 9px 12px;
   border-bottom: 1px solid var(--border-soft);
 }
@@ -2611,10 +2613,14 @@ body.rz-dragging * {
   text-decoration: line-through;
   color: var(--text-deco);
 }
+/* 徽标数量是**开放**的:严重度 + 分类、本轮新增、复核表态、自检裁决…… 每加一档就多一枚,
+   而分类名长度不受控。不换行的话必然在某个窗宽下把 origin 挤到卡片外面去 —— 那是溢出,
+   不是截断,看起来像渲染坏了。宁可占两行也不许出框。 */
 .fr-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 5px 8px;
   margin-bottom: 6px;
 }
 .fr-top .origin {
@@ -2706,6 +2712,9 @@ body.rz-dragging * {
   padding: 3px 9px;
   cursor: pointer;
 }
+/* 这枚徽标带着 category,而 category 在 ingress 只是任意非空字符串(reportFindingSchema)——
+   长度不受控。父行的 flex-wrap 只挪得动整枚徽标,收不了**单枚过宽**的,所以这里必须自己让步:
+   `0 1 auto` 平时按内容撑开、挤不下才收,收到头用省略号而不是出框。全文由 title 兜底。 */
 .sev {
   font-family: var(--mono);
   font-size: 10px;
@@ -2715,7 +2724,11 @@ body.rz-dragging * {
   padding: 2px 7px;
   border-radius: 5px;
   height: fit-content;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 /* 底色/边线一律从本档的 --sev-* 现推,不借 diff(--del-bg)或双声道(--human-soft/--agent-soft)的色板:
    借过来的话 HIGH 会读成"删除行"、MED 读成"human 发言"、LOW 读成"agent 发言"。

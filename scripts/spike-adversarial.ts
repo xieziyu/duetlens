@@ -185,6 +185,11 @@ async function main() {
     assert.equal(noEvidence.isError, true, '未取证的裁决必须被拒');
     assert.equal(store.getFinding(f.id)!.verdict, null, '被拒的裁决不能落库');
     assert.ok(textOf(noEvidence as never).includes('src/guard.ts'), '要点名缺哪个文件的证');
+    // 模型手上还有 shell,`cat` 过之后撞上这道闸时它自认已读过原文 —— 文案不点破口径、
+    // 不给出能自救的那次调用,它就只会重试同一次调用或干脆放弃裁决。
+    const denial = textOf(noEvidence as never);
+    assert.ok(denial.includes(MCP_TOOL.getFile), '拒收文案要写出能解锁的那次调用');
+    assert.ok(/shell|cat/.test(denial), '要点破「别的方式读过不算」,否则模型会以为工具坏了');
 
     // 验红确认:红的确实是取证闸 —— 取证后同一次调用就该通过
     await client.callTool({ name: MCP_TOOL.getFile, arguments: { path: 'src/guard.ts', start: 1, end: 4 } });
@@ -229,6 +234,38 @@ async function main() {
     })) as { isError?: boolean };
     assert.equal(stale.isError, true, '取证记账必须按 turn 清空,否则等于默许凭记忆写引用');
     log('取证记账按 turn 重置 ✓');
+
+    // 记账与查账的路径口径必须一致:记的是 agent 传来的 path,查的是 finding 落库的 file。
+    // 同一个文件写成 `./x` 与 `x` 时错杀的是**真取了证**的裁决,而模型只看到「还没取证」。
+    await client.callTool({ name: MCP_TOOL.getFile, arguments: { path: './src/guard.ts', start: 1, end: 4 } });
+    const dotted = (await client.callTool({
+      name: MCP_TOOL.judgeFinding,
+      arguments: { finding_id: f.id, verdict: 'confirmed', note: '按 ./ 前缀读回同一个文件' },
+    })) as { isError?: boolean };
+    assert.notEqual(dotted.isError, true, '`./a` 与 `a` 是同一个文件,不该因写法差异被判未取证');
+
+    // source 侧走 path.resolve,`a/x/../b.ts` 是真读得到 `a/b.ts` 的,中间段不折同样是误杀。
+    mcp.setTurn('selfcheck');
+    await client.callTool({
+      name: MCP_TOOL.getFile,
+      arguments: { path: 'src/tmp/../guard.ts', start: 1, end: 4 },
+    });
+    const dotdot = (await client.callTool({
+      name: MCP_TOOL.judgeFinding,
+      arguments: { finding_id: f.id, verdict: 'confirmed', note: '经 ../ 读回同一个文件' },
+    })) as { isError?: boolean };
+    assert.notEqual(dotdot.isError, true, '中间的 ../ 要折掉,否则读得到却判未取证');
+
+    // 反方向:归一**不许**把两个不同文件并成一个 key。反斜杠与首尾空格在 POSIX 下都是
+    // 合法文件名,抹掉它们等于 agent 读 A 就能裁决 B —— 放松闸门比误杀糟得多。
+    mcp.setTurn('selfcheck');
+    await client.callTool({ name: MCP_TOOL.getFile, arguments: { path: 'src\\guard.ts' } });
+    const merged = (await client.callTool({
+      name: MCP_TOOL.judgeFinding,
+      arguments: { finding_id: f.id, verdict: 'confirmed', note: '只读过反斜杠那个名字' },
+    })) as { isError?: boolean };
+    assert.equal(merged.isError, true, '`src\\guard.ts` 是另一个文件名,不得并成 src/guard.ts 的证');
+    log('取证记账:./ 与中间 ../ 折叠 · 反斜杠不并 key ✓');
 
     // ── 7. 读取失败不算取证 ──────────────────────────────────────
     // 从前无条件记账,于是锚到不存在文件的 finding 只要调一次注定失败的 get_file 就能解锁裁决。
