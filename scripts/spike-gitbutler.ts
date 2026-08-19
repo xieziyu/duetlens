@@ -2,12 +2,12 @@
  * GitButler source 验证(不烧 token):
  *   (1) 确定性:合成 but 结构化 diff → toUnifiedDiff → 断言重建成标准 unified(改/增/删)。
  *   (2) 实仓 smoke:对本仓某虚拟分支跑 GitButlerSource.getDiff/getFile,断言 diff 标记与文件内容。
- *   (3) 路径穿越:越界读盘被拒。
+ *   (3) 路径穿越:越界读盘被拒,仓内符号链接可读、指向仓外的被拒。
  *   (4) 入口模式探测:inspectRepo 对 workspace 仓 / 普通仓 / 非 git 目录的判定。
  * 运行:npm run spike:gitbutler [虚拟分支名，默认 feat/dev]
  */
 import { strict as assert } from 'node:assert';
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { run } from '../src/backend/source/exec';
@@ -85,6 +85,16 @@ async function testLive(branch: string) {
   }
 }
 
+/** 读不到必须**抛**(见 Source.getFile 契约):回占位文本的话,取证闸会把一次失败的读当成已取证。 */
+async function rejects(fn: () => Promise<unknown>, why: string): Promise<string> {
+  try {
+    await fn();
+  } catch (e) {
+    return (e as Error).message;
+  }
+  throw new Error(`应当被拒却读成功了: ${why}`);
+}
+
 async function testTraversal() {
   const source = new GitButlerSource({
     source: 'gitbutler-vbranch',
@@ -93,13 +103,41 @@ async function testTraversal() {
   });
   // POSIX 下真实穿越向量:相对 ../ 与绝对路径(反斜杠是合法文件名,不算分隔符)
   for (const p of ['../../../../etc/passwd', '/etc/passwd', 'src/../../../etc/hosts']) {
-    const out = await source.getFile(p);
-    assert.ok(out.startsWith('// 拒绝越界读取'), `应拒绝越界路径: ${p}`);
+    const msg = await rejects(() => source.getFile(p), p);
+    assert.ok(msg.includes('拒绝越界读取'), `应拒绝越界路径: ${p}(实际: ${msg})`);
   }
   // 正常仓内路径不被误伤
   const ok = await source.getFile('package.json');
   assert.ok(ok.includes('duetlens'), '仓内路径应正常读取');
   log('✅ (3) 路径穿越:越界 ../、绝对路径被拒,仓内路径放行');
+}
+
+/**
+ * 符号链接:词法检查看到的是 `<root>/leak`,而 readFile 跟到了仓库外。
+ * 被审仓库是**不可信输入** —— 一条指向 ~/.ssh/id_rsa 的链接就能把私钥送进模型上下文。
+ */
+async function testSymlinkEscape() {
+  const outer = await realpath(await mkdtemp(path.join(tmpdir(), 'duetlens-sym-')));
+  try {
+    const repo = path.join(outer, 'repo');
+    await mkdir(repo, { recursive: true });
+    await writeFile(path.join(outer, 'secret.txt'), 'PRIVATE KEY\n');
+    await writeFile(path.join(repo, 'a.txt'), 'in-repo\n');
+    await symlink('../secret.txt', path.join(repo, 'leak'));
+    // 仓内指向仓内的链接是合法的,不能一刀切禁掉 symlink
+    await symlink('a.txt', path.join(repo, 'alias'));
+
+    const source = new GitButlerSource({ source: 'gitbutler-vbranch', ref: 'x', repoPath: repo });
+    const msg = await rejects(() => source.getFile('leak'), 'leak -> ../secret.txt');
+    assert.ok(msg.includes('拒绝越界读取'), `符号链接越界应被拒(实际: ${msg})`);
+    assert.ok(!msg.includes('PRIVATE'), '拒绝信息里也不能带出目标内容');
+
+    assert.equal(await source.getFile('alias'), 'in-repo\n', '仓内符号链接应照常可读');
+    assert.equal(await source.getFile('a.txt'), 'in-repo\n', '普通文件不受影响');
+    log('✅ (3b) 符号链接:指向仓外被拒,仓内链接与普通文件放行');
+  } finally {
+    await rm(outer, { recursive: true, force: true });
+  }
 }
 
 /** 入口模式探测:本仓(workspace 分支)按虚拟分支审,临时普通仓与非 git 目录都落到 local。 */
@@ -136,6 +174,7 @@ async function testInspect() {
 async function main() {
   testReconstruction();
   await testTraversal();
+  await testSymlinkEscape();
   await testInspect();
   await testLive(process.argv[2] ?? 'feat/dev');
   log('✅ PASS — GitButler source 就位');

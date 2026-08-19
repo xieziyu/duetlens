@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { butJson } from './but-cli';
 import { gitGrep } from './git-grep';
@@ -47,8 +47,24 @@ export class GitButlerSource implements Source {
   async getFile(p: string): Promise<string> {
     const full = this.resolveInRepo(p);
     if (!full) throw new Error(`拒绝越界读取 ${p}`);
+    // **词法判断拦不住符号链接**:readFile 会跟随它,而被审仓库完全可以提交一条
+    // `leak -> ~/.ssh/id_rsa` —— `<root>/leak` 在词法上就在根内,读回来的却是仓库外的私钥,
+    // 再由取证工具原样送进模型上下文。故解析真实路径后再判一次归属。
+    // 根本身也要 realpath:macOS 的 /tmp 就是 /private/tmp 的链接,不解析会把自家路径判成越界。
+    let realRoot: string;
+    let real: string;
     try {
-      return await readFile(full, 'utf8');
+      realRoot = await realpath(this.target.repoPath);
+      real = await realpath(full);
+    } catch {
+      // 不存在 / 断链 —— 是读不到,不是越界,别把两者说成一回事
+      throw new Error(`无法读取 ${p}`);
+    }
+    if (real !== realRoot && !real.startsWith(realRoot + path.sep)) {
+      throw new Error(`拒绝越界读取 ${p}(符号链接指向仓库外)`);
+    }
+    try {
+      return await readFile(real, 'utf8');
     } catch {
       throw new Error(`无法读取 ${p}`);
     }
@@ -62,7 +78,7 @@ export class GitButlerSource implements Source {
     });
   }
 
-  /** 把相对路径限制在 repoPath 内(防 `../` 穿越读盘);越界返回 null。 */
+  /** 词法上把相对路径限制在 repoPath 内(挡 `../` 与绝对路径);符号链接由 getFile 再判一次。 */
   private resolveInRepo(p: string): string | null {
     const root = path.resolve(this.target.repoPath);
     const full = path.resolve(root, p);
