@@ -236,7 +236,10 @@ function CardView({
           <span className={`av ${isAgent ? 'agent' : 'human'}`}>{isAgent ? '◆' : '●'}</span>
           {isAgent ? 'agent' : finding.origin === 'promoted' ? '你 · 提升' : '你'}
         </span>
-        <span className={`sev sev-${finding.severity}`}>
+        <span
+          className={`sev sev-${finding.severity}`}
+          title={finding.category ? `${SEV_LABEL[finding.severity]} · ${finding.category}` : undefined}
+        >
           {SEV_LABEL[finding.severity]}
           {finding.category ? ` · ${finding.category}` : ''}
         </span>

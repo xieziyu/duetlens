@@ -138,7 +138,7 @@ export const INTENSITY_LABELS: Record<ReviewIntensity, string> = {
 };
 export const INTENSITY_HINTS: Record<ReviewIntensity, string> = {
   standard: '单轮扫描,直接上报 · 最快、最省 token',
-  adversarial: 'agent 以证伪立场构造反例,扫描后再自检一轮 · 更准,但 token 成倍、更慢',
+  adversarial: 'agent 以证伪立场构造反例,扫描后再自检一轮 · 更准,但 token 约翻倍、明显更慢',
 };
 
 // ---- MCP ingress schema(agent 经工具回传的字段;triage/submission 由用户侧决定,不在此)----

@@ -364,6 +364,28 @@ const TOOLS: Tool[] = [
 ];
 
 /**
+ * 取证记账用的路径口径。**记账与查账必须同一口径** —— 记的是 agent 传来的 path,
+ * 查的是 finding 落库的 file,同一个文件写成 `./a/b.ts` 与 `a/b.ts` 就会让闸门错杀一次
+ * 真取了证的裁决,而模型看到的只是「还没取证」,并不知道差在写法上。
+ * `..` 也要折(source 侧走 `path.resolve`,`a/x/../b.ts` 真读得到 `a/b.ts`)。
+ *
+ * **只折路径语义,不动文件名字符**:反斜杠与首尾空格在 POSIX 下都是合法文件名的一部分,
+ * 归一它们就把两个不同的文件并成一个 key —— 那是**放松**闸门,agent 读 A 就能裁决 B。
+ * 两种错法不对称:多余的空格只会误判成「还没取证」,而错误信息已经写清了该调哪次工具,
+ * 模型下一步就能自救;并错的 key 则是静默放行,没有任何一处会发现。
+ * 越过根的 `..` 同理保留原样,免得 `../a` 与 `a` 撞成一个。
+ */
+function evidenceKey(path: string): string {
+  const segs: string[] = [];
+  for (const seg of path.split('/')) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..' && segs.length > 0 && segs[segs.length - 1] !== '..') segs.pop();
+    else segs.push(seg);
+  }
+  return segs.join('/');
+}
+
+/**
  * 按 1 起、两端含的行区间截取。越界与倒置一律夹到合法范围(不报错):
  * agent 拿 search_code 的行号 ±N 算区间,边界附近必然算出 0 或超尾的值,
  * 为此回一个错误只会让它重试一次拿到同样的内容。
@@ -756,12 +778,19 @@ export class DuetlensMcpServer extends EventEmitter {
             isError: true,
           };
         }
-        if (!this.evidence.has(file)) {
+        // 闸门只认这里记下的调用:模型手上还有 shell,完全可能 `cat` 过这个文件就来下裁决。
+        // 那时它自认已读过原文,一句「还没取证」在它看来是工具坏了 —— 于是要么重试同一次调用,
+        // 要么放弃裁决。故错误文案必须点破口径,并把能自救的那次调用原样写出来。
+        if (!this.evidence.has(evidenceKey(file))) {
           return {
             content: [
               {
                 type: 'text',
-                text: `裁决未记录:本轮还没有对 ${file} 取证。请先 get_file(带行区间)或 search_code 重新读回该 finding 引用的原文,再下裁决 —— 不要凭首轮的印象。`,
+                text:
+                  `裁决未记录:本轮没有经由本工具集读过 ${file}。用 shell / cat 读过、或凭上一 turn 的印象都不算 —— ` +
+                  `取证只认 get_file 与 search_code 记下的调用。\n` +
+                  `请先调 get_file({ path: "${file}", start, end })(取锚点附近那一段就够)` +
+                  `或用 search_code 搜回该 finding 引用的原文,再重下这条裁决。`,
               },
             ],
             isError: true,
@@ -790,7 +819,7 @@ export class DuetlensMcpServer extends EventEmitter {
             isError: true,
           };
         }
-        this.evidence.add(path);
+        this.evidence.add(evidenceKey(path));
         return { content: [{ type: 'text', text: sliceLines(full, a.start, a.end) }] };
       }
       if (name === MCP_TOOL.searchCode) {
@@ -835,7 +864,7 @@ export class DuetlensMcpServer extends EventEmitter {
         }
         // 命中的文件计入取证:闸门问的是「本轮是否真去查过原文」,不是「读没读全」。
         // 覆盖面计量是另一回事,在 renderer 的 ActivityLog.paths,那边只认 get_file。
-        for (const f of result.files) this.evidence.add(f.path);
+        for (const f of result.files) this.evidence.add(evidenceKey(f.path));
         return { content: [{ type: 'text', text: formatSearchResult(query, result) }] };
       }
       return { content: [{ type: 'text', text: `未知工具: ${name}` }], isError: true };
