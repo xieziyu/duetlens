@@ -1319,7 +1319,8 @@ export function installPreviewApi(): void {
             { name: 'virtual/streaming', fileCount: 7, commitCount: 2, hasUncommitted: true, stackId: 'g0', stackOrder: 0 },
             { name: 'virtual/api-cleanup', fileCount: 3, commitCount: 1, hasUncommitted: true, stackId: 'g0', stackOrder: 1 },
             { name: 'virtual/proto-bump', fileCount: 1, commitCount: 1, hasUncommitted: false, stackId: 'g0', stackOrder: 2 },
-            { name: 'virtual/docs-pass', fileCount: 2, commitCount: 1, hasUncommitted: false, stackId: 'h0', stackOrder: 0 },
+            // fileCount: null = 计量失败(如与同名 tag 冲突),界面必须说「未知」而不是画成空分支
+            { name: 'virtual/docs-pass', fileCount: null, commitCount: 1, hasUncommitted: false, stackId: 'h0', stackOrder: 0 },
           ],
         };
         const base = { repoPath, repoName: 'podcast-go', isGit: true, gitbutler: null, degraded: null } as const;

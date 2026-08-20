@@ -969,7 +969,7 @@ function RepoPanel({
         name: b.name,
         kind: 'vbranch',
         tag: 'vbranch',
-        meta: `${b.fileCount} files`,
+        meta: b.fileCount === null ? '改动面未知' : `${b.fileCount} files`,
         detail: [b.hasUncommitted ? '未提交改动' : '', b.commitCount > 0 ? `归属 ${b.commitCount} 个 commit` : '']
           .filter(Boolean)
           .join(' · '),
