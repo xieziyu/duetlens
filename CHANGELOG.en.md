@@ -4,6 +4,65 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.6.0] - 2026-08-20
+
+### Added
+
+- **The adversarial self-check is now grounded in tool evidence.** It used to run in the same thread,
+  asking the model to reconsider its own findings — but the first turn's reasoning chain is still in
+  context, so the search space has already been pruned, and the payoff is small. The real failure
+  mode of agent review is not a missed finding but a fabricated one, a citation of a call path that
+  does not exist; noise hurts more than omission because it teaches people to ignore the whole
+  channel. The self-check now has `judge_finding`: a verdict is one of confirmed / refuted /
+  cannot_verify, a rationale is required, and it is rejected unless that turn actually read the
+  finding's file through `get_file` or `search_code` — a model can fabricate a citation in prose, it
+  cannot fabricate a tool call the backend recorded. `cannot_verify` is deliberately distinct from
+  confirmed: no evidence is not the same as established. The turn judges reported findings before
+  hunting for missed ones, and is skipped entirely when there is nothing to judge. `search_code`
+  (literal `git grep`) lets the model check whether a symbol or call site really exists; it is
+  declared only when the source has a real code tree, so github-pr sessions never see a tool they
+  cannot use. Verdicts are annotations: they never touch severity or triage — demoting a finding is a
+  soft dismissal, and dismissal belongs to the reviewer. (#52)
+- **An update downloaded in the background is now flagged on the left rail.** It was previously
+  visible only on the settings screen, so nothing told you that a restart would upgrade you. The
+  settings button now carries an unread dot while an update is ready, with a tooltip naming the
+  version waiting for a restart, and going to settings from that button scrolls straight to the
+  About section so the restart button is in view. Only the ready phase lights up — there is nothing
+  actionable while downloading or on error. (#56)
+
+### Fixed
+
+- **Symlinks pointing outside the repository are no longer read.** The path check was purely lexical
+  while reading a file follows symlinks, so a link holding `leak -> ~/.ssh/id_rsa` passed the check
+  as `<repo>/leak` and then handed the private key straight to the agent's evidence tools. The target
+  is now resolved to its real path and re-checked against the repository root; links that stay inside
+  the repo keep working. (#54)
+- **The adversarial evidence gate no longer refuses verdicts the agent had earned, and the cost hint
+  was rewritten.** Evidence keys did not fold `.` / `..`, yet `a/x/../b.ts` really does read
+  `a/b.ts`, so a file the agent had read was treated as unread. The keys also rewrote backslashes and
+  trimmed spaces, both legal POSIX filename characters — merging them let the agent read one file and
+  rule on another. The two directions are not symmetric: a stray space only causes a refusal you can
+  recover from, a merged key is a silent pass. The intensity hint's "about a third more" came from a
+  single run that happened to be the cheapest of four, and now states the observed range. Separately,
+  the severity chip could overflow when `category` is long; it now truncates with the full text on
+  hover. (#53)
+- **The status dot in the settings rows is no longer a blank gap.** The dot only got a background
+  from its tone class (ok / warn / error / checking), and the update row's "up to date" and idle
+  phases match none of them, so the dot stayed transparent while still taking 7px plus a 6px gap —
+  reading as a missing icon and an empty space left of the text. (#51)
+- **The scan coverage counter now says "read" rather than "evidenced".** The forensic wording made
+  the number look like the agent was building a case against the code, when it only means the agent
+  actually read those files. The empty-findings header and the tooltip changed with it. (#55)
+
+### Upgrade notes
+
+- The database schema moves to v20 (0.5.0 was v18); an existing database migrates on first launch
+  with no action needed. **The migration is one-way** — 0.5.0 can still open a migrated database, it
+  just cannot see or write the new columns (which turn reported a finding, and the self-check's
+  verdict and round). Back up `~/Library/Application Support/Duetlens/duetlens.db` before
+  downgrading.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.5.0] - 2026-08-18
 
 ### Added
@@ -230,6 +289,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.6.0]: https://github.com/xieziyu/duetlens/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/xieziyu/duetlens/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/xieziyu/duetlens/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/xieziyu/duetlens/compare/v0.2.2...v0.3.0
