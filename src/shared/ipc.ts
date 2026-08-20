@@ -26,6 +26,7 @@ import type { UpdateStatus } from './update';
 import type {
   DiffStat,
   LocalBranchList,
+  PrAncestor,
   PrPreview,
   PrSummary,
   RepoInspection,
@@ -81,6 +82,7 @@ export const IpcChannels = {
   sourceListLocalBranches: 'source:list-local-branches',
   sourceInspectRepo: 'source:inspect-repo',
   sourceDiffStat: 'source:diff-stat',
+  sourcePrBaseChain: 'source:pr-base-chain',
   sourceListRepoPaths: 'source:list-repo-paths',
   promptGet: 'prompt:get',
   promptSave: 'prompt:save',
@@ -439,6 +441,8 @@ export interface DuetlensApi {
     inspectRepo(repoPath: string): Promise<RepoInspection>;
     /** 按所选 base 现算改动面(入口切 base 后据此刷新计量)。 */
     diffStat(input: DiffStatInput): Promise<DiffStat>;
+    /** 被审 PR 的祖先链(自近及远,[0] 即它自己的 base);非 stacked PR 只有一环。 */
+    prBaseChain(ref: string, repoPath?: string): Promise<PrAncestor[]>;
     /** 历史审核用过的本地仓库路径(去重、最近在前),供入口空态快选。 */
     listRepoPaths(): Promise<string[]>;
   };

@@ -119,11 +119,34 @@ export function SubmitGitHubScreen({
     () => new Set(findings.filter((f) => isStaleAnchor(f, diff, round)).map((f) => f.id)),
     [findings, diff, round],
   );
+  /**
+   * 审核 base 比 PR 自己宽时,锚在下层 PR 代码上的条目同样会被判成「不在最新 diff 上」——
+   * 但那不是失效,是审核范围本就比这个 PR 大,它在本 PR 里**没有**一个可改的位置。
+   * 两者的处置一样(降级 / 剔除),原因说错却会让人跑去改锚点。
+   *
+   * 判据取「PR 自己的 diff 根本没碰这个文件」:下层 PR 的改动多半落在本 PR 没动过的文件上。
+   * 两个 PR 都改过的同一个文件分不出来,会落到失效那一档 —— 宁可保守,那一档的措辞对两者都成立。
+   */
+  const outOfScopeIds = useMemo(() => {
+    if (!review.baseRef) return new Set<string>();
+    const touched = new Set(diff.map((d) => d.path));
+    return new Set(
+      findings.filter((f) => staleIds.has(f.id) && !touched.has(f.file)).map((f) => f.id),
+    );
+  }, [review.baseRef, diff, findings, staleIds]);
+
   const inlineCount = pending.filter(hasAnchor).length;
   // 降级 / 无锚点的条目并进 review body 末尾一节,与草稿正文一起构成摘要
   const summaryCount = pending.filter((f) => !hasAnchor(f)).length;
   const keptCount = findings.filter((f) => f.triage !== 'dismiss').length;
   const staleList = useMemo(() => findings.filter((f) => staleIds.has(f.id)), [findings, staleIds]);
+  /**
+   * 已经判出会被拒就别再发一次。PR review 是原子提交,一条越界锚点让整份被 422 拒 ——
+   * 那次往返除了把用户已经看见的红框重说一遍,不产生任何新信息。
+   * 核对在途时同样按住:那正是这道预检存在的意义,赶在它出结论前提交等于绕过自己。
+   * 三条出路(改锚点 / 降级为摘要 / 剔除)都能把 staleIds 清零,按住不会把人堵死。
+   */
+  const canSend = fresh.state !== 'checking' && staleIds.size === 0;
   const reAnchorableCount = staleList.filter((f) => nearestLiveLine(f.file, f.line, diff) != null).length;
 
   // 派生上报而非在 submit() 里逐条路径手动置位:那样每加一条 return 就漏一次解冻
@@ -183,7 +206,7 @@ export function SubmitGitHubScreen({
   );
 
   const submit = async () => {
-    if (blocked || busy) return;
+    if (blocked || busy || !canSend) return;
     setSub('submitting');
     setSentEvent(event);
     const res = await window.duetlens.review.submit(reviewId, { event, body });
@@ -206,11 +229,18 @@ export function SubmitGitHubScreen({
         txt: `未能读取 PR 最新状态(${fresh.message}) —— 锚点仍按审核时的 diff 快照预判,可能不准。`,
       };
     const head = fresh.headSha ? ` · head ${shortSha(fresh.headSha)}` : '';
-    if (staleIds.size > 0)
+    if (staleIds.size > 0) {
+      const out = outOfScopeIds.size;
+      // 两个原因都可能同时存在,措辞要各报各的数 —— 合成一句「N 条失效」会让人对着改不了锚点的那批干瞪眼
+      const why = [
+        out > 0 ? `${out} 条锚在本 PR 之外(审核 base 是 ${review.baseRef})` : '',
+        staleIds.size - out > 0 ? `${staleIds.size - out} 条行锚点不在最新改动上` : '',
+      ].filter(Boolean).join('、');
       return {
         ic: '⛔',
-        txt: `${fresh.headMoved ? '审核后 PR 又有新提交' : '已核对 PR 最新状态'}${head} —— ${staleIds.size} 条行锚点不在最新改动上(红框),照此提交会被 422 整份拒。`,
+        txt: `${fresh.headMoved ? '审核后 PR 又有新提交' : '已核对 PR 最新状态'}${head} —— ${why}(红框),照此提交会被 422 整份拒。`,
       };
+    }
     return { ic: '✓', txt: `已核对 PR 最新状态${head} · ${inlineCount} 条行锚点均有效。` };
   })();
 
@@ -390,8 +420,18 @@ export function SubmitGitHubScreen({
                   )}
                   {isStale && !isDismissed && !locked && (
                     <div className={'f-invalid' + (sub === 'invalid' ? ' escalated' : '')}>
-                      <b>⛔ 行锚点失效</b> —— <code>{f.file}:{f.line}</code>{' '}
-                      不在最新 diff 的新增侧(base 已更新,原行已移位)。作为 inline 评论会让整份 review 被 422 拒。
+                      {outOfScopeIds.has(f.id) ? (
+                        <>
+                          <b>⛔ 锚在本 PR 之外</b> —— <code>{f.file}:{f.line}</code>{' '}
+                          属于本次更宽的审核范围(base <code>{review.baseRef}</code>),不在 PR 自己的 diff 里。
+                          作为 inline 评论会让整份 review 被 422 拒;它该发到对应的那个 PR,或并入摘要。
+                        </>
+                      ) : (
+                        <>
+                          <b>⛔ 行锚点失效</b> —— <code>{f.file}:{f.line}</code>{' '}
+                          不在最新 diff 的新增侧(base 已更新,原行已移位)。作为 inline 评论会让整份 review 被 422 拒。
+                        </>
+                      )}
                       <div className="fix">
                         <span onClick={() => degradeToSummary(f)}>降级为摘要评论</span>
                         {canReAnchor && (
@@ -532,15 +572,19 @@ export function SubmitGitHubScreen({
                 <button
                   className={'submit' + (sub === 'failed' || sub === 'invalid' ? ' retry' : '')}
                   onClick={submit}
-                  disabled={blocked !== null}
+                  disabled={blocked !== null || !canSend}
                 >
                   {sub === 'failed'
                     ? '↻ 重试提交'
                     : blocked
                       ? '需要填写 Review 意见'
-                      : sub === 'invalid'
-                        ? `↻ 重新${btnLabel}`
-                        : btnLabel}
+                      : fresh.state === 'checking'
+                        ? '核对 PR 最新状态中…'
+                        : staleIds.size > 0
+                          ? `先处理 ${staleIds.size} 条红框`
+                          : sub === 'invalid'
+                            ? `↻ 重新${btnLabel}`
+                            : btnLabel}
                 </button>
                 {!blocked && (sub === 'invalid' || staleIds.size > 0) && (
                   /* 失效锚点会让整份 review 被拒,是阻断条件而非脚注 —— 单独标记以拿到警示样式 */

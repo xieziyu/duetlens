@@ -734,6 +734,14 @@ export function installPreviewApi(): void {
         await new Promise((r) => setTimeout(r, 600));
         if (params.get('latest') === 'error')
           return { ok: false, message: 'gh: Could not resolve to a PullRequest with the number of 482.' };
+        // ?latest=narrow 模拟宽 base:PR 自己的 diff 比审核时那份窄,锚在别的 PR 文件上的条目落到范围外
+        if (params.get('latest') === 'narrow')
+          return {
+            ok: true,
+            diff: diff.filter((f) => f.path !== 'src/worker.rs'),
+            headSha: 'bb17e4f0a993',
+            headMoved: false,
+          };
         const moved = forceSubmit === 'invalid';
         return {
           ok: true,
@@ -1233,6 +1241,22 @@ export function installPreviewApi(): void {
         };
       },
       listOpenPrs: async () => OPEN_PRS,
+      // 默认演示一条 3 层的 stacked PR;?entry-state=flat-pr 回到非 stacked(只有一环 = 自己的 base)
+      prBaseChain: async () => {
+        await new Promise((r) => setTimeout(r, 300));
+        if (params.get('entry-state') === 'flat-pr')
+          return [{ ref: 'main', number: null, title: null, isDefaultBranch: true }];
+        // ?entry-state=stack-lts 演示栈底不是默认分支(长期维护分支,没有以它为 head 的 open PR)
+        const bottom =
+          params.get('entry-state') === 'stack-lts'
+            ? { ref: 'release/1.x', number: null, title: null, isDefaultBranch: false }
+            : { ref: 'main', number: null, title: null, isDefaultBranch: true };
+        return [
+          { ref: 'feat/base-picker-ui', number: 481, title: 'feat(entry): base 选择器', isDefaultBranch: false },
+          { ref: 'feat/source-base', number: 480, title: 'feat(source): 让 diff base 可选', isDefaultBranch: false },
+          bottom,
+        ];
+      },
       // entry-state=infer 演示粘贴 PR 后自动反推本地 clone;默认不命中(留空路径)
       inferLocalRepo: async () => (params.get('entry-state') === 'infer' ? '/Users/dev/podcast-go' : null),
       getRepoRemote: async () => ({

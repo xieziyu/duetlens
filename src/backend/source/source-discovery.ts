@@ -9,6 +9,7 @@ import path from 'node:path';
 import type {
   DiffStat,
   GitButlerStatus,
+  PrAncestor,
   LocalBranchList,
   LocalBranchSummary,
   PrPreview,
@@ -65,6 +66,96 @@ export async function previewPr(ref: string, repoPath?: string): Promise<PrPrevi
     url: m.url,
     baseRef: m.baseRefName,
   };
+}
+
+/** 顺着 base 往下最多摸几层;stacked PR 现实里两三层,给足余量同时兜住成环。 */
+const PR_CHAIN_DEPTH = 8;
+
+/**
+ * 被审 PR 的祖先链,自近及远:`[0]` 就是这个 PR 自己的 base(即默认基线),
+ * 之后每一层是「以上一层 base 为 head 的那个 PR」的 base,直到摸不到 PR 为止。
+ *
+ * 这条链就是 stacked PR 的形状本身 —— 用户想「pr1 对 pr3」时,要选的正是链上某一环,
+ * 而不必自己记住 pr1 的分支叫什么。
+ *
+ * 每层一次 `gh` 调用,故封了深度;`seen` 兼防分支互为 base 时成环。
+ * 中途出错就把已经摸到的那几层返回:链短一点仍然可用,报错反而把默认那档也一起没收了。
+ */
+export async function prBaseChain(ref: string, repoPath?: string): Promise<PrAncestor[]> {
+  const parsed = parsePrRef(ref);
+  const nwo = parsed.nwo || (await deriveNwo(repoPath));
+  const chain: PrAncestor[] = [];
+  const seen = new Set<string>();
+  let cursor: string;
+  try {
+    cursor = await prBaseRef(nwo, parsed.num);
+  } catch {
+    return [];
+  }
+  const defaultBranch = await repoDefaultBranch(nwo);
+
+  for (let i = 0; i < PR_CHAIN_DEPTH && cursor && !seen.has(cursor); i++) {
+    seen.add(cursor);
+    const parent = await prByHead(nwo, cursor);
+    chain.push({
+      ref: cursor,
+      number: parent?.number ?? null,
+      title: parent?.title ?? null,
+      isDefaultBranch: !!defaultBranch && cursor === defaultBranch,
+    });
+    if (!parent) break; // 这一层没有对应 PR,链到此为止
+    cursor = parent.baseRefName;
+  }
+  return chain;
+}
+
+/** 仓库默认分支名;取不到返回 null(那就别去断言某一环是不是它)。 */
+async function repoDefaultBranch(nwo: string): Promise<string | null> {
+  try {
+    const out = await run('gh', [
+      'repo', 'view', nwo, '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name',
+    ]);
+    return out.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function prBaseRef(nwo: string, num: string): Promise<string> {
+  const json = await run('gh', ['pr', 'view', num, '--repo', nwo, '--json', 'baseRefName']);
+  return (JSON.parse(json) as { baseRefName: string }).baseRefName;
+}
+
+/**
+ * 以某分支为 head 的 PR(open);没有则 null —— 那一层就不是一个 PR,而是普通分支。
+ *
+ * **`gh pr list --head` 只按分支名过滤**(它的帮助里明写不支持 `<owner>:<branch>`),于是 fork 里
+ * 一条同名分支的 PR 会一并命中 —— 拿它的 base 接着往下摸,整条链就串到了不相干的分支上。
+ * 故多取几条、只认 head 在本仓库的那些。
+ *
+ * 同仓库仍有多条同名 head 时**返回 null 断链**,不静默挑一条:挑错会让 base 候选看起来正常、
+ * 实际比的是另一条线,而断链只是少给几个候选,默认那档照旧可用。
+ */
+async function prByHead(
+  nwo: string,
+  head: string,
+): Promise<{ number: number; title: string; baseRefName: string } | null> {
+  try {
+    const json = await run('gh', [
+      'pr', 'list', '--repo', nwo, '--head', head, '--state', 'open', '--limit', '10',
+      '--json', 'number,title,baseRefName,isCrossRepository',
+    ]);
+    const rows = JSON.parse(json) as {
+      number: number;
+      title: string;
+      baseRefName: string;
+      isCrossRepository: boolean;
+    }[];
+    const own = rows.filter((r) => !r.isCrossRepository);
+    return own.length === 1 ? own[0] : null;
+  } catch {
+    return null;
+  }
 }
 
 /** 列举某仓库最近的 open PR(nwo 或本地仓库路径二选一)。 */

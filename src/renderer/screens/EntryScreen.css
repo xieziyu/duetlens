@@ -453,6 +453,24 @@
 .stackbar .sb-tail { margin-left: auto; padding-left: 10px; font-size: 11px; color: var(--text-faint); white-space: nowrap; }
 .stackbar .sb-tail b { color: var(--text-dim); font-weight: 600; }
 
+/* 宽 base 的提交口径提示:说的是「这次审的比这个 PR 大」,属于人这一侧要做的取舍,故走 human 档 */
+.scopewarn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 9px;
+  --derived-gap: 9px;
+  padding: 8px 11px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  background: color-mix(in oklab, var(--human) 7%, var(--surface-2));
+  border: 1px solid var(--human-line);
+  border-radius: 9px;
+}
+.scopewarn .si { color: var(--human); flex: none; }
+.scopewarn code { font-size: 11px; color: var(--text); }
+
 .bpick { position: relative; flex: 1; min-width: 260px; }
 .bp-trig {
   display: flex;

@@ -182,6 +182,9 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
   );
   ipcMain.handle(IpcChannels.sourceListRepoPaths, () => manager.listRepoPaths());
   ipcMain.handle(IpcChannels.sourceDiffStat, (_e, input: DiffStatInput) => manager.diffStat(input));
+  ipcMain.handle(IpcChannels.sourcePrBaseChain, (_e, ref: string, repoPath?: string) =>
+    manager.prBaseChain(ref, repoPath),
+  );
 
   ipcMain.handle(IpcChannels.promptGet, (_e, cwd?: string) => manager.getReviewPrompt(cwd));
   ipcMain.handle(IpcChannels.promptSave, (_e, input: PromptSaveInput) => manager.saveReviewPrompt(input));

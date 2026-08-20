@@ -39,6 +39,7 @@ import {
   checkGhAuth,
   diffStat,
   getRepoRemote,
+  prBaseChain,
   inferLocalRepo,
   inspectRepo,
   listLocalBranches,
@@ -48,6 +49,7 @@ import {
 import type {
   DiffStat,
   LocalBranchList,
+  PrAncestor,
   PrPreview,
   PrSummary,
   RepoInspection,
@@ -272,6 +274,11 @@ export class ReviewManager extends EventEmitter {
     return inspectRepo(repoPath);
   }
 
+  /** 被审 PR 的祖先链(stacked PR 的形状);非 stacked 只有一环。 */
+  prBaseChain(ref: string, repoPath?: string): Promise<PrAncestor[]> {
+    return prBaseChain(ref, repoPath);
+  }
+
   /** 按所选 base 现算改动面(入口切 base 后刷新计量)。 */
   diffStat(input: DiffStatInput): Promise<DiffStat> {
     return diffStat({
@@ -316,7 +323,13 @@ export class ReviewManager extends EventEmitter {
   async getLatestDiff(reviewId: string): Promise<LatestDiffResult> {
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
-    const source = createSource(targetOf(review));
+    // **github-pr 这里刻意不带 base**:本函数的第一用途是预判 GitHub 会不会 422,而 GitHub 的
+    // 判据永远是「这条锚点在不在这个 PR 自己的 diff 里」。审核时选了更宽的 base 的话,带上它
+    // 拉回来的正是那份更宽的 diff —— 于是每条锚在下层 PR 上的 finding 都会被判成有效,
+    // 而它们恰恰是提交时唯一会被拒的那批。
+    const source = createSource(
+      review.source === 'github-pr' ? { ...targetOf(review), baseRef: undefined } : targetOf(review),
+    );
     try {
       const prepared = await source.prepare();
       const raw = await source.getDiff();

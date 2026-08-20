@@ -37,6 +37,9 @@ export async function resolvePrRef(
 /**
  * GitHub PR source:diff 走 `gh pr diff`,文件走 `gh api .../contents`(按 head sha),
  * 无需本地 clone。可选 repoPath 仅用作 codex cwd;缺省用临时空目录。
+ *
+ * 指定 base 时改走 compare API(见 {@link getDiff}):stacked PR 下「只审本 PR」与
+ * 「连同下面几个 PR 一起审」是两个不同的范围,而 `gh pr diff` 只给得出前者。
  */
 export class GitHubPrSource implements Source {
   private nwo = '';
@@ -62,8 +65,18 @@ export class GitHubPrSource implements Source {
     return { title: `#${meta.number} · ${meta.title}`, cwd, headSha: this.headSha };
   }
 
+  /**
+   * 缺省用 `gh pr diff`(PR 相对自己 base 的那份)。指定 base 时改问 compare API 并要 diff
+   * 媒体类型 —— 它回的是同一套标准 unified 文本,**仍然不需要 clone**,PR source 「不落地也能审」
+   * 的性质得以保住。三点比较:base 分支后来前进不会被倒着显示成删除。
+   */
   async getDiff(): Promise<string> {
-    return run('gh', ['pr', 'diff', this.num, '--repo', this.nwo]);
+    const base = this.target.baseRef?.trim();
+    if (!base) return run('gh', ['pr', 'diff', this.num, '--repo', this.nwo]);
+    return run('gh', [
+      'api', '-H', 'Accept: application/vnd.github.v3.diff',
+      `repos/${this.nwo}/compare/${encodeURIComponent(base)}...${this.headSha}`,
+    ]);
   }
 
   async getFile(path: string): Promise<string> {

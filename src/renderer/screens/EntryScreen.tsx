@@ -13,6 +13,7 @@ import { LIVE_SESSION_LIMIT_CODE } from '@shared/ipc';
 import type { LiveCapacity, RecentReview, ReviewStartInput, ReviewStartStage } from '@shared/ipc';
 import type {
   LocalBranchList,
+  PrAncestor,
   PrPreview,
   PrSummary,
   RepoInspection,
@@ -143,6 +144,9 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     if (next === tab) return;
     setTab(next);
     setRef('');
+    // base 是「相对哪条 ref 审」,换来源后原来那条多半在新来源里根本不存在;
+    // 不清的话它会一路带到发起,把一个 PR 拿去和上一个仓库的分支比。
+    setBaseRef('');
     setError(null);
     if (next === 'repo' && !repoPath.trim()) setRepoPath(settings.lastRepoPath);
   };
@@ -209,8 +213,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       source,
       ref: ref.trim(),
       repoPath: repoPath.trim() || undefined,
-      // github-pr 尚未支持改 base(见 docs/design/ui.md);其余两档都按所选基线发起
-      baseRef: source === 'github-pr' ? undefined : baseRef.trim() || undefined,
+      baseRef: baseRef.trim() || undefined,
       model: trimmedModel || undefined,
       reasoningEffort: effort,
       intensity,
@@ -305,6 +308,8 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
             setPrRef={setRef}
             repoPath={repoPath}
             setRepoPath={setRepoPath}
+            baseRef={baseRef}
+            setBaseRef={setBaseRef}
             pickDir={pickDir}
             busy={busy}
             onReady={setGhReady}
@@ -530,6 +535,8 @@ function GitHubPanel({
   setPrRef,
   repoPath,
   setRepoPath,
+  baseRef,
+  setBaseRef,
   pickDir,
   busy,
   onReady,
@@ -538,6 +545,8 @@ function GitHubPanel({
   setPrRef: (v: string) => void;
   repoPath: string;
   setRepoPath: (v: string) => void;
+  baseRef: string;
+  setBaseRef: (v: string) => void;
   pickDir: () => void;
   busy: boolean;
   onReady: (ready: boolean) => void;
@@ -552,8 +561,12 @@ function GitHubPanel({
   const [inferred, setInferred] = useState(false);
   const [inferring, setInferring] = useState(false);
   const triedInferFor = useRef<string | null>(null);
+  // 上一次真正发起解析的查询串:只有它变了才作废旧预览(改本地路径会重解析,但目标 PR 没变)
+  const lastQuery = useRef('');
   // open PR 列表默认折叠:已贴 PR 链接时目标已确定,展开会把开始按钮挤出视野
   const [browseOpen, setBrowseOpen] = useState(false);
+  // 祖先 PR 链(stacked PR 的形状);连同它是为哪个 PR 拉的一起存,换 PR 后旧链立即作废
+  const [chain, setChain] = useState<{ key: string; value: PrAncestor[] } | null>(null);
 
   const recheckAuth = () => {
     setGhAuth(null);
@@ -567,30 +580,87 @@ function GitHubPanel({
   }, [ghAuth, preview, previewErr, onReady]);
   useEffect(() => () => onReady(false), [onReady]);
 
-  // PR 引用防抖解析预览
+  // PR 引用防抖解析预览。
+  // **输入一变,上一份解析结果立即作废**:留着它,`ghReady` 会一直是 true,防抖那 450ms 里点
+  // 「开始审核」发起的是新 ref、界面与祖先链讲的却还是上一个 PR。
+  // 请求发出后 cleanup 只清得掉定时器,故另立 alive 闸 —— 否则先发的那次晚回来会盖掉后发的结果。
   useEffect(() => {
     const q = prRef.trim();
-    if (!q) {
+    if (lastQuery.current !== q) {
+      lastQuery.current = q;
       setPreview(null);
       setPreviewErr(null);
+    }
+    if (!q) {
+      setPreviewing(false);
       return;
     }
+    let alive = true;
     setPreviewing(true);
     const t = setTimeout(() => {
       window.duetlens.source
         .previewPr(q, repoPath.trim() || undefined)
         .then((p) => {
+          if (!alive) return;
           setPreview(p);
           setPreviewErr(null);
         })
         .catch((e: Error) => {
+          if (!alive) return;
           setPreview(null);
           setPreviewErr(e.message ?? String(e));
         })
-        .finally(() => setPreviewing(false));
+        .finally(() => alive && setPreviewing(false));
     }, 450);
-    return () => clearTimeout(t);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
   }, [prRef, repoPath]);
+
+  // 当前已解析出的目标 PR;祖先链、base、改动面计量都以它为准
+  const prKey = preview ? `${preview.nwo}#${preview.number}` : '';
+
+  // 解析出 PR 后摸一次祖先链:stacked 时它就是 base 候选,非 stacked 时只有一环(= PR 自己的 base)
+  useEffect(() => {
+    if (!preview) {
+      setChain(null);
+      return;
+    }
+    let alive = true;
+    window.duetlens.source
+      .prBaseChain(prKey, repoPath.trim() || undefined)
+      .then((v) => alive && setChain({ key: prKey, value: v }))
+      .catch(() => alive && setChain(null));
+    return () => {
+      alive = false;
+    };
+  }, [preview, prKey, repoPath]);
+
+  const ancestors = chain?.key === prKey ? chain.value : [];
+  const baseOptions = useMemo<BaseOption[]>(
+    () => prBaseOptions(ancestors, preview?.number ?? 0),
+    [ancestors, preview],
+  );
+  // **base 属于某一个具体的 PR,目标一变就清** —— 不能改判成「不在候选里才清」:
+  // 祖先链是异步的,在它到手前(或它压根拉失败时)候选是空的,那种判法一条都清不掉,
+  // 旧 base 会跟着新 PR 一路发起。清空即回到「跟随该 PR 自己的 base」,是安全的那一侧。
+  const lastPrKey = useRef(prKey);
+  useEffect(() => {
+    if (lastPrKey.current === prKey) return;
+    lastPrKey.current = prKey;
+    setBaseRef('');
+  }, [prKey, setBaseRef]);
+
+  const prLadder = prLadderNodes(ancestors, preview?.number ?? 0);
+  const prBaseIndex = Math.max(0, prLadder.indexOf(ladderLabel(ancestors, baseRef || ancestors[0]?.ref)));
+  const stat = useDiffStat({
+    source: 'github-pr',
+    ref: prKey,
+    repoPath: repoPath.trim(),
+    baseRef,
+    enabled: !!preview && baseOptions.length > 1,
+  });
 
   // 指定本地仓库后:取 remote 归属(用于匹配校验 + 作为 open PR 列表的来源)
   useEffect(() => {
@@ -675,6 +745,7 @@ function GitHubPanel({
 
   const mismatch = preview && remoteNwo && remoteNwo !== preview.nwo;
 
+
   return (
     <div className="src-panel">
       <div className={previewErr ? 'ghfield err' : 'ghfield'}>
@@ -720,6 +791,23 @@ function GitHubPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {baseOptions.length > 1 && (
+        <>
+          <BaseRow options={baseOptions} value={baseRef} onChange={setBaseRef} stat={stat} />
+          <StackLadder nodes={prLadder} baseIndex={prBaseIndex} />
+          {baseRef && (
+            <div className="scopewarn derived">
+              <span className="si">◇</span>
+              <div>
+                本次会连下面几个 PR 的改动一起审。那些行不在 <code className="mono">#{preview!.number}</code>{' '}
+                自己的 diff 里,锚在那儿的 finding 提交时会被 GitHub 拒收 ——
+                提交屏会把它们单列出来,可并入摘要评论或导出。
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <label className={mismatch ? 'pathfield warn' : 'pathfield'}>
@@ -1051,6 +1139,42 @@ function RepoPanel({
       )}
     </div>
   );
+}
+
+/**
+ * stacked PR 的 base 候选:祖先链的每一环。`[0]` 是 PR 自己的 base,即默认基线。
+ * 范围标签按「往下数到这一环为止会把哪几个 PR 算进来」写,列 PR 号而不是分支名 ——
+ * 用户脑子里的 stack 是「pr1 → pr2 → pr3」,不是三个分支名。
+ */
+function prBaseOptions(chain: PrAncestor[], prNumber: number): BaseOption[] {
+  return chain.map((a, i) => {
+    const covered = [...chain.slice(0, i).map((x) => x.number), prNumber].filter(
+      (n): n is number => n != null,
+    );
+    return {
+      ref: a.ref,
+      // number 为空只说明「没有以它为 head 的 open PR」,不等于它就是默认分支 —— 那要后端确认过才敢说
+      label: a.number
+        ? `PR #${a.number} 的 head${a.title ? ` · ${a.title}` : ''}`
+        : a.isDefaultBranch
+          ? '仓库默认分支'
+          : '普通分支 · 无对应 open PR',
+      scope: covered.length <= 1 ? `只审 #${prNumber}` : `含 ${covered.map((n) => `#${n}`).join(' ')}`,
+      isDefault: i === 0,
+    };
+  });
+}
+
+/** 链路条上一环的显示名:有 PR 就用号,没有(仓库默认分支)就用分支名。 */
+function ladderLabel(chain: PrAncestor[], ref: string | undefined): string {
+  const hit = chain.find((a) => a.ref === ref);
+  return hit?.number ? `#${hit.number}` : ref ?? '';
+}
+
+/** PR 链路条的节点,自底向上:最远的祖先 → … → 被审的这个 PR。 */
+function prLadderNodes(chain: PrAncestor[], prNumber: number): string[] {
+  if (!chain.length) return [];
+  return [...chain.map((a) => (a.number ? `#${a.number}` : a.ref)).reverse(), `#${prNumber}`];
 }
 
 /** 同 stack 内位于 `selected` 下方的各条(近的在前);跨 stack 的分支不在其中 —— 它们之间没有叠加关系。 */
