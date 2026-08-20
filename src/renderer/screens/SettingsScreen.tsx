@@ -6,6 +6,7 @@ import { DATA_MODE_LABELS, DEFAULT_UI_SETTINGS, REASONING_EFFORTS, REVIEW_INTENS
 import type { EnvironmentReport } from '@shared/environment';
 import { AUTHOR, PROJECT_LINKS, newIssueUrl } from '@shared/links';
 import { useSettings } from '../settings/SettingsProvider';
+import { useUpdateStatus } from '../update/useUpdateStatus';
 import { KbdHelp } from '../components/KbdHelp';
 import './SettingsScreen.css';
 
@@ -45,7 +46,16 @@ const SOURCE_CHOICES: { v: SourceKind; label: string }[] = [
   { v: 'local-branch', label: '本地仓库' },
 ];
 
-export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): React.JSX.Element {
+export function SettingsScreen({
+  onOpenPrompt,
+  focusSection = null,
+  onFocusHandled,
+}: {
+  onOpenPrompt: () => void;
+  /** 外部(rail 未读点)要求进屏即定位到某节;兑现一次由 onFocusHandled 消费掉。 */
+  focusSection?: SectionId | null;
+  onFocusHandled?: () => void;
+}): React.JSX.Element {
   const { settings, update } = useSettings();
   const [active, setActive] = useState<SectionId>('appearance');
   const [env, setEnv] = useState<EnvironmentReport | null>(null);
@@ -54,6 +64,8 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const updateStatus = useUpdateStatus();
+  const updateReady = updateStatus.phase === 'ready';
 
   const runEnvCheck = useCallback(async () => {
     setCheckingCodex(true);
@@ -98,6 +110,16 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
     setActive(cur);
   };
 
+  // 外部定位请求:不复用 goTo(它随每次 render 重建,进不了依赖表),直接现取 DOM。
+  useEffect(() => {
+    if (!focusSection) return;
+    contentRef.current
+      ?.querySelector<HTMLElement>(`[data-sec="${focusSection}"]`)
+      ?.scrollIntoView({ block: 'start' });
+    setActive(focusSection);
+    onFocusHandled?.();
+  }, [focusSection, onFocusHandled]);
+
   // codex 路径 / gh 路径先落库(即时应用到 exec 解析),再自检,使「检测」反映刚填的路径。
   const detectCodex = async (): Promise<void> => {
     await window.duetlens.ui.saveSettings(settings);
@@ -137,6 +159,7 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
               >
                 <span className="ic">{it.icon}</span>
                 {it.label}
+                {it.id === 'about' && updateReady && <span className="set-link-dot" aria-hidden="true" />}
               </button>
             ))}
           </div>
@@ -349,7 +372,7 @@ export function SettingsScreen({ onOpenPrompt }: { onOpenPrompt: () => void }): 
               </div>
               <span className="lic mono">GPL-3.0</span>
             </div>
-            <UpdateRow />
+            <UpdateRow status={updateStatus} />
             <div className="about-links">
               <LinkOut href={PROJECT_LINKS.repo}>源码仓库</LinkOut>
               <i />
@@ -427,14 +450,7 @@ function LinkOut({ href, children }: { href: string; children: React.ReactNode }
  * 更新状态一行。更新本身是后台下载、退出时静默安装的,所以这里不是升级的必经之路 ——
  * 只让用户看得见进度、并能提前重启。dev / 不支持的渠道整行不渲染。
  */
-function UpdateRow(): React.JSX.Element | null {
-  const [status, setStatus] = useState<UpdateStatus>({ phase: 'idle' });
-
-  useEffect(() => {
-    window.duetlens.update.getStatus().then(setStatus).catch(() => undefined);
-    return window.duetlens.update.onStatus(setStatus);
-  }, []);
-
+function UpdateRow({ status }: { status: UpdateStatus }): React.JSX.Element | null {
   if (status.phase === 'unsupported') return null;
 
   const busy = status.phase === 'checking' || status.phase === 'downloading';

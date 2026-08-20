@@ -11,6 +11,7 @@ import { Wordmark } from './components/Wordmark';
 import { LogoMark } from './components/LogoMark';
 import { AppRail, type RailScreen } from './components/AppRail';
 import { CompletionToast } from './components/CompletionToast';
+import { useUpdateStatus } from './update/useUpdateStatus';
 import './App.css';
 
 // 屏路由。除 onboarding(全屏引导)外都套同一外壳:整幅顶栏 + 左侧 rail;
@@ -52,6 +53,11 @@ export function App({
   // 与 focusDiscussion 同理带上 reviewId —— ReviewScreen 要等 status 到了才兑现,这段空窗里
   // 若换了 review(rail 走开再从历史/通知开另一条),裸布尔会在别人的 review 上弹出面板。
   const [rerunRequest, setRerunRequest] = useState<{ reviewId: string } | null>(null);
+  // 设置屏的定位请求(目前只有 rail 上那颗更新未读点会发)。与 focusDiscussion 同理兑现一次即消费:
+  // 留着的话,之后每次从别处回设置屏都会被再滚一遍。
+  const [settingsFocus, setSettingsFocus] = useState<{ section: 'about' } | null>(null);
+  const updateStatus = useUpdateStatus();
+  const updateReady = updateStatus.phase === 'ready';
 
   const openReview = (id: string, discussionId?: string) => {
     setActiveReviewId(id);
@@ -99,6 +105,8 @@ export function App({
 
   const onRail = (s: RailScreen) => {
     if (s === 'review' && !activeReviewId) return;
+    // 未读点指向的是「关于」那行的重启按钮,进屏就把它滚到眼前 —— 否则用户只知道有事,不知道在哪
+    if (s === 'settings' && updateReady) setSettingsFocus({ section: 'about' });
     setScreen(s);
   };
 
@@ -116,7 +124,12 @@ export function App({
         </header>
       )}
 
-      <AppRail active={RAIL_OF[screen]} reviewAvailable={activeReviewId !== null} onNavigate={onRail} />
+      <AppRail
+        active={RAIL_OF[screen]}
+        reviewAvailable={activeReviewId !== null}
+        updateReady={updateReady}
+        onNavigate={onRail}
+      />
 
       {screen === 'review' ? (
         /* key = 换 review 即重挂:屏内一切 per-review 本地态(草稿、活跃线程、待恢复原文…)
@@ -149,7 +162,13 @@ export function App({
             <PromptRulesScreen reviewId={activeReviewId} onBack={() => setScreen('entry')} />
           )}
           {screen === 'history' && <HistoryScreen onOpen={openReview} />}
-          {screen === 'settings' && <SettingsScreen onOpenPrompt={() => setScreen('prompt')} />}
+          {screen === 'settings' && (
+            <SettingsScreen
+              onOpenPrompt={() => setScreen('prompt')}
+              focusSection={settingsFocus?.section ?? null}
+              onFocusHandled={() => setSettingsFocus(null)}
+            />
+          )}
         </main>
       )}
 

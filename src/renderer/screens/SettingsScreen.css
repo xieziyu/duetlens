@@ -63,6 +63,16 @@
   color: var(--agent-2);
 }
 
+/* 左导航的未读点(目前只有「关于」那节的待重启更新会点亮) */
+.set-link-dot {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--human);
+  flex: none;
+}
+
 /* 右内容 */
 .set-content {
   min-width: 0;

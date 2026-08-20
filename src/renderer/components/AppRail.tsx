@@ -9,18 +9,27 @@ export type RailScreen = 'entry' | 'review' | 'history' | 'prompt' | 'settings';
 export function AppRail({
   active,
   reviewAvailable,
+  updateReady = false,
   onNavigate,
 }: {
   active: RailScreen;
   /** 无活跃 review 时「当前审核」不可达 */
   reviewAvailable: boolean;
+  /** 新版已下好、只差重启 —— 设置钮挂未读点,点进去直接落到「关于」那行 */
+  updateReady?: boolean;
   onNavigate: (s: RailScreen) => void;
 }): React.JSX.Element {
   const { settings, update } = useSettings();
   const mode = settings.dataMode;
   const next = nextDataMode(mode);
 
-  const item = (id: RailScreen, label: string, icon: React.JSX.Element, disabled = false) => (
+  const item = (
+    id: RailScreen,
+    label: string,
+    icon: React.JSX.Element,
+    disabled = false,
+    dot = false,
+  ) => (
     <button
       className={`rail-btn${active === id ? ' on' : ''}`}
       onClick={() => onNavigate(id)}
@@ -30,6 +39,7 @@ export function AppRail({
       aria-current={active === id ? 'page' : undefined}
     >
       {icon}
+      {dot && <span className="rail-dot" aria-hidden="true" />}
     </button>
   );
 
@@ -48,7 +58,13 @@ export function AppRail({
       >
         {mode === 'system' ? <SystemIcon /> : mode === 'dark' ? <MoonIcon /> : <SunIcon />}
       </button>
-      {item('settings', '设置', <GearIcon />)}
+      {item(
+        'settings',
+        updateReady ? '设置 · 新版本已就绪,重启即生效' : '设置',
+        <GearIcon />,
+        false,
+        updateReady,
+      )}
     </nav>
   );
 }
