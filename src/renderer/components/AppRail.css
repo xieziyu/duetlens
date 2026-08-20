@@ -58,3 +58,16 @@
 .rail-gap {
   flex: 1;
 }
+
+/* 未读点:图标钮上唯一的状态提示,当前只有「新版已下好待重启」用它。
+   描边取 rail 底色,压在图标角上也不糊。 */
+.rail-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--human);
+  box-shadow: 0 0 0 2px var(--surface);
+}
