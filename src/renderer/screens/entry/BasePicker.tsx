@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { SourceKind } from '@shared/domain';
 import type { DiffStat } from '@shared/source-discovery';
 import { BranchPicker, type BranchOption } from './BranchPicker';
+import { Busy } from './Busy';
 
 /**
  * 一个可选的 diff 基线。`ref` 是落库与传给 git 的原值,`scope` 说的是「选它会把谁算进来」——
@@ -72,13 +73,74 @@ function DiffMetric({ stat }: { stat: DiffStatState }) {
       </span>
     );
   }
-  if (stat.state === 'loading') return <span className="basemetric mono">计量中…</span>;
+  if (stat.state === 'loading') return <Busy>计量中…</Busy>;
   return (
     <span className="basemetric mono">
       {stat.value.files} files · <span className="a">+{stat.value.additions}</span>{' '}
       <span className="d">−{stat.value.deletions}</span>
     </span>
   );
+}
+
+/**
+ * base 候选还没摸出来(或摸失败)时,占住选择器自己那一格。
+ *
+ * **状态必须落在选择器将要出现的位置**,而不是上游结果块里的一枚小字 —— 这段等待要好几秒,
+ * 而人的眼睛在「答案会出现的地方」;放到别处,再动的点也等于没有。
+ * 高度与真实那行一致,摸出多个候选后原地换成选择器,不推屏。
+ */
+export function BaseProbeRow({ error, onRetry }: { error?: string; onRetry?: () => void }) {
+  return (
+    <div className="picker-row base-row">
+      <span className="lbl w">对比 base</span>
+      <div className={error ? 'baseprobe err' : 'baseprobe'}>
+        {error ? (
+          <>
+            <span className="bpr-ic">!</span>
+            <span className="bpr-txt" title={error}>
+              base 候选探测失败 · 先按该 PR 自己的 base 审
+            </span>
+            {onRetry && (
+              <button type="button" className="bpr-retry" onClick={onRetry}>
+                重试
+              </button>
+            )}
+          </>
+        ) : (
+          <Busy>正在探测 Stacked PR…</Busy>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * base 设置区:选择器 + stack 链路条 + 调用方追加的后果提示。
+ *
+ * 三块是同一件事的三层展开(选谁 / 选出来是什么形状 / 选宽了要付什么代价),故合成一个块归组 ——
+ * 各自挂 `.derived` 会画出三条平行虚线,读起来像三条不相干的信息。
+ *
+ * `tucked` 说的是这一区挂在谁下面:github 侧 base 是**某一个具体 PR 的属性**(换 PR 就得清),
+ * 于是整区缩进到 PR 卡片那一层、只在容器上画一次连接线;本地侧 base 与「审核分支」是定宽标签
+ * 对齐的并排两行,回到主层级,线仍由区内的 stack 条自己挂。
+ */
+export function BaseSection({
+  tucked,
+  collapsed,
+  children,
+}: {
+  tucked?: boolean;
+  /**
+   * 收起(高度过渡到 0)。**只给探测占位用** —— 收起靠 `overflow: hidden`,
+   * 真选择器那一区挂上就会把 BranchPicker 的浮层裁没。
+   */
+  collapsed?: boolean;
+  children: ReactNode;
+}) {
+  const cls = ['base-block', tucked && 'tucked derived', collapsed !== undefined && 'probe', collapsed && 'gone']
+    .filter(Boolean)
+    .join(' ');
+  return <div className={cls}>{children}</div>;
 }
 
 /**
@@ -92,12 +154,15 @@ export function StackLadder({ nodes, baseIndex }: { nodes: string[]; baseIndex: 
   return (
     <div className="stackbar derived">
       <span className="sb-lbl mono">stack</span>
-      {nodes.map((n, i) => (
-        <span key={n} className="sb-part">
-          {i > 0 && <span className={i > baseIndex ? 'sb-seg in' : 'sb-seg'} />}
-          <span className={`sb-node mono${nodeClass(i, baseIndex, nodes.length)}`}>{n}</span>
-        </span>
-      ))}
+      {/* 只有链路本身滚动:层数是这条链的结论,跟着节点滚出可视区就得靠横向拖动才看得见 */}
+      <div className="sb-scroll">
+        {nodes.map((n, i) => (
+          <span key={n} className="sb-part">
+            {i > 0 && <span className={i > baseIndex ? 'sb-seg in' : 'sb-seg'} />}
+            <span className={`sb-node mono${nodeClass(i, baseIndex, nodes.length)}`}>{n}</span>
+          </span>
+        ))}
+      </div>
       <span className="sb-tail">
         审核范围 <b>{nodes.length - 1 - baseIndex}</b> 层
       </span>

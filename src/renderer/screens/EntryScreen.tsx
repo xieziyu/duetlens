@@ -21,8 +21,16 @@ import type {
   VbranchSummary,
 } from '@shared/source-discovery';
 import { useSettings } from '../settings/SettingsProvider';
-import { BaseRow, StackLadder, useDiffStat, type BaseOption } from './entry/BasePicker';
+import {
+  BaseProbeRow,
+  BaseRow,
+  BaseSection,
+  StackLadder,
+  useDiffStat,
+  type BaseOption,
+} from './entry/BasePicker';
 import { BranchPicker, BranchSummary, type BranchOption } from './entry/BranchPicker';
+import { Busy } from './entry/Busy';
 import { GhIcon, LocalBranchIcon } from './entry/icons';
 import { baseName, parentDir } from './entry/paths';
 import { RepoSwitch } from './entry/RepoSwitch';
@@ -566,7 +574,9 @@ function GitHubPanel({
   // open PR 列表默认折叠:已贴 PR 链接时目标已确定,展开会把开始按钮挤出视野
   const [browseOpen, setBrowseOpen] = useState(false);
   // 祖先 PR 链(stacked PR 的形状);连同它是为哪个 PR 拉的一起存,换 PR 后旧链立即作废
-  const [chain, setChain] = useState<{ key: string; value: PrAncestor[] } | null>(null);
+  const [chain, setChain] = useState<{ key: string; value: ChainState } | null>(null);
+  // 摸链失败后重来一次的闸;链是纯读取,重试无副作用
+  const [chainTry, setChainTry] = useState(0);
 
   const recheckAuth = () => {
     setGhAuth(null);
@@ -621,23 +631,37 @@ function GitHubPanel({
   // 当前已解析出的目标 PR;祖先链、base、改动面计量都以它为准
   const prKey = preview ? `${preview.nwo}#${preview.number}` : '';
 
-  // 解析出 PR 后摸一次祖先链:stacked 时它就是 base 候选,非 stacked 时只有一环(= PR 自己的 base)
+  // 解析出 PR 后摸一次祖先链:stacked 时它就是 base 候选,非 stacked 时只有一环(= PR 自己的 base)。
+  // **每层一次 gh 调用,现实里要几秒** —— 这段的可见反馈见 BaseProbeRow。
+  //
+  // **只认 prKey,不吃 preview 与 repoPath**:链只取决于是哪个 PR。prKey 自带 owner/repo,
+  // 所以 prBaseChain 那个 repoPath 兜底参数在这条路径上永远用不上;而改本地路径会重跑
+  // previewPr、换出一个新的 preview 对象,把这两样留在依赖里就会为同一个 PR 反复重摸 ——
+  // 白烧几次 gh 是小事,要命的是重摸期间候选表是空的:选择器与宽范围警告双双消失,
+  // 用户手上那条 base 却还在生效,于是可以发起一次自己看不见的宽审核。
   useEffect(() => {
-    if (!preview) {
+    if (!prKey) {
       setChain(null);
       return;
     }
     let alive = true;
+    setChain(null);
     window.duetlens.source
-      .prBaseChain(prKey, repoPath.trim() || undefined)
-      .then((v) => alive && setChain({ key: prKey, value: v }))
-      .catch(() => alive && setChain(null));
+      .prBaseChain(prKey)
+      .then((v) => alive && setChain({ key: prKey, value: { state: 'value', value: v } }))
+      .catch(
+        (e: Error) =>
+          alive && setChain({ key: prKey, value: { state: 'error', message: e.message ?? String(e) } }),
+      );
     return () => {
       alive = false;
     };
-  }, [preview, prKey, repoPath]);
+  }, [prKey, chainTry]);
 
-  const ancestors = chain?.key === prKey ? chain.value : [];
+  // 探测中与探测失败必须可分:都落回「没有候选」的话,一次拉不动的链会静悄悄地
+  // 表现成「这个 PR 不是 stacked」,而用户本可以重贴一次或去查 gh。
+  const chainState: ChainState = chain?.key === prKey ? chain.value : PROBING;
+  const ancestors = chainState.state === 'value' ? chainState.value : [];
   const baseOptions = useMemo<BaseOption[]>(
     () => prBaseOptions(ancestors, preview?.number ?? 0),
     [ancestors, preview],
@@ -645,21 +669,45 @@ function GitHubPanel({
   // **base 属于某一个具体的 PR,目标一变就清** —— 不能改判成「不在候选里才清」:
   // 祖先链是异步的,在它到手前(或它压根拉失败时)候选是空的,那种判法一条都清不掉,
   // 旧 base 会跟着新 PR 一路发起。清空即回到「跟随该 PR 自己的 base」,是安全的那一侧。
+  // 手上这条 baseRef 是为哪个 prKey 选的。只在选择事件里写(不在 render 期写),故 render 期读安全。
+  const baseOwner = useRef('');
   const lastPrKey = useRef(prKey);
   useEffect(() => {
     if (lastPrKey.current === prKey) return;
     lastPrKey.current = prKey;
+    baseOwner.current = '';
     setBaseRef('');
   }, [prKey, setBaseRef]);
 
+  // 链一落定就用它校验手上这条 base:候选里没有它(探测失败 / 链变短了)就清掉。
+  // **不能连 probing 一起判** —— 那会让每次改本地路径都白白吞掉用户选好的 base;
+  // 而落定后候选是空的,界面上已经既不显示这条 base、也不出宽范围警告了,
+  // 再拿它发起就是「说的和做的不一样」(错误行写的是「先按该 PR 自己的 base 审」)。
+  useEffect(() => {
+    if (chainState.state === 'probing' || !baseRef) return;
+    if (baseOptions.some((o) => o.ref === baseRef)) return;
+    baseOwner.current = '';
+    setBaseRef('');
+  }, [chainState.state, baseOptions, baseRef, setBaseRef]);
+
   const prLadder = prLadderNodes(ancestors, preview?.number ?? 0);
   const prBaseIndex = Math.max(0, prLadder.indexOf(ladderLabel(ancestors, baseRef || ancestors[0]?.ref)));
+  // **不等祖先链**:默认档的计量与链无关(PR 自己的 base 就是默认档),而链要串几次 gh。
+  // 串着发会让「链回来」和「数回来」排成两段等待;并行发出后,链一到手数往往已经在了。
+  // 代价是非 stacked PR 也会白算一次 —— github source 不落地(prepare + getDiff 两次 gh、无 clone),
+  // 换掉一整段可见的空白等待值这个价。
+  // 目标刚换、旧 base 还没清掉的那一帧,别拿上一个 PR 的 base 去问新 PR 的 compare:
+  // 清理走 effect(commit 后才生效),而计量的 effect 就在同一轮 flush 里、闭包里捏的还是旧值,
+  // 请求发出去就撤不回来了。**只能在 render 期派生**。
+  // 判据是「这条 base 是为哪个 PR 选的」,不是「它在不在新 PR 的候选表里」——
+  // 两个 PR 的候选里撞上同名 ref 是常事(stack 换条线重开就会),按候选表判会把旧 base 放过去。
+  const statBase = baseOwner.current === prKey ? baseRef : '';
   const stat = useDiffStat({
     source: 'github-pr',
     ref: prKey,
     repoPath: repoPath.trim(),
-    baseRef,
-    enabled: !!preview && baseOptions.length > 1,
+    baseRef: statBase,
+    enabled: !!preview,
   });
 
   // 指定本地仓库后:取 remote 归属(用于匹配校验 + 作为 open PR 列表的来源)
@@ -758,7 +806,7 @@ function GitHubPanel({
           onChange={(e) => setPrRef(e.target.value)}
           placeholder="粘贴 PR 链接 · 或 owner/repo#123"
         />
-        {previewing && <span className="fld-spin mono">解析…</span>}
+        {previewing && <Busy>解析 PR…</Busy>}
       </div>
 
       {preview && (
@@ -793,9 +841,28 @@ function GitHubPanel({
         </div>
       )}
 
+      {/* 摸链期间就把这一区摆出来:摸出多个候选就原地换成选择器(两者等高,不推屏);
+          非 stacked 则收起 —— 那时 PR 卡片的「← base」已经把话说全了。
+          **收起要过渡,不能直接撤**:多数 PR 走的正是这一支,硬撤会让下面凭空上跳一行。 */}
+      {preview && !(chainState.state === 'value' && baseOptions.length > 1) && (
+        <BaseSection tucked collapsed={chainState.state === 'value'}>
+          <BaseProbeRow
+            error={chainState.state === 'error' ? chainState.message : undefined}
+            onRetry={() => setChainTry((n) => n + 1)}
+          />
+        </BaseSection>
+      )}
       {baseOptions.length > 1 && (
-        <>
-          <BaseRow options={baseOptions} value={baseRef} onChange={setBaseRef} stat={stat} />
+        <BaseSection tucked>
+          <BaseRow
+            options={baseOptions}
+            value={baseRef}
+            onChange={(ref) => {
+              baseOwner.current = prKey;
+              setBaseRef(ref);
+            }}
+            stat={stat}
+          />
           <StackLadder nodes={prLadder} baseIndex={prBaseIndex} />
           {baseRef && (
             <div className="scopewarn derived">
@@ -807,7 +874,7 @@ function GitHubPanel({
               </div>
             </div>
           )}
-        </>
+        </BaseSection>
       )}
 
       <label className={mismatch ? 'pathfield warn' : 'pathfield'}>
@@ -821,7 +888,7 @@ function GitHubPanel({
         <button type="button" className="pf-pick" onClick={pickDir} disabled={busy}>
           选择…
         </button>
-        {inferring && !repoPath.trim() && <span className="pf-tag muted mono">查找本地…</span>}
+        {inferring && !repoPath.trim() && <Busy>查找本地 clone…</Busy>}
         {repoPath.trim() && remoteNwo && (
           <span className={mismatch ? 'pf-tag warn' : 'pf-tag'}>
             {mismatch ? 'remote 不匹配 ⚠' : inferred ? '自动匹配 ✓' : '已匹配 ✓'}
@@ -853,7 +920,11 @@ function GitHubPanel({
           </button>
           {browseOpen && (
             <div className="prbox">
-              {openPrs === null && <div className="list-loading mono">列举 open PR…</div>}
+              {openPrs === null && (
+                <div className="list-loading">
+                  <Busy>列举 open PR…</Busy>
+                </div>
+              )}
               {openPrs?.length === 0 && <div className="list-empty">该仓库没有 open PR。</div>}
               {openPrs && openPrs.length > 0 && (
                 <div className="prlist">
@@ -1069,7 +1140,11 @@ function RepoPanel({
         )}
       </div>
 
-      {!insp && <div className="list-loading mono derived">探测仓库…</div>}
+      {!insp && (
+        <div className="list-loading derived">
+          <Busy>探测仓库形态…</Busy>
+        </div>
+      )}
 
       {insp && !insp.isGit && (
         <div className="gb-hint warn derived">
@@ -1119,20 +1194,22 @@ function RepoPanel({
               }
             />
           </div>
-          {!pending && !!selected && baseOptions.length > 0 && (
-            <BaseRow options={baseOptions} value={baseRef} onChange={setBaseRef} stat={stat} />
-          )}
-          {mode === 'gitbutler' && (
-            <StackLadder
-              nodes={stackNodes(gbBranches ?? [], insp?.gitbutler?.targetRef ?? null, selected)}
-              baseIndex={stackBaseIndex(
-                gbBranches ?? [],
-                insp?.gitbutler?.targetRef ?? null,
-                selected,
-                baseRef || baseOptions.find((o) => o.isDefault)?.ref || '',
-              )}
-            />
-          )}
+          <BaseSection>
+            {!pending && !!selected && baseOptions.length > 0 && (
+              <BaseRow options={baseOptions} value={baseRef} onChange={setBaseRef} stat={stat} />
+            )}
+            {mode === 'gitbutler' && (
+              <StackLadder
+                nodes={stackNodes(gbBranches ?? [], insp?.gitbutler?.targetRef ?? null, selected)}
+                baseIndex={stackBaseIndex(
+                  gbBranches ?? [],
+                  insp?.gitbutler?.targetRef ?? null,
+                  selected,
+                  baseRef || baseOptions.find((o) => o.isDefault)?.ref || '',
+                )}
+              />
+            )}
+          </BaseSection>
           {current && <BranchSummary option={current} base={listing ? effectiveBase : undefined} />}
           {err && <div className="start-error derived">{err}</div>}
         </>
@@ -1140,6 +1217,14 @@ function RepoPanel({
     </div>
   );
 }
+
+/** 祖先链的三态。**探测中与探测失败不能并成一档** —— 见 chainState 处的说明。 */
+type ChainState =
+  | { state: 'probing' }
+  | { state: 'value'; value: PrAncestor[] }
+  | { state: 'error'; message: string };
+
+const PROBING: ChainState = { state: 'probing' };
 
 /**
  * stacked PR 的 base 候选:祖先链的每一环。`[0]` 是 PR 自己的 base,即默认基线。

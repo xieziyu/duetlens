@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { imeComposing } from '../../keys';
+import { Busy } from './Busy';
 import { GitButlerIcon, LocalBranchIcon } from './icons';
 
 /** 一个可审核目标(普通 git 分支或 GitButler 虚拟分支)在选择器里的展示形态。 */
@@ -165,7 +166,9 @@ export function BranchPicker({
             {selected.badge && <span className="headtag mono">{selected.badge}</span>}
           </>
         ) : (
-          <span className="bp-placeholder">{loading ? '列举分支…' : emptyHint}</span>
+          <span className="bp-placeholder">
+            {loading ? <Busy>列举分支…</Busy> : emptyHint}
+          </span>
         )}
         <span className="chev" />
       </button>

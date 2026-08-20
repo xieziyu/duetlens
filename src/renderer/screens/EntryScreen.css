@@ -141,7 +141,6 @@
   outline: none;
 }
 .ghfield input::placeholder { color: var(--text-faint); font-family: var(--sans); }
-.fld-spin { font-size: 10.5px; color: var(--text-faint); }
 
 .pr-resolved {
   margin-top: 12px;
@@ -236,7 +235,6 @@
   flex: none;
 }
 .pf-tag.warn { color: var(--human); border-color: var(--human-line); background: var(--human-soft); }
-.pf-tag.muted { color: var(--text-faint); border-color: var(--border); background: transparent; }
 .path-warn {
   margin-top: 8px; /* = --derived-gap */
   --derived-gap: 8px;
@@ -402,7 +400,9 @@
 }
 
 /* 审核分支下拉:触发器 + 浮层列表 + 选中摘要 */
-.picker-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+/* 选择器那一格的行高。占位行要与真选择器等高才能原地替换、不推屏,
+   故两处共用这一个值,别各写各的 40px。 */
+.picker-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; --pick-h: 40px; }
 .picker-row .lbl { font-size: 11.5px; color: var(--text-faint); }
 
 /* 「对比 base」与「审核分支」同构,故并排两行:标签定宽,两个下拉左沿才对得齐 */
@@ -413,6 +413,93 @@
 .basemetric .a { color: var(--add); }
 .basemetric .d { color: var(--del); }
 
+/* 入口屏统一的在途状态位(见 entry/Busy.tsx)。原先六处各画各的灰色小字,
+   共同的毛病是不动、不亮、字号比正文小一档 —— 三样凑齐就等于没画。 */
+.busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* 作为 flex 子项时不许被压:压扁的那半句话比不显示更像故障 */
+  flex: none;
+  font-size: 11.5px;
+  color: var(--agent-2);
+  white-space: nowrap;
+}
+.busy .busy-ring {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--agent-line);
+  border-top-color: var(--agent-2);
+  animation: busy-spin 0.75s linear infinite;
+}
+@keyframes busy-spin { to { transform: rotate(360deg); } }
+/* 放慢而不是停掉:转圈是这里唯一的在途信号,停了就与「卡住了」不可分 */
+@media (prefers-reduced-motion: reduce) {
+  .busy .busy-ring { animation-duration: 2.4s; }
+}
+
+/* base 候选还没到手时占住选择器那一格:边框/高度与 .bp-trig 对齐,
+   候选一到就原地换成真选择器,不推屏 */
+.baseprobe {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 260px;
+  min-height: var(--pick-h);
+  padding: 8px 11px;
+  border-radius: 10px;
+  border: 1px dashed var(--border);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+.baseprobe.err { border-style: solid; border-color: var(--del-gutter); background: var(--del-bg); }
+.baseprobe .bpr-ic { color: var(--sev-high); flex: none; font-weight: 600; }
+.baseprobe .bpr-txt { font-size: 11.5px; color: var(--sev-high); }
+.baseprobe .bpr-retry {
+  margin-left: auto;
+  flex: none;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.baseprobe .bpr-retry:hover { color: var(--agent-2); border-color: var(--agent-line); }
+
+/* base 设置区:选择器 + stack 链路条 + 口径提示合成一个块。
+   `.tucked` = github 侧,整区缩到 PR 卡片那一层(base 是那个 PR 的属性),
+   只由容器挂一次 .derived 的连接线,区内子块不再各画各的。 */
+.base-block { margin-top: 10px; }
+/* 本地侧两个子块都不满足条件时容器为空:留着它就是 10px 的死白 */
+.base-block:empty { display: none; }
+.base-block.tucked { --derived-gap: 10px; }
+.base-block.tucked > .derived { margin-left: 0; }
+.base-block.tucked > .derived::before { display: none; }
+/* 区内首块紧贴容器上沿:间距由容器统一给,免得两处各加一次 */
+.base-block > :first-child { margin-top: 0; }
+
+/* 探测占位专用的收起过渡:非 stacked PR 是最常见的一支,结论一到就硬撤这一行,
+   下面的东西会凭空上跳 50px,读起来像故障而不像「查完了」。
+   `overflow: hidden` 只敢挂在这里 —— 真选择器那一区挂上会把浮层裁没。 */
+.base-block.probe {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 200ms ease, opacity 180ms ease, margin-top 200ms ease;
+}
+.base-block.probe > * { min-height: 0; overflow: hidden; }
+.base-block.probe.gone { grid-template-rows: 0fr; opacity: 0; margin-top: 0; }
+/* 收起后别让看不见的转圈继续跑 */
+.base-block.probe.gone .busy-ring { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .base-block.probe { transition: none; }
+}
+
 /* base 选项行右侧的范围标签:说的是「选它会把谁算进来」,故按 agent 档着色区别于中性的 ← base */
 .bp-row .cmp.scope { color: var(--agent-2); background: var(--agent-soft); border-color: var(--agent-line); }
 
@@ -422,8 +509,6 @@
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: thin;
   margin-top: 9px;
   --derived-gap: 9px;
   padding: 8px 11px;
@@ -432,6 +517,26 @@
   border-radius: 9px;
 }
 .stackbar .sb-lbl { font-size: 10.5px; color: var(--text-faint); margin-right: 9px; flex: none; }
+/* 只有链路滚动:`sb-tail` 留在滚动区外,深 stack 下「审核范围 N 层」才不会被推出可视区
+   —— 它是这条链的结论,不该要横向拖动才看得见 */
+.stackbar .sb-scroll {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  /* 撑满剩余宽度而不是收到内容宽:右缘的渐隐才只在真溢出时落在节点上 ——
+     收到内容宽的话,链路没超长时最后一层也会被这层渐隐吃掉一角。 */
+  flex: 1 1 auto;
+  min-width: 0;
+  /* 溢出时把切口渐隐成「还有,可横向滚」,而不是齐根截断的渲染事故相。
+     尾部留同宽的 padding:滚到底时它正好垫在渐隐区下面,最后那个节点(= 被审的那条)
+     才不会在「已经没得滚了」的时候还被遮掉半截 —— 渐隐说的是「右边还有」,滚到头就不该再说。
+     两个值必须同宽,故共用 --sb-fade。 */
+  --sb-fade: 18px;
+  padding-right: var(--sb-fade);
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--sb-fade)), transparent);
+}
 .stackbar .sb-part { display: flex; align-items: center; flex: none; }
 .stackbar .sb-node {
   font-size: 11.5px;
@@ -450,7 +555,7 @@
 .stackbar .sb-node.basenode { color: var(--text); border-style: dashed; border-color: var(--text-deco); }
 .stackbar .sb-seg { width: 18px; height: 1px; background: var(--border); flex: none; }
 .stackbar .sb-seg.in { background: var(--agent-line); height: 2px; }
-.stackbar .sb-tail { margin-left: auto; padding-left: 10px; font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.stackbar .sb-tail { padding-left: 10px; font-size: 11px; color: var(--text-faint); white-space: nowrap; flex: none; }
 .stackbar .sb-tail b { color: var(--text-dim); font-weight: 600; }
 
 /* 宽 base 的提交口径提示:说的是「这次审的比这个 PR 大」,属于人这一侧要做的取舍,故走 human 档 */
@@ -477,6 +582,7 @@
   align-items: center;
   gap: 9px;
   width: 100%;
+  min-height: var(--pick-h);
   padding: 8px 11px;
   border-radius: 10px;
   border: 1px solid var(--border);
