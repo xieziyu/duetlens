@@ -4,6 +4,74 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.7.0] - 2026-08-20
+
+### Added
+
+- **A review can now be diffed against a base you choose.** Only "which branch to review" was
+  selectable; what it got compared against came from auto-detecting the default branch, so a branch
+  in a stack could only be reviewed one layer at a time — reviewing it together with the layers
+  below was not possible. The entry screen now has a base picker next to the branch picker, each row
+  stating the range it covers, with a stack ladder and a live change-surface count. A GitButler
+  source offers the lower branches of the same stack plus the workspace base; a local repository
+  widens the candidates to all local branches. The chosen base is persisted on the review, so a
+  rerun or a resume keeps the same baseline instead of quietly re-detecting a different one on the
+  second round. (#58)
+- **A stacked PR can be reviewed together with the PRs below it.** `gh pr diff` only ever returns a
+  PR's own diff, so a PR stacked on top of others was reviewed without the context underneath. The
+  ancestor chain is now discovered by walking `baseRefName` and looking up the PR whose head is that
+  branch — that chain is the stack itself — and the widened diff comes from the compare API, so no
+  clone is needed. The pre-submit check still uses the PR's own diff, since that is what GitHub
+  validates against, and a finding anchored in a lower PR now says it is out of scope rather than
+  vaguely calling it stale. (#59)
+
+### Fixed
+
+- **Reviewing one branch in a GitButler workspace no longer exposes another branch's changes.** The
+  diff only ever contained that branch's commits, while `get_file` and `search_code` read the
+  worktree — and a GitButler worktree is every applied lane merged together, so the agent could cite
+  code the review had never shown, with nothing on screen hinting at it; following a committed
+  symlink could also read outside the repository. The branch head is now pinned at prepare and every
+  evidence call is served from that tree, with calls made before prepare refused outright (they
+  would otherwise read the index). The diff is taken once and required to come from the pinned head:
+  a branch that moved before anything was read is re-pinned, one that moved after evidence was
+  served is an error rather than a second tree read silently. Two silent baseline swaps are fixed
+  along the way: a short ref now resolves as `refs/heads` then `refs/remotes`, peeled to a commit,
+  because a same-name tag wins the short-ref lookup; and the default diff is refused when such a tag
+  exists, since `but diff` only takes a name and returns an empty change set there. A change surface
+  that cannot be counted now reads as unknown instead of 0 files, so a conflicting branch no longer
+  looks like an empty one. (#61)
+- **In-flight states on the entry screen are visible, and the base area stops jumping.** The screen
+  had six in-flight states, each drawn its own way, all of them motionless faint grey text; they are
+  now one Busy indicator (an agent-coloured ring plus a line of text). The ancestor-chain probe
+  moved out of the PR card's metadata row and into the base picker slot itself — a multi-second wait
+  tucked into a caption inside a dense metadata line goes unnoticed. The placeholder matches the
+  real row height, so the swap to the picker does not push the page, and a PR that turns out not to
+  be stacked collapses with a transition instead of dropping the row and jumping the page 50px.
+  Several ways to review the wrong thing are gone too: the probe is keyed on the PR identity alone
+  (it carries owner/repo, so the repoPath fallback never applied), where editing the path used to
+  re-probe and blank the candidate list for seconds — picker and scope warning both vanished while
+  the chosen base stayed in effect; a first-layer chain failure is now raised instead of returning
+  an empty chain, since a valid PR always has a base and swallowing the error disguised rate limits
+  as "not stacked"; and a chosen base that is not among the candidates once the chain settles is
+  cleared, so a failed probe cannot start a review on a wider base than the screen is showing. (#66)
+- **Start always reviews the PR the card is showing.** A bare `#123` reference was resolved for
+  display using the local repository path, but the raw text was submitted and the backend derived
+  owner/repo from that path a second time. Changing the path does not change the query string, so
+  the old preview stayed on screen and the start gate stayed open: clicking start inside the
+  debounce window reviewed the other repository's #123 while the card still showed the first one.
+  The GitHub panel now reports the resolved `owner/repo#n` and the review starts from that, so what
+  the card shows and what gets reviewed cannot diverge. (#67)
+
+### Upgrade notes
+
+- The database schema moves to v21 (0.6.0 was v20); an existing database migrates on first launch
+  with no action needed. **The migration is one-way** — 0.6.0 can still open a migrated database, it
+  simply cannot see the content of the new column (the diff base chosen for a review) and never
+  writes it back. If you really need to downgrade, back up
+  `~/Library/Application Support/Duetlens/duetlens.db` first.
+- Updates are delivered by the in-app updater; there is no need to download the dmg again.
+
 ## [0.6.0] - 2026-08-20
 
 ### Added
@@ -289,6 +357,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.7.0]: https://github.com/xieziyu/duetlens/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/xieziyu/duetlens/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/xieziyu/duetlens/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/xieziyu/duetlens/compare/v0.3.0...v0.4.0
