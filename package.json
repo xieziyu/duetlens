@@ -31,6 +31,7 @@
     "spike:resume": "tsx scripts/spike-resume.ts",
     "spike:gitbutler": "tsx scripts/spike-gitbutler.ts",
     "spike:source": "tsx scripts/spike-source.ts",
+    "spike:base-ref": "tsx scripts/spike-base-ref.ts",
     "spike:mcp": "tsx scripts/spike-mcp.ts",
     "spike:session-events": "tsx scripts/spike-session-events.ts",
     "spike:write": "tsx scripts/spike-write.ts",

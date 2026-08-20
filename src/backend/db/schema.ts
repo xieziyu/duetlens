@@ -266,8 +266,16 @@ const V20 = `
 ALTER TABLE findings ADD COLUMN verdict_round INTEGER;
 `;
 
+// 审核时选定的 diff 基线。不落库的话复审会重新自动探测 base,第二轮起悄悄换一条基线 ——
+// findings 锚点与 diff 屏共用这份快照,基线一漂,「同一条 finding 还在不在」就无从判起。
+// NULL = 沿用该 source 的默认基线(local 自动探测 / PR 自己的 base / stack 里紧邻的下层分支)。
+const V21 = `
+ALTER TABLE reviews ADD COLUMN base_ref TEXT;
+`;
+
 const MIGRATIONS: string[] = [
   V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20,
+  V21,
 ];
 
 export function migrate(db: Database): void {

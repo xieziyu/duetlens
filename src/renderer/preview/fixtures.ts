@@ -136,6 +136,8 @@ const REVIEW: Review = {
   // 本地分支 source:无 PR 可提交,终点走导出 Markdown(便于自查导出屏)
   source: 'local-branch',
   sourceRef: 'feat/streaming-transcode',
+  // 非默认 base:顶栏那枚 ← chip 只在这种情况下出,fixture 里得有一份才看得见
+  baseRef: 'release/2.0',
   repoPath: '/Users/dev/podcast-go',
   codexThreadId: 'thread-demo',
   model: 'gpt-5.6-sol',
@@ -1244,6 +1246,8 @@ export function installPreviewApi(): void {
         const branches = [
           { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
           { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
+          // 默认分支自己也在库里:换个 base 就该能审它(后端按 base 剔除,见下面的 filter)
+          { name: 'main', isHead: false, ahead: 0, updatedAt: Date.now() - 26 * 3600_000, subject: 'release 2.0' },
           ...(state === 'many-branches'
             ? Array.from({ length: 14 }, (_, i) => ({
                 name: `chore/cleanup-${i + 1}`,
@@ -1256,20 +1260,42 @@ export function installPreviewApi(): void {
         ];
         return {
           base: base ?? 'main',
-          baseCandidates: ['main', 'develop', 'release/2.0'],
-          branches: state === 'no-branches' ? [] : branches,
+          // 探测值恒为 main:换 base 后它不该跟着变(那正是「用户选的冒充自动探测的」那个 bug)
+          detectedBase: 'main',
+          // 常见默认分支 + 本地分支(stacked 的本地分支要能互为 base)。
+          // **含被审分支自己** —— 后端就是这么列的,UI 必须把它滤掉(选中它会连审核目标一起换掉)
+          baseCandidates: [
+            'main', 'develop', 'release/2.0', 'feat/stream-transcode', 'fix/feed-encoding', 'chore/proto-bump',
+          ],
+          // **等于 base 的那条要剔掉** —— 后端就是这么列的(自己不能和自己 diff),
+          // 于是「换 base 才能审到默认分支」这条路径在预览里也真实存在
+          branches: state === 'no-branches' ? [] : branches.filter((b) => b.name !== (base ?? 'main')),
         };
+      },
+      // base 换一条,改动面就该跟着变;预览里按 base 名派生一组稳定的假数,让这个联动看得见
+      diffStat: async (input) => {
+        await new Promise((r) => setTimeout(r, 260));
+        const seed = [...(input.baseRef ?? 'default')].reduce((n, c) => n + c.charCodeAt(0), 0);
+        return { files: 3 + (seed % 22), additions: 120 + (seed % 700), deletions: 18 + (seed % 130) };
       },
       // entry-state=no-gb 演示普通 git 分支模式;gb-degraded 演示 HEAD 在 workspace 但 but 不可用
       inspectRepo: async (repoPath) => {
         await new Promise((r) => setTimeout(r, 250));
         const state = params.get('entry-state');
+        // 一条两层的 stack(streaming 叠在 api-cleanup 上)+ 一条独立 lane:
+        // 前者才有可选 base,后者用来验「跨 stack 的分支不互为 base」
         const gitbutler = {
           isWorkspace: true,
           repoName: 'podcast-go',
+          // gb-no-target:读不到 workspace 目标分支。此时独立 lane 那条的 base 候选**合法地为空**,
+          // 是「换分支后旧 base 必须清掉」唯一没有候选可判的场景
+          targetRef: state === 'gb-no-target' ? null : 'origin/main',
+          // 三层才够用:两层时栈顶只有一个候选、而它就是默认档,选不出「非默认 base」这个状态
           branches: [
-            { name: 'virtual/streaming', fileCount: 7, commitCount: 2, hasUncommitted: true },
-            { name: 'virtual/api-cleanup', fileCount: 3, commitCount: 0, hasUncommitted: true },
+            { name: 'virtual/streaming', fileCount: 7, commitCount: 2, hasUncommitted: true, stackId: 'g0', stackOrder: 0 },
+            { name: 'virtual/api-cleanup', fileCount: 3, commitCount: 1, hasUncommitted: true, stackId: 'g0', stackOrder: 1 },
+            { name: 'virtual/proto-bump', fileCount: 1, commitCount: 1, hasUncommitted: false, stackId: 'g0', stackOrder: 2 },
+            { name: 'virtual/docs-pass', fileCount: 2, commitCount: 1, hasUncommitted: false, stackId: 'h0', stackOrder: 0 },
           ],
         };
         const base = { repoPath, repoName: 'podcast-go', isGit: true, gitbutler: null, degraded: null } as const;

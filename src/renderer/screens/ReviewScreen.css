@@ -138,6 +138,17 @@
   color: var(--text-faint);
   white-space: nowrap;
 }
+/* 非默认 base 的标记:与 source chip 并列,说明这份改动面是相对谁算的 */
+.rev-topbar .basechip {
+  flex: none;
+  font-size: 11px;
+  color: var(--agent-2);
+  background: var(--agent-soft);
+  border: 1px solid var(--agent-line);
+  border-radius: 6px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
 .rev-topbar .spacer {
   flex: 1;
   min-width: 8px;

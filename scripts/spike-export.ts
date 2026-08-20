@@ -20,6 +20,7 @@ const review: Review = {
   id: 'r1',
   source: 'local-branch',
   sourceRef: 'feat/streaming-transcode',
+  baseRef: null,
   repoPath: '/repo',
   codexThreadId: null,
   model: null,

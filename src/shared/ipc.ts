@@ -24,6 +24,7 @@ import type { PromptSaveInput, ReviewPromptView } from './prompt';
 import type { EnvCheckOptions, EnvironmentReport } from './environment';
 import type { UpdateStatus } from './update';
 import type {
+  DiffStat,
   LocalBranchList,
   PrPreview,
   PrSummary,
@@ -79,6 +80,7 @@ export const IpcChannels = {
   sourceInferLocalRepo: 'source:infer-local-repo',
   sourceListLocalBranches: 'source:list-local-branches',
   sourceInspectRepo: 'source:inspect-repo',
+  sourceDiffStat: 'source:diff-stat',
   sourceListRepoPaths: 'source:list-repo-paths',
   promptGet: 'prompt:get',
   promptSave: 'prompt:save',
@@ -108,6 +110,14 @@ export interface ReviewStartInput {
   context?: string;
   /** renderer 生成的一次性 id;启动阶段事件按它回关,过期的启动不会污染当前浮层 */
   startId?: string;
+}
+
+/** 改动面计量的目标(与 ReviewStartInput 同构,只取定位所需那几格)。 */
+export interface DiffStatInput {
+  source: SourceKind;
+  ref: string;
+  repoPath?: string;
+  baseRef?: string;
 }
 
 /**
@@ -427,6 +437,8 @@ export interface DuetlensApi {
     listLocalBranches(repoPath: string, baseRef?: string): Promise<LocalBranchList>;
     /** 探测本地仓库该按虚拟分支还是普通 git 分支审核(gitbutler 模式一并带回虚拟分支列表)。 */
     inspectRepo(repoPath: string): Promise<RepoInspection>;
+    /** 按所选 base 现算改动面(入口切 base 后据此刷新计量)。 */
+    diffStat(input: DiffStatInput): Promise<DiffStat>;
     /** 历史审核用过的本地仓库路径(去重、最近在前),供入口空态快选。 */
     listRepoPaths(): Promise<string[]>;
   };

@@ -276,6 +276,11 @@ export interface Review {
   source: SourceKind;
   /** PR 链接 / 分支名 / vbranch 标识 */
   sourceRef: string;
+  /**
+   * 审核时选定的 diff 基线;null = 沿用该 source 的默认基线。
+   * 落库是为了让复审沿用同一条基线 —— 重新自动探测会让第二轮起悄悄换一份改动面。
+   */
+  baseRef: string | null;
   /** 可选本地仓库路径(github source 也可指定,让 agent 读全量代码) */
   repoPath: string | null;
   /** codex 侧会话 id(续接用) */

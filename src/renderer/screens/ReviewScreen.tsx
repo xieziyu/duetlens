@@ -567,6 +567,12 @@ export function ReviewScreen({
               <span className="mono ref">{sourceLabel}</span>
             </span>
           )}
+          {/* 只在改过 base 时才出:默认基线不需要解释,而非默认的那份改动面三天后回看根本认不出 */}
+          {review?.baseRef && (
+            <span className="mono basechip" title={`本次改动面相对 ${review.baseRef} 计算`}>
+              ← {review.baseRef}
+            </span>
+          )}
           <span className="title">{review?.title ?? '加载中…'}</span>
           {pr?.nwo && <span className="mono nwo">{pr.nwo}</span>}
         </div>
