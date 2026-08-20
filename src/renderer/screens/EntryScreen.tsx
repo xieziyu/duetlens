@@ -94,7 +94,9 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   const startIdRef = useRef<string | null>(null);
   const shownAt = useRef(0);
   // github 面板上报的「PR 已成功解析且 gh 已登录」;作为该来源可发起的门控
-  const [ghReady, setGhReady] = useState(false);
+  // GitHubPanel 解析出的**完整** PR 引用(owner/repo#n);空串 = 还不能发起。
+  // 存引用而不是一个 bool:发起时必须用它,不能用输入框里的原文 —— 见 startRef。
+  const [ghResolvedRef, setGhResolvedRef] = useState('');
   // 活跃会话并发容量:满载(全在跑)时不让发起,并列出在跑的那几条
   const [capacity, setCapacity] = useState<LiveCapacity | null>(null);
 
@@ -201,13 +203,15 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   const source: SourceKind =
     tab === 'github-pr' ? 'github-pr' : repoMode === 'gitbutler' ? 'gitbutler-vbranch' : 'local-branch';
 
-  const target = useTargetLabel(source, ref);
+  // **发起用已解析出的引用,不用输入框原文**。原文允许只写 `#123`,后端会拿 repoPath 再推一次
+  // owner/repo —— 于是「屏上显示 A#123、审的却是 B#123」只需要中途换一次本地路径就能发生
+  // (换路径不改查询串,旧 preview 不作废,发起门槛也一直开着)。
+  // 身份在解析那一刻就钉死,展示与提交同源,这条缝就不存在了。
+  const startRef = tab === 'github-pr' ? ghResolvedRef : ref.trim();
+  const target = useTargetLabel(source, startRef);
   const atCapacity = isAtCapacity(capacity);
   const canStart =
-    !busy &&
-    !atCapacity &&
-    !!ref.trim() &&
-    (tab === 'github-pr' ? ghReady : !!repoPath.trim());
+    !busy && !atCapacity && !!startRef && (tab === 'github-pr' || !!repoPath.trim());
 
   const start = async () => {
     const startId = newStartId();
@@ -219,7 +223,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     const trimmedModel = model.trim();
     const input: ReviewStartInput = {
       source,
-      ref: ref.trim(),
+      ref: startRef,
       repoPath: repoPath.trim() || undefined,
       baseRef: baseRef.trim() || undefined,
       model: trimmedModel || undefined,
@@ -320,7 +324,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
             setBaseRef={setBaseRef}
             pickDir={pickDir}
             busy={busy}
-            onReady={setGhReady}
+            onResolved={setGhResolvedRef}
           />
         ) : (
           <RepoPanel
@@ -460,7 +464,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       {overlay && (
         <StartOverlay
           stage={startStage ?? 'resolve'}
-          target={target || ref.trim()}
+          target={target || startRef}
           error={startFailed}
           onRetry={() => void start()}
           onBack={dismissOverlay}
@@ -547,7 +551,7 @@ function GitHubPanel({
   setBaseRef,
   pickDir,
   busy,
-  onReady,
+  onResolved,
 }: {
   prRef: string;
   setPrRef: (v: string) => void;
@@ -557,7 +561,8 @@ function GitHubPanel({
   setBaseRef: (v: string) => void;
   pickDir: () => void;
   busy: boolean;
-  onReady: (ready: boolean) => void;
+  /** 报上去的是解析出的完整引用(owner/repo#n);空串 = 还不能发起 */
+  onResolved: (resolvedRef: string) => void;
 }) {
   const [ghAuth, setGhAuth] = useState<boolean | null>(null);
   const [preview, setPreview] = useState<PrPreview | null>(null);
@@ -583,12 +588,6 @@ function GitHubPanel({
     window.duetlens.source.checkGhAuth().then(setGhAuth).catch(() => setGhAuth(false));
   };
   useEffect(recheckAuth, []);
-
-  // 可发起门控:gh 已登录 + PR 已成功解析(解析中/失败/未填均不可)
-  useEffect(() => {
-    onReady(ghAuth === true && !!preview && !previewErr);
-  }, [ghAuth, preview, previewErr, onReady]);
-  useEffect(() => () => onReady(false), [onReady]);
 
   // PR 引用防抖解析预览。
   // **输入一变,上一份解析结果立即作废**:留着它,`ghReady` 会一直是 true,防抖那 450ms 里点
@@ -628,8 +627,16 @@ function GitHubPanel({
     };
   }, [prRef, repoPath]);
 
-  // 当前已解析出的目标 PR;祖先链、base、改动面计量都以它为准
+  // 当前已解析出的目标 PR;祖先链、base、改动面计量、以及**真正发起时用的引用**都以它为准
   const prKey = preview ? `${preview.nwo}#${preview.number}` : '';
+
+  // 可发起门控:gh 已登录 + PR 已成功解析(解析中/失败/未填均不可)。
+  // 报上去的是 prKey 而不是一个 bool —— 父层拿它当发起引用,身份就钉在解析那一刻,
+  // 不会再被后端按 repoPath 重推一次。
+  useEffect(() => {
+    onResolved(ghAuth === true && !previewErr ? prKey : '');
+  }, [ghAuth, prKey, previewErr, onResolved]);
+  useEffect(() => () => onResolved(''), [onResolved]);
 
   // 解析出 PR 后摸一次祖先链:stacked 时它就是 base 候选,非 stacked 时只有一环(= PR 自己的 base)。
   // **每层一次 gh 调用,现实里要几秒** —— 这段的可见反馈见 BaseProbeRow。
