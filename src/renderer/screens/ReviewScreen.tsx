@@ -999,7 +999,7 @@ function RightPanel({
                       <span className="ff-sp" />
                       {scanCoverage && scanCoverage.total > 0 && (
                         <span>
-                          {scanCoverage.covered}/{scanCoverage.total} 改动文件已取证
+                          {scanCoverage.covered}/{scanCoverage.total} 改动文件已读
                         </span>
                       )}
                     </div>

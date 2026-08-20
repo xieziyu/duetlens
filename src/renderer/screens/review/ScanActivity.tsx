@@ -59,7 +59,7 @@ export interface ScanCoverage {
 }
 
 const COVERAGE_TITLE =
-  '本次改动的文件里,agent 已经取证(读过原文或被检索命中)的比例。' +
+  '本次改动的文件里,agent 已经读过(读到原文或被检索命中)的比例。' +
   '这是覆盖面不是完成度 —— 它跑满也不代表扫描结束,agent 还会读改动之外的上下文。';
 
 function Coverage({ covered, total }: ScanCoverage) {
@@ -72,7 +72,7 @@ function Coverage({ covered, total }: ScanCoverage) {
       <b>
         {covered}/{total}
       </b>
-      {' 改动文件已取证'}
+      {' 改动文件已读'}
     </span>
   );
 }
