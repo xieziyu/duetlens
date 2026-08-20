@@ -391,12 +391,16 @@ export async function detectGitButler(repoPath: string): Promise<GitButlerStatus
   return { isWorkspace: true, repoName, branches, targetRef: await gitButlerTargetRef(repoPath) };
 }
 
-/** 虚拟分支相对 base 的净改动文件数;取不到(分支刚被改名 / but 报错)记 0,不阻断列举。 */
-async function countDiffFiles(repoPath: string, branch: string): Promise<number> {
+/**
+ * 虚拟分支相对 base 的净改动文件数。取不到回 **null 而不是 0** —— 分支与同名 tag 冲突时
+ * `gitButlerDiff` 现在是明确抛错的,折成 0 会把一条改了几十个文件的分支画成空分支,
+ * 用户照着这个数跳过它。算不出就说算不出,不阻断整张列表。
+ */
+async function countDiffFiles(repoPath: string, branch: string): Promise<number | null> {
   try {
     return parseUnifiedDiff(await gitButlerDiff(repoPath, branch)).length;
   } catch {
-    return 0;
+    return null;
   }
 }
 

@@ -76,7 +76,8 @@ export interface DiffStat {
 /** GitButler 虚拟分支的一项。 */
 export interface VbranchSummary {
   name: string;
-  fileCount: number;
+  /** 相对 base 的净改动文件数;算不出(分支刚改名 / 与同名 tag 冲突 / but 报错)为 null */
+  fileCount: number | null;
   commitCount: number;
   hasUncommitted: boolean;
   /** 所属 stack(同一条 lane 的分支共享);跨 stack 的分支之间没有叠加关系,不能互为 base */
