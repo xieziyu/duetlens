@@ -110,6 +110,7 @@ const api: DuetlensApi = {
     listLocalBranches: (repoPath, baseRef) =>
       ipcRenderer.invoke(IpcChannels.sourceListLocalBranches, repoPath, baseRef),
     inspectRepo: (repoPath) => ipcRenderer.invoke(IpcChannels.sourceInspectRepo, repoPath),
+    diffStat: (input) => ipcRenderer.invoke(IpcChannels.sourceDiffStat, input),
     listRepoPaths: () => ipcRenderer.invoke(IpcChannels.sourceListRepoPaths),
   },
   prompt: {

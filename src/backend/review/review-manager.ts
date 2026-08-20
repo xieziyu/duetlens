@@ -19,7 +19,7 @@ import type {
 } from '@shared/domain';
 import type { AgentErrorKind } from '@shared/agent-events';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { AddFindingInput, BusyReview, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, BusyReview, DiffStatInput, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import { LIVE_SESSION_LIMIT_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 import { isCodexProtocolError } from '@shared/codex';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
@@ -37,6 +37,7 @@ import { setToolPath } from '../config/tool-paths';
 import type { ReviewTarget, Source } from '../source/source';
 import {
   checkGhAuth,
+  diffStat,
   getRepoRemote,
   inferLocalRepo,
   inspectRepo,
@@ -45,6 +46,7 @@ import {
   previewPr,
 } from '../source/source-discovery';
 import type {
+  DiffStat,
   LocalBranchList,
   PrPreview,
   PrSummary,
@@ -84,6 +86,19 @@ function snapshotPatched(before: Finding, after: Finding): ProposalUpdateBefore 
   if (after.resolutionNote !== before.resolutionNote) snapshot.resolutionNote = before.resolutionNote;
   if (after.bodyRound !== before.bodyRound) snapshot.bodyRound = before.bodyRound;
   return snapshot;
+}
+
+/**
+ * 由持久化的 review 反推 source 定位。**baseRef 必须一并带上** —— 漏掉它,复审与续接会
+ * 回到该 source 的默认基线,同一条 review 的第二轮起就换了一份改动面。
+ */
+function targetOf(review: Review): ReviewTarget {
+  return {
+    source: review.source,
+    ref: review.sourceRef,
+    baseRef: review.baseRef ?? undefined,
+    repoPath: review.repoPath ?? '',
+  };
 }
 
 /** 首轮扫描指令:有附加上下文时拼在缺省指令之后一并注入,否则用缺省。 */
@@ -257,6 +272,16 @@ export class ReviewManager extends EventEmitter {
     return inspectRepo(repoPath);
   }
 
+  /** 按所选 base 现算改动面(入口切 base 后刷新计量)。 */
+  diffStat(input: DiffStatInput): Promise<DiffStat> {
+    return diffStat({
+      source: input.source,
+      ref: input.ref,
+      baseRef: input.baseRef,
+      repoPath: input.repoPath ?? '',
+    });
+  }
+
   listRepoPaths(limit?: number): string[] {
     return this.store.listRepoPaths(limit);
   }
@@ -291,11 +316,7 @@ export class ReviewManager extends EventEmitter {
   async getLatestDiff(reviewId: string): Promise<LatestDiffResult> {
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
-    const source = createSource({
-      source: review.source,
-      ref: review.sourceRef,
-      repoPath: review.repoPath ?? '',
-    });
+    const source = createSource(targetOf(review));
     try {
       const prepared = await source.prepare();
       const raw = await source.getDiff();
@@ -355,11 +376,7 @@ export class ReviewManager extends EventEmitter {
     }
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
-    const source = createSource({
-      source: review.source,
-      ref: review.sourceRef,
-      repoPath: review.repoPath ?? '',
-    });
+    const source = createSource(targetOf(review));
     try {
       await source.prepare();
       return await source.getFile(filePath);
@@ -793,6 +810,7 @@ export class ReviewManager extends EventEmitter {
       review = this.store.createReview({
         source: target.source,
         sourceRef: target.ref,
+        baseRef: target.baseRef || null,
         repoPath: target.repoPath || null,
         title: prepared.title,
         model: target.model || null,
@@ -926,11 +944,7 @@ export class ReviewManager extends EventEmitter {
     // 轮次已经落库、却只能收成一条莫名其妙的失败。
     const release = this.reserveCapacity();
 
-    const source = createSource({
-      source: review.source,
-      ref: review.sourceRef,
-      repoPath: review.repoPath ?? '',
-    });
+    const source = createSource(targetOf(review));
     let round: ReviewRound;
     let prepared: Awaited<ReturnType<typeof source.prepare>>;
     let rawDiff: string;
@@ -1107,11 +1121,7 @@ export class ReviewManager extends EventEmitter {
     if (!review.codexThreadId) throw new Error(`review 无 codex thread,无法续接: ${reviewId}`);
 
     const epoch = this.teardownEpoch(reviewId);
-    const source = createSource({
-      source: review.source,
-      ref: review.sourceRef,
-      repoPath: review.repoPath ?? '',
-    });
+    const source = createSource(targetOf(review));
     const prepared = await source.prepare();
     const baseInstructions = await loadBaseInstructions({
       cwd: prepared.cwd,

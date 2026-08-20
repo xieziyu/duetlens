@@ -384,7 +384,6 @@
 /* ---------- local / gitbutler shared ---------- */
 .local-head { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; flex-wrap: wrap; }
 .local-head .lbl { font-size: 11.5px; color: var(--text-faint); }
-.local-head .base-lbl { margin-left: 6px; }
 .local-head .repo-path {
   font-size: 12px;
   color: var(--text-dim);
@@ -393,18 +392,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.local-head select {
-  font-family: var(--mono);
-  font-size: 12px;
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  outline: none;
-  cursor: pointer;
-}
-.local-head select:hover { border-color: var(--agent-line); }
 .local-head .mode-chip {
   font-size: 11px;
   color: var(--text-dim);
@@ -417,18 +404,54 @@
 /* 审核分支下拉:触发器 + 浮层列表 + 选中摘要 */
 .picker-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .picker-row .lbl { font-size: 11.5px; color: var(--text-faint); }
-.picker-row select {
-  font-family: var(--mono);
-  font-size: 12px;
+
+/* 「对比 base」与「审核分支」同构,故并排两行:标签定宽,两个下拉左沿才对得齐 */
+.picker-row + .picker-row { margin-top: 10px; }
+.picker-row .lbl.w { width: 56px; flex: none; }
+.basemetric { font-size: 11.5px; color: var(--text-faint); }
+.basemetric.err { color: var(--sev-high); }
+.basemetric .a { color: var(--add); }
+.basemetric .d { color: var(--del); }
+
+/* base 选项行右侧的范围标签:说的是「选它会把谁算进来」,故按 agent 档着色区别于中性的 ← base */
+.bp-row .cmp.scope { color: var(--agent-2); background: var(--agent-soft); border-color: var(--agent-line); }
+
+/* stack 链路条:workspace base ─ 下层分支 ─▸ 被审那条,覆盖的区间点亮。
+   不换行、横向滚动 —— 深 stack 加长分支名换行会把连接线断在半空,断线比不画更误导。 */
+.stackbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  margin-top: 9px;
+  --derived-gap: 9px;
+  padding: 8px 11px;
   background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  outline: none;
-  cursor: pointer;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
 }
-.picker-row select:hover { border-color: var(--agent-line); }
+.stackbar .sb-lbl { font-size: 10.5px; color: var(--text-faint); margin-right: 9px; flex: none; }
+.stackbar .sb-part { display: flex; align-items: center; flex: none; }
+.stackbar .sb-node {
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+/* 落在审核范围内 */
+.stackbar .sb-node.in { color: var(--agent-2); background: var(--agent-soft); border-color: var(--agent-line); }
+/* 被审的那一条 */
+.stackbar .sb-node.cur { font-weight: 600; box-shadow: 0 0 0 2px var(--agent-soft); }
+/* 选作 base 的那一条:范围的下界,自己不在范围内,故虚线边而非实心 */
+.stackbar .sb-node.basenode { color: var(--text); border-style: dashed; border-color: var(--text-deco); }
+.stackbar .sb-seg { width: 18px; height: 1px; background: var(--border); flex: none; }
+.stackbar .sb-seg.in { background: var(--agent-line); height: 2px; }
+.stackbar .sb-tail { margin-left: auto; padding-left: 10px; font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.stackbar .sb-tail b { color: var(--text-dim); font-weight: 600; }
 
 .bpick { position: relative; flex: 1; min-width: 260px; }
 .bp-trig {

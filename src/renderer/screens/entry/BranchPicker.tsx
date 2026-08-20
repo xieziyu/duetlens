@@ -6,8 +6,11 @@ import { GitButlerIcon, LocalBranchIcon } from './icons';
 export interface BranchOption {
   name: string;
   kind: 'git' | 'vbranch';
+  /** 数据位:普通 git 分支里 HEAD 所在那条(默认选中用),不直接决定渲染 */
   isHead?: boolean;
-  /** 行尾标签:← base / vbranch */
+  /** 行内小 chip 的文字(HEAD / 默认);不给则不出 chip */
+  badge?: string;
+  /** 行尾标签:← base / vbranch / 覆盖范围;为空则不出这枚 chip */
   tag: string;
   /** 计量段:N commits ahead / N files */
   meta: string;
@@ -159,7 +162,7 @@ export function BranchPicker({
           <>
             <BranchIcon kind={selected.kind} />
             <span className="bp-name mono">{selected.name}</span>
-            {selected.isHead && <span className="headtag mono">HEAD</span>}
+            {selected.badge && <span className="headtag mono">{selected.badge}</span>}
           </>
         ) : (
           <span className="bp-placeholder">{loading ? '列举分支…' : emptyHint}</span>
@@ -207,11 +210,13 @@ export function BranchPicker({
                 <div className="m">
                   <div className="bn mono">
                     {o.name}
-                    {o.isHead && <span className="headtag mono">HEAD</span>}
+                    {o.badge && <span className="headtag mono">{o.badge}</span>}
                   </div>
-                  <div className="bd">{[o.meta, o.detail].filter(Boolean).join(' · ')}</div>
+                  {(o.meta || o.detail) && (
+                    <div className="bd">{[o.meta, o.detail].filter(Boolean).join(' · ')}</div>
+                  )}
                 </div>
-                <span className="cmp mono">{o.tag}</span>
+                {o.tag && <span className="cmp mono">{o.tag}</span>}
                 <span className="tick">{o.name === value ? '✓' : ''}</span>
               </div>
             ))}

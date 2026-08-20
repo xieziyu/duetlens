@@ -37,7 +37,8 @@ Electron 桌面应用:人与 codex agent 协同对话式的 code review。主进
 | 领域事件名→载荷 | `ReviewSessionEvents`;ReviewManager 转发表与 renderer `useReviewStream` 三处编译期收敛,加事件要一起动 |
 | 快捷键表 | `components/KbdHelp`(设置屏弹同一浮层,别抄摘录) |
 | 强度显示名 / 代价文案 | `shared/domain.ts` 的 `INTENSITY_LABELS` / `INTENSITY_HINTS` |
-| 改动面计量 | `but diff <branch>`(入口卡片与 `GitButlerSource.getDiff` 同一条命令,数由构造相等) |
+| 改动面计量 | `source-discovery.ts` 的 `diffStat`(绕 `Source.getDiff` 现算,入口卡片与进屏后的改动面由同一次构造得出) |
+| diff 基线 | review 的 `base_ref` 列;空 = 跟随该 source 的默认基线,取 target 一律经 `targetOf(review)` |
 | 仓库 / issue / 作者外链 | `src/shared/links.ts`(package.json 不重复一份) |
 | 客户端版本号 | `package.json` 的 `version` → 构建期 define 注入 `src/shared/version.ts`;发给 app-server / MCP 的 clientInfo 一律取 `APP_VERSION`,别再写字面量 |
 | 版本改动说明 | `CHANGELOG.md` / `CHANGELOG.en.md`;GitHub release notes 由 `scripts/release-notes.mjs` 抽出对应小节,别在 release 页手写 |

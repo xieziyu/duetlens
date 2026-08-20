@@ -27,6 +27,8 @@ Review (一次审核会话)
 
 **`summary_round` 顺带成了来源判据。** 该列出现之前 agent 没有任何写入总结的通道,故升级后「有正文却没有轮次」只可能是当年人工编辑框写下的。这类正文不清空(那是用户写的话),但也不挂在 agent 名下 —— **把人的话署到机器名下,与把机器的结论当人的话发出去是同一种错**。下次机审会连正文带轮次一并覆盖,自愈回正常路径。
 
+**diff 基线随 review 落库,不在复审时重新探测。** `base_ref` 是 review 的属性而非某一次发起的参数:空值表示「跟随该 source 的默认基线」(local 自动探测 / PR 自己的 base / stack 里紧邻的下层分支),非空则钉死在那条 ref 上。不落库的话第 2 轮会重新自动探测 —— 而 diff 快照是 findings 锚点与 diff 屏的共同基准,基线一漂,「同一条 finding 还在不在」就无从判起,且界面上没有任何地方看得出换过基准。**空值与「探测结果的字面量」要可分**:把探测到的 `origin/main` 直接写进去,等于把当时的探测结果冻成了永久选择,默认分支后来改名就会拿着一条不存在的 ref 复审。
+
 **finding id 由 MCP `report_finding` 生成回传**,codex 侧 id 与存储 id 一致,`update_finding` / `resolve_finding` 据此定位。每条 finding 落库时同时建出**承载 discussion**,且必须随事件一起外发,否则本轮会话内 Discussion 栏是空的。
 
 ## finding 的状态与字段

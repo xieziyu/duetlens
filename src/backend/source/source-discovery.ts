@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type {
+  DiffStat,
   GitButlerStatus,
   LocalBranchList,
   LocalBranchSummary,
@@ -16,9 +17,14 @@ import type {
   RepoRemoteInfo,
   VbranchSummary,
 } from '@shared/source-discovery';
+import { parseUnifiedDiff } from '@shared/diff';
+import { BASE_ORDER, detectBaseRef, refExists } from './base-ref';
 import { butJson } from './but-cli';
+import { createSource } from './create-source';
 import { run } from './exec';
+import { gitButlerDiff } from './gitbutler-source';
 import { parsePrRef } from './github-pr-source';
+import type { ReviewTarget } from './source';
 
 /** `gh auth status` 退出码非 0 即未登录;命令缺失(未装 gh)同样视为不可用。 */
 export async function checkGhAuth(): Promise<boolean> {
@@ -169,7 +175,9 @@ export async function listLocalBranches(
   baseRef?: string,
   limit = 30,
 ): Promise<LocalBranchList> {
-  const base = baseRef?.trim() || (await detectBase(repoPath));
+  // 探测独立于调用方给的 base:两者同源会让「用户选的」冒充「自动探测的」(见 LocalBranchList)
+  const detectedBase = await detectBaseRef(repoPath);
+  const base = baseRef?.trim() || detectedBase;
   const head = (await run('git', ['-C', repoPath, 'rev-parse', '--abbrev-ref', 'HEAD'])).trim();
   // refname|committerdate(unix)|subject —— \x1f 作字段分隔,避免与 subject 内容冲突
   const raw = await run('git', [
@@ -191,8 +199,8 @@ export async function listLocalBranches(
     }
     branches.push({ name, isHead: name === head, ahead, updatedAt: Number(unix) * 1000, subject: subject ?? '' });
   }
-  const baseCandidates = await existingBaseCandidates(repoPath, base);
-  return { base, baseCandidates, branches };
+  const baseCandidates = await existingBaseCandidates(repoPath, detectedBase);
+  return { base, detectedBase, baseCandidates, branches };
 }
 
 /** GitButler 把整个 workspace 的改动挂在这条分支上;HEAD 在它上面即说明该按虚拟分支审核。 */
@@ -259,20 +267,28 @@ export async function detectGitButler(repoPath: string): Promise<GitButlerStatus
   try {
     json = await butJson(['status'], repoPath);
   } catch {
-    return { isWorkspace: false, repoName, branches: [] };
+    return { isWorkspace: false, repoName, branches: [], targetRef: null };
   }
   let parsed: ButStatus;
   try {
     parsed = JSON.parse(json) as ButStatus;
   } catch {
-    return { isWorkspace: false, repoName, branches: [] };
+    return { isWorkspace: false, repoName, branches: [], targetRef: null };
   }
-  const listed: { name: string; commitCount: number; hasUncommitted: boolean }[] = [];
-  for (const stack of parsed.stacks ?? []) {
+  const listed: Omit<VbranchSummary, 'fileCount'>[] = [];
+  for (const [si, stack] of (parsed.stacks ?? []).entries()) {
     // assignedChanges 是整条 lane 的未提交部分,不含各 branch 已提交的那些
     const hasUncommitted = (stack.assignedChanges?.length ?? 0) > 0;
-    for (const b of stack.branches ?? []) {
-      listed.push({ name: b.name, commitCount: b.commits?.length ?? 0, hasUncommitted });
+    // but 自顶向下列 stack 内的分支,位次即叠加次序:序号大的在下方,才可作上方分支的 base
+    const stackId = stack.cliId || `s${si}`;
+    for (const [bi, b] of (stack.branches ?? []).entries()) {
+      listed.push({
+        name: b.name,
+        commitCount: b.commits?.length ?? 0,
+        hasUncommitted,
+        stackId,
+        stackOrder: bi,
+      });
     }
   }
   // 计量按 `but diff <branch>` 现算:那正是 GitButlerSource 取 diff 用的命令,
@@ -281,24 +297,56 @@ export async function detectGitButler(repoPath: string): Promise<GitButlerStatus
   const branches: VbranchSummary[] = await Promise.all(
     listed.map(async (b) => ({ ...b, fileCount: await countDiffFiles(repoPath, b.name) })),
   );
-  return { isWorkspace: true, repoName, branches };
+  return { isWorkspace: true, repoName, branches, targetRef: await gitButlerTargetRef(repoPath) };
 }
 
 /** 虚拟分支相对 base 的净改动文件数;取不到(分支刚被改名 / but 报错)记 0,不阻断列举。 */
 async function countDiffFiles(repoPath: string, branch: string): Promise<number> {
   try {
-    const out = await butJson(['diff', branch, '--no-tui'], repoPath);
-    return (JSON.parse(out) as { changes?: unknown[] }).changes?.length ?? 0;
+    return parseUnifiedDiff(await gitButlerDiff(repoPath, branch)).length;
   } catch {
     return 0;
   }
 }
 
+/**
+ * 选定 base 后的改动面。**刻意绕一圈 source 而不另写一条 git 命令** —— 卡片上的数与进屏后
+ * 的改动面必须由同一次构造得出,各算各的迟早分家(见 CLAUDE.md「改动面计量」)。
+ */
+export async function diffStat(target: ReviewTarget): Promise<DiffStat> {
+  const source = createSource(target);
+  try {
+    await source.prepare();
+    const files = parseUnifiedDiff(await source.getDiff());
+    return {
+      files: files.length,
+      additions: files.reduce((n, f) => n + f.additions, 0),
+      deletions: files.reduce((n, f) => n + f.deletions, 0),
+    };
+  } finally {
+    await source.dispose();
+  }
+}
+
 interface ButStatus {
   stacks?: {
+    cliId?: string;
     assignedChanges?: unknown[];
     branches?: { name: string; commits?: unknown[] }[];
   }[];
+}
+
+/**
+ * workspace 的目标分支(整条 stack 的底)。but status 的 JSON 只给 mergeBase 的 commitId,
+ * 没有名字;而 base 要落库、要在界面上显示,拿得住的是这条 git config 里的 ref 名。
+ */
+async function gitButlerTargetRef(repoPath: string): Promise<string | null> {
+  try {
+    const raw = (await run('git', ['-C', repoPath, 'config', '--get', 'gitbutler.project.targetref'])).trim();
+    return raw.replace(/^refs\/remotes\//, '').replace(/^refs\/heads\//, '') || null;
+  } catch {
+    return null;
+  }
 }
 
 /** github-pr review 的 PR 网页地址;ref 缺 owner/repo 时用 repoPath 推断,推断不出向上抛。 */
@@ -315,30 +363,33 @@ async function deriveNwo(repoPath?: string): Promise<string> {
   return info.nwo;
 }
 
-const BASE_ORDER = ['origin/main', 'origin/master', 'main', 'master', 'develop'];
 
-async function detectBase(repoPath: string): Promise<string> {
-  for (const b of BASE_ORDER) {
-    if (await refExists(repoPath, b)) return b;
-  }
-  const root = (await run('git', ['-C', repoPath, 'rev-list', '--max-parents=0', 'HEAD'])).trim();
-  return root.split('\n')[0];
-}
+/** base 候选里本地分支最多列几条(默认分支那几档之外);再多就该用筛选而不是往下滚。 */
+const BASE_BRANCH_LIMIT = 20;
 
-/** 存在的常见 base 候选(含探测到的 base 置顶),供发起表单切换对比基线。 */
-async function existingBaseCandidates(repoPath: string, base: string): Promise<string[]> {
+/**
+ * base 候选:探测到的 base 置顶,其次常见默认分支,再次本地分支(按最近提交倒序)。
+ * 本地分支也要列 —— 叠在一起的分支互为 base 才审得出「只看上面这一层」。
+ * 置顶的必须是**探测到的**那条,不是本次生效的那条:候选顺序跟着用户的选择变,列表会在他每选一次后重排。
+ */
+async function existingBaseCandidates(repoPath: string, detectedBase: string): Promise<string[]> {
   const out: string[] = [];
-  for (const b of [base, ...BASE_ORDER]) {
+  for (const b of [detectedBase, ...BASE_ORDER]) {
     if (!out.includes(b) && (await refExists(repoPath, b))) out.push(b);
   }
-  return out;
-}
-
-async function refExists(repoPath: string, ref: string): Promise<boolean> {
   try {
-    await run('git', ['-C', repoPath, 'rev-parse', '--verify', '--quiet', ref]);
-    return true;
+    const raw = await run('git', [
+      '-C', repoPath, 'for-each-ref',
+      '--sort=-committerdate',
+      `--count=${BASE_BRANCH_LIMIT}`,
+      '--format=%(refname:short)',
+      'refs/heads',
+    ]);
+    for (const name of raw.split('\n').map((l) => l.trim()).filter(Boolean)) {
+      if (!out.includes(name)) out.push(name);
+    }
   } catch {
-    return false;
+    // 列不出本地分支不阻断:常见默认分支那几档已经够用
   }
+  return out;
 }

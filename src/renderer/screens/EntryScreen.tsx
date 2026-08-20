@@ -17,8 +17,10 @@ import type {
   PrSummary,
   RepoInspection,
   RepoMode,
+  VbranchSummary,
 } from '@shared/source-discovery';
 import { useSettings } from '../settings/SettingsProvider';
+import { BaseRow, StackLadder, useDiffStat, type BaseOption } from './entry/BasePicker';
 import { BranchPicker, BranchSummary, type BranchOption } from './entry/BranchPicker';
 import { GhIcon, LocalBranchIcon } from './entry/icons';
 import { baseName, parentDir } from './entry/paths';
@@ -207,7 +209,8 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       source,
       ref: ref.trim(),
       repoPath: repoPath.trim() || undefined,
-      baseRef: source === 'local-branch' ? baseRef.trim() || undefined : undefined,
+      // github-pr 尚未支持改 base(见 docs/design/ui.md);其余两档都按所选基线发起
+      baseRef: source === 'github-pr' ? undefined : baseRef.trim() || undefined,
       model: trimmedModel || undefined,
       reasoningEffort: effort,
       intensity,
@@ -308,6 +311,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
           />
         ) : (
           <RepoPanel
+            source={source}
             repoPath={repoPath}
             pickDir={pickDir}
             pickRepo={pickRepo}
@@ -799,6 +803,7 @@ function GitHubPanel({
 
 // ---------- 本地仓库 panel(模式由探测结果决定:虚拟分支 / 普通 git 分支)----------
 function RepoPanel({
+  source,
   repoPath,
   pickDir,
   pickRepo,
@@ -813,6 +818,7 @@ function RepoPanel({
   baseRef,
   setBaseRef,
 }: {
+  source: SourceKind;
   repoPath: string;
   pickDir: () => void;
   pickRepo: (v: string) => void;
@@ -861,7 +867,6 @@ function RepoPanel({
       .then((l) => {
         if (!alive) return;
         setList({ key, value: l });
-        if (!baseRef) setBaseRef(l.base);
       })
       .catch((e: Error) => alive && setErr(e.message ?? String(e)))
       .finally(() => alive && setLoading(false));
@@ -886,6 +891,7 @@ function RepoPanel({
       name: b.name,
       kind: 'git',
       isHead: b.isHead,
+      badge: b.isHead ? 'HEAD' : undefined,
       tag: `← ${branchList!.base}`,
       meta: `${b.ahead} commits ahead`,
       detail: b.subject,
@@ -906,6 +912,35 @@ function RepoPanel({
   }, [options, pending, selected, setSelected]);
 
   const current = options.find((o) => o.name === selected) ?? null;
+
+  // base 候选:vbranch 取同 stack 下层各条 + workspace base;普通 git 分支取后端给的 ref 候选
+  const effectiveBase = baseRef || branchList?.base || '';
+  const baseOptions = useMemo<BaseOption[]>(
+    () =>
+      mode === 'gitbutler'
+        ? vbranchBaseOptions(gbBranches ?? [], insp?.gitbutler?.targetRef ?? null, selected)
+        : localBaseOptions(branchList?.baseCandidates ?? [], branchList?.detectedBase ?? '', selected),
+    [mode, gbBranches, insp, selected, branchList],
+  );
+
+  // **只在 base 对当前被审分支非法时才清**,判据是候选集本身(vbranch 取同 stack 下层各条,
+  // 普通 git 取后端给的 ref 候选)。别改成「换分支就清」:清空等于回落到探测出的默认基线,而后端
+  // 列分支时会把等于 base 的那条剔掉 —— 于是「审 main、比 release」只能先选 base 再选目标,
+  // 而选中 main 的那一刻 base 被清回 main,目标又从列表里消失、被默认选中的 effect 换成 HEAD。
+  // 候选**合法地为空**也要清(stack 最底层那条且读不到 targetRef),所以必须等候选到手再判,
+  // 不能拿「空集」当「还没加载」搪塞 —— `pending` 就是这道闸。
+  useEffect(() => {
+    if (pending || !baseRef) return;
+    if (!baseOptions.some((o) => o.ref === baseRef)) setBaseRef('');
+  }, [pending, baseOptions, baseRef, setBaseRef]);
+
+  const stat = useDiffStat({
+    source,
+    ref: selected,
+    repoPath: repoPath.trim(),
+    baseRef,
+    enabled: !pending && !!selected,
+  });
 
   if (!repoPath.trim()) {
     return (
@@ -985,35 +1020,115 @@ function RepoPanel({
       {insp && (listing || mode === 'gitbutler') && (
         <>
           <div className="picker-row">
-            <span className="lbl">审核分支</span>
+            <span className="lbl w">审核分支</span>
             <BranchPicker
               options={options}
               value={selected}
               onChange={setSelected}
               loading={pending}
               emptyHint={
-                listing ? `没有相对 ${branchList?.base ?? baseRef} 领先的分支` : '该 workspace 暂无 applied 虚拟分支'
+                listing ? `没有相对 ${effectiveBase} 领先的分支` : '该 workspace 暂无 applied 虚拟分支'
               }
             />
-            {listing && (
-              <>
-                <span className="lbl base-lbl">对比 base</span>
-                <select className="mono" value={baseRef} onChange={(e) => setBaseRef(e.target.value)}>
-                  {(branchList?.baseCandidates ?? [baseRef].filter(Boolean)).map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
           </div>
-          {current && <BranchSummary option={current} base={listing ? branchList?.base : undefined} />}
+          {!pending && !!selected && baseOptions.length > 0 && (
+            <BaseRow options={baseOptions} value={baseRef} onChange={setBaseRef} stat={stat} />
+          )}
+          {mode === 'gitbutler' && (
+            <StackLadder
+              nodes={stackNodes(gbBranches ?? [], insp?.gitbutler?.targetRef ?? null, selected)}
+              baseIndex={stackBaseIndex(
+                gbBranches ?? [],
+                insp?.gitbutler?.targetRef ?? null,
+                selected,
+                baseRef || baseOptions.find((o) => o.isDefault)?.ref || '',
+              )}
+            />
+          )}
+          {current && <BranchSummary option={current} base={listing ? effectiveBase : undefined} />}
           {err && <div className="start-error derived">{err}</div>}
         </>
       )}
     </div>
   );
+}
+
+/** 同 stack 内位于 `selected` 下方的各条(近的在前);跨 stack 的分支不在其中 —— 它们之间没有叠加关系。 */
+function lowerInStack(branches: VbranchSummary[], selected: string): VbranchSummary[] {
+  const me = branches.find((b) => b.name === selected);
+  if (!me) return [];
+  return branches
+    .filter((b) => b.stackId === me.stackId && b.stackOrder > me.stackOrder)
+    .sort((a, b) => a.stackOrder - b.stackOrder);
+}
+
+/**
+ * 虚拟分支的 base 候选:同 stack 各下层分支 + workspace base。
+ * 默认那条 = 紧邻的下层分支(没有下层则是 workspace base)—— 那正是 `but diff <branch>` 的口径。
+ */
+function vbranchBaseOptions(
+  branches: VbranchSummary[],
+  targetRef: string | null,
+  selected: string,
+): BaseOption[] {
+  if (!selected) return [];
+  const lower = lowerInStack(branches, selected);
+  const opts: BaseOption[] = lower.map((b, i) => ({
+    ref: b.name,
+    label: '同 stack 下层分支',
+    scope: coverScope(i + 1),
+    isDefault: i === 0,
+  }));
+  if (targetRef) {
+    opts.push({
+      ref: targetRef,
+      label: 'workspace base',
+      scope: coverScope(lower.length + 1),
+      isDefault: lower.length === 0,
+    });
+  }
+  return opts;
+}
+
+/**
+ * 普通 git 分支的 base 候选;`detected` 必须是**自动探测**出的那条,不是本次生效的那条。
+ *
+ * **排除被审分支自己**:选中它并不会得到一份空 diff 就完事 —— 后端列分支时会把等于 base 的那条
+ * 剔出去,于是「审核分支」在候选里消失,默认选中的 effect 接手改成 HEAD/首项。一次改 base 的操作
+ * 会静默把审核目标也换掉,而界面上只有那一行下拉动过。
+ */
+function localBaseOptions(candidates: string[], detected: string, selected: string): BaseOption[] {
+  return candidates
+    .filter((ref) => ref !== selected)
+    .map((ref) => ({
+      ref,
+      label: ref === detected ? '自动探测的基线' : '',
+      scope: '',
+      isDefault: ref === detected,
+    }));
+}
+
+/** 覆盖 N 层时的范围短语。 */
+function coverScope(covered: number): string {
+  return covered <= 1 ? '只审这一层' : `含 ${covered} 条分支`;
+}
+
+/** 链路条的节点,自底向上:workspace base → 各下层分支 → 被审那条。 */
+function stackNodes(branches: VbranchSummary[], targetRef: string | null, selected: string): string[] {
+  if (!selected) return [];
+  const lower = lowerInStack(branches, selected);
+  return [...(targetRef ? [targetRef] : []), ...lower.map((b) => b.name).reverse(), selected];
+}
+
+/** 当前 base 在链路条上的位次;落不到(候选刚变)就退到栈底,宁可把范围画大也别画成空。 */
+function stackBaseIndex(
+  branches: VbranchSummary[],
+  targetRef: string | null,
+  selected: string,
+  baseRef: string,
+): number {
+  const i = stackNodes(branches, targetRef, selected).indexOf(baseRef);
+  return i >= 0 ? i : 0;
 }
 
 function PickRepoEmpty({ pickDir, hint }: { pickDir: () => void; hint: string }) {

@@ -4,6 +4,7 @@
  *   (2) 实仓 smoke:对本仓某虚拟分支跑 GitButlerSource.getDiff/getFile,断言 diff 标记与文件内容。
  *   (3) 路径穿越:越界读盘被拒,仓内符号链接可读、指向仓外的被拒。
  *   (4) 入口模式探测:inspectRepo 对 workspace 仓 / 普通仓 / 非 git 目录的判定。
+ *   (5) 叠加 base:自建两层 stack,验缺省 / 下层分支 / workspace base 三档 diff 口径。
  * 运行:npm run spike:gitbutler [虚拟分支名，默认 feat/dev]
  */
 import { strict as assert } from 'node:assert';
@@ -11,7 +12,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { run } from '../src/backend/source/exec';
-import { inspectRepo } from '../src/backend/source/source-discovery';
+import { detectGitButler, inspectRepo } from '../src/backend/source/source-discovery';
 import { GitButlerSource, toUnifiedDiff } from '../src/backend/source/gitbutler-source';
 
 const log = (m: string) => process.stdout.write(`[gitbutler] ${m}\n`);
@@ -75,7 +76,8 @@ async function testLive(branch: string) {
     log(`✅ (2) 实仓 smoke:${prepared.title} → 合法 unified diff`);
   } catch (e) {
     const msg = (e as Error).message;
-    if (/not a GitButler|setup|no such|unknown|not found/i.test(msg)) {
+    // 「No ID found for entity」= 这台机器此刻没有挂着这条虚拟分支,是环境不具备而非回归
+    if (/not a GitButler|setup|no such|unknown|not found|No ID found/i.test(msg)) {
       log(`⚠ (2) 跳过:${msg.split('\n')[0]}`);
       return;
     }
@@ -171,11 +173,90 @@ async function testInspect() {
   log('✅ (4) 模式探测:workspace → vbranch,普通仓/子目录 → local(路径归一),非 git 目录不误判');
 }
 
+/**
+ * 叠加分支的可选 base(自建 workspace,不依赖开发机此刻挂着哪些虚拟分支)。
+ *
+ * 要证的是三件事:缺省仍等于 `but diff <branch>`(只有本层)、指定下层分支得到同一份、
+ * 指定 workspace base 得到整条 stack 的累积。**必须 teardown** —— `but setup` 会把这个
+ * 临时仓库登记进全局项目表,不摘掉就在开发机上留一条指向已删目录的记录。
+ */
+async function testStackedBase() {
+  const tmp = await realpath(await mkdtemp(path.join(tmpdir(), 'duetlens-stack-')));
+  let setup = false;
+  try {
+    await run('git', ['-C', tmp, 'init', '-q', '-b', 'main']);
+    await run('git', ['-C', tmp, 'config', 'user.email', 'spike@duetlens.local']);
+    await run('git', ['-C', tmp, 'config', 'user.name', 'spike']);
+    await writeFile(path.join(tmp, 'seed.txt'), 'seed\n');
+    await run('git', ['-C', tmp, 'add', '-A']);
+    await run('git', ['-C', tmp, 'commit', '-q', '-m', 'init']);
+    try {
+      await run('but', ['setup'], tmp);
+      setup = true;
+    } catch (e) {
+      log(`⚠ (5) 跳过:but setup 失败(${(e as Error).message.split('\n')[0]})`);
+      return;
+    }
+
+    // 两层 stack:lower 在下,upper 叠在其上,各改一个文件
+    await writeFile(path.join(tmp, 'lower.txt'), 'lower\n');
+    await run('but', ['commit', '-b', 'spike/lower', '-m', 'lower'], tmp);
+    await writeFile(path.join(tmp, 'upper.txt'), 'upper\n');
+    await run('but', ['commit', '-b', 'spike/upper', '-m', 'upper'], tmp);
+    await run('but', ['move', 'spike/upper', '--above', 'spike/lower'], tmp);
+
+    const status = await detectGitButler(tmp);
+    const upper = status.branches.find((b) => b.name === 'spike/upper');
+    const lower = status.branches.find((b) => b.name === 'spike/lower');
+    assert.ok(upper && lower, '两条分支都应被列出');
+    assert.equal(upper!.stackId, lower!.stackId, '同一条 stack 的分支应共享 stackId');
+    assert.ok(upper!.stackOrder < lower!.stackOrder, '栈顶位次应小于下层');
+    assert.ok(status.targetRef, 'workspace 应给出目标分支名');
+
+    const diffOf = async (baseRef?: string) => {
+      const source = new GitButlerSource({
+        source: 'gitbutler-vbranch',
+        ref: 'spike/upper',
+        repoPath: tmp,
+        baseRef,
+      });
+      try {
+        return await source.getDiff();
+      } finally {
+        await source.dispose();
+      }
+    };
+
+    const dflt = await diffOf();
+    assert.ok(dflt.includes('upper.txt'), '缺省应含本层改动');
+    assert.ok(!dflt.includes('lower.txt'), '缺省(= but diff)不该含下层改动');
+
+    const viaLower = await diffOf('spike/lower');
+    assert.ok(viaLower.includes('upper.txt') && !viaLower.includes('lower.txt'),
+      '指定紧邻下层分支应与缺省同口径');
+
+    const viaTarget = await diffOf(status.targetRef!);
+    assert.ok(viaTarget.includes('upper.txt') && viaTarget.includes('lower.txt'),
+      '指定 workspace base 应累积整条 stack');
+
+    log('✅ (5) 叠加 base:缺省=本层,下层分支同口径,workspace base 累积整条 stack');
+  } finally {
+    if (setup) {
+      // 摘不掉也不能让整条 spike 挂掉,但要说出来 —— 全局项目表里会留一条脏记录
+      await run('but', ['teardown'], tmp).catch((e: Error) =>
+        log(`⚠ (5) but teardown 失败,请手工清理 ${tmp}:${e.message.split('\n')[0]}`),
+      );
+    }
+    await rm(tmp, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   testReconstruction();
   await testTraversal();
   await testSymlinkEscape();
   await testInspect();
+  await testStackedBase();
   await testLive(process.argv[2] ?? 'feat/dev');
   log('✅ PASS — GitButler source 就位');
 }

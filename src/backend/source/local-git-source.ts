@@ -1,3 +1,4 @@
+import { detectBaseRef } from './base-ref';
 import { run } from './exec';
 import { gitGrep } from './git-grep';
 import type {
@@ -23,7 +24,7 @@ export class LocalGitSource implements Source {
     this.head =
       this.target.ref?.trim() ||
       (await run('git', ['-C', repo, 'rev-parse', '--abbrev-ref', 'HEAD'])).trim();
-    this.base = this.target.baseRef ?? (await this.detectBase(repo));
+    this.base = this.target.baseRef ?? (await detectBaseRef(repo));
     const subject = (await run('git', ['-C', repo, 'log', '-1', '--format=%s', this.head])).trim();
     const headSha = (await run('git', ['-C', repo, 'rev-parse', this.head])).trim();
     return { title: `${this.head} · ${subject}`, cwd: repo, headSha };
@@ -52,18 +53,4 @@ export class LocalGitSource implements Source {
   }
 
   async dispose(): Promise<void> {}
-
-  private async detectBase(repo: string): Promise<string> {
-    for (const b of ['origin/main', 'origin/master', 'main', 'master']) {
-      try {
-        await run('git', ['-C', repo, 'rev-parse', '--verify', b]);
-        return b;
-      } catch {
-        // 试下一个
-      }
-    }
-    // 兜底:根提交
-    const root = (await run('git', ['-C', repo, 'rev-list', '--max-parents=0', 'HEAD'])).trim();
-    return root.split('\n')[0];
-  }
 }
