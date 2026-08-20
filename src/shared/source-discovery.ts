@@ -54,6 +54,18 @@ export interface LocalBranchList {
   branches: LocalBranchSummary[];
 }
 
+/**
+ * stacked PR 的一层祖先:上一层 PR 的 base 分支,以及(若存在)以它为 head 的那个 PR。
+ * 没有对应 PR 的层(通常是仓库默认分支)`number` 为 null。
+ */
+export interface PrAncestor {
+  ref: string;
+  number: number | null;
+  title: string | null;
+  /** 这条 ref 是不是仓库的默认分支;`number === null` 只说明没有以它为 head 的 open PR,不等于默认分支 */
+  isDefaultBranch: boolean;
+}
+
 /** 一次改动面计量(选定 base 后现算,入口据此显示本次要审多大一片)。 */
 export interface DiffStat {
   files: number;
