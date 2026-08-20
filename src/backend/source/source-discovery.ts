@@ -79,19 +79,17 @@ const PR_CHAIN_DEPTH = 8;
  * 而不必自己记住 pr1 的分支叫什么。
  *
  * 每层一次 `gh` 调用,故封了深度;`seen` 兼防分支互为 base 时成环。
- * 中途出错就把已经摸到的那几层返回:链短一点仍然可用,报错反而把默认那档也一起没收了。
+ *
+ * **第一层与后续层对失败的处理刻意不同**:摸到一半失败就把已有的几层返回(链短一点仍然可用,
+ * 报错反而把默认那档也一起没收);但**第一层失败必须抛** —— 有效 PR 一定有 base,空链只可能是
+ * 探测本身没成,咽下去会让一次限流/断网伪装成「这个 PR 不是 stacked」,界面连重试的口子都不给。
  */
 export async function prBaseChain(ref: string, repoPath?: string): Promise<PrAncestor[]> {
   const parsed = parsePrRef(ref);
   const nwo = parsed.nwo || (await deriveNwo(repoPath));
   const chain: PrAncestor[] = [];
   const seen = new Set<string>();
-  let cursor: string;
-  try {
-    cursor = await prBaseRef(nwo, parsed.num);
-  } catch {
-    return [];
-  }
+  let cursor = await prBaseRef(nwo, parsed.num);
   const defaultBranch = await repoDefaultBranch(nwo);
 
   for (let i = 0; i < PR_CHAIN_DEPTH && cursor && !seen.has(cursor); i++) {
