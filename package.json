@@ -26,6 +26,7 @@
     "spike:reasoning": "tsx scripts/spike-reasoning-summary.ts",
     "spike:db": "tsx scripts/spike-db.ts",
     "spike:diff": "tsx scripts/spike-diff.ts",
+    "spike:duration": "tsx scripts/spike-duration.ts",
     "spike:review": "tsx scripts/spike-review.ts",
     "spike:discussion": "tsx scripts/spike-discussion.ts",
     "spike:resume": "tsx scripts/spike-resume.ts",
