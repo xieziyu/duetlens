@@ -4,6 +4,28 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.7.1] - 2026-08-21
+
+### Fixed
+
+- **Launching from the Dock or Spotlight no longer drops half the environment codex needs.** launchd
+  hands the app an almost empty environment, and only `PATH` was being recovered; everything else was
+  thrown away. A custom codex `model_providers` entry with `env_key`, a plain `OPENAI_API_KEY`, proxy
+  variables — none of them were visible in a GUI launch, so a review died immediately with "missing
+  environment variable X" while the very same config worked fine with the codex CLI in a terminal,
+  which made the failure almost impossible to self-diagnose. The same login-shell probe now brings back
+  the full environment: `PATH` keeps its existing merge and fallback-directory logic, and every other
+  variable is backfilled only when the process does not already have that key, so anything launchd or
+  the command line passed in still wins. Switches that would change how this process runs
+  (`ELECTRON_RUN_AS_NODE`, `NODE_OPTIONS` and friends) and the app's own startup switches
+  (`DUETLENS_USER_DATA`) are never adopted. The probe result stays in memory only: never logged, never
+  stored, never sent over IPC. (#70)
+
+### Upgrade notes
+
+- The database schema is unchanged at v21; 0.7.0 and 0.7.1 can be installed in any direction.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.7.0] - 2026-08-20
 
 ### Added
@@ -357,6 +379,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.7.1]: https://github.com/xieziyu/duetlens/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/xieziyu/duetlens/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/xieziyu/duetlens/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/xieziyu/duetlens/compare/v0.4.0...v0.5.0
