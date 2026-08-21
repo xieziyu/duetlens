@@ -3,6 +3,17 @@
 本文件只记**对使用者可见**的变化。内部重构、文档与 CI 调整不单列,查 `git log`。
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/);`0.x` 阶段 minor 位即破坏性变更位。
 
+## [0.7.1] - 2026-08-21
+
+### 修复
+
+- **从 Dock / Spotlight 启动时,codex 需要的环境变量不再丢一半。** launchd 给的环境近乎是空的,此前只补回了 `PATH`,其余变量一律丢掉:codex 配置里带 `env_key` 的自定义 `model_providers`、裸的 `OPENAI_API_KEY`、代理变量,在图形启动下全都读不到,评审一开跑就死在「missing environment variable X」;而同一份配置在终端里跑 codex CLI 一切正常,这个差异几乎无法自查。现在同一次登录 shell 探测会把整份环境带回来,`PATH` 保持原有的合并与兜底目录逻辑,其余变量只在当前进程没有该键时补上 —— launchd 或命令行传进来的仍然优先。会改变本进程行为的开关(`ELECTRON_RUN_AS_NODE`、`NODE_OPTIONS` 等)与本应用自己的启动开关(`DUETLENS_USER_DATA`)不会被采纳。探测结果只留在内存里:不写日志、不落库、不过 IPC。(#70)
+
+### 升级须知
+
+- 数据库结构不变,仍是 v21,与 0.7.0 之间可以来回安装。
+- 更新由应用内 updater 接手,无需重新下载 dmg。
+
 ## [0.7.0] - 2026-08-20
 
 ### 新增
@@ -148,6 +159,7 @@
 
 首个公开版本。
 
+[0.7.1]: https://github.com/xieziyu/duetlens/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/xieziyu/duetlens/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/xieziyu/duetlens/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/xieziyu/duetlens/compare/v0.4.0...v0.5.0
