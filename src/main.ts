@@ -5,7 +5,7 @@ import { openDatabase } from '@backend/db/database';
 import { ReviewStore } from '@backend/db/review-store';
 import { ReviewManager } from '@backend/review/review-manager';
 import { createCompletionNotifier } from '@backend/notify/completion-notifier';
-import { hydratePath } from '@backend/env/shell-path';
+import { hydrateEnv } from '@backend/env/shell-env';
 import { createUpdater } from '@backend/update/updater';
 import { IpcEvents, type CompletionNotice, type ReviewEvent } from '@shared/ipc';
 
@@ -19,9 +19,9 @@ if (userDataOverride) {
   app.setPath('userData', `${app.getPath('userData')}-dev`);
 }
 
-// 立刻起 PATH 探测,与 Electron 自身的启动重叠;whenReady 里 await,基本不额外等。
-// 必须在任何 spawn 外部 CLI 之前完成,见 shell-path.ts。
-const pathReady = hydratePath();
+// 立刻起 shell 环境探测,与 Electron 自身的启动重叠;whenReady 里 await,基本不额外等。
+// 必须在任何 spawn 外部 CLI 之前完成,见 shell-env.ts。
+const envReady = hydrateEnv();
 
 let manager: ReviewManager;
 let mainWindow: BrowserWindow | null = null;
@@ -106,7 +106,7 @@ function notifyNative(notice: CompletionNotice): void {
 }
 
 app.whenReady().then(async () => {
-  await pathReady;
+  await envReady;
 
   const db = openDatabase(path.join(app.getPath('userData'), 'duetlens.db'));
   manager = new ReviewManager(new ReviewStore(db));
