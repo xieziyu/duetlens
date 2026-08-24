@@ -70,6 +70,15 @@ async function main() {
     }),
   );
 
+  // codex 自带 list_mcp_resources 且会主动探;不应答就是一次 -32601,在界面上长成失败的工具调用
+  assert.deepEqual((await client.listResources()).resources, [], 'resources/list 应答空表而非报错');
+  assert.deepEqual(
+    (await client.listResourceTemplates()).resourceTemplates,
+    [],
+    'resources/templates/list 应答空表而非报错',
+  );
+  log('resources:探测返回空表 ✓');
+
   const tools = (await client.listTools()).tools.map((t) => t.name).sort();
   log(`tools: ${tools.join(', ')}`);
   assert.ok(tools.includes('report_finding') && tools.includes('update_finding'), '应含 report/update');

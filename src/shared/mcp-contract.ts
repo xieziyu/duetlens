@@ -31,6 +31,14 @@ export const MCP_TOOL = {
 
 export type McpToolName = (typeof MCP_TOOL)[keyof typeof MCP_TOOL];
 
+/**
+ * 这次调用是不是**我们声明的**工具。codex 自带的 MCP 探测工具(list_mcp_resources 等)
+ * 也会以 `server: 'duetlens'` 报事件,不加这道过滤会把它们的失败当成我们自己的工具失联。
+ */
+export function isMcpToolName(name: string): name is McpToolName {
+  return (Object.values(MCP_TOOL) as string[]).includes(name);
+}
+
 /** 跨层被读到的参数名。只收录**两侧都碰**的那些,不做全字段镜像 —— 那会变成第二份 schema。 */
 export const MCP_ARG = {
   findingId: 'finding_id',
