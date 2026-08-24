@@ -3,6 +3,17 @@
 本文件只记**对使用者可见**的变化。内部重构、文档与 CI 调整不单列,查 `git log`。
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/);`0.x` 阶段 minor 位即破坏性变更位。
 
+## [0.7.2] - 2026-08-24
+
+### 修复
+
+- **codex 0.149 起,评审不再静默地报告「0 个问题」。** 这一版把 MCP 工具调用也纳入了审批,`approvalPolicy: "never"` 的含义从「不问、放行」翻成了「不问、拒绝」,于是 agent 每一次 `report_finding` / `write_summary` 都被挡下,一轮评审跑到底、结论页干干净净、日志里也没有任何异常 —— 与「审完确实没发现问题」在界面上完全一样。现在握手时改为申请 `granular` 审批策略并把五道闸门全部关死(这是当前唯一表达「不问且放行」的写法),codex 若不认这个策略再退回 `"never"`;老版本 codex 会忽略它读不懂的字段,因此不需要第二次握手。另外,codex 若拒绝把工具调用交给内置 MCP 服务器,这一轮会直接判失败并报错,不会再退化成一份空结论。(#72)
+
+### 升级须知
+
+- 数据库结构不变,仍是 v21,与 0.7.1、0.7.0 之间可以来回安装。
+- 更新由应用内 updater 接手,无需重新下载 dmg。
+
 ## [0.7.1] - 2026-08-21
 
 ### 修复
@@ -159,6 +170,7 @@
 
 首个公开版本。
 
+[0.7.2]: https://github.com/xieziyu/duetlens/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/xieziyu/duetlens/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/xieziyu/duetlens/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/xieziyu/duetlens/compare/v0.5.0...v0.6.0

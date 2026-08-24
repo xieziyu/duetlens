@@ -4,6 +4,26 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.7.2] - 2026-08-24
+
+### Fixed
+
+- **Reviews no longer silently report zero findings on codex 0.149 and later.** That release folds
+  MCP tool calls into approvals, which flipped `approvalPolicy: "never"` from "don't ask, allow" to
+  "don't ask, deny". Every `report_finding` and `write_summary` the agent made was rejected, so a
+  review ran to completion with an empty result page and nothing unusual in the logs —
+  indistinguishable, on screen, from a review that genuinely found nothing. The handshake now asks
+  for the `granular` approval policy with all five gates closed (currently the only spelling that
+  means "don't ask and allow") and falls back to `"never"` when codex rejects that policy; older
+  builds ignore fields they do not understand, so no second handshake is needed. On top of that, a
+  round now fails loudly when codex refuses to hand a tool call to the built-in MCP server, instead
+  of degrading into an empty verdict. (#72)
+
+### Upgrade notes
+
+- The database schema is unchanged at v21; 0.7.0, 0.7.1 and 0.7.2 can be installed in any direction.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.7.1] - 2026-08-21
 
 ### Fixed
@@ -379,6 +399,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.7.2]: https://github.com/xieziyu/duetlens/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/xieziyu/duetlens/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/xieziyu/duetlens/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/xieziyu/duetlens/compare/v0.5.0...v0.6.0
