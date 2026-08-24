@@ -139,13 +139,15 @@ async function runTurn(label: string, reasoningSummary: string | null): Promise<
     };
     if (reasoningSummary) config.model_reasoning_summary = reasoningSummary;
 
-    const thread = await codex.threadStart({
-      cwd: workdir,
-      approvalPolicy: 'never',
-      sandbox: 'read-only',
-      baseInstructions: BASE_INSTRUCTIONS,
-      config,
-    });
+    const thread = await codex.withReadOnlyApproval((approvalPolicy) =>
+      codex.threadStart({
+        cwd: workdir,
+        approvalPolicy,
+        sandbox: 'read-only',
+        baseInstructions: BASE_INSTRUCTIONS,
+        config,
+      }),
+    );
     log(label, `thread/start → ${thread.thread.id}(codex ${thread.thread.cliVersion ?? '?'})`);
 
     await codex.turnStart({

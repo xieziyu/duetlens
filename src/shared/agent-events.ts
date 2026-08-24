@@ -29,6 +29,8 @@ export const AGENT_ERROR_KINDS = [
   'sandbox-not-applied',
   /** 本机 codex 与这版对齐的协议对不上(见 CODEX_PROTOCOL_ERROR)—— 重试必然复现 */
   'codex-version-mismatch',
+  /** codex 没把工具调用交给自建 MCP —— findings 回不来,再跑也是空手,见 MCP_UNDELIVERED_CODE */
+  'mcp-undelivered',
   'other',
 ] as const;
 export type AgentErrorKind = (typeof AGENT_ERROR_KINDS)[number];
@@ -54,7 +56,19 @@ export type AgentEvent =
   | { kind: 'turn-started'; turnId: string }
   // turnId 是 agent 可选给的:有就据此把残余 delta 挡在别的 turn 之外(被打断那轮常有补发)
   | { kind: 'message-delta'; text: string; turnId?: string }
-  | { kind: 'tool-call'; server: string; tool: string; status: string; args?: unknown; durationMs?: number }
+  | {
+      kind: 'tool-call';
+      server: string;
+      tool: string;
+      status: string;
+      args?: unknown;
+      /**
+       * **codex 没把这次调用交给 server** 时的原因。工具自己回的业务拒绝不在此列 ——
+       * 那种 agent 看得到原文、改对了会重来,不是故障;这里只装它重试也到不了的那半。
+       */
+      undelivered?: string;
+      durationMs?: number;
+    }
   /**
    * agent 跑的 shell 命令(只读沙箱下就是 rg / sed / cat 这一类取证动作)。
    * 与 `tool-call` 分开是因为二者的可读单位不同:工具调用问的是「哪个工具、什么参数」,
