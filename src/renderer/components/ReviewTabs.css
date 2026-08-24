@@ -22,6 +22,18 @@
   display: none;
 }
 
+/* 溢出那侧的渐隐:滚动条藏掉了,不给这个就完全看不出后面还有 tab。
+   用 mask 而不是叠一层伪元素 —— 遮罩按元素自己的盒子算,不会跟着内容滚走。 */
+.rev-tabs .tabs-strip[data-fade='l'] {
+  mask-image: linear-gradient(90deg, transparent, #000 26px);
+}
+.rev-tabs .tabs-strip[data-fade='r'] {
+  mask-image: linear-gradient(90deg, #000 calc(100% - 26px), transparent);
+}
+.rev-tabs .tabs-strip[data-fade='lr'] {
+  mask-image: linear-gradient(90deg, transparent, #000 26px, #000 calc(100% - 26px), transparent);
+}
+
 .rev-tab {
   display: flex;
   align-items: center;
@@ -164,7 +176,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  /* 不参与收缩:tab 条挤满时(上限二十枚,满载提示恰好只在这时出现)按比例分摊会把它压成
+     几个字加省略号 —— 让 tab 条多滚一点,别把话说不完整。max-width 兜住长文案不反过来吃掉整条。 */
+  flex: none;
+  max-width: 340px;
   margin-left: auto;
   padding: 0 12px;
   overflow: hidden;

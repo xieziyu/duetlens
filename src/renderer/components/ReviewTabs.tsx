@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { REVIEW_STATUS_LABELS } from '@shared/domain';
 import type { ReviewTab } from '../review/tabs';
 import type { TabMeta } from '../review/useTabMeta';
@@ -47,10 +47,20 @@ export function ReviewTabs({
   onNew: () => void;
 }): React.JSX.Element {
   const tip = useTabTip();
+  const strip = useStripScroll(activeId, tabs.length);
   return (
     <div className="rev-tabs" role="tablist" aria-label="打开的审核">
       {/* 横向滚动会把卡片留在原处指向已经移开的那枚 tab */}
-      <div className="tabs-strip" onScroll={tip.hide}>
+      <div
+        className="tabs-strip"
+        ref={strip.ref}
+        data-fade={strip.fade}
+        onScroll={() => {
+          tip.hide();
+          strip.sync();
+        }}
+        onWheel={strip.onWheel}
+      >
         {tabs.map((t) => {
           const m = meta[t.reviewId];
           const label = m ? shortSourceLabel(m.source, m.sourceRef) : '…';
@@ -139,6 +149,91 @@ export function ReviewTabs({
       )}
     </div>
   );
+}
+
+/** 两端渐隐的宽度;滚动落位也留这么多,免得刚滚进来的那枚正压在渐隐底下。 */
+const FADE_PX = 26;
+
+/**
+ * tab 条的横向滚动。上限放到二十几枚之后「一屏放不下」是常态(1280 窗口约 9 枚到顶),
+ * 于是两件事必须由代码兜住:
+ *
+ * 1. **活跃那枚要自己滚进视野**。⌃⇥ 切过去、或关掉活跃 tab 后右邻接位时,正文换了而 tab 条
+ *    不动的话,条上一枚活跃的都看不见 —— 人会以为切错了。
+ * 2. **两端要有「后面还有」的迹象**。滚动条是藏掉的(34px 的条上摆一根横滚条太吵),
+ *    没有渐隐就完全看不出溢出。
+ *
+ * 落位自己按实测矩形算,不用 `scrollIntoView`:后者会连带滚祖先,且平滑滚动在预览面板里是 no-op。
+ */
+function useStripScroll(
+  activeId: string | null,
+  count: number,
+): {
+  ref: React.RefObject<HTMLDivElement>;
+  fade: 'l' | 'r' | 'lr' | undefined;
+  sync: () => void;
+  onWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
+} {
+  const ref = useRef<HTMLDivElement>(null);
+  const [fade, setFade] = useState<'l' | 'r' | 'lr' | undefined>(undefined);
+
+  const sync = useCallback(() => {
+    const s = ref.current;
+    if (!s) return;
+    // 1px 容差:缩放下 scrollWidth 带小数,严格比较会让不该出现的那侧渐隐常驻
+    const l = s.scrollLeft > 1;
+    const r = s.scrollLeft < s.scrollWidth - s.clientWidth - 1;
+    setFade(l && r ? 'lr' : l ? 'l' : r ? 'r' : undefined);
+  }, []);
+
+  /** 幂等:已经在视野里就一动不动 —— 点一枚看得见的 tab 不该把整条甩一下。 */
+  const keepVisible = useCallback(() => {
+    const s = ref.current;
+    const el = s?.querySelector<HTMLElement>('.rev-tab.on');
+    if (!s || !el) return;
+    // offsetLeft 不可靠(strip 没定位,offsetParent 是更外面的某个祖先),一律用实测矩形的差
+    const sr = s.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    // 首尾那枚会被浏览器自己夹回 0 / 上限,不必单独判
+    if (r.left < sr.left + FADE_PX) s.scrollLeft += r.left - sr.left - FADE_PX;
+    else if (r.right > sr.right - FADE_PX) s.scrollLeft += r.right - sr.right + FADE_PX;
+  }, []);
+
+  /**
+   * 布局期做:留到 effect 才滚的话,活跃那枚会先在屏外绘出一帧。
+   *
+   * **不跟着标题异步补齐重跑**:能滚的时候每枚 tab 都顶在 min-width 上(见 ReviewTabs.css),
+   * 内容宽恒等于 116×N,标题从 '…' 补成全称一个像素都不动。
+   */
+  useLayoutEffect(() => {
+    keepVisible();
+    sync();
+  }, [activeId, count, keepVisible, sync]);
+
+  /**
+   * 可视宽变了同样要重新落位 —— 窗口缩窄、右侧那句轻提示出现都会挤掉宽度,而 scrollLeft 不动,
+   * 活跃那枚就这么被留在屏外。用 ResizeObserver 而非 window.resize:提示进出不发 resize,
+   * 而要量的本来就是这一条 strip。
+   */
+  useEffect(() => {
+    const s = ref.current;
+    if (!s) return;
+    const ro = new ResizeObserver(() => {
+      keepVisible();
+      sync();
+    });
+    ro.observe(s);
+    return () => ro.disconnect();
+  }, [keepVisible, sync]);
+
+  // 竖向滚轮也拿来横滚:鼠标只有这一个轴,不接的话二十几枚 tab 只剩触控板横扫一条路
+  const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const s = ref.current;
+    if (!s || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    s.scrollLeft += e.deltaY;
+  }, []);
+
+  return { ref, fade, sync, onWheel };
 }
 
 interface TipAt {
