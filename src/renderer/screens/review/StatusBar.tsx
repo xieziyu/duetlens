@@ -1,13 +1,5 @@
-import type { ReviewStatus } from '@shared/domain';
+import { REVIEW_STATUS_LABELS, type ReviewStatus } from '@shared/domain';
 import type { TokenUsage } from '@shared/agent-events';
-
-const STATUS_LABEL: Record<ReviewStatus, string> = {
-  scanning: '扫描中',
-  reviewing: '审核中',
-  completed: '已完成',
-  submitted: '已提交',
-  failed: '失败',
-};
 
 /**
  * review 屏底部状态栏:agent 运行态从顶栏下沉到此,顶栏只留导航与上下文。
@@ -71,13 +63,13 @@ export function ReviewStatusBar({
           onClick={onShowFailure}
           title={`${failureHint} — 点击查看原因与重试`}
         >
-          {STATUS_LABEL[st]}
+          {REVIEW_STATUS_LABELS[st]}
           <span className="sb-why">查看原因</span>
         </button>
       ) : (
         <span className={`sb-status s-${st}`}>
           {running && <span className="pulse" />}
-          {STATUS_LABEL[st]}
+          {REVIEW_STATUS_LABELS[st]}
         </span>
       )}
       {round && (

@@ -1,0 +1,186 @@
+/* review tab 条:外壳网格 tabs 行(仅 review 屏占用,rail 右侧)。
+   活跃 tab 与下方内容同底(--surface)、且不画下边框,读起来是连着的一块;其余压暗后退。 */
+.rev-tabs {
+  grid-area: tabs;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: 34px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+/* 溢出横向滚动、绝不换行:换行会把下面的 diff 挤下去,而 tab 数是用户随手在变的 */
+.rev-tabs .tabs-strip {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.rev-tabs .tabs-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.rev-tab {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  /* 挤窄了也不让它变成读不出字的细条:到这个宽度就不再缩,由 strip 横向滚动接手 */
+  min-width: 116px;
+  max-width: 210px;
+  padding-right: 4px;
+  background: var(--surface-2);
+  border-right: 1px solid var(--border-soft);
+  color: var(--text-faint);
+}
+.rev-tab:hover {
+  background: var(--surface-3);
+}
+.rev-tab.on {
+  background: var(--surface);
+  color: var(--text);
+  /* 顶部一道细线标出活跃那枚;底边留空,与下方内容连成一片 */
+  box-shadow: inset 0 2px 0 var(--agent);
+}
+
+.rev-tab .tab-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  /* 缺了它,不肯收缩的文字会直接压到关闭钮上 */
+  overflow: hidden;
+  height: 100%;
+  padding: 0 4px 0 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rev-tab .tab-main .si {
+  flex: none;
+  opacity: 0.8;
+}
+/* 本地分支这档的 ref 就是整个标签(标题与它同名,已被去重),长分支名全靠它自己截 */
+.rev-tab .lbl {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+}
+
+/* 两者都能缩,但先缩标题:收缩量按基准宽 × 系数分配,给标题一个大系数,
+   ref(它是这枚 tab 的身份)就只在标题已经缩没了之后才轮到被截 */
+.rev-tab .ttl {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+}
+.rev-tab.on .ttl {
+  color: var(--text-dim);
+}
+
+/* 未读角标:后台期间新报出的 finding 数。用 agent 声道的色 —— 报出它的是 agent */
+.rev-tab .tab-badge {
+  flex: none;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: var(--agent-soft);
+  color: var(--agent-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+}
+
+.rev-tab .tab-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.rev-tab .tab-dot.scanning {
+  background: var(--agent-2);
+  animation: tab-pulse 2s infinite;
+}
+.rev-tab .tab-dot.failed {
+  background: var(--sev-high);
+}
+@keyframes tab-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 关闭钮常驻(而非 hover 才出):hover 才出的话,要关一枚 tab 得先猜它在哪 */
+.rev-tab .tab-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-deco);
+  cursor: pointer;
+}
+.rev-tab .tab-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.rev-tabs .tab-add {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.rev-tabs .tab-add:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+/* 轻提示搭在 tab 条右端(不另占一行、不盖住内容):说的都是刚发生在 tab 上的事,过几秒自己走 */
+.rev-tabs .tab-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+  padding: 0 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.rev-tabs .tab-notice button {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--agent-2);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.rev-tabs .tab-notice button:hover {
+  text-decoration: underline;
+}

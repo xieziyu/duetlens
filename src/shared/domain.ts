@@ -103,6 +103,15 @@ export type MessageRole = (typeof MESSAGE_ROLES)[number];
 export const REVIEW_STATUSES = ['scanning', 'reviewing', 'completed', 'submitted', 'failed'] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
+/** 状态的显示名;状态栏胶囊与 tab 上的状态点共用一份,避免同一枚状态在两处叫两个名字。 */
+export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
+  scanning: '扫描中',
+  reviewing: '审核中',
+  completed: '已完成',
+  submitted: '已提交',
+  failed: '失败',
+};
+
 /**
  * 首轮/每轮机审跑完后落到哪个状态 —— 由 source 决定,因为只有 github-pr 还有一步真正的终点动作
  * (提交 review 到 PR),在那之前停在 `reviewing` 是有意义的待办。
@@ -689,6 +698,13 @@ export interface UiSettings {
   codexPath: string;
   /** gh 可执行文件路径(空=用 PATH 中的 gh) */
   ghPath: string;
+  /**
+   * 上次开着的 review tab,按屏上顺序。冷启动据此恢复 —— 恢复时要逐条核对 review 还在不在
+   * (30 天保留会清掉旧的,用户也可能删过),对不上的直接剔除,不能拿一个空壳 tab 占位。
+   */
+  openReviewIds: string[];
+  /** 上次活跃的那一枚;不在 openReviewIds 里就当没有。 */
+  activeReviewId: string;
 }
 
 /** 明暗模式各档的显示名与图示;设置屏选项、rail 提示、onboarding 顶栏同源。 */
@@ -731,6 +747,8 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   notifyOnComplete: true,
   codexPath: '',
   ghPath: '',
+  openReviewIds: [],
+  activeReviewId: '',
 };
 
 /** per-review 的进度态(随会话恢复);viewedFiles = 已标记「已看」的文件路径。 */

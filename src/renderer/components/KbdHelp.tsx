@@ -13,6 +13,12 @@ const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
     ],
   },
   {
+    title: '审核 tab',
+    rows: [
+      { label: '切到下一枚 / 上一枚 review tab', keys: ['⌃⇥', '⌃⇧⇥'] },
+    ],
+  },
+  {
     title: '重跑',
     rows: [
       { label: '弹出重跑面板(提交 / 导出屏则先返回 diff)', keys: ['⌘', 'E'] },

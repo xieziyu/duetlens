@@ -9,7 +9,6 @@ import {
   type ReviewIntensity,
   type SourceKind,
 } from '@shared/domain';
-import { LIVE_SESSION_LIMIT_CODE } from '@shared/ipc';
 import type { LiveCapacity, RecentReview, ReviewStartInput, ReviewStartStage } from '@shared/ipc';
 import type {
   LocalBranchList,
@@ -37,6 +36,13 @@ import { RepoSwitch } from './entry/RepoSwitch';
 import { RecentReviews } from './entry/RecentReviews';
 import { StartOverlay } from './entry/StartOverlay';
 import { LogoMark } from '../components/LogoMark';
+import {
+  CAPACITY_POLL_MS,
+  CapacityNotice,
+  isAtCapacity,
+  isLiveSessionLimit,
+  stripLimitCode,
+} from '../components/CapacityNotice';
 import { newStartId } from '../components/StartProgress';
 import './EntryScreen.css';
 
@@ -254,7 +260,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       // 满载是可预期的拦截、不是故障:刷新容量让拦截面板接手,别把一串英文 code 甩给用户。
       // 但只有**确实刷出了满载快照**才交给面板 —— 容量接口本身失败(或此刻已被腾空)时面板
       // 根本不出现,那就退回普通报错,否则用户每点一次都只看见界面纹丝不动、真实原因还全丢了。
-      const atLimit = message.includes(LIVE_SESSION_LIMIT_CODE);
+      const atLimit = isLiveSessionLimit(message);
       if (atLimit && isAtCapacity(await refreshCapacity())) {
         setOverlay(false);
         setStartStage(null);
@@ -262,7 +268,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
         setBusy(false);
         return;
       }
-      const shown = atLimit ? message.replace(LIVE_SESSION_LIMIT_CODE, '').trim() : message;
+      const shown = atLimit ? stripLimitCode(message) : message;
       // 浮层已经挡住界面,就地转错误态;还没升起来的快速失败仍走卡片内行内报错
       if (shownAt.current) setStartFailed(shown);
       else setError(shown);
@@ -438,7 +444,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
 
           {error && <p className="start-error">{error}</p>}
           {atCapacity && (
-            <CapacityBlock capacity={capacity!} onOpen={onOpenReview} onRefresh={refreshCapacity} />
+            <CapacityNotice capacity={capacity!} onOpen={onOpenReview} onRefresh={refreshCapacity} />
           )}
 
           <div className="footcta">
@@ -470,62 +476,6 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
           onBack={dismissOverlay}
         />
       )}
-    </div>
-  );
-}
-
-/** 入口停留期间的容量轮询间隔:会话跑完没有推给入口的事件,只能自己回头问一次。 */
-const CAPACITY_POLL_MS = 5000;
-
-/**
- * 满载 = 会话位坐满且**每一个都在跑**。有空闲位时后端会静默回收,用户不必知道这回事。
- * 快照缺失(容量接口失败)一律不算满载 —— 拦截面板要有真实的在跑清单才有意义。
- */
-function isAtCapacity(c: LiveCapacity | null): boolean {
-  return !!c && c.live >= c.max && c.busy.length >= c.max;
-}
-
-/**
- * 满载拦截:4 个会话位坐满且全在跑机审 / 追问,再起一个就得拆掉别人跑到一半的那轮。
- * 逐条列出在跑的是谁并给直达入口 —— 只说「满了」等于让用户自己去猜该关掉哪个。
- * 有空闲位时后端静默回收,这块根本不出现。
- */
-function CapacityBlock({
-  capacity,
-  onOpen,
-  onRefresh,
-}: {
-  capacity: LiveCapacity;
-  onOpen: (id: string) => void;
-  onRefresh: () => void;
-}) {
-  return (
-    <div className="cap-block">
-      <div className="cap-head">
-        <span className="cap-ic">◔</span>
-        <b>
-          {capacity.max} 个审核会话都在跑,暂时开不了新的
-        </b>
-        <button type="button" className="cap-refresh" onClick={onRefresh}>
-          刷新
-        </button>
-      </div>
-      <div className="cap-body">
-        每个会话是一个常驻 codex 子进程;等其中一个跑完、或进去把它叫停,这里会自动放行。
-      </div>
-      <div className="cap-list">
-        {capacity.busy.map((b) => (
-          <button key={b.reviewId} type="button" className="cap-item" onClick={() => onOpen(b.reviewId)}>
-            <span className="pulse" />
-            <span className="ci-title">{b.title}</span>
-            <span className="ci-meta mono">
-              {b.sourceRef}
-              {b.round > 1 ? ` · 第 ${b.round} 轮` : ''} · {b.scanning ? '机审中' : '回答中'}
-            </span>
-            <span className="ci-go">→</span>
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

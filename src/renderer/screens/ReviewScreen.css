@@ -14,6 +14,13 @@
   color: var(--text-faint);
 }
 
+/* 非活跃 tab 的整屏。UA 给 [hidden] 的 display:none 来自 user-agent 层,上面两条 author 规则
+   一律压过它 —— 不补这两条,隐藏的 tab 照样把顶栏/主体/状态栏摊进外壳网格。 */
+.rev-root[hidden],
+.rev-empty[hidden] {
+  display: none;
+}
+
 /* ---------- review 顶栏:只留来源上下文 + 常驻 CTA(运行态见底部状态栏)---------- */
 .rev-topbar {
   grid-area: top;

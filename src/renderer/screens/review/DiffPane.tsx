@@ -17,6 +17,7 @@ import { PencilIcon } from './PencilIcon';
 import { SelectionPopover } from './SelectionPopover';
 import { DiffFindBar } from './DiffFindBar';
 import { primaryModifier } from '../../keys';
+import { useIsActiveTab } from '../../review/TabVisibility';
 import {
   clearMatches,
   findMatches,
@@ -55,6 +56,30 @@ const FILE_STATUS_LABEL: Partial<Record<DiffFile['status'], string>> = {
   deleted: '删除',
   renamed: '重命名',
 };
+
+/**
+ * 定位类 effect 的可见性闸门。隐藏态下 `getBoundingClientRect` / `scrollTop` 全是 0,
+ * `scrollIntoView` 静默 no-op —— 这时兑现定位等于把请求丢掉。故:请求先攒着,等重新可见的
+ * 那一帧再跑,且**只跑一次** —— 此后单纯切回这枚 tab 不该重放已经做过的定位,否则每次回来
+ * 都会把恢复好的滚动位置顶掉。
+ *
+ * 「有没有新请求」按 deps 的实际变化判,不看 active 自己的翻转:两者同一次提交里一起变
+ * (通知点击既换 tab 又要定位)时,请求不能被当成"只是切回来"漏掉。
+ */
+function useLocateEffect(active: boolean, run: () => void, deps: React.DependencyList) {
+  const pending = useRef(false);
+  const seen = useRef<React.DependencyList | null>(null);
+  const runRef = useRef(run);
+  runRef.current = run;
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = deps;
+    if (!before || deps.some((d, i) => !Object.is(d, before[i]))) pending.current = true;
+    if (!active || !pending.current) return;
+    pending.current = false;
+    runRef.current();
+  }, [...deps, active]);
+}
 
 /** diff 内锚点:发起 discussion / 追问 codex 时携带的选区信息 */
 interface AnchorPick {
@@ -166,6 +191,8 @@ export interface DiffPaneProps {
   keysSuspended?: boolean;
   /** 检索条自行关闭(Esc / ✕)时回报,好让屏侧的 nonce 归零 */
   onFindClose?: () => void;
+  /** 框选发起卡里有没有还没提交的字;透传自 AnnotateComposer,供屏一级并入未保存判据 */
+  onComposeDraftChange?: (hasDraft: boolean) => void;
 }
 
 /**
@@ -185,6 +212,8 @@ export function DiffPane(props: DiffPaneProps) {
     onJumpFinding,
     onJumpDiscussion,
   } = props;
+  // 不可见时:全局键位不注册,定位一律推迟(隐藏态下几何量全是 0,scrollIntoView 静默 no-op)
+  const active = useIsActiveTab();
   const ref = useRef<HTMLDivElement>(null);
   const [sel, setSel] = useState<{ pick: AnchorPick; top: number; left: number } | null>(null);
   const [composeAt, setComposeAt] = useState<Compose | null>(null);
@@ -315,10 +344,13 @@ export function DiffPane(props: DiffPaneProps) {
   // 折叠态一并入依赖:跳到已是 activePath 的那个文件时,同值的 setActivePath 不触发重渲染,
   // 光靠 activePath 补不上这次定位(锚在其上的又恰好没有 finding 可走下面那条 effect 时尤其明显)。
   const activeCollapsed = activePath != null && props.collapsed.has(activePath);
-  useEffect(() => {
-    if (!activePath) return;
-    scrollToFile(activePath);
-  }, [activePath, activeCollapsed, scrollToFile]);
+  useLocateEffect(
+    active,
+    () => {
+      if (activePath) scrollToFile(activePath);
+    },
+    [activePath, activeCollapsed, scrollToFile],
+  );
 
   // 标记已看会把当前文件折叠掉,滚动位置不变则视口塌进下一个文件的中段;
   // 记下落点,等折叠提交后再把它的文件头顶上来。取消已看不跳。
@@ -349,11 +381,15 @@ export function DiffPane(props: DiffPaneProps) {
   const focusCollapsed =
     focusFindingId != null &&
     props.collapsed.has(findings.find((f) => f.id === focusFindingId)?.file ?? '');
-  useEffect(() => {
-    if (!focusFindingId || !ref.current) return;
-    const el = ref.current.querySelector(`#${CSS.escape(`finding-${focusFindingId}`)}`);
-    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [focusFindingId, focusCollapsed]);
+  useLocateEffect(
+    active,
+    () => {
+      if (!focusFindingId || !ref.current) return;
+      const el = ref.current.querySelector(`#${CSS.escape(`finding-${focusFindingId}`)}`);
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    },
+    [focusFindingId, focusCollapsed],
+  );
 
   // 长代码行只让 code 表自己横滚(文件头/hunk 头/内联卡片不跟着滑走);
   // 一份 diff 被卡片切成多张表,共用同一横向偏移才不会读到一半错位。scroll 不冒泡,故用捕获。
@@ -480,9 +516,10 @@ export function DiffPane(props: DiffPaneProps) {
   //   1. 只在真的请求了跳转时动作(pendingReveal),否则用户手动折叠任何文件都会被当成跳转;
   //   2. 展开走 onExpandFile 这条只展不收的路 —— 用 toggle 的话,用户折叠恰好含当前命中的
   //      文件时,会被本 effect 立刻掰回展开。
+  // 第三处设防同上:不可见时**不消费** pendingReveal —— 滚动落空还把标记清掉,等于把这次跳转吞了。
   const pendingReveal = useRef(false);
   useEffect(() => {
-    if (!pendingReveal.current || !ref.current) return;
+    if (!pendingReveal.current || !ref.current || !active) return;
     const m = matchesRef.current[cur];
     if (m && props.collapsed.has(m.file) && props.onExpandFile) {
       props.onExpandFile(m.file); // 展开后 collapsed 变化,本 effect 再跑一遍完成滚动
@@ -491,19 +528,20 @@ export function DiffPane(props: DiffPaneProps) {
     pendingReveal.current = false;
     const cell = m && matchCell(ref.current, m);
     if (cell && m) scrollToMatch(ref.current, cell, m);
-  }, [revealNonce, cur, props.collapsed]);
+  }, [revealNonce, cur, props.collapsed, active]);
 
   // ⌘F 以选区预填(编辑器惯例)。选区只能在**按键当场**读:检索条一挂载就抢焦点并全选,
   // 那一步会清空文档选区,而子组件的 effect 先于父组件跑 —— 等这里的 effect 轮到时已什么都不剩。
   const findSeed = useRef<string | null>(null);
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       if (!primaryModifier(e) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'f') return;
       findSeed.current = selectionSeed(ref.current);
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     if (!findOpen) return;
@@ -515,8 +553,9 @@ export function DiffPane(props: DiffPaneProps) {
   // ⌘G / ⌘⇧G 前后跳:只在检索开启、且没有模态弹层压在上面时接管。
   // 少了 keysSuspended 这一档,帮助层开着按 ⌘G 会在弹层背后偷偷换命中并滚动 diff,
   // 关掉弹层才发现视口已经不是原来那处 —— ⌘F 由屏侧的导航 handler 同样按这条让位。
+  // 不可见的 tab 同样让位:检索条还开着的后台 tab 会把 ⌘G 一起接走,而它连屏都不在。
   useEffect(() => {
-    if (!findOpen || props.keysSuspended) return;
+    if (!findOpen || props.keysSuspended || !active) return;
     const onKey = (e: KeyboardEvent) => {
       if (!primaryModifier(e) || e.altKey || e.key.toLowerCase() !== 'g') return;
       e.preventDefault();
@@ -524,7 +563,7 @@ export function DiffPane(props: DiffPaneProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [findOpen, props.keysSuspended, step]);
+  }, [findOpen, props.keysSuspended, active, step]);
 
   const closeFind = props.onFindClose;
 
@@ -578,7 +617,13 @@ export function DiffPane(props: DiffPaneProps) {
     }, 0);
   }, [canStart]);
 
+  // 浮层坐标是按当时的视口算死的,隐藏期间 diff 还可能被别处滚走 —— 与其留一枚回来就错位的浮层,
+  // 不如变为不可见时就收掉;两条全局监听也随之不再注册。
   useEffect(() => {
+    if (!active) {
+      setSel(null);
+      return;
+    }
     if (!sel) return;
     const onDown = (e: MouseEvent) => {
       if (!(e.target as HTMLElement).closest('.sel-pop')) setSel(null);
@@ -590,7 +635,7 @@ export function DiffPane(props: DiffPaneProps) {
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('scroll', onScroll, true);
     };
-  }, [sel]);
+  }, [sel, active]);
 
   const startCompose = (pick: AnchorPick) => {
     setSel(null);
@@ -672,6 +717,7 @@ export function DiffPane(props: DiffPaneProps) {
             setComposeAt(null);
           }}
           onCancelCompose={() => setComposeAt(null)}
+          onComposeDraftChange={props.onComposeDraftChange}
         />
       ))}
 
@@ -996,6 +1042,7 @@ function DiffFileView({
   onSendCompose,
   onCreateFinding,
   onCancelCompose,
+  onComposeDraftChange,
   fileLines,
   loadingCtx,
   revealOf,
@@ -1022,6 +1069,7 @@ function DiffFileView({
   onSendCompose: (text: string) => void | Promise<void>;
   onCreateFinding: (draft: NewFindingDraft) => void | Promise<void>;
   onCancelCompose: () => void;
+  onComposeDraftChange?: (hasDraft: boolean) => void;
   /** 以下四项由 DiffPane 托管:检索索引要看得到已展开的上下文,状态不能留在这里 */
   fileLines: string[] | null;
   loadingCtx: boolean;
@@ -1103,6 +1151,7 @@ function DiffFileView({
       onSend={onSendCompose}
       onCreate={onCreateFinding}
       onCancel={onCancelCompose}
+      onDraftChange={onComposeDraftChange}
     />
   ) : null;
 

@@ -8,6 +8,7 @@ import {
   EMPTY_ACTIVITY_LOG,
   type ActivityLog,
 } from '../screens/review/scan-activity';
+import { subscribeReviewEvents } from './review-event-bus';
 
 /**
  * 一条追问在途(或刚中断)的回复。它是**未落库**的:turn 收尾成功后由权威 message 事件接手,
@@ -235,8 +236,8 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     void window.duetlens.review.rounds(reviewId).then((r) => alive && setRounds(r));
 
     // switch + 兜底哨兵:ReviewEvent 新增一支而这里漏处理,编译期即报错(见 assertExhaustive)
-    const off = window.duetlens.review.onEvent((e) => {
-      if (e.reviewId !== reviewId) return;
+    // 过滤交给事件总线:多 tab 各挂一份 onEvent 会在同一条 IPC 频道上堆到告警线(见 review-event-bus)
+    const off = subscribeReviewEvents(reviewId, (e) => {
       switch (e.type) {
         case 'finding': {
           // upsert:新 finding 追加,已存在的(update_finding 回写)就地替换

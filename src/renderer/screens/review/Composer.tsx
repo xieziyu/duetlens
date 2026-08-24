@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDraftFlag } from './useDraftFlag';
 
 /** 一条没发出去的原文;每次失败各占一条,不互相顶掉,由用户决定何时放回输入框。 */
 export interface UnsentDraft {
@@ -32,10 +33,22 @@ export interface ComposerProps {
   /** 一条待恢复原文的去向说明(切线程 / 原线程已不在);null = 就在当前线程,无需多说 */
   targetNote: (d: UnsentDraft) => string | null;
   onRestore: (d: UnsentDraft) => void;
+  /** 框里有没有还没发出去的字;纯空白不算。关 tab 前的拦截据此判断,故只报布尔量 */
+  onDraftChange?: (hasDraft: boolean) => void;
 }
 
-export function Composer({ disabled, placeholder, scope, onSend, unsent, targetNote, onRestore }: ComposerProps) {
+export function Composer({
+  disabled,
+  placeholder,
+  scope,
+  onSend,
+  unsent,
+  targetNote,
+  onRestore,
+  onDraftChange,
+}: ComposerProps) {
   const [text, setText] = useState('');
+  useDraftFlag(text.trim().length > 0, onDraftChange);
 
   // 先清空是因为发送可能挂着一整轮 turn(几十秒起步),不能一直锁着输入框;等待期间还能接着打下一句。
   // 因此失败时不能直接往框里塞:那句话可能早被新内容占着,多条同时失败更会互相覆盖 ——

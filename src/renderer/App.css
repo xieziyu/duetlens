@@ -1,11 +1,13 @@
-/* 外壳网格:整幅顶栏 / 左 rail + 屏内容 / 整幅状态栏(仅 review 屏占用第三行)。
-   review 屏根节点是 display:contents,其顶栏与状态栏直接落进这三个 area。 */
+/* 外壳网格:整幅顶栏 / review tab 条 / 左 rail + 屏内容 / 整幅状态栏(后两者仅 review 屏占用)。
+   review 屏根节点是 display:contents,其顶栏与状态栏直接落进 top/host/foot 三个 area。
+   tabs 行归 review 独有,故只跨 host 那一列(rail 是全局导航,跨这两行)——没有 tab 时该行为 0 高。 */
 .app {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   grid-template-areas:
     'top  top'
+    'rail tabs'
     'rail host'
     'foot foot';
   height: 100%;

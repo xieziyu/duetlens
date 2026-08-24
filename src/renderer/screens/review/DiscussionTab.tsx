@@ -42,6 +42,8 @@ export interface DiscussionTabProps {
   /** 没发出去的原文(含框选发起的首问),待用户放回输入框 */
   unsent: UnsentDraft[];
   onRestoreUnsent: (d: UnsentDraft) => void;
+  /** composer 里正在打的字是否非空;透传自 Composer,供屏一级并入未保存判据 */
+  onComposerDraftChange?: (hasDraft: boolean) => void;
   scanning: boolean;
   onSend: (text: string) => void | Promise<void>;
   /** 新开一条不锚定代码的全局讨论;失败原样抛出,由按钮就地回显 */
@@ -405,6 +407,7 @@ export function DiscussionTab(props: DiscussionTabProps) {
         unsent={props.unsent}
         targetNote={targetNote}
         onRestore={props.onRestoreUnsent}
+        onDraftChange={props.onComposerDraftChange}
       />
     </div>
   );

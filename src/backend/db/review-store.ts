@@ -181,14 +181,14 @@ function toRound(r: RoundRow): ReviewRound {
     suppressedCount: r.suppressed_count,
     errorMessage: r.error_message,
     errorKind: (r.error_kind as ReviewRound['errorKind']) ?? null,
-    changedFiles: parseChangedFiles(r.changed_files),
+    changedFiles: parseStringList(r.changed_files),
     codeChanged: r.code_changed === 1,
     startedAt: r.started_at,
     endedAt: r.ended_at,
   };
 }
 
-/** 同 parseChangedFiles:坏值退化成空列表,不让一列脏 JSON 把整个 review 读不出来。 */
+/** 同 parseStringList:坏值退化成空列表,不让一列脏 JSON 把整个 review 读不出来。 */
 function parseSummaryFiles(raw: string): SummaryFile[] {
   try {
     const v: unknown = JSON.parse(raw || '[]');
@@ -202,8 +202,9 @@ function parseSummaryFiles(raw: string): SummaryFile[] {
   }
 }
 
-/** 手改过库或旧版本写坏都不该让整屏轮次读不出来,坏值退化成空列表。 */
-function parseChangedFiles(raw: string): string[] {
+/** 手改过库或旧版本写坏都不该让整屏读不出来:非 JSON、非数组、混进非字符串,一律退化成空列表。 */
+function parseStringList(raw: unknown): string[] {
+  if (typeof raw !== 'string') return [];
   try {
     const v = JSON.parse(raw || '[]');
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
@@ -1210,14 +1211,16 @@ export class ReviewStore {
         r.notify_on_complete == null ? DEFAULT_UI_SETTINGS.notifyOnComplete : !!r.notify_on_complete,
       codexPath: (r.codex_path as string | null) ?? DEFAULT_UI_SETTINGS.codexPath,
       ghPath: (r.gh_path as string | null) ?? DEFAULT_UI_SETTINGS.ghPath,
+      openReviewIds: parseStringList(r.open_review_ids),
+      activeReviewId: (r.active_review_id as string | null) ?? DEFAULT_UI_SETTINGS.activeReviewId,
     };
   }
 
   saveUiSettings(s: UiSettings): void {
     this.db
       .prepare(
-        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, file_list_view, default_source, last_repo_path, findings_grouping, collapse_viewed, default_model, default_effort, default_intensity, notify_on_complete, codex_path, gh_path)
-         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @fileListView, @defaultSource, @lastRepoPath, @findingsGrouping, @collapseViewedFiles, @defaultModel, @defaultEffort, @defaultIntensity, @notifyOnComplete, @codexPath, @ghPath)
+        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, file_list_view, default_source, last_repo_path, findings_grouping, collapse_viewed, default_model, default_effort, default_intensity, notify_on_complete, codex_path, gh_path, open_review_ids, active_review_id)
+         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @fileListView, @defaultSource, @lastRepoPath, @findingsGrouping, @collapseViewedFiles, @defaultModel, @defaultEffort, @defaultIntensity, @notifyOnComplete, @codexPath, @ghPath, @openReviewIds, @activeReviewId)
          ON CONFLICT(id) DO UPDATE SET
            data_mode = @dataMode, data_theme = @dataTheme, left_width = @leftWidth,
            right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView,
@@ -1225,13 +1228,15 @@ export class ReviewStore {
            default_source = @defaultSource, last_repo_path = @lastRepoPath,
            findings_grouping = @findingsGrouping, collapse_viewed = @collapseViewedFiles,
            default_model = @defaultModel, default_effort = @defaultEffort, default_intensity = @defaultIntensity,
-           notify_on_complete = @notifyOnComplete, codex_path = @codexPath, gh_path = @ghPath`,
+           notify_on_complete = @notifyOnComplete, codex_path = @codexPath, gh_path = @ghPath,
+           open_review_ids = @openReviewIds, active_review_id = @activeReviewId`,
       )
-      // SQLite 不能绑定 boolean:布尔字段转 0/1
+      // SQLite 既不能绑定 boolean 也不能绑定数组:布尔转 0/1,列表转 JSON
       .run({
         ...s,
         collapseViewedFiles: s.collapseViewedFiles ? 1 : 0,
         notifyOnComplete: s.notifyOnComplete ? 1 : 0,
+        openReviewIds: JSON.stringify(s.openReviewIds ?? []),
       });
   }
 
