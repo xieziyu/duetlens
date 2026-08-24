@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { isProposalUndoBlocked, REVIEW_RETENTION_MS } from '@shared/domain';
+import { isProposalUndoBlocked, REVIEW_RETENTION_MS, scanDoneStatus } from '@shared/domain';
 import type {
   CodexModelInfo,
   Discussion,
@@ -166,6 +166,13 @@ const SESSION_FORWARDERS: {
     reason: payload.reason,
   }),
 };
+
+/**
+ * 冷启动收尾用的失败原因(见 {@link ReviewManager.failInterruptedRounds})。
+ * 说的是这条 review 自己身上发生过的事实,不借 agent 的口气,也不塞英文错误码。
+ */
+const ROUND_INTERRUPTED_BY_EXIT =
+  '上次退出 Duetlens 时这一轮机审还在跑,进程结束后就中断了 —— 不是 agent 报的错。';
 
 /**
  * 轮次失败的落库形态。turn 失败带得到 agent 归因;编排层自己抛的(source/网络/gh)只有原文,
@@ -756,6 +763,51 @@ export class ReviewManager extends EventEmitter {
     return this.store.pruneReviewsBefore(nowMs - REVIEW_RETENTION_MS);
   }
 
+  /**
+   * 把上次进程留下的「还在扫描中」收掉(轮次判失败、父状态补齐),返回处理的条数。
+   *
+   * 只在启动、尚无活跃会话时调用 —— 会话是进程内的活物,此刻库里任何 scanning 都必然是
+   * 上次退出时留下的,不必去猜它是否还在跑。这条判据同时要求进程唯一,故 main 在开库之前
+   * 先拿单实例锁。收尾后当前轮是 failed,失败卡上的「重试本轮」即可接手
+   * (见 {@link retryRound});已上报的 findings 一条不动。
+   */
+  failInterruptedRounds(): number {
+    let settled = 0;
+    for (const review of this.store.listReviews()) {
+      const current = this.store.getRound(review.id, review.currentRound);
+      const roundLeftScanning = current?.status === 'scanning';
+      /**
+       * 父记录还在说「扫描中」也要收:轮次与父状态是**两张表两次写**,而两条路径的写序还相反
+       * —— 跑完是先写父状态(ReviewSession.runStart)后收轮次,收尾是先收轮次后写父状态。
+       * 崩在任一个缝里都会留下一半,只看其中一边就会漏掉另一种。压根没有轮次记录的那种
+       * (createReview 与紧随的 startRound 之间崩过、或轮次表存在之前的存量行)同样落在这一支。
+       */
+      const reviewLeftScanning = review.status === 'scanning';
+      if (!roundLeftScanning && !reviewLeftScanning) continue;
+      /** 父状态已经翻过去了 = 这一轮其实跑完了,只是 done 还没落库。 */
+      const scanFinished = review.status !== 'scanning' && review.status !== 'failed';
+      // 这一步跑在 IPC 注册与建窗之前,settleRound 外发的轮次事件此刻没有订阅者,落地即丢;
+      // renderer 起来后首次拉取读到的就是收尾后的状态。
+      if (current && roundLeftScanning)
+        this.settleRound(
+          review.id,
+          current.round,
+          // 哪边已经落定就拿哪边去补另一边:拿一句「中断」盖掉真跑完的那一轮,
+          // 用户会看到一条已完成的 review 顶着中断原因和重试入口
+          scanFinished ? 'done' : 'failed',
+          scanFinished ? undefined : new Error(ROUND_INTERRUPTED_BY_EXIT),
+        );
+      if (reviewLeftScanning) {
+        // 反过来:轮次已经跑完(done / stopped)、只差父状态没落的,按正常口径补 ——
+        // 一律判失败等于把一轮真跑出了 findings 的机审说成失败。没有轮次记录的那种才是真失败。
+        const roundFinished = !roundLeftScanning && current != null && current.status !== 'failed';
+        this.store.setReviewStatus(review.id, roundFinished ? scanDoneStatus(review.source) : 'failed');
+      }
+      settled += 1;
+    }
+    return settled;
+  }
+
   /** 显式续接一个非活跃 review 的会话(app 重启后);已活跃则原样返回。 */
   async resumeReview(reviewId: string): Promise<Review> {
     if (!this.sessions.has(reviewId)) await this.resumeSession(reviewId);
@@ -1092,7 +1144,15 @@ export class ReviewManager extends EventEmitter {
         round,
       })
       .then(
-        () => this.settleRound(review.id, round, session.isStopped() ? 'stopped' : 'done'),
+        () => {
+          this.settleRound(review.id, round, session.isStopped() ? 'stopped' : 'done');
+          // 父状态压在收轮之后写:两次写库同一个写序(失败路径亦然),崩在缝里只会留下
+          // 「轮次已终态、父记录仍 scanning」这一种,冷启动据轮次结果反推即可。
+          // 反过来写就分不清这一轮是跑完还是被叫停 —— 两者的父状态是同一个终态。
+          const status = scanDoneStatus(review.source);
+          this.store.setReviewStatus(review.id, status);
+          this.forward({ reviewId: review.id, type: 'status', payload: status });
+        },
         (e: unknown) => {
           this.settleRound(review.id, round, 'failed', e);
           this.forward({ reviewId: review.id, type: 'status', payload: 'failed' });

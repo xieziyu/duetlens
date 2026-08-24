@@ -11,7 +11,7 @@ import { IpcEvents, type CompletionNotice, type ReviewEvent } from '@shared/ipc'
 
 // 开发态与打包版可能同时开着:各自独立 userData,否则两个进程写同一个 sqlite,
 // 且各自的内存态互相看不见对方的写入。DUETLENS_USER_DATA 可显式指向某份数据
-// (如直接开使用版的库排查问题),前提是确保只有一个实例在跑。ready 前必须设好。
+// (如直接开使用版的库排查问题)。ready 前必须设好 —— 单实例锁按这个目录加,见下。
 const userDataOverride = process.env.DUETLENS_USER_DATA;
 if (userDataOverride) {
   app.setPath('userData', path.resolve(userDataOverride));
@@ -25,6 +25,37 @@ const envReady = hydrateEnv();
 
 let manager: ReviewManager;
 let mainWindow: BrowserWindow | null = null;
+/** whenReady 里的初始化是否已走完(IPC 已注册、首个窗口已建)。 */
+let ready = false;
+
+/**
+ * 单实例锁。Electron 按 userData 目录加锁,所以开发态与打包版仍可并存(各自独立目录),
+ * 挡的是**同一份库被两个进程同时开着**。
+ *
+ * 这不只是「窗口别开两个」:冷启动收尾把库里所有 scanning 判成上次退出时的残留
+ * (见 ReviewManager.failInterruptedRounds),而两个进程彼此的会话在内存里互不可见 ——
+ * 后起的那个会把前一个**正在跑的**那一轮判成中断,两边随后还可能各自重试同一轮。
+ * 故必须在开库之前就把这件事定死;userData 已在上面设好,加锁才落在对的目录上。
+ */
+const singleInstance = app.requestSingleInstanceLock();
+if (!singleInstance) {
+  app.quit();
+} else {
+  // 再次点开时把已经在跑的那个窗口亮到前面,而不是让用户以为没反应
+  app.on('second-instance', () => {
+    // 初始化还没走完:窗口本来就要建出来,这会儿抢着建等于赶在 IPC 注册之前,拿到的是个空壳
+    if (!ready) return;
+    // macOS 关掉最后一个窗口后进程还活着(见 window-all-closed),mainWindow 此时是 null ——
+    // 直接返回的话,用户再点一次图标仍然什么都不发生,和没加这个处理器一样
+    if (!mainWindow) {
+      createWindow();
+      return;
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
 
 /** `ready-to-show` 迟迟不来(dev server 没起、渲染进程崩)也得把窗口放出来,否则只剩一个看不见的进程。 */
 const WINDOW_SHOW_TIMEOUT_MS = 5000;
@@ -106,6 +137,9 @@ function notifyNative(notice: CompletionNotice): void {
 }
 
 app.whenReady().then(async () => {
+  // quit 与 ready 是两条独立的路,拿不到锁时 ready 仍可能先到 —— 这条路上一步都不能往下走,
+  // 尤其不能开库:开了就等于两个进程同时持有同一个 sqlite 连接
+  if (!singleInstance) return;
   await envReady;
 
   const db = openDatabase(path.join(app.getPath('userData'), 'duetlens.db'));
@@ -113,6 +147,9 @@ app.whenReady().then(async () => {
 
   // 过期历史在建窗前清一次:此刻还没有活跃会话,删库不会抽走运行中会话的行。
   manager.pruneExpiredReviews();
+  // 同一个时机收上次退出时中断的机审:codex 会话随进程没了,库里那行还停在 scanning,
+  // 而 review tab 会跨重启恢复 —— 不收尾就是开屏一个永远转的进度条。
+  manager.failInterruptedRounds();
 
   const broadcast = (channel: string, payload: unknown) => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
@@ -142,6 +179,7 @@ app.whenReady().then(async () => {
   manager.on('review-event', (e: ReviewEvent) => notifier(e));
 
   createWindow();
+  ready = true;
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
