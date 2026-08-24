@@ -24,10 +24,11 @@ export interface TabState {
 
 /**
  * 同时开着的 tab 上限。后台 tab 是**挂载但隐藏**的(切回来不丢在途回复残文 / 动作流 / 草稿 /
- * 滚动位置),每一枚都压着一整份 diff DOM,故要有上限。与后端 `maxLiveSessions` 无关 ——
- * 开 tab 只读库、不占会话位。
+ * 滚动位置),每一枚都压着一整份 diff DOM,故要有上限 —— 拦的是内存,不是屏宽:
+ * 一屏放不下由 tab 条自己横滚接住(见 ReviewTabs 的 useStripScroll)。
+ * 与后端 `maxLiveSessions` 无关 —— 开 tab 只读库、不占会话位。
  */
-export const MAX_TABS = 6;
+export const MAX_TABS = 20;
 
 export const EMPTY_TABS: TabState = { tabs: [], activeId: null };
 
