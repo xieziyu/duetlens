@@ -1,0 +1,31 @@
+/* renderMarkdown 的块级排版。宿主(气泡 / finding 卡 / 提交预览)各自定基准字号,
+   这里一律继承 —— 标题只用字重、色阶与间距分节,一处气泡内不出现第二种正文字号。 */
+.md-h {
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--text);
+  margin: 14px 0 4px;
+}
+.md-h:first-child {
+  margin-top: 0;
+}
+/* h1/h2 在对话里少见,出现时基本是整段换题:多给一条分节线 */
+h1.md-h,
+h2.md-h {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+h1.md-h:first-child,
+h2.md-h:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.md-ol {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+.md-ol li {
+  margin: 3px 0;
+}
