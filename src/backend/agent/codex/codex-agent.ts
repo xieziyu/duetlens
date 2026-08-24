@@ -5,7 +5,9 @@ import {
   CodexItemType,
   CodexNotification,
   CodexServerRequest,
+  READ_ONLY_GATES,
   codexErrorKind,
+  type AskForApproval,
   type CodexErrorNotification,
   type CodexModel,
   type CodexTurnError,
@@ -21,6 +23,7 @@ import {
 } from './protocol';
 import { CODEX_TARGET_VERSION } from '@shared/codex';
 import { SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
+import { MCP_SERVER_NAME } from '@shared/mcp-contract';
 import type { CommandAction } from '@shared/agent-events';
 import type {
   AgentEvent,
@@ -34,7 +37,7 @@ import type {
 const MCP_TOKEN_ENV = 'DUETLENS_MCP_TOKEN';
 
 /**
- * 把关执行/写入/权限的反向审批 —— 只读 + approvalPolicy=never 的会话里一条都不该出现,
+ * 把关执行/写入/权限的反向审批 —— 只读 + 闸门全关的会话里一条都不该出现,
  * 故可当沙箱注入是否失效的哨兵。`mcpElicitation` **不在此列**:那是工具调用的确认,
  * 用户自己在 config.toml 里配的第三方 MCP server 也会发,被拒不能说明我们的注入没生效。
  */
@@ -50,6 +53,26 @@ export const POLICY_APPROVALS: ReadonlySet<string> = new Set([
 const norm = (v: string | undefined): string => (v ?? '').toLowerCase().replace(/[^a-z]/g, '');
 
 /**
+ * 回显的审批策略是否等于「不来问」。两版 codex 的说法都认:`'never'` 与闸门全关的 granular。
+ *
+ * 两侧都要判,少一侧就有一种漂移能蒙混过去:
+ * - **请求过的闸门逐个回显且严格为 `false`** —— 只查「现有值是否都为 false」的话,
+ *   `{ granular: {} }` 会因空集恒真而通过,于是一份根本没证实的策略被当成已生效。
+ *   闸门清单从 {@link READ_ONLY_GATES} 派生,不另抄一份。
+ * - **回显里多出来的闸门也必须关着** —— 多一个我们没请求过的开关意味着 codex 可能来问,
+ *   而「不该被问到」正是 {@link POLICY_APPROVALS} 那条兜底的前提。
+ *
+ * 导出仅供 spike:sandbox-guard 钉住上面这张真值表(assertReadOnly 本身要真 codex 才跑得起来)。
+ */
+export function isSilentApproval(policy: AskForApproval | undefined): boolean {
+  if (typeof policy === 'string') return norm(policy) === 'never';
+  const gates: Record<string, unknown> | undefined = policy?.granular;
+  if (!gates) return false;
+  if (!Object.keys(READ_ONLY_GATES).every((gate) => gates[gate] === false)) return false;
+  return Object.values(gates).every((open) => open === false);
+}
+
+/**
  * 证实只读注入**真的落地**,否则拒绝开工。见 {@link SANDBOX_NOT_APPLIED_CODE} ——
  * 请求发出去不算数,codex 会静默吞掉它不认识的字段。
  *
@@ -59,8 +82,9 @@ const norm = (v: string | undefined): string => (v ?? '').toLowerCase().replace(
 function assertReadOnly(res: ThreadStartResponse | ThreadResumeResponse): void {
   const sandbox = (res as EffectiveThreadPolicy).sandbox?.type;
   const approval = (res as EffectiveThreadPolicy).approvalPolicy;
-  if (norm(sandbox) === 'readonly' && norm(approval) === 'never') return;
-  const seen = `sandbox=${sandbox ?? '(未回显)'}, approvalPolicy=${approval ?? '(未回显)'}`;
+  if (norm(sandbox) === 'readonly' && isSilentApproval(approval)) return;
+  const shown = approval === undefined ? '(未回显)' : JSON.stringify(approval);
+  const seen = `sandbox=${sandbox ?? '(未回显)'}, approvalPolicy=${shown}`;
   throw new Error(
     `${SANDBOX_NOT_APPLIED_CODE} codex 没有按只读沙箱起会话(${seen})。` +
       `本机 codex ${res.thread.cliVersion ?? '版本未知'},这版 Duetlens 对齐的是 ${CODEX_TARGET_VERSION}。`,
@@ -85,7 +109,7 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
     this.server = new CodexAppServer({
       codexBin: opts.codexBin,
       codexHome: opts.codexHome,
-      trustedMcpServers: ['duetlens'],
+      trustedMcpServers: [MCP_SERVER_NAME],
       onLog: opts.onLog,
     });
     this.server.on('notification', (m, p) => this.mapNotification(m, p));
@@ -142,29 +166,33 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
 
   async startConversation(opts: StartConversationOptions): Promise<ConversationHandle> {
     await this.launchServer(opts.mcpToken);
-    const res = await this.server.threadStart({
-      cwd: opts.cwd,
-      sandbox: 'read-only',
-      approvalPolicy: 'never',
-      baseInstructions: opts.baseInstructions,
-      model: opts.model || undefined,
-      config: this.threadConfig(opts),
-    });
+    const res = await this.server.withReadOnlyApproval((approvalPolicy) =>
+      this.server.threadStart({
+        cwd: opts.cwd,
+        sandbox: 'read-only',
+        approvalPolicy,
+        baseInstructions: opts.baseInstructions,
+        model: opts.model || undefined,
+        config: this.threadConfig(opts),
+      }),
+    );
     this.acceptOrStop(res);
     return { conversationId: res.thread.id, model: res.model || undefined };
   }
 
   async resumeConversation(opts: ResumeConversationOptions): Promise<ConversationHandle> {
     await this.launchServer(opts.mcpToken);
-    const res = await this.server.threadResume({
-      threadId: opts.conversationId,
-      cwd: opts.cwd,
-      sandbox: 'read-only',
-      approvalPolicy: 'never',
-      baseInstructions: opts.baseInstructions,
-      model: opts.model || undefined,
-      config: this.threadConfig(opts),
-    });
+    const res = await this.server.withReadOnlyApproval((approvalPolicy) =>
+      this.server.threadResume({
+        threadId: opts.conversationId,
+        cwd: opts.cwd,
+        sandbox: 'read-only',
+        approvalPolicy,
+        baseInstructions: opts.baseInstructions,
+        model: opts.model || undefined,
+        config: this.threadConfig(opts),
+      }),
+    );
     this.acceptOrStop(res);
     return { conversationId: res.thread.id, model: res.model || undefined };
   }
@@ -192,9 +220,9 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
   private threadConfig(opts: StartConversationOptions): Record<string, unknown> | undefined {
     const config: Record<string, unknown> = {};
     if (opts.mcpUrl) {
-      const duetlens: Record<string, unknown> = { url: opts.mcpUrl };
-      if (opts.mcpToken) duetlens.bearer_token_env_var = MCP_TOKEN_ENV;
-      config.mcp_servers = { duetlens };
+      const server: Record<string, unknown> = { url: opts.mcpUrl };
+      if (opts.mcpToken) server.bearer_token_env_var = MCP_TOKEN_ENV;
+      config.mcp_servers = { [MCP_SERVER_NAME]: server };
     }
     if (opts.reasoningEffort) config.model_reasoning_effort = opts.reasoningEffort;
     return Object.keys(config).length ? config : undefined;
@@ -253,6 +281,7 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
             tool: call.tool,
             status: call.status,
             args: call.arguments,
+            undelivered: call.error?.message,
             durationMs: call.durationMs ?? undefined,
           });
         } else if (item?.type === CodexItemType.commandExecution) {

@@ -10,6 +10,12 @@
  * 有意不做成模板 —— 那段是写给模型读的说明,拼接会毁掉可读性,且它已是锁定段。
  */
 
+/**
+ * codex 那侧看到的 server 名。注入 config、判「这次调用是不是我们自己的 server」都取它 ——
+ * 后者是安全判据(见 ReviewSession 对未送达调用的兜底),拼错不会报错,只会让兜底静默失效。
+ */
+export const MCP_SERVER_NAME = 'duetlens';
+
 export const MCP_TOOL = {
   reportFinding: 'report_finding',
   updateFinding: 'update_finding',

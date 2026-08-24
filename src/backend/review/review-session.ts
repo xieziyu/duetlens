@@ -27,7 +27,12 @@ import {
   type WriteSummaryInput,
 } from '@shared/domain';
 import { findDuplicate, isRestatedFinding } from '@shared/finding-dedupe';
-import { FOLLOWUP_REPLY_FAILED_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
+import {
+  FOLLOWUP_REPLY_FAILED_CODE,
+  MCP_UNDELIVERED_CODE,
+  SANDBOX_NOT_APPLIED_CODE,
+} from '@shared/ipc';
+import { MCP_SERVER_NAME } from '@shared/mcp-contract';
 import type { AgentErrorKind } from '@shared/agent-events';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
 import type { ReviewStore } from '../db/review-store';
@@ -928,7 +933,7 @@ export class ReviewSession {
 
     cleanup.push(
       this.agent.streamEvents((e) => {
-        // 注入的 approvalPolicy 是 never,codex 本不该来问这类审批;问了就说明只读策略没生效。
+        // 注入的 approvalPolicy 把审批闸门全关了,codex 本不该来问这类审批;问了就说明只读策略没生效。
         // 与握手时的读回校验同一个判据,这里是它的兜底。
         if (e.kind === 'approval' && !e.expected && e.gate === 'policy') {
           finish({
@@ -941,6 +946,21 @@ export class ReviewSession {
           // 「不知道它在什么策略下跑」。拆掉会话让它真的停手:打断需要对方配合,
           // 这里已经不能假定对方守规矩;何况会话留着,下一条追问又会喂进同一个坏策略里。
           // 拆的过程再出错也别变成进程级 unhandled rejection —— 判死已经落下了
+          void this.dispose().catch(() => undefined);
+          return;
+        }
+        // codex 没把对自建 MCP 的调用交给我们 —— findings 回不来了。turn 会照常跑完并
+        // completed,不判死的话这一轮会以「审核完成,0 findings」收场,和「真的没问题」
+        // 长得一模一样。判据只认「未送达」这一半:工具自己回的业务拒绝(schema 不合法等)
+        // agent 看得到原文、改对了会重来,那是正常来回,不是故障。
+        if (e.kind === 'tool-call' && e.server === MCP_SERVER_NAME && e.undelivered) {
+          finish({
+            kind: 'turn-failed',
+            turnId: mine ?? '',
+            error: `${MCP_UNDELIVERED_CODE} codex 没把 ${e.tool} 交给 Duetlens:${e.undelivered}`,
+            errorKind: 'mcp-undelivered',
+          });
+          // 同上:拆会话。回传链路断在 codex 那侧,留着会话只会让下一条追问也白跑。
           void this.dispose().catch(() => undefined);
           return;
         }

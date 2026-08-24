@@ -28,7 +28,7 @@ import {
 } from '@shared/domain';
 import type { CodeSearchInput, CodeSearchResult } from '../source/source';
 import { APP_VERSION } from '@shared/version';
-import { MCP_ARG, MCP_TOOL } from '@shared/mcp-contract';
+import { MCP_ARG, MCP_SERVER_NAME, MCP_TOOL } from '@shared/mcp-contract';
 
 const CATEGORY_HINT = `建议取值:${FINDING_CATEGORIES.join(' / ')}`;
 
@@ -581,7 +581,7 @@ export class DuetlensMcpServer extends EventEmitter {
 
   private buildMcpServer(): Server {
     const server = new Server(
-      { name: 'duetlens', version: APP_VERSION },
+      { name: MCP_SERVER_NAME, version: APP_VERSION },
       { capabilities: { tools: {} } },
     );
 

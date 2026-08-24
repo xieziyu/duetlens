@@ -61,6 +61,14 @@ const COPY: Record<AgentErrorKind, RoundErrorCopy> = {
   },
   'sandbox-not-applied': { ...SANDBOX_BREACH, retryable: false },
   'codex-version-mismatch': { ...VERSION_MISMATCH, retryable: false },
+  'mcp-undelivered': {
+    title: 'codex 没把工具调用交给 Duetlens,已中止',
+    advice:
+      'agent 上报 findings 的通道断在 codex 那一侧 —— 它自己就把调用拒了,一条都没到货。' +
+      '再跑也是空手,而且「0 findings」和「真的没问题」在界面上长得一样,所以直接停了。' +
+      `多为本机 codex 与这版 Duetlens 的审批策略对不上;这版对齐的是 codex ${CODEX_TARGET_VERSION}。`,
+    retryable: false,
+  },
   other: {
     title: '这一轮机审没能跑完',
     advice: '',

@@ -126,15 +126,17 @@ async function main() {
     await codex.initialize({ name: 'duetlens', version: APP_VERSION });
     log('codex', 'initialized');
 
-    const thread = await codex.threadStart({
-      cwd: workdir,
-      approvalPolicy: 'never',
-      sandbox: 'read-only',
-      baseInstructions: BASE_INSTRUCTIONS,
-      config: {
-        mcp_servers: { duetlens: { url: mcpUrl, bearer_token_env_var: 'DUETLENS_MCP_TOKEN' } },
-      },
-    });
+    const thread = await codex.withReadOnlyApproval((approvalPolicy) =>
+      codex.threadStart({
+        cwd: workdir,
+        approvalPolicy,
+        sandbox: 'read-only',
+        baseInstructions: BASE_INSTRUCTIONS,
+        config: {
+          mcp_servers: { duetlens: { url: mcpUrl, bearer_token_env_var: 'DUETLENS_MCP_TOKEN' } },
+        },
+      }),
+    );
     log('codex', `thread/start → ${thread.thread.id}`);
 
     const turn = await codex.turnStart({

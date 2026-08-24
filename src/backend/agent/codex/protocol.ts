@@ -25,9 +25,56 @@ export type AskForApproval =
     };
 
 // ---- initialize ----
+
+/**
+ * 客户端单向声明的能力(0.149 起有;更早的 codex 把整个字段当未知字段静默丢弃,
+ * 故无条件发,不必按版本分叉)。
+ *
+ * - `experimentalApi`:granular 审批策略的前提,见 {@link READ_ONLY_APPROVAL}。
+ * - `requestAttestation`:恒 false —— 开了 codex 会发 `attestation/generate` 反向请求,
+ *   而我们答不了它,一条答不上来的反向请求就是一个卡死的 turn。
+ */
+export interface InitializeCapabilities {
+  experimentalApi: boolean;
+  requestAttestation: boolean;
+}
+
+export const CLIENT_CAPABILITIES: InitializeCapabilities = {
+  experimentalApi: true,
+  requestAttestation: false,
+};
+
 export interface InitializeParams {
   clientInfo: { name: string; version: string; title?: string };
+  capabilities?: InitializeCapabilities;
 }
+
+/**
+ * 只读审核会话的审批策略:**五个闸门全关** —— 既不来问,也不因为没问就拒。
+ *
+ * 为什么不是 `'never'`:0.149 起 codex 把 MCP 工具调用也纳入审批,而 `'never'` 的语义是
+ * 「不问 → 直接拒」,于是 `report_finding` 这类回传工具一律以 isError 收场
+ * (原文:MCP tool call requires approval, but approval policy is never),
+ * 机审跑完一条 finding 都落不了库。只有 granular 能表达「不问且放行」。
+ *
+ * 全关也是 {@link CodexServerRequest} 那套兜底的前提:这几个闸门开着才会有政策类反向审批,
+ * 关着还被问到,就说明只读注入没生效。
+ */
+export const READ_ONLY_GATES = {
+  sandbox_approval: false,
+  rules: false,
+  skill_approval: false,
+  request_permissions: false,
+  mcp_elicitations: false,
+} as const;
+
+export const READ_ONLY_APPROVAL: AskForApproval = { granular: { ...READ_ONLY_GATES } };
+
+/**
+ * 认不出 granular 的 codex 上的同义说法。**退回它是安全的**:不认 granular 的版本,
+ * 恰好就是 `'never'` 仍表示「不问且放行」的那些版本 —— 两个条件同源于 0.149 那次改动。
+ */
+export const LEGACY_READ_ONLY_APPROVAL: AskForApproval = 'never';
 
 // ---- thread/start ----
 export interface ThreadStartParams {
@@ -47,7 +94,8 @@ export interface ThreadStartParams {
  * 这几个字段是只读注入能否被证实的唯一途径,见 {@link SANDBOX_NOT_APPLIED_CODE}。
  */
 export interface EffectiveThreadPolicy {
-  approvalPolicy?: string;
+  /** 回显与请求同形:`'never'` 是字符串,granular 回来的是对象 */
+  approvalPolicy?: AskForApproval;
   sandbox?: { type?: string; [k: string]: unknown } | null;
 }
 
@@ -287,5 +335,16 @@ export interface McpToolCallItem {
   tool: string;
   status: string;
   arguments?: unknown;
+  /** server 答过话就有值(**包括**它主动回的 isError,拒绝原文在 content 里) */
+  result?: { content?: unknown } | null;
+  /**
+   * **codex 自己**没能把这次调用交给 server 时的原因(审批拒绝、传输失败)。
+   *
+   * 这是「未送达」与「server 已处理后拒绝」唯一可靠的分界:两者 `status` 都是 `'failed'`,
+   * 但业务拒绝是 `error: null` + `result` 有内容(agent 看得到原文,能改对了重来),
+   * 未送达是 `error` 有值 + `result: null`(agent 怎么重试都到不了我们这儿)。
+   * 实测两种形状见 review-session 里对未送达的兜底。
+   */
+  error?: { message: string } | null;
   durationMs?: number | null;
 }

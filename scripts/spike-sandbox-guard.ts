@@ -2,7 +2,7 @@
  * 确定性验证「只读沙箱注入失效」的判据(不走 codex/不烧 token)。
  *
  * 背景:codex 对请求里的未知字段是**静默忽略**的,所以 thread/start 把 sandbox 送出去
- * 不等于它生效;又因为注入的 approvalPolicy 是 never,策略没落地时 codex 通常**不会来问**,
+ * 不等于它生效;又因为注入的 approvalPolicy 把审批闸门全关了,策略没落地时 codex 通常**不会来问**,
  * 没有天然哨兵。握手侧的读回校验在 CodexAgent(需真 codex,见 assertReadOnly),
  * 这里验的是 turn 内那条兜底:
  *
@@ -21,9 +21,14 @@ import { openDatabase } from '../src/backend/db/database';
 import { ReviewStore } from '../src/backend/db/review-store';
 import { AgentTurnError, ReviewSession } from '../src/backend/review/review-session';
 import { describeRoundFailure } from '../src/backend/review/review-manager';
-import { CodexServerRequest, DECLINE_BY_METHOD } from '../src/backend/agent/codex/protocol';
-import { POLICY_APPROVALS } from '../src/backend/agent/codex/codex-agent';
-import { SANDBOX_NOT_APPLIED_CODE } from '../src/shared/ipc';
+import {
+  CodexServerRequest,
+  DECLINE_BY_METHOD,
+  READ_ONLY_GATES,
+} from '../src/backend/agent/codex/protocol';
+import { POLICY_APPROVALS, isSilentApproval } from '../src/backend/agent/codex/codex-agent';
+import { MCP_UNDELIVERED_CODE, SANDBOX_NOT_APPLIED_CODE } from '../src/shared/ipc';
+import { MCP_SERVER_NAME, MCP_TOOL } from '../src/shared/mcp-contract';
 import type {
   AgentEvent,
   ConversationalAgent,
@@ -207,13 +212,96 @@ function everyApprovalIsASentinel(): void {
   log('✓ 审批方法表与哨兵集合同步,拒绝说法齐备');
 }
 
+/**
+ * 6. codex 没把调用交给自建 MCP —— findings 回不来,本轮必须判死。
+ *
+ * 这条兜底最容易被写过头:工具自己回的业务拒绝(schema 不合法)也是 `status: 'failed'`,
+ * 而那种 agent 看得到原文、改对了会重来,是正常来回。分界不在措辞上,在 `undelivered`
+ * 有没有值 —— 未送达才有,业务拒绝没有。两种形状都在这里钉住。
+ */
+async function undeliveredMcpCallKillsRound(): Promise<() => Promise<void>> {
+  const f = fixture((agent, turnId) => {
+    agent.emitEvent({
+      kind: 'tool-call',
+      server: MCP_SERVER_NAME,
+      tool: MCP_TOOL.reportFinding,
+      status: 'failed',
+      undelivered: 'MCP tool call requires approval, but approval policy is never',
+    });
+    // 未送达之后 turn 照样会 completed —— 正是这一点让它伪装成「审核完成,0 findings」
+    agent.emitEvent({ kind: 'turn-completed', turnId });
+  });
+  await assert.rejects(
+    () => f.session.start({ cwd: process.cwd(), providers: f.providers, round: 1 }),
+    (e: Error) =>
+      e instanceof AgentTurnError &&
+      e.errorKind === 'mcp-undelivered' &&
+      e.message.includes(MCP_UNDELIVERED_CODE),
+    'codex 侧拒掉的 MCP 调用 = 回传链路断了,本轮要以 mcp-undelivered 失败',
+  );
+  assert.equal(f.agent.disposed, true, '同沙箱那条:会话得真拆掉,留着下一条追问也白跑');
+  log('✓ 未送达的 MCP 调用 → 本轮判死并拆会话');
+  return () => f.session.dispose();
+}
+
+/** 7. 工具自己回的业务拒绝走同一个事件 —— 不许被上面那条误杀。 */
+async function toolRejectionIsHarmless(): Promise<() => Promise<void>> {
+  const f = fixture((agent, turnId) => {
+    agent.emitEvent({
+      kind: 'tool-call',
+      server: MCP_SERVER_NAME,
+      tool: MCP_TOOL.writeSummary,
+      // 实测形状:server 答过话了,拒绝原文在 result 里,故 undelivered 无值
+      status: 'failed',
+    });
+    agent.emitEvent({ kind: 'turn-completed', turnId });
+  });
+  await f.session.start({ cwd: process.cwd(), providers: f.providers, round: 1 });
+  assert.equal(f.agent.disposed, false, 'server 已答话的业务拒绝不该拆会话 —— agent 还要改对了重来');
+  log('✓ 工具回的业务拒绝 → 不误判为链路断开');
+  return () => f.session.dispose();
+}
+
+/**
+ * 8. 回显策略的真值表。这里是**失败关闭**的那一侧:判错成「静默」就等于放一份没证实的
+ * 策略过关,而 assertReadOnly 之后不会再问第二遍。
+ *
+ * 最容易漏的是空 granular —— 只查「现有值是否都为 false」的写法会因空集恒真而放行。
+ */
+function silentApprovalTruthTable(): void {
+  const gates = { ...READ_ONLY_GATES };
+  const cases: [unknown, boolean, string][] = [
+    ['never', true, '旧版说法'],
+    [{ granular: gates }, true, '我们请求的那份,原样回显'],
+    [{ granular: {} }, false, '空 granular:什么都没证实,不能因空集恒真而放行'],
+    [{ granular: { ...gates, mcp_elicitations: true } }, false, '有闸门开着'],
+    [
+      { granular: Object.fromEntries(Object.entries(gates).slice(1)) },
+      false,
+      '少回显一个闸门:那一个的状态是未知,不是关',
+    ],
+    [{ granular: { ...gates, future_gate: true } }, false, '多出一个我们没请求过的闸门且开着'],
+    [{ granular: { ...gates, future_gate: false } }, true, '多出的闸门关着 —— 仍算静默'],
+    ['on-request', false, '会来问'],
+    [undefined, false, '没回显 = 没证实'],
+  ];
+  for (const [policy, expected, why] of cases) {
+    const got = isSilentApproval(policy as Parameters<typeof isSilentApproval>[0]);
+    assert.equal(got, expected, `${why}:应判 ${expected},实得 ${got}`);
+  }
+  log('✓ 回显策略真值表:空/缺项/多出的 granular 都不放行');
+}
+
 async function main(): Promise<void> {
   everyApprovalIsASentinel();
   launchFailuresKeepTheirKind();
+  silentApprovalTruthTable();
   for (const t of [
     unexpectedApprovalKillsRound,
     expectedApprovalIsHarmless,
     declinedMcpElicitationIsNotABreach,
+    undeliveredMcpCallKillsRound,
+    toolRejectionIsHarmless,
   ]) {
     const dispose = await t();
     await dispose(); // MCP server 不关,event loop 就一直醒着,进程退不了

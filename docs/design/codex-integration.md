@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 审核 agent 完全建立在 codex-cli 的 `app-server` 之上。下列是**实测结论**(2026-07-18 在 0.144.5 字节级验证,2026-07-20 在 0.144.1 端到端复跑并修正),不是文档臆测。协议随版本演进,升级后重新导出比对。
+> 审核 agent 完全建立在 codex-cli 的 `app-server` 之上。下列是**实测结论**(0.144.x 字节级验证,0.149.1 端到端复跑并修正),不是文档臆测。协议随版本演进,升级后重新导出比对。
 
 ## 关键假设验证
 
@@ -15,6 +15,8 @@
 | token 膨胀有治理原语 | ✅ 内置 auto-compact + `thread/tokenUsage/updated` |
 
 **版本稳定性**:`generate-ts` 全量导出在 **0.144.1 → 0.144.6 逐字节完全一致**(方法名 / 通知名 / 反向请求名全同),即 0.144.x 内 wire 契约无变化。升级到不同 minor 时按此法重导比对。我们只手写最小协议子集,全量重导有专门脚本。
+
+**但 wire 契约没变不等于没坏**:0.149 那次改动一个字段都没动,改的是 `approvalPolicy: "never"` 的**语义**(见下节)。重导比对只能证伪,证实还得端到端跑一轮。
 
 ## 会话 / turn 映射
 
@@ -40,9 +42,39 @@
 
 codex 通过 **server→client 反向请求**要求授权,client 必须应答,否则 turn **卡死**。
 
-**坑(已验证)**:即便 `approvalPolicy: "never"` + `sandbox: "read-only"`,codex 仍会在**每次** MCP 工具调用前发 elicitation。故 client 对**自建受信工具**自动 accept 是架构必需件(另一条路是 `AskForApproval::granular{ mcp_elicitations:false }`)。`exec` / `applyPatch` 类审批在 review-only 下一律拒绝(只读 sandbox 下实测未触发)。
+**坑(已验证)**:即便审批闸门全关 + `sandbox: "read-only"`,codex 仍会在**每次** MCP 工具调用前发 elicitation(granular 里把 `mcp_elicitations` 关掉也照发)。故 client 对**自建受信工具**自动 accept 是架构必需件。`exec` / `applyPatch` 类审批在 review-only 下一律拒绝(只读 sandbox 下实测未触发)。
 
 反向审批统一归一成 `approval` 领域事件:受信 accept 标记为预期内,其余拒绝并上浮供 UI 审批卡呈现。
+
+### 为什么审批策略不是 `never`
+
+0.149 起 codex 把 **MCP 工具调用也纳入审批**,而 `"never"` 的语义是「不问 → 直接拒」,于是 `report_finding` 这类回传工具一律以 isError 收场(原文:`MCP tool call requires approval, but approval policy is never`),机审跑得完却一条 finding 都落不了库 —— 没有任何一处报错。能表达「不问且放行」的只有 `AskForApproval::granular` 五闸全关,而它需要 `initialize` 里声明 `capabilities.experimentalApi`。
+
+更早的 codex 不认 granular,但那些版本上 `"never"` 仍是「不问且放行」—— 两个条件同源于同一次改动,所以**先要 granular、被拒退回 `never`** 这条退路是安全的。协商在 `CodexAppServer.withReadOnlyApproval`(策略随连接不随 thread),只在拒绝形状像「策略不认」时退:放宽成「任何错误都退」等于把真实故障悄悄降级成上面那种最难查的失败。
+
+那条「同源于同一次改动」是**推断,不是实测**(手上只有 0.149.0-alpha.4.1 与 0.149.1,两个都接受 granular,谁也走不进回退分支)。所以不靠它兜底:退回之后若 `never` 恰好连 MCP 调用一并拒了,下面那条判据会把这一轮判死。
+
+连带的两条约束:
+
+- `capabilities` 只能在握手时发对一次 —— 一条连接**只 initialize 一次**(再来是 `-32600 Already initialized`);好在 codex 静默忽略未知字段,旧版收到 `capabilities` 会直接丢掉,不必按版本分叉。
+- `requestAttestation` 恒 false:开了 codex 会发 `attestation/generate` 反向请求,而我们答不了它,一条答不上来的反向请求就是一个卡死的 turn。
+
+### 回传链路断了要判死本轮
+
+codex 在自己那侧拒掉对自建 MCP 的调用时,turn **照常跑完并 completed** —— 用户看到的是「审核完成,0 findings」,与「真的没问题」在界面上一模一样。故 `ReviewSession` 见到未送达的调用即判死本轮(`MCP_UNDELIVERED_CODE`)并拆掉会话。
+
+判据是**结构性**的,不认措辞 —— 两种失败的 `status` 都是 `'failed'`,但形状不同(实测):
+
+| 情形 | `error` | `result` | 该怎么办 |
+| --- | --- | --- | --- |
+| 我们 server 主动回 isError(schema 不合法) | `null` | 有内容,拒绝原文在 `content` 里 | 正常来回,agent 改对了会重来 |
+| codex 侧拒绝(审批策略、传输起不来) | 有值 | `null` | 重试也到不了我们这儿,判死 |
+
+**不要把所有 `failed` 都升级成整轮失败** —— 那会把业务拒绝也判死,而那本是 agent 自我修正的正常路径。回归钉在 `npm run spike:sandbox-guard`,两种形状各一条。
+
+### MCP 工具默认是 deferred 的
+
+0.149 起 MCP 工具不再进模型的初始 tool list(`tool_search_always_defer_mcp_tools` 已是恒开),要经 code mode 检索才拿得到,调用最终仍以 `item.type === "mcpToolCall"` 到货(item id 带 `exec-` 前缀)。**实测不需要为此改提示词**:只要策略允许调用,agent 自己就会去找。
 
 ## 能观测到什么,不能观测到什么
 

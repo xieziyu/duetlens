@@ -209,12 +209,24 @@ export const FOLLOWUP_REPLY_FAILED_CODE = 'DUETLENS_FOLLOWUP_REPLY_FAILED';
  * codex 对请求里的未知字段是**静默忽略**的(实测多送一个字段照常走到业务逻辑),
  * 所以 thread/start 把 `sandbox` 送出去不等于它生效:字段哪天改名或换枚举,我们会
  * 「发送成功」而 codex 按自己的默认策略跑,审核 agent 就不再是只读的,且全程无一句报错。
- * 又因为注入的 `approvalPolicy` 是 never,这种情况下 codex **不会来问**,没有天然的哨兵。
+ * 又因为注入的 `approvalPolicy` 把审批闸门全关了,这种情况下 codex **不会来问**,没有天然的哨兵。
  *
  * 故一律失败关闭:握手读回策略、turn 里收到本不该出现的审批请求,两处都判死本轮。
  * 嵌进 message 的理由同 {@link FOLLOWUP_REPLY_FAILED_CODE}:IPC 只把 message 串过去。
  */
 export const SANDBOX_NOT_APPLIED_CODE = 'DUETLENS_SANDBOX_NOT_APPLIED';
+
+/**
+ * codex 没把对自建 MCP 的调用交给我们 —— **findings 的回传链路断了**。
+ *
+ * 与沙箱那条同属「跑得下去但结果不可信」:codex 在自己那侧就把调用拒了(审批策略不合、
+ * 传输起不来),turn 照常跑完、照常 completed,而 report_finding / write_summary 一条都没到货。
+ * 不判死的话,用户看到的是「审核完成,0 findings」—— 与「真的没问题」长得一模一样。
+ *
+ * 判据是**结构性**的,不认措辞:未送达是 `error` 有值,而工具自己回的业务拒绝是
+ * `error: null` + result 带原文。后者是 agent 能改对了重来的,不在此列。
+ */
+export const MCP_UNDELIVERED_CODE = 'DUETLENS_MCP_UNDELIVERED';
 
 /** 正在跑的一条审核;满载提示逐条列出,可跳过去看或叫停。 */
 export interface BusyReview {

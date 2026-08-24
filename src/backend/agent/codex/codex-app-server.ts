@@ -2,10 +2,15 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { resolveTool } from '../../config/tool-paths';
 import { JsonRpcConnection } from './jsonrpc';
+import { isApprovalPolicyUnsupported } from '@shared/codex';
 import {
+  CLIENT_CAPABILITIES,
   CodexMethod,
   CodexServerRequest,
   DECLINE_BY_METHOD,
+  LEGACY_READ_ONLY_APPROVAL,
+  READ_ONLY_APPROVAL,
+  type AskForApproval,
   type InitializeParams,
   type McpServerElicitationRequestParams,
   type McpServerElicitationRequestResponse,
@@ -43,6 +48,8 @@ export class CodexAppServer extends EventEmitter {
   private child?: ChildProcessWithoutNullStreams;
   private rpc?: JsonRpcConnection;
   private readonly trusted: Set<string>;
+  /** 协商下来的审批策略;认过一次就不再重试(策略随连接,不随 thread) */
+  private approvalPolicy?: AskForApproval;
 
   constructor(private readonly opts: CodexAppServerOptions = {}) {
     super();
@@ -72,12 +79,54 @@ export class CodexAppServer extends EventEmitter {
     });
   }
 
+  /**
+   * 握手。**一条连接只握一次**(再来一次是 `-32600 Already initialized`),所以这里没有
+   * 「先试后退」的余地 —— 能力声明只能一次发对。发的是 {@link CLIENT_CAPABILITIES},
+   * 不认识它的旧版 codex 会把整个字段当未知字段丢掉,不必按版本分叉。
+   */
   async initialize(clientInfo: InitializeParams['clientInfo']): Promise<unknown> {
-    return this.rpcOrThrow().request(CodexMethod.initialize, { clientInfo });
+    return this.rpcOrThrow().request(CodexMethod.initialize, {
+      clientInfo,
+      capabilities: CLIENT_CAPABILITIES,
+    });
   }
 
   async listModels(params: ModelListParams = {}): Promise<ModelListResponse> {
     return this.rpcOrThrow().request<ModelListResponse>(CodexMethod.modelList, params);
+  }
+
+  /**
+   * 把「只读且静默」翻成本机 codex 认的那种说法:先要 {@link READ_ONLY_APPROVAL}(granular),
+   * 被拒再退 {@link LEGACY_READ_ONLY_APPROVAL}。`start` 会被调一次或两次,收到策略后自己发
+   * thread/start 或 thread/resume。
+   *
+   * 为什么退得起:握手不能重来(一条连接只 initialize 一次),但 thread/start 被拒时并没有
+   * 建出 thread,原地换个说法重发既安全也不烧 token。
+   *
+   * **退的条件是拒绝的形状像「策略不认」**(判据与其宽窄的取舍见 `isApprovalPolicyUnsupported`
+   * —— 它有意认下所有 serde 形状拒绝,不止点名 granular 的那句)。不放宽成「任何错误都退」:
+   * 真退错了,拿到的会是最难查的那种失败 —— 会话建得起来、turn 跑得完、一条 finding 都回不来。
+   * 退不动时抛第二次的错 —— 那次用的是最保守的说法,更接近真因。
+   *
+   * 退回后**并非无人看管**:若那个版本上 `'never'` 恰好连 MCP 调用一并拒了,ReviewSession
+   * 对未送达调用的兜底会把这一轮判死(见 `MCP_UNDELIVERED_CODE`),不会静默变成 0 findings。
+   */
+  async withReadOnlyApproval<T>(start: (approvalPolicy: AskForApproval) => Promise<T>): Promise<T> {
+    if (this.approvalPolicy) return start(this.approvalPolicy);
+    try {
+      const res = await start(READ_ONLY_APPROVAL);
+      this.approvalPolicy = READ_ONLY_APPROVAL;
+      return res;
+    } catch (e) {
+      const message = (e as Error).message;
+      if (!isApprovalPolicyUnsupported(message)) throw e;
+      this.opts.onLog?.(
+        `codex 不认 granular 审批策略(${message}),退回 ${LEGACY_READ_ONLY_APPROVAL}`,
+      );
+      const res = await start(LEGACY_READ_ONLY_APPROVAL);
+      this.approvalPolicy = LEGACY_READ_ONLY_APPROVAL;
+      return res;
+    }
   }
 
   async threadStart(params: ThreadStartParams): Promise<ThreadStartResponse> {
