@@ -63,7 +63,8 @@
   flex: none;
   opacity: 0.8;
 }
-/* 本地分支这档的 ref 就是整个标签(标题与它同名,已被去重),长分支名全靠它自己截 */
+/* 身份(PR #号 / 分支名):这枚 tab 认人的那半句,故最后才轮到被截。
+   它是唯一按内容占宽的项,标题只吃它剩下的 —— 见下面 .ttl 的 flex-basis */
 .rev-tab .lbl {
   flex: 0 1 auto;
   min-width: 0;
@@ -73,10 +74,10 @@
   font-size: 11.5px;
 }
 
-/* 两者都能缩,但先缩标题:收缩量按基准宽 × 系数分配,给标题一个大系数,
-   ref(它是这枚 tab 的身份)就只在标题已经缩没了之后才轮到被截 */
+/* 基准宽取 0 再 grow:标题占的永远只是身份用剩的空间,收缩轮不到身份头上。
+   (按 flex-shrink 系数分配是**按比例**的,系数开到 100 也只是让身份少截一点、不是不截) */
 .rev-tab .ttl {
-  flex: 0 100 auto;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -183,4 +184,39 @@
 }
 .rev-tabs .tab-notice button:hover {
   text-decoration: underline;
+}
+
+/* tab 悬浮卡:答「这枚 tab 是哪条 review」—— 项目 + 身份一行,完整标题一行。
+   fixed 而非 absolute:tabs-strip 会横向滚动,绝对定位的卡片会被它的 overflow 裁掉。
+   位置由 JS 按实测矩形给。 */
+.rev-tabs .tab-tip {
+  position: fixed;
+  z-index: 65;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 320px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-3);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.28);
+  font-size: 11.5px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+/* 身份不折行:它是认人的那半句,折了反而读不出边界 */
+.rev-tabs .tab-tip .tip-id {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+}
+/* 标题折行,但封到两行:长 PR 标题原样铺开会变成一堵墙 */
+.rev-tabs .tab-tip .tip-ttl {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--text);
 }

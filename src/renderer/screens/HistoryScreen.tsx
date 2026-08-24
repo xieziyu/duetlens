@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RecentReview } from '@shared/ipc';
 import { REVIEW_RETENTION_DAYS, REVIEW_RETENTION_MS, type ReviewStatus, type SourceKind } from '@shared/domain';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './entry/icons';
+import { repoName } from '../review/source-ref';
 import './HistoryScreen.css';
 
 // 全部审核历史屏。数据来自 review:list-recent;
@@ -103,7 +104,7 @@ export function HistoryScreen({ onOpen }: { onOpen: (id: string) => void }): Rea
       if (srcFilter !== 'all' && r.source !== srcFilter) return false;
       if (statFilter !== 'all' && statusGroup(r.status) !== statFilter) return false;
       if (q) {
-        const hay = `${r.title ?? ''} ${repoLabel(r)} ${r.sourceRef}`.toLowerCase();
+        const hay = `${r.title ?? ''} ${repoName(r) ?? r.source} ${r.sourceRef}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -242,7 +243,7 @@ export function HistoryScreen({ onOpen }: { onOpen: (id: string) => void }): Rea
 function metaParts(r: RecentReview, expiring: number | null): React.JSX.Element {
   return (
     <>
-      <span>{repoLabel(r)}</span>
+      <span>{repoName(r) ?? r.source}</span>
       <span className="dot" />
       <span className={r.findingCount === 0 ? 'find zero' : 'find'}>{r.findingCount} findings</span>
       <span className="dot" />
@@ -330,19 +331,6 @@ function bucketOf(ts: number, now: number): Bucket {
   if (ts >= startOfToday) return 'today';
   if (ts >= now - 7 * DAY_MS) return 'week';
   return 'older';
-}
-
-/** 展示用仓库名:本地路径 basename 优先,其次从 github sourceRef 取 repo 段。 */
-function repoLabel(r: RecentReview): string {
-  if (r.repoPath) {
-    const base = r.repoPath.replace(/[/\\]+$/, '').split(/[/\\]/).pop();
-    if (base) return base;
-  }
-  if (r.source === 'github-pr') {
-    const m = r.sourceRef.match(/([^/]+)\/([^/#]+)/);
-    if (m) return m[2];
-  }
-  return r.source;
 }
 
 function formatWhen(ts: number): string {
