@@ -32,7 +32,7 @@ import {
   MCP_UNDELIVERED_CODE,
   SANDBOX_NOT_APPLIED_CODE,
 } from '@shared/ipc';
-import { MCP_SERVER_NAME } from '@shared/mcp-contract';
+import { isMcpToolName, MCP_SERVER_NAME } from '@shared/mcp-contract';
 import type { AgentErrorKind } from '@shared/agent-events';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
 import type { ReviewStore } from '../db/review-store';
@@ -1109,7 +1109,15 @@ export class ReviewSession {
         // completed,不判死的话这一轮会以「审核完成,0 findings」收场,和「真的没问题」
         // 长得一模一样。判据只认「未送达」这一半:工具自己回的业务拒绝(schema 不合法等)
         // agent 看得到原文、改对了会重来,那是正常来回,不是故障。
-        if (e.kind === 'tool-call' && e.server === MCP_SERVER_NAME && e.undelivered) {
+        // 只认我们自己声明的工具:codex 自带的 MCP 探测工具(list_mcp_resources 等)也挂在
+        // `server: 'duetlens'` 名下,它们探不到东西是常态(我们不提供 resources),
+        // 拿它判死会把一轮好好的机审毙掉。
+        if (
+          e.kind === 'tool-call' &&
+          e.server === MCP_SERVER_NAME &&
+          isMcpToolName(e.tool) &&
+          e.undelivered
+        ) {
           finish({
             kind: 'turn-failed',
             turnId: mine ?? '',

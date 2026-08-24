@@ -292,6 +292,29 @@ function silentApprovalTruthTable(): void {
   log('✓ 回显策略真值表:空/缺项/多出的 granular 都不放行');
 }
 
+/**
+ * 9. codex 自带的 MCP 探测工具失败 —— 也挂在 `server: 'duetlens'` 名下,但不是我们的工具。
+ *
+ * 实测:codex 0.149 会自作主张调 list_mcp_resources(它的工具说明还鼓励「优先用 resources」),
+ * 而我们不发布 resources。这类探测失败在事件上与真·未送达同形,拿它判死会毙掉一轮好机审。
+ */
+async function builtinProbeFailureIsHarmless(): Promise<() => Promise<void>> {
+  const f = fixture((agent, turnId) => {
+    agent.emitEvent({
+      kind: 'tool-call',
+      server: MCP_SERVER_NAME,
+      tool: 'list_mcp_resources',
+      status: 'failed',
+      undelivered: 'resources/list failed for `duetlens`: Mcp error: -32601: Method not found',
+    });
+    agent.emitEvent({ kind: 'turn-completed', turnId });
+  });
+  await f.session.start({ cwd: process.cwd(), providers: f.providers, round: 1 });
+  assert.equal(f.agent.disposed, false, 'codex 自带工具探不到东西不是链路故障,本轮得照常跑完');
+  log('✓ codex 自带探测工具失败 → 不判死本轮');
+  return () => f.session.dispose();
+}
+
 async function main(): Promise<void> {
   everyApprovalIsASentinel();
   launchFailuresKeepTheirKind();
@@ -302,6 +325,7 @@ async function main(): Promise<void> {
     declinedMcpElicitationIsNotABreach,
     undeliveredMcpCallKillsRound,
     toolRejectionIsHarmless,
+    builtinProbeFailureIsHarmless,
   ]) {
     const dispose = await t();
     await dispose(); // MCP server 不关,event loop 就一直醒着,进程退不了

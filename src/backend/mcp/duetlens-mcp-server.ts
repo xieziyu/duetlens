@@ -6,6 +6,8 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
   CallToolRequestSchema,
+  ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
   isInitializeRequest,
   type Tool,
@@ -582,12 +584,18 @@ export class DuetlensMcpServer extends EventEmitter {
   private buildMcpServer(): Server {
     const server = new Server(
       { name: MCP_SERVER_NAME, version: APP_VERSION },
-      { capabilities: { tools: {} } },
+      { capabilities: { tools: {}, resources: {} } },
     );
 
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: toolsFor(this.providers),
     }));
+
+    // 我们不发布 resources —— 改动面与源码都从工具走。但 codex 会主动探(它自带
+    // list_mcp_resources,提示词还鼓励「优先用 resources」),不应答就是一次 -32601 报错,
+    // 在界面上长成一条失败的工具调用。空列表是这里的诚实答案。
+    server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [] }));
+    server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({ resourceTemplates: [] }));
 
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const { name, arguments: args = {} } = req.params;
