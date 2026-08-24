@@ -1,6 +1,7 @@
 import type { RecentReview } from '@shared/ipc';
 import type { ReviewStatus, SourceKind } from '@shared/domain';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './icons';
+import { repoName } from '../../review/source-ref';
 
 /** 入口只摆最近这些条,全量翻阅走审核历史屏。 */
 const LIMIT = 20;
@@ -37,7 +38,7 @@ export function RecentReviews({
               <div className="m">
                 <div className="t">{r.title ?? r.sourceRef}</div>
                 <div className="meta mono">
-                  <span>{repoLabel(r)}</span>
+                  <span>{repoName(r) ?? r.source}</span>
                   <span className="dot" />
                   <span className={r.findingCount === 0 ? 'find zero' : 'find'}>{r.findingCount} findings</span>
                   {r.submittedCount > 0 ? (
@@ -105,17 +106,4 @@ function StatusChip({ status }: { status: ReviewStatus }) {
       {m.label}
     </span>
   );
-}
-
-/** 展示用仓库名:优先本地路径 basename,其次从 github sourceRef 取 repo 段。 */
-function repoLabel(r: RecentReview): string {
-  if (r.repoPath) {
-    const base = r.repoPath.replace(/[/\\]+$/, '').split(/[/\\]/).pop();
-    if (base) return base;
-  }
-  if (r.source === 'github-pr') {
-    const m = r.sourceRef.match(/([^/]+)\/([^/#]+)/);
-    if (m) return m[2];
-  }
-  return r.source;
 }

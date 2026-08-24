@@ -7,6 +7,8 @@ export interface TabMeta {
   title: string;
   sourceRef: string;
   source: Review['source'];
+  /** 悬浮卡要的项目名从它来(见 repoName);github 源可以没有 */
+  repoPath: string | null;
   status: ReviewStatus | null;
   /** 这枚 tab 在后台期间新报出的 finding 数;激活即清零。 */
   unread: number;
@@ -57,7 +59,13 @@ export function useTabMeta(
       if (!alive || !r) return;
       setInfo((prev) => ({
         ...prev,
-        [id]: { title: r.title ?? r.sourceRef, sourceRef: r.sourceRef, source: r.source, status: r.status },
+        [id]: {
+          title: r.title ?? r.sourceRef,
+          sourceRef: r.sourceRef,
+          source: r.source,
+          repoPath: r.repoPath,
+          status: r.status,
+        },
       }));
     };
 

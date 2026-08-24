@@ -161,7 +161,7 @@ const REVIEW: Review = {
   model: 'gpt-5.6-sol',
   reasoningEffort: 'high',
   intensity: 'adversarial',
-  title: 'feat: streaming transcode pipeline',
+  title: 'feat/streaming-transcode · feat: streaming transcode pipeline',
   status: 'completed',
   summaryBody: '本次改动引入并发编码管线,整体方向合理,但并发计数存在数据竞争,需修正。',
   summaryFiles: [
@@ -183,14 +183,14 @@ const REVIEW: Review = {
 
 // 入口「最近的审核」/ 历史屏列表 fixture(覆盖三来源 × 状态 × 时间分桶)
 const RECENT_REVIEWS: RecentReview[] = [
-  { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: 'feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 23 * 60_000 },
-  { ...REVIEW, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', title: 'fix: episode duration off-by-one on live cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
-  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding-for-legacy-clients', title: 'fix/feed-encoding-for-legacy-clients', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 26 * 3600_000 },
-  { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
-  { ...REVIEW, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: 'refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, currentRound: 1, summaryRound: 1, updatedAt: now - 10 * 86_400_000 },
-  { ...REVIEW, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
+  { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: '#482 · feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 23 * 60_000 },
+  { ...REVIEW, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', title: '#479 · fix: episode duration off-by-one on live cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
+  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding-for-legacy-clients', title: 'fix/feed-encoding-for-legacy-clients · fix: keep latin-1 feed output for legacy clients', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 26 * 3600_000 },
+  { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'GitButler · virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
+  { ...REVIEW, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: '#471 · refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, currentRound: 1, summaryRound: 1, updatedAt: now - 10 * 86_400_000 },
+  { ...REVIEW, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout · fix: raise transcode timeout to 5m', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
   // 距 30 天保留期只剩 3 天:历史屏的临期标记只有这种行才出现,没有它就自查不到
-  { ...REVIEW, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: 'chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 27 * 86_400_000 },
+  { ...REVIEW, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: '#440 · chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 27 * 86_400_000 },
 ];
 
 // 满载提示 fixture:正在跑的会话(?busy=1..4)
@@ -683,7 +683,9 @@ export function installPreviewApi(): void {
   // 可变:重跑 stub 会改 currentRound / status,模拟后端回推后的新值
   let review: Review = {
     ...REVIEW,
-    ...(asGithub ? { source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', repoPath: null } : {}),
+    ...(asGithub
+      ? { source: 'github-pr' as const, sourceRef: 'xieziyu/podcast-go#482', repoPath: null, title: '#482 · feat: streaming transcode pipeline' }
+      : {}),
     ...(asScanning ? { status: 'scanning' as const } : {}),
     ...(asRoundFailed ? { status: 'failed' as const } : {}),
   };

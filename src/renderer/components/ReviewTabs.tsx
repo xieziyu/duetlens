@@ -1,7 +1,8 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { REVIEW_STATUS_LABELS } from '@shared/domain';
 import type { ReviewTab } from '../review/tabs';
 import type { TabMeta } from '../review/useTabMeta';
-import { shortSourceLabel } from '../review/source-ref';
+import { shortSourceLabel, sourceTitleRest, tabTipText } from '../review/source-ref';
 import { SourceIcon } from './SourceIcon';
 import './ReviewTabs.css';
 
@@ -16,6 +17,9 @@ export interface TabNotice {
    */
   sticky?: boolean;
 }
+
+/** 悬浮卡的出现延迟 */
+const TIP_DELAY_MS = 420;
 
 /**
  * 打开着的 review。**tab 只是视图的把手** —— 关掉一枚不动后端会话,那条审核继续在后台跑
@@ -42,18 +46,19 @@ export function ReviewTabs({
   /** ＋:回入口发起新审核(不直接建 tab —— 没有 review 就没有 tab) */
   onNew: () => void;
 }): React.JSX.Element {
+  const tip = useTabTip();
   return (
     <div className="rev-tabs" role="tablist" aria-label="打开的审核">
-      <div className="tabs-strip">
+      {/* 横向滚动会把卡片留在原处指向已经移开的那枚 tab */}
+      <div className="tabs-strip" onScroll={tip.hide}>
         {tabs.map((t) => {
           const m = meta[t.reviewId];
           const label = m ? shortSourceLabel(m.source, m.sourceRef) : '…';
-          // 本地分支的 title 就是 ref 本身,两个都画等于把同一句话说两遍、还挤掉了别的 tab
-          const title = m && m.title !== label ? m.title : '';
+          const rest = m ? sourceTitleRest(m.source, m.sourceRef, m.title) : '';
+          const tipText = m ? tabTipText(m) : '';
           const on = t.reviewId === activeId;
           const dot = m?.status === 'scanning' ? 'scanning' : m?.status === 'failed' ? 'failed' : null;
-          // 未读数与状态点二选一:210px 的 tab 上两样都画就谁也读不清。
-          // 状态本身不会因此丢失 —— title 里一直带着它。
+          // 未读数与状态点二选一:210px 的 tab 上两样都画就谁也读不清
           const unread = !on && m ? m.unread : 0;
           return (
             <div key={t.reviewId} className={`rev-tab${on ? ' on' : ''}`}>
@@ -61,22 +66,39 @@ export function ReviewTabs({
                 className="tab-main"
                 role="tab"
                 aria-selected={on}
-                title={[
-                  label,
-                  title,
-                  m ? REVIEW_STATUS_LABELS[m.status ?? 'scanning'] : null,
-                  unread > 0 ? `新增 ${unread} 条 finding` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-                onClick={() => onActivate(t.reviewId)}
-                onAuxClick={(e) => e.button === 1 && onClose(t.reviewId)}
+                // 状态与未读也得进这里:显式 aria-label 会盖掉后代,挂在角标 / 状态点上的说明读不到
+                aria-label={
+                  m
+                    ? [
+                        tipText,
+                        rest,
+                        REVIEW_STATUS_LABELS[m.status ?? 'scanning'],
+                        unread > 0 ? `新增 ${unread} 条 finding` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
+                    : label
+                }
+                onMouseEnter={(e) => m && tip.show(e.currentTarget, tipText, rest)}
+                onMouseLeave={tip.hide}
+                onFocus={(e) => m && tip.show(e.currentTarget, tipText, rest)}
+                onBlur={tip.hide}
+                onClick={() => {
+                  tip.hide();
+                  onActivate(t.reviewId);
+                }}
+                onAuxClick={(e) => {
+                  // 元素被移除不会派发 mouseleave,不先收的话卡片会留在原地指着一枚已经没了的 tab
+                  if (e.button !== 1) return;
+                  tip.hide();
+                  onClose(t.reviewId);
+                }}
               >
                 <SourceIcon source={m?.source} />
                 <span className="mono lbl">{label}</span>
-                {title && <span className="ttl">{title}</span>}
+                {rest && <span className="ttl">{rest}</span>}
                 {unread > 0 ? (
-                  <span className="tab-badge" title={`后台新报出 ${unread} 条 finding`}>
+                  <span className="tab-badge" aria-hidden>
                     {unread > 99 ? '99+' : unread}
                   </span>
                 ) : (
@@ -86,8 +108,7 @@ export function ReviewTabs({
               <button
                 className="tab-close"
                 onClick={() => onClose(t.reviewId)}
-                title="关闭这枚 tab(审核不受影响)"
-                aria-label={`关闭 ${label}`}
+                aria-label={`关闭 ${label}(审核不受影响)`}
               >
                 <CloseIcon />
               </button>
@@ -95,7 +116,7 @@ export function ReviewTabs({
           );
         })}
       </div>
-      <button className="tab-add" onClick={onNew} title="发起新审核">
+      <button className="tab-add" onClick={onNew} aria-label="发起新审核">
         <PlusIcon />
       </button>
       {notice && (
@@ -106,8 +127,72 @@ export function ReviewTabs({
           )}
         </span>
       )}
+      {tip.at && (
+        <div
+          className="tab-tip"
+          role="tooltip"
+          style={{ left: tip.at.left, right: tip.at.right, top: tip.at.y }}
+        >
+          <span className="mono tip-id">{tip.at.id}</span>
+          {tip.at.title && <span className="tip-ttl">{tip.at.title}</span>}
+        </div>
+      )}
     </div>
   );
+}
+
+interface TipAt {
+  /** 项目名 + 完整身份 */
+  id: string;
+  /** 去重后的完整标题;tab 上那份多半被截过 */
+  title: string;
+  y: number;
+  /** 左右二选一:贴左边缘的那枚从左对齐,贴右边缘的从右对齐 */
+  left?: number;
+  right?: number;
+}
+
+/**
+ * tab 的悬浮卡。**不用原生 `title`** —— 它在这条栏上不出现,而且排不了版;
+ * 位置用 fixed + 实测矩形算:tab 条自己会横向滚动,绝对定位会被 strip 的 overflow 裁掉。
+ */
+function useTabTip(): {
+  at: TipAt | null;
+  show: (el: HTMLElement, id: string, title: string) => void;
+  hide: () => void;
+} {
+  const [at, setAt] = useState<TipAt | null>(null);
+  const timer = useRef<number | null>(null);
+
+  const hide = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    setAt(null);
+  }, []);
+
+  const show = useCallback((el: HTMLElement, id: string, title: string) => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      // 等待期间这枚 tab 可能已被关掉:脱离文档的元素量出来是 0×0,卡片会飞到左上角
+      if (!el.isConnected) return;
+      const r = el.getBoundingClientRect();
+      // 右半边的 tab 改为右对齐:卡片宽度要等它排完版才知道,靠估宽去夹会把卡片推离它指的那枚 tab
+      const toRight = r.left > window.innerWidth / 2;
+      setAt({
+        id,
+        title,
+        y: r.bottom + 4,
+        left: toRight ? undefined : Math.max(6, r.left),
+        right: toRight ? Math.max(6, window.innerWidth - r.right) : undefined,
+      });
+    }, TIP_DELAY_MS);
+  }, []);
+
+  useEffect(() => () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+  }, []);
+
+  return { at, show, hide };
 }
 
 const CloseIcon = () => (

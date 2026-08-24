@@ -5,7 +5,7 @@ import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput, LiveCapacity } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
 import { SourceIcon } from '../components/SourceIcon';
-import { parsePrRefLoose } from '../review/source-ref';
+import { parsePrRefLoose, sourceTitleRest } from '../review/source-ref';
 import { useIsActiveTab } from '../review/TabVisibility';
 import { useReviewStream, type ReplyStream } from '../review/useReviewStream';
 import { useReviewUiState } from '../review/useReviewUiState';
@@ -681,6 +681,8 @@ export function ReviewScreen({
   // 顶栏源标识:PR 拆成「#号 chip + 仓库 nwo 尾注」,分支 / vbranch 直接显示 ref
   const pr = isGithub ? parsePrRefLoose(review.sourceRef) : null;
   const sourceLabel = pr ? `#${pr.num}` : (review?.sourceRef ?? '…');
+  // 标题去掉与 chip 重复的开头(backend 按 `<身份> · <正文>` 拼);剥空就只剩 chip
+  const titleRest = review ? sourceTitleRest(review.source, review.sourceRef, review.title) : '';
 
   // URL 解析与打开都在 main 侧(ref 可能只有 PR 号,需借 repoPath 推断仓库)
   const openInBrowser = useCallback(() => {
@@ -734,7 +736,7 @@ export function ReviewScreen({
               ← {review.baseRef}
             </span>
           )}
-          <span className="title">{review?.title ?? '加载中…'}</span>
+          <span className="title">{review ? titleRest : '加载中…'}</span>
           {pr?.nwo && <span className="mono nwo">{pr.nwo}</span>}
         </div>
         <span className="spacer" />
