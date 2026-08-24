@@ -183,14 +183,14 @@ const REVIEW: Review = {
 
 // 入口「最近的审核」/ 历史屏列表 fixture(覆盖三来源 × 状态 × 时间分桶)
 const RECENT_REVIEWS: RecentReview[] = [
-  { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: 'feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, updatedAt: now - 23 * 60_000 },
+  { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: 'feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 23 * 60_000 },
   { ...REVIEW, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', title: 'fix: episode duration off-by-one on live cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
-  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding', title: 'fix/feed-encoding', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, submittedCount: 0, updatedAt: now - 26 * 3600_000 },
+  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding-for-legacy-clients', title: 'fix/feed-encoding-for-legacy-clients', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 26 * 3600_000 },
   { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
-  { ...REVIEW, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: 'refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, updatedAt: now - 10 * 86_400_000 },
+  { ...REVIEW, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: 'refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, currentRound: 1, summaryRound: 1, updatedAt: now - 10 * 86_400_000 },
   { ...REVIEW, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
   // 距 30 天保留期只剩 3 天:历史屏的临期标记只有这种行才出现,没有它就自查不到
-  { ...REVIEW, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: 'chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, submittedCount: 0, updatedAt: now - 27 * 86_400_000 },
+  { ...REVIEW, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: 'chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 27 * 86_400_000 },
 ];
 
 // 满载提示 fixture:正在跑的会话(?busy=1..4)
@@ -368,6 +368,29 @@ const FAILED_ROUND: ReviewRound = {
   endedAt: now - 21 * 60_000,
 };
 
+/**
+ * 多 tab 自查(`?tabs=demo,r1,r2`)按 id 取到的那条 review。没有它,几枚 tab 顶着同一个标题、
+ * 同一枚状态点,连有没有切过去都看不出来。内容(findings / 讨论 / diff)仍共用同一份 demo 数据 ——
+ * 这里要的是「两枚 tab 不一样」,不是两份真数据。
+ */
+function recentReviewOf(id: string): Review | null {
+  return RECENT_REVIEWS.find((r) => r.id === id) ?? null;
+}
+
+/**
+ * 轮次履历按这条 review 的 currentRound 截断,并让末轮与 status 对齐 —— 否则轮次角标写第 1 轮、
+ * 时间线却摊着第 2 轮,或状态点说失败而当前轮显示跑完了,屏上自相矛盾。
+ */
+function roundsOf(r: Review): ReviewRound[] {
+  const list = ROUNDS.slice(0, Math.max(1, Math.min(ROUNDS.length, r.currentRound))).map((x) => ({
+    ...x,
+    reviewId: r.id,
+  }));
+  if (r.status === 'failed')
+    list[list.length - 1] = { ...FAILED_ROUND, reviewId: r.id, round: list.length };
+  return list;
+}
+
 const DISCUSSIONS: Discussion[] = [
   ...FINDINGS.map((f) => ({
     id: f.discussionId,
@@ -392,8 +415,20 @@ const DISCUSSIONS: Discussion[] = [
   },
 ];
 
+/**
+ * `?restore=demo,r1`:模拟「上次开着这几枚 tab」的记录,走真实的冷启动恢复路径
+ * (main.tsx 此时不传 initialTabs,由 App 自己去核对哪几条还在)。缺省为空 ——
+ * 有 `?tabs=` 时从这里再塞一份只会盖掉它。
+ */
+const restoreIds = (new URLSearchParams(window.location.search).get('restore') ?? '')
+  .split(',')
+  .map((x) => x.trim())
+  .filter(Boolean);
+
 // 刻意用非默认栏宽,便于自查「启动即从 ui_settings 应用」而非用组件默认值
 const UI_SETTINGS: UiSettings = {
+  openReviewIds: restoreIds,
+  activeReviewId: restoreIds[0] ?? '',
   dataMode: 'dark',
   dataTheme: 'duetlens',
   leftWidth: 300,
@@ -710,6 +745,12 @@ export function installPreviewApi(): void {
   (window as unknown as { __fireInApp?: (n: CompletionNotice) => void }).__fireInApp = (n) => {
     for (const l of inAppListeners) l(n);
   };
+  // 点系统通知那条路。它的订阅是**挂载时装一次**的,故只有从这里发才验得到闭包取的是不是最新状态
+  (
+    window as unknown as { __fireOpenReview?: (p: { reviewId: string; discussionId?: string }) => void }
+  ).__fireOpenReview = (p) => {
+    for (const l of openReviewListeners) l(p);
+  };
 
   const updateListeners = new Set<(s: UpdateStatus) => void>();
   const fireUpdate = (): void => {
@@ -764,9 +805,13 @@ export function installPreviewApi(): void {
       list: async () => [review],
       listRecent: async () => (params.has('empty') ? [] : RECENT_REVIEWS),
       // ?review=error 模拟读库失败,自查依赖它的屏不会卡在加载态
-      get: async () => {
+      get: async (id) => {
         if (params.get('review') === 'error') throw new Error('database is locked');
-        return review;
+        // 写路径(重跑 / 状态流转)只作用于可变的 demo 那条;其余 id 是多 tab 自查的静态陪衬。
+        // 认不出的 id 一律 null,与真实后端一致 —— 回落到 demo 的话,`?restore=` 里那些
+        // 已删 / 已过期的 id 会被喂成一条真 review,恢复时该被剔除的那一支就永远验不到。
+        if (id === 'demo') return review;
+        return recentReviewOf(id);
       },
       findings: async () => findings,
       diff: async () => diff,
@@ -814,7 +859,10 @@ export function installPreviewApi(): void {
         await new Promise((r) => window.setTimeout(r, 14_000));
         return review;
       },
-      rounds: async () => rounds,
+      rounds: async (id) => {
+        const other = recentReviewOf(id);
+        return other ? roundsOf(other) : rounds;
+      },
       // 开一轮:插入 scanning 记录并回推,4s 后收轮 —— 够看清面板→扫描→收轮的整条视觉链路。
       // ?rerun=slow 模拟大 PR 的慢启动(阶段按真实顺序推进,record 停够久能看到「读 PR 评论」提示)
       rerun: async (_r, input) => {

@@ -43,3 +43,21 @@ export function isRerunKey(e: {
 }): boolean {
   return primaryModifier(e) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'e';
 }
+
+/**
+ * review tab 前后切:⌃⇥ / ⌃⇧⇥,返回 +1 / -1,不是这个组合则 null。
+ *
+ * 用 ⌃⇥ 而不是屏内那套 ⌘ 组合:**⌘1/2/3 已经归右栏三 tab**,再拿 ⌘ 数字键切 review tab
+ * 就是同一组键在两层导航上打架。⌃⇥ 是跨平台的 tab 惯例,两边都不必分支。
+ * 排除 ⌘ 与 ⌥:带别的修饰键的组合是另一个意图,不该被这里顺手吃掉。
+ */
+export function tabStepKey(e: {
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  key: string;
+}): number | null {
+  if (e.key !== 'Tab' || !e.ctrlKey || e.metaKey || e.altKey) return null;
+  return e.shiftKey ? -1 : 1;
+}

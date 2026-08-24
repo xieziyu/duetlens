@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Discussion, Finding, FindingProposal, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
 import { DEFAULT_UI_SETTINGS, VERDICT_LABELS } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
-import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
+import type { AddFindingInput, DiscussionAnchor, FindingEditInput, LiveCapacity } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
+import { SourceIcon } from '../components/SourceIcon';
+import { parsePrRefLoose } from '../review/source-ref';
+import { useIsActiveTab } from '../review/TabVisibility';
 import { useReviewStream, type ReplyStream } from '../review/useReviewStream';
 import { useReviewUiState } from '../review/useReviewUiState';
 import { FileTree } from './review/FileTree';
@@ -16,6 +19,13 @@ import { ScanActivityFeed } from './review/ScanActivity';
 import { coveredFiles, type Activity } from './review/scan-activity';
 import { deriveScanSteps } from './review/scan-progress';
 import { KbdHelp } from '../components/KbdHelp';
+import {
+  CAPACITY_POLL_MS,
+  CapacityNotice,
+  isAtCapacity,
+  isLiveSessionLimit,
+  stripLimitCode,
+} from '../components/CapacityNotice';
 import { LensScanArt } from '../components/LensScanArt';
 import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
@@ -63,6 +73,8 @@ export function ReviewScreen({
   onFocusHandled,
   rerunRequest,
   onRerunHandled,
+  onOpenReview,
+  onUnsavedChange,
 }: {
   reviewId: string | null;
   onOpenSubmit?: () => void;
@@ -74,7 +86,15 @@ export function ReviewScreen({
   rerunRequest?: { reviewId: string } | null;
   /** 重跑面板已弹出,请求方据此清掉它 —— 同 onFocusHandled */
   onRerunHandled?: () => void;
+  /** 打开另一条 review(满载提示里的直达);不给则那几行只是纯文本 */
+  onOpenReview?: (reviewId: string) => void;
+  /** 屏上有「关掉就没了」的东西时上报;App 据此在关 tab 前拦一下 */
+  onUnsavedChange?: (hasUnsaved: boolean) => void;
 }) {
+  // 多 tab 下所有已开的 review 都挂载着,只有活跃那枚可见(语义见 TabVisibility)。
+  // 全局键位、定位请求、滚动位置三件事都按它收口。
+  const active = useIsActiveTab();
+  const rootRef = useRef<HTMLDivElement>(null);
   const {
     review,
     findings,
@@ -124,6 +144,10 @@ export function ReviewScreen({
   const [helpOpen, setHelpOpen] = useState(false);
   // 重跑确认面板
   const [rerunOpen, setRerunOpen] = useState(false);
+  // 会话位满载时在跑的那几条(与入口屏同一块提示)。不进 round-error 那两张表:
+  // 满载不是「这一轮跑挂了」而是根本没开跑,且要附一份现拉的动态名单,纯文案表放不下。
+  const [capacity, setCapacity] = useState<LiveCapacity | null>(null);
+  const [capacityBlocked, setCapacityBlocked] = useState('');
   // 状态栏「查看原因」→ 让进度条的失败卡展开并闪一下(递增即触发)
   const [revealFailure, setRevealFailure] = useState(0);
   // ⌘F diff 内检索:0 = 关;每按一次自增,DiffPane 据此把焦点抢回输入框并全选
@@ -214,12 +238,37 @@ export function ReviewScreen({
     [reviewId],
   );
 
+  // 现拉一次在跑清单;已经不满(或快照拉不到)就把提示收起来。返回是否确实满载。
+  const refreshCapacity = useCallback(async (): Promise<boolean> => {
+    const c = await window.duetlens.review.capacity().catch(() => null);
+    const full = isAtCapacity(c);
+    setCapacity(full ? c : null);
+    return full;
+  }, []);
+
+  // 某个动作被会话位挡下。只有**确实刷出了满载快照**才出提示 —— 名单是这块提示的全部意义,
+  // 拉不到时提示不出现,调用方仍按普通失败照常呈现原文,不至于界面纹丝不动。
+  const hitCapacity = useCallback(
+    (blocked: string): Promise<boolean> => {
+      setCapacityBlocked(blocked);
+      return refreshCapacity();
+    },
+    [refreshCapacity],
+  );
+
   // 没发出去的原文连同它本来要问的线程一起收着(见 UnsentDraft.discussionId);
   // 发送路径都经这里,定性文案不必各写一遍。
-  const keepFailed = useCallback((text: string, discussionId: string | null, e: unknown) => {
-    const reason = describeSendFailure((e as Error).message ?? String(e)).raw;
-    setUnsent((prev) => [...prev, { id: unsentSeq.current++, text, reason, discussionId }]);
-  }, []);
+  const keepFailed = useCallback(
+    (text: string, discussionId: string | null, e: unknown) => {
+      const message = (e as Error).message ?? String(e);
+      // 满载:原文照收(一个字都没发出去),但真正该看的是「在跑的是谁」那份名单;
+      // 给程序认的那段码剥掉再示人。
+      if (isLiveSessionLimit(message)) void hitCapacity('这条追问暂时发不出去');
+      const reason = describeSendFailure(stripLimitCode(message)).raw;
+      setUnsent((prev) => [...prev, { id: unsentSeq.current++, text, reason, discussionId }]);
+    },
+    [hitCapacity],
+  );
 
   // 框选 / 行内 ＋ 发起 discussion:先建 user discussion(事件回推),再发出首问。
   //
@@ -351,15 +400,37 @@ export function ReviewScreen({
   const onRerun = useCallback(
     async ({ note, intensity, startId }: { note: string; intensity: ReviewIntensity; startId: string }) => {
       if (!reviewId) return;
-      await window.duetlens.review.rerun(reviewId, { note: note || undefined, intensity, startId });
+      try {
+        await window.duetlens.review.rerun(reviewId, { note: note || undefined, intensity, startId });
+      } catch (e) {
+        const message = (e as Error).message ?? String(e);
+        // 满载时名单先备好,但仍把错误抛回面板:面板正盖在上面、由它就地说明原因,
+        // 用户写的那段说明也还留在里面。关掉面板就能看见这块提示(见渲染处的 modalOpen)。
+        if (isLiveSessionLimit(message)) {
+          void hitCapacity('暂时跑不了新的一轮');
+          throw new Error(stripLimitCode(message));
+        }
+        throw e;
+      }
     },
-    [reviewId],
+    [reviewId, hitCapacity],
   );
   // 重试失败的当前轮:沿用同一轮号,不新增轮次;失败原因由进度条就地展示
+  // 重试失败的那一轮同样要现要一个会话位,故与重跑走同一套满载提示 ——
+  // 少这一支的话,唯独从失败卡按重试撞上满载时,落到屏上的还是那串英文码
   const onRetryRound = useCallback(async () => {
     if (!reviewId) return;
-    await window.duetlens.review.retryRound(reviewId);
-  }, [reviewId]);
+    try {
+      await window.duetlens.review.retryRound(reviewId);
+    } catch (e) {
+      const message = (e as Error).message ?? String(e);
+      if (isLiveSessionLimit(message)) {
+        void hitCapacity('暂时跑不了新的一轮');
+        throw new Error(stripLimitCode(message));
+      }
+      throw e;
+    }
+  }, [reviewId, hitCapacity]);
   // 叫停本轮机审:已上报的 findings 全留下,状态经事件回推(不本地臆造)
   const onStopScan = useCallback(async () => {
     if (!reviewId) return;
@@ -408,21 +479,57 @@ export function ReviewScreen({
   const scanning = status === 'scanning' || !status;
 
   // 通知点击带 discussionId 时定位到该线程(切 Discussion 栏);兑现后即刻消费掉这条请求。
+  // 不可见时**不消费**:隐藏态里滚动落空,消费掉这条请求就等于把定位吞了。攒到重新可见再兑现。
   useEffect(() => {
-    if (!focusRequest) return;
+    if (!focusRequest || !active) return;
     focusDiscussion(focusRequest.id);
     onFocusHandled?.();
-  }, [focusRequest]);
+  }, [focusRequest, active]);
 
   // 提交/导出屏按下「返回 diff 并重跑」后进到本屏:直接把重跑面板顶出来,兑现即消费。
   // 判据用 status 而非 scanning:重挂到 review 到达前 status 还是 undefined,按 scanning
   // 处理会把请求当"扫描中"吞掉 —— 未知就等下一次,别急着消费。而这段空窗里 review 可能已经换人,
   // 所以兑现前先核对 reviewId:不是发给这条的就只消费、不弹。
+  // 同 focusRequest:不可见时不消费 —— 面板弹在看不见的地方等于没弹。
   useEffect(() => {
-    if (!rerunRequest || !status) return;
+    if (!rerunRequest || !status || !active) return;
     if (rerunRequest.reviewId === reviewId && status !== 'scanning') setRerunOpen(true);
     onRerunHandled?.();
-  }, [rerunRequest, reviewId, status]);
+  }, [rerunRequest, reviewId, status, active]);
+
+  // 满载提示停在屏上期间自查:别人的会话跑完不会有事件推到这一屏,只能自己回头问一次。
+  // 不可见的 tab 不轮询 —— 看不见的提示不值得为它一直问后端。
+  const capacityShown = capacity !== null;
+  useEffect(() => {
+    if (!capacityShown || !active) return;
+    const t = window.setInterval(() => void refreshCapacity(), CAPACITY_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [capacityShown, active, refreshCapacity]);
+
+  // 「关掉这枚 tab 就没了」的东西上报给 App(拦截与确认在那一侧):没发出去的原文,
+  // 加上两处 composer 里正在打的字。草稿文本留在各自组件里,只把「非空」这一位冒上来 ——
+  // 抬文本会让这棵挂着整份 diff 的树跟着每次击键重渲染(见 useDraftFlag)。
+  const [composerDraft, setComposerDraft] = useState(false);
+  const [annotateDraft, setAnnotateDraft] = useState(false);
+  const hasUnsaved = unsent.length > 0 || composerDraft || annotateDraft;
+  const notifyRef = useRef(onUnsavedChange);
+  const reportedRef = useRef(false);
+  useEffect(() => {
+    notifyRef.current = onUnsavedChange;
+  });
+  useEffect(() => {
+    // 只在真值翻转时喊一次:App 侧每次渲染都换一个新回调,按值去重才不会每帧都上报。
+    if (reportedRef.current === hasUnsaved) return;
+    reportedRef.current = hasUnsaved;
+    notifyRef.current?.(hasUnsaved);
+  }, [hasUnsaved]);
+  useEffect(
+    () => () => {
+      // 卸载即这份原文随 tab 一起没了;拦截方不该继续挂着一条永远不会被撤销的「有未保存」。
+      if (reportedRef.current) notifyRef.current?.(false);
+    },
+    [],
+  );
 
   // 有模态压在上面时,导航键一律挂起。判据必须是**所有**打开中的模态,不能只认帮助层:
   // 重跑面板同样是带 scrim 的 dialog,漏掉它时在说明输入框里按 ⌘F 会把焦点抢到对话框背后的
@@ -433,7 +540,11 @@ export function ReviewScreen({
   // ⌘E 重跑 / Esc 关闭。
   // 导航键一律带 ⌘,所以打字时也照常生效;只有裸键 ? 要给输入框让位。
   // 编辑/发送的 ⌘↵·Esc·↵ 由各 composer/编辑器自理。
+  //
+  // 注册本身跟着 active 走(不是在 handler 里判):N 个 tab 都挂着,都注册的话 ⌘F / ⌘E / Esc
+  // 会被连屏都不在的那几枚一起接走。
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       const typing = !!el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable);
@@ -486,7 +597,38 @@ export function ReviewScreen({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [helpOpen, modalOpen, scanning, diffView, update, setActiveTab]);
+  }, [active, helpOpen, modalOpen, scanning, diffView, update, setActiveTab]);
+
+  // ---- 滚动位置跨隐藏保活 ----
+  //
+  // `display:none` 会把可滚容器的 scrollTop 清零,而"变为不可见"那一刻已经读不回原值
+  // (隐藏态下几何量全是 0)。故在滚动发生时就记账,重新可见时按元素写回。
+  // 元素跨隐藏一直挂载着,可以直接当键;scroll 不冒泡,只能捕获。
+  const scrollMemo = useRef(new Map<Element, { top: number; left: number }>());
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onScroll = (e: Event) => {
+      const el = e.target;
+      if (el instanceof Element) scrollMemo.current.set(el, { top: el.scrollTop, left: el.scrollLeft });
+    };
+    root.addEventListener('scroll', onScroll, true);
+    return () => root.removeEventListener('scroll', onScroll, true);
+  }, [reviewId]);
+
+  // 必须等 hidden 摘掉之后才写得进去(隐藏态下写 scrollTop 是空操作),而且要赶在这一帧绘出之前 ——
+  // 放进 useEffect 用户就会看见先弹到顶、再跳回来的那一帧。顺带清掉已被重渲染换掉的旧节点。
+  useLayoutEffect(() => {
+    if (!active) return;
+    for (const [el, pos] of scrollMemo.current) {
+      if (!el.isConnected) {
+        scrollMemo.current.delete(el);
+        continue;
+      }
+      el.scrollTop = pos.top;
+      el.scrollLeft = pos.left;
+    }
+  }, [active]);
 
   const currentRoundRec = useMemo(
     () => rounds.find((r) => r.round === currentRound) ?? null,
@@ -547,12 +689,20 @@ export function ReviewScreen({
   }, [reviewId]);
 
   if (!reviewId) {
-    return <div className="rev-empty">从入口开始一个审核。</div>;
+    return (
+      <div className="rev-empty" hidden={!active}>
+        从入口开始一个审核。
+      </div>
+    );
   }
 
   return (
     <div
       className="rev-root"
+      ref={rootRef}
+      // 不可见的 tab 整块退出外壳网格(display:contents 会把三块摊进 top/host/foot);
+      // 只是不可见,不卸载 —— 在途回复、动作流、草稿、滚动位置都得留着。
+      hidden={!active}
       style={{ ['--left-w' as string]: `${leftW}px`, ['--right-w' as string]: `${rightW}px` }}
     >
       <header className="rev-topbar">
@@ -613,6 +763,18 @@ export function ReviewScreen({
           rounds={rounds}
           onClose={() => setRerunOpen(false)}
           onRun={onRerun}
+        />
+      )}
+      {/* 满载提示悬浮在这一屏上;有模态压着时让位给它 —— 那边正就地说明同一件事,
+          两处一起出只会打架(重跑面板还会把它盖掉一半)。 */}
+      {capacity && !modalOpen && (
+        <CapacityNotice
+          capacity={capacity}
+          blocked={capacityBlocked || undefined}
+          float
+          onOpen={onOpenReview}
+          onRefresh={() => void refreshCapacity()}
+          onDismiss={() => setCapacity(null)}
         />
       )}
 
@@ -684,6 +846,7 @@ export function ReviewScreen({
             findNonce={findNonce}
             onFindClose={() => setFindNonce(0)}
             keysSuspended={modalOpen}
+            onComposeDraftChange={setAnnotateDraft}
           />
           <Resizer
             cssVar="--right-w"
@@ -726,6 +889,7 @@ export function ReviewScreen({
               if (back && d.discussionId !== activeDiscussionId) focusDiscussion(d.discussionId!);
             }}
             onComposerSend={onComposerSend}
+            onComposerDraftChange={setComposerDraft}
             onStartGlobalDiscussion={startGlobalDiscussion}
             onJumpToCode={jumpToCode}
             ensureMessages={ensureMessages}
@@ -755,38 +919,6 @@ export function ReviewScreen({
         onOpenHelp={() => setHelpOpen(true)}
       />
     </div>
-  );
-}
-
-/**
- * 顶栏展示用的 PR 引用拆解(URL / owner/repo#123 / 纯号);解析不出就退回原样显示,
- * 不与 main 侧 parsePrRef 共用 —— 那条路径要抛错并回退推断仓库,展示态不需要。
- */
-function parsePrRefLoose(ref: string): { nwo: string; num: string } | null {
-  const url = ref.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
-  if (url) return { nwo: url[1], num: url[2] };
-  const short = ref.match(/^([^/\s]+\/[^/#\s]+)#(\d+)$/);
-  if (short) return { nwo: short[1], num: short[2] };
-  const numOnly = ref.match(/^#?(\d+)$/);
-  return numOnly ? { nwo: '', num: numOnly[1] } : null;
-}
-
-/** 顶栏源标识图标:三来源各一枚,与入口页 srcbadge 同一视觉词汇。 */
-function SourceIcon({ source }: { source?: Review['source'] }) {
-  if (source === 'github-pr') {
-    return (
-      <svg className="si" width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-        <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-1.33c-2.23.48-2.7-1.07-2.7-1.07-.36-.93-.89-1.18-.89-1.18-.73-.5.05-.49.05-.49.81.06 1.23.83 1.23.83.72 1.23 1.89.87 2.35.67.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-      </svg>
-    );
-  }
-  return (
-    <svg className="si" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden>
-      <circle cx="6.5" cy="5.5" r="2.5" />
-      <circle cx="6.5" cy="18.5" r="2.5" />
-      <circle cx="17.5" cy="12" r="2.5" />
-      <path d="M6.5 8v8M9 5.5h4a2.5 2.5 0 0 1 2.5 2.5v1.5" />
-    </svg>
   );
 }
 
@@ -827,6 +959,7 @@ function RightPanel({
   unsent,
   onRestoreUnsent,
   onComposerSend,
+  onComposerDraftChange,
   onStartGlobalDiscussion,
   onJumpToCode,
   ensureMessages,
@@ -869,6 +1002,7 @@ function RightPanel({
   unsent: UnsentDraft[];
   onRestoreUnsent: (d: UnsentDraft) => void;
   onComposerSend: (text: string) => void | Promise<void>;
+  onComposerDraftChange: (hasDraft: boolean) => void;
   onStartGlobalDiscussion: () => Promise<string | null>;
   onJumpToCode: (d: Discussion) => void;
   ensureMessages: (id: string) => void;
@@ -1123,6 +1257,7 @@ function RightPanel({
           onRestoreUnsent={onRestoreUnsent}
           scanning={scanning}
           onSend={onComposerSend}
+          onComposerDraftChange={onComposerDraftChange}
           onStartGlobal={onStartGlobalDiscussion}
           onJumpToCode={onJumpToCode}
           ensureMessages={ensureMessages}

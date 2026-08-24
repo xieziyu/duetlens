@@ -273,9 +273,17 @@ const V21 = `
 ALTER TABLE reviews ADD COLUMN base_ref TEXT;
 `;
 
+// 上次开着的 review tab 集合与活跃项。tab 只是视图把手,不影响后端会话,故存进 ui_settings
+// 而非 reviews:它记的是「这台机器上次摆开了哪几枚」,与 review 自身的生命周期无关。
+// 顺序有意义(屏上从左到右),JSON 数组存一列。恢复时 review 可能已被保留期清掉,读侧不保证有效。
+const V22 = `
+ALTER TABLE ui_settings ADD COLUMN open_review_ids TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE ui_settings ADD COLUMN active_review_id TEXT NOT NULL DEFAULT '';
+`;
+
 const MIGRATIONS: string[] = [
   V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20,
-  V21,
+  V21, V22,
 ];
 
 export function migrate(db: Database): void {

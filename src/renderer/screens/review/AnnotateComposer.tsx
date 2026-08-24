@@ -3,6 +3,7 @@ import type { Severity } from '@shared/domain';
 import { imeComposing } from '../../keys';
 import { CategorySelect } from './CategorySelect';
 import { describeSendFailure } from './round-error';
+import { useDraftFlag } from './useDraftFlag';
 
 const SEV_LABEL: Record<Severity, string> = { high: 'high', medium: 'med', low: 'low' };
 const SEV_OPTIONS: Severity[] = ['high', 'medium', 'low'];
@@ -29,6 +30,8 @@ export interface AnnotateComposerProps {
   /** finding 态提交:经 review:add-finding 落库(origin=manual);同 onSend,resolve 才关卡片 */
   onCreate: (draft: NewFindingDraft) => void | Promise<void>;
   onCancel: () => void;
+  /** 卡里有没有还没提交的字;关 tab 前的拦截据此判断,故只报布尔量 */
+  onDraftChange?: (hasDraft: boolean) => void;
 }
 
 /**
@@ -38,7 +41,14 @@ export interface AnnotateComposerProps {
  * severity / category / 标题 / suggestion,正文原地变成「说明」。升格是加法不是切换,已写的字不丢:
  * 开关来回切时正文与标题按首行分/合,与后端 promoteDiscussion(discussion → finding)是同一条语义。
  */
-export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }: AnnotateComposerProps) {
+export function AnnotateComposer({
+  label,
+  snippet,
+  onSend,
+  onCreate,
+  onCancel,
+  onDraftChange,
+}: AnnotateComposerProps) {
   const [up, setUp] = useState(false);
   const [text, setText] = useState('');
   const [title, setTitle] = useState('');
@@ -48,6 +58,8 @@ export function AnnotateComposer({ label, snippet, onSend, onCreate, onCancel }:
   const [suggestion, setSuggestion] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // suggestion 只在开关打开时才会随提交带走,关着时框里的残留不算草稿
+  useDraftFlag(!!(text.trim() || title.trim() || (hasSugg && suggestion.trim())), onDraftChange);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
 
