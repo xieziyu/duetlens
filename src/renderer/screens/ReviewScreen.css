@@ -2024,14 +2024,18 @@ body.rz-dragging * {
 /* ---------- 机审期的实时播报:agent 此刻在读什么 / 搜什么 ---------- */
 /* 常驻第二行。实测首条 finding 中位 169s、p90 302s —— 在它到达之前,
    横条上除了这一行没有任何东西会变,所以这行必须自己撑起"还活着"的证据。 */
-.scanbar .sb-live {
+/* 播报行本身无前缀:进度条与讨论里的在途气泡共用同一副长相,两处宿主只调外边距 ——
+   抄成两份的话,同一件事在两个地方会慢慢长歪。 */
+.sb-live {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 14px 7px;
   min-width: 0;
 }
-.scanbar .sb-live .lv-ic {
+.scanbar .sb-live {
+  padding: 0 14px 7px;
+}
+.sb-live .lv-ic {
   flex: none;
   width: 15px;
   height: 15px;
@@ -2045,22 +2049,22 @@ body.rz-dragging * {
   color: var(--agent-2);
   box-shadow: 0 0 0 1px var(--agent-line) inset;
 }
-.scanbar .sb-live .lv-ic.k-finding {
+.sb-live .lv-ic.k-finding {
   background: color-mix(in oklab, var(--sev-med) 16%, transparent);
   color: var(--sev-med);
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--sev-med) 40%, transparent) inset;
 }
-.scanbar .sb-live .lv-ic.k-idle {
+.sb-live .lv-ic.k-idle {
   background: color-mix(in oklab, var(--text-deco) 16%, transparent);
   color: var(--text-faint);
   box-shadow: 0 0 0 1px var(--border) inset;
 }
-.scanbar .sb-live .lv-verb {
+.sb-live .lv-verb {
   flex: none;
   font-size: 11.5px;
   color: var(--text-dim);
 }
-.scanbar .sb-live .lv-obj {
+.sb-live .lv-obj {
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--mono);
@@ -2070,20 +2074,20 @@ body.rz-dragging * {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.scanbar .sb-live .lv-obj em {
+.sb-live .lv-obj em {
   font-style: normal;
   color: var(--text-faint);
 }
 /* 本步已耗时:静默期与卡死在界面上长得一样,没有这个数就分不出来 */
-.scanbar .sb-live .lv-el {
+.sb-live .lv-el {
   flex: none;
   font-family: var(--mono);
   font-size: 10.5px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
-.scanbar .sb-live.stale .lv-el,
-.scanbar .sb-live.stale .lv-verb {
+.sb-live.stale .lv-el,
+.sb-live.stale .lv-verb {
   color: var(--sev-med);
 }
 
@@ -3825,6 +3829,122 @@ body.rz-dragging * {
   30% {
     opacity: 1;
   }
+}
+
+/* ---------- 在途气泡:一问从排队到落定的那一格 ---------- */
+/* 它不是答案之外另开的进度条,就是答案将要出现的那个气泡(见 LiveReply)。
+   所以这里只加装饰,不改 .msg / .bubble 的排版 —— 落定那一刻屏上不能跳。 */
+.thread-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.thread-wrap > .thread {
+  flex: 1;
+  min-height: 0;
+}
+/* 脱离吸底后的回吸口。浮在线程之上而不占位:占位的话按钮一出现内容就往上跳一截 */
+.thread-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border: 1px solid var(--agent-line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--agent-2);
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.18);
+}
+.thread-jump:hover {
+  background: var(--agent-soft);
+}
+
+.live-reply .lr-clock {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+/* 停止:常驻但压得很淡 —— 它要随时按得到(答偏了就该立刻停),又不该抢正文的注意力 */
+.live-reply .lr-stop {
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: none;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    border-color 0.12s;
+}
+.live-reply .lr-stop:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--sev-high) 45%, transparent);
+  color: var(--sev-high);
+}
+.live-reply .lr-stop:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.live-reply .lr-stop-err {
+  flex-basis: 100%;
+  font-size: 10.5px;
+  color: var(--sev-high);
+}
+
+/* 取证段:出字前它顶在气泡上方回答「此刻在做什么」,出字后收成一枚角标 */
+.live-reply .lr-act {
+  margin-bottom: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--surface-2) 60%, transparent);
+}
+.live-reply .lr-act.compact {
+  padding: 2px 8px;
+  border-color: transparent;
+  background: none;
+}
+.live-reply .lr-act-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.live-reply .lr-act-head:hover {
+  color: var(--text-dim);
+}
+.live-reply .lr-caret {
+  font-size: 8px;
+}
+.live-reply .lr-act .sb-live {
+  margin-top: 4px;
+}
+.live-reply .lr-feed {
+  margin-top: 4px;
+  max-height: 168px;
+}
+/* 中断:半句话留在屏上,但要说清它没落库 —— 否则下一次进这条讨论时它凭空消失 */
+.live-reply .lr-cut {
+  margin-top: 6px;
+  padding: 5px 9px;
+  border-left: 2px solid var(--sev-med);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.live-reply .lr-cut b {
+  color: var(--text);
 }
 
 /* ---------- Composer(Discussion 栏底部)---------- */

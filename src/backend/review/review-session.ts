@@ -164,6 +164,74 @@ type TurnOutcome =
   | { kind: 'failed'; error: string; errorKind: AgentErrorKind };
 
 /**
+ * delta 的合流窗口。逐 token 外发是几百条 IPC 换同一屏文字,而 50ms 的滞后在屏上看不出来;
+ * 合流只作用于**外发**,{@link TurnWaiter.reply} 仍逐条累加 —— 落库文本与叫停取证都依赖它逐字为真。
+ */
+const STREAM_FLUSH_MS = 50;
+
+/**
+ * 一条追问的流式回执。生命周期与那一问的 turn 同宽:起跑、逐段出字、收尾各发一次事件,
+ * renderer 据此把「排队中 / 在跑 / 已中断」画成同一个气泡的三个阶段。
+ *
+ * 收尾**必须先把残余 delta 吐净**:留在缓冲里的那截会排在落库消息之后到达,
+ * 于是一条已经定稿的回复旁边又冒出半句在途文本。
+ */
+class ReplyStream {
+  private pending = '';
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private turnId = '';
+  private ended = false;
+
+  constructor(
+    private readonly discussionId: string,
+    private readonly emit: <K extends keyof ReviewSessionEvents>(
+      event: K,
+      payload: ReviewSessionEvents[K],
+    ) => void,
+  ) {}
+
+  /**
+   * 这一问出队了(此前一直排在扫描/前一问后面)。**报在出队那一刻,不等 turn/start 应答** ——
+   * 那一个来回里到达的工具事件找不到归属,会被记进机审动作流(顶高「改动文件已读 N/M」),
+   * 而这一问的取证行反倒空着。turnId 此刻还不知道,由 {@link identify} 稍后补。
+   */
+  started(): void {
+    if (this.ended) return;
+    this.emit('reply-started', { discussionId: this.discussionId });
+  }
+
+  /** turn/start 应答到手;此后的 delta 与收尾都带得上 id。 */
+  identify(turnId: string): void {
+    this.turnId = turnId;
+  }
+
+  delta(text: string): void {
+    if (this.ended || !text) return;
+    this.pending += text;
+    this.timer ??= setTimeout(() => this.flush(), STREAM_FLUSH_MS);
+  }
+
+  flush(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    if (!this.pending) return;
+    const text = this.pending;
+    this.pending = '';
+    this.emit('reply-delta', { discussionId: this.discussionId, turnId: this.turnId, text });
+  }
+
+  /** 幂等:失败路径会经就地判定与外层 catch 各走一次。 */
+  end(outcome: 'ok' | 'failed' | 'stopped'): void {
+    if (this.ended) return;
+    this.flush();
+    this.ended = true;
+    this.emit('reply-ended', { discussionId: this.discussionId, turnId: this.turnId, outcome });
+  }
+}
+
+/**
  * 一个 turn 是为谁跑的。**叫停只作用于机审那几个** —— 追问 turn 也要等终局、
  * 也登记在 {@link ReviewSession.stopTargets} 里,但它是用户刚问出去的那句话,不该被
  * 「停止机审」顺手打断(扫描自然收尾后,队里的追问紧接着就开跑)。
@@ -195,8 +263,10 @@ interface TurnWaiter {
  * 故由 {@link ReviewSession.stopScan} 取快照逐个通知,而不是置一个全局旗子。
  */
 interface StopTarget {
-  /** 这次等待是为谁跑的;叫停只挑 `scan` 的下手 */
+  /** 这次等待是为谁跑的;「停止机审」只挑机审那几档下手 */
   kind: TurnKind;
+  /** 追问轮所属的讨论;{@link ReviewSession.stopReply} 按它点名,机审轮为空 */
+  discussionId?: string;
   /**
    * 要打断的那个 turn。**两种「没有」必须分开**,处置相反:
    *   `undefined` —— turn/start 应答还没回来,稍等就有;
@@ -281,8 +351,20 @@ export interface ReviewSessionEvents {
   discussion: Discussion;
   /** 已落库的对话消息(user/agent) */
   message: Message;
-  /** 归一后的 agent 流事件(原样转发) */
+  /**
+   * 归一后的 agent 流事件。**`message-delta` 除外** —— 它没有讨论归属,
+   * renderer 拿它无从落笔;追问的正文走 `reply-delta`,机审轮的回复文本本就只用于收轮。
+   */
   'agent-event': AgentEvent;
+  /**
+   * 这一问出队开跑了(此前一直排在扫描/前一问后面)。**不带 turnId** ——
+   * 它报的是出队那一刻,而 id 要到 turn/start 应答才有(见 {@link ReplyStream.started})。
+   */
+  'reply-started': { discussionId: string };
+  /** 追问回复的流式增量(已按 {@link STREAM_FLUSH_MS} 合流) */
+  'reply-delta': { discussionId: string; turnId: string; text: string };
+  /** 追问 turn 收尾;`ok` 表示正文已作为 message 落库并外发 */
+  'reply-ended': { discussionId: string; turnId: string; outcome: 'ok' | 'failed' | 'stopped' };
   /** 讨论里 agent 提出的待确认回写提案(新建 / 挂上消息后重发) */
   'finding-proposal': FindingProposal;
   /** 对抗档跳过了自检轮。档位承诺了这一轮,不跑就得说为什么,否则看起来像功能坏了。 */
@@ -501,23 +583,39 @@ export class ReviewSession {
     // 本轮提案的收集篮由调用方持有并原样传进 turn:同一线程可以有多条追问并发,
     // 记在 session 上的话,后一条会把前一条的篮子清掉,提案就再也挂不上那句回复。
     const collected: string[] = [];
+    // 在途状态由它外发(排队 → 起跑 → 逐段出字 → 收尾)。与 collected 同理由挂在调用方:
+    // 同一线程可以有多条追问,记在 session 上会被后一条顶掉。
+    const stream = new ReplyStream(discussionId, (event, payload) => this.emit(event, payload));
     try {
       const outcome = await this.runTurn(
         'followup',
         this.buildFollowupPrompt(discussion, text, history),
         { discussionId, collected },
+        stream,
       );
-      if (outcome.kind === 'failed')
+      if (outcome.kind === 'failed') {
+        stream.end('failed');
         throw new AgentTurnError(`追问失败: ${outcome.error}`, outcome.errorKind, outcome.error);
-      if (outcome.kind === 'stopped') return userMsg;
+      }
+      if (outcome.kind === 'stopped') {
+        stream.end('stopped');
+        return userMsg;
+      }
 
       const reply = outcome.reply.trim();
-      if (!reply) return userMsg;
+      // 残余 delta 必须赶在落库消息之前吐净,否则它会排在定稿的回复后面到达
+      stream.flush();
+      if (!reply) {
+        stream.end('ok');
+        return userMsg;
+      }
       const agentMsg = this.store.addMessage(discussionId, 'agent', reply);
       this.emit('message', agentMsg);
       this.bindProposals(collected, agentMsg.id);
+      stream.end('ok');
       return agentMsg;
     } catch (e) {
+      stream.end('failed'); // 幂等:上面已定性过的那条不会重复外发
       throw new FollowupReplyError(e);
     }
   }
@@ -570,14 +668,59 @@ export class ReviewSession {
           : 'agent 没有给出 turn id,这一轮打断不了,停不下来',
       );
 
+    await this.interruptTurns(
+      conversationId,
+      targets,
+      live.map((x) => x.turnId),
+      () => {
+        this.stopped = true;
+      },
+    );
+  }
+
+  /**
+   * 叫停某条讨论正在跑的那一问。打断时序与 {@link stopScan} 同一套(闸门先挂、点名打断、
+   * 成功后就地收轮),但**不置 session 级的 stopped 旗子** —— 那面旗子的语义是
+   * 「本轮机审到此为止」,拿它停一句追问会顺带掐掉排在后面的自检轮。
+   *
+   * 只停**已经起跑**的那一问。还排在队里的没有 turn 可打断,UI 也因此只在起跑后才给这枚按钮。
+   */
+  async stopReply(discussionId: string): Promise<void> {
+    const conversationId = this.conversationId;
+    if (!conversationId) throw new Error('会话尚未建立,无法停止');
+    const targets = [...this.stopTargets].filter(
+      (t) => t.kind === 'followup' && t.discussionId === discussionId,
+    );
+    if (targets.length === 0) throw new Error('这一问没有在跑的轮次,停不下来');
+    // 与 stopScan 同判据:id 未到手是「稍等再停」,agent 压根不给 id 是「停不下来」
+    const live = targets.map((t) => t.turnId());
+    if (!live.some(Boolean))
+      throw new Error(
+        live.some((id) => id === undefined)
+          ? '这一问刚发出去,还没拿到可打断的 turn id,请稍等一下再停'
+          : 'agent 没有给出 turn id,这一问打断不了',
+      );
+    await this.interruptTurns(conversationId, targets, live);
+  }
+
+  /**
+   * 打断一批在跑的 turn:闸门先挂 → 逐个 interrupt → 成功后就地收轮。
+   * 闸门必须**先于**打断挂上,期间到达的终局才扣得住(成败定性见 {@link stopScan})。
+   */
+  private async interruptTurns(
+    conversationId: string,
+    targets: readonly StopTarget[],
+    turnIds: readonly (string | undefined)[],
+    onInterrupted?: () => void,
+  ): Promise<void> {
     let openGate!: () => void;
     const gate = new Promise<void>((resolve) => {
       openGate = resolve;
     });
     for (const t of targets) t.begin(gate);
     try {
-      for (const { turnId } of live) if (turnId) await this.agent.interrupt(conversationId, turnId);
-      this.stopped = true;
+      for (const turnId of turnIds) if (turnId) await this.agent.interrupt(conversationId, turnId);
+      onInterrupted?.();
       for (const t of targets) t.stop();
     } finally {
       openGate(); // 没停成的话,扣住的终局在这里还原本色
@@ -697,7 +840,12 @@ export class ReviewSession {
       if (review) this.emit('review', review);
     });
     const mcpUrl = await this.mcp.listen();
-    this.unsubscribe = this.agent.streamEvents((e) => this.emit('agent-event', e));
+    // delta 不进这条转发:它没有讨论归属,renderer 拿它无从落笔,而逐 token 过 IPC
+    // 是几百条消息白流经整条链路(含完成通知)。追问的正文走 reply-delta,机审轮的回复
+    // 文本只用于收轮、本就不上屏。
+    this.unsubscribe = this.agent.streamEvents((e) => {
+      if (e.kind !== 'message-delta') this.emit('agent-event', e);
+    });
     return mcpUrl;
   }
 
@@ -805,7 +953,12 @@ export class ReviewSession {
    * 跑一轮 turn(串行入队):累积 message-delta 作为 agent 回复文本,resolve 于 turn 结束。
    * 前一轮失败不阻断后续轮(链上 catch)。
    */
-  private runTurn(kind: TurnKind, text: string, propose?: ProposeContext): Promise<TurnOutcome> {
+  private runTurn(
+    kind: TurnKind,
+    text: string,
+    propose?: ProposeContext,
+    stream?: ReplyStream,
+  ): Promise<TurnOutcome> {
     const run = async (): Promise<TurnOutcome> => {
       // 排在队里的那些:轮到自己时会话可能已经拆了,别再发一轮出去等终局
       if (this.disposed) throw new SessionDisposedError();
@@ -814,9 +967,11 @@ export class ReviewSession {
       // report_finding 记成这条讨论的提案,而扫描收尾时的复位又会让排在后面的这一问
       // 退回直接落库 —— 一次绕过 reviewer 确认的静默改动。
       this.enterTurnMode(kind, propose);
+      // 归属窗口与 turn 的执行窗口必须严丝合缝:晚报一步,这一步里的工具事件就没人认领
+      stream?.started();
       try {
         // 订阅要先于发起:极快的 turn(乃至 stub)会在 turn/start 应答之前就把 delta 与终局发出来
-        const waiter = this.awaitTurnEnd(kind);
+        const waiter = this.awaitTurnEnd(kind, propose?.discussionId, stream);
         try {
           waiter.identify(await this.agent.sendMessage(conversationId, text));
         } catch (e) {
@@ -867,7 +1022,7 @@ export class ReviewSession {
    * 那条迟到的终局会被下一次追问当成自己的(追问提前返回空回复),残余文本还会混进追问的答案。
    * turnId 要到 turn/start 应答才知道,故认领之前先扣住,认领后再逐条比对。
    */
-  private awaitTurnEnd(kind: TurnKind): TurnWaiter {
+  private awaitTurnEnd(kind: TurnKind, discussionId?: string, stream?: ReplyStream): TurnWaiter {
     type TerminalEvent = Extract<AgentEvent, { kind: 'turn-completed' | 'turn-failed' }>;
     const cleanup: (() => void)[] = [];
     let settle!: (end: TurnEnd) => void;
@@ -895,6 +1050,7 @@ export class ReviewSession {
     };
     const target: StopTarget = {
       kind,
+      discussionId,
       turnId: () => (identified ? (mine ?? '') : undefined),
       begin: (g) => {
         gate = g;
@@ -966,7 +1122,10 @@ export class ReviewSession {
         }
         if (e.kind === 'message-delta') {
           if (!identified) heldDeltas.set(e.turnId, (heldDeltas.get(e.turnId) ?? '') + e.text);
-          else if (isMine(e.turnId)) reply += e.text;
+          else if (isMine(e.turnId)) {
+            reply += e.text;
+            stream?.delta(e.text);
+          }
           return;
         }
         if (e.kind === 'turn-completed' || e.kind === 'turn-failed') takeEnd(e);
@@ -980,7 +1139,13 @@ export class ReviewSession {
         if (identified) return;
         identified = true;
         mine = turnId || undefined; // agent 没给 id 就退回「来什么认什么」
-        for (const [from, text] of heldDeltas) if (isMine(from)) reply += text;
+        // 认领要先于补发:顺序反了的话那截扣住的正文会带着空 turnId 出去
+        stream?.identify(turnId);
+        for (const [from, text] of heldDeltas)
+          if (isMine(from)) {
+            reply += text;
+            stream?.delta(text);
+          }
         heldDeltas.clear();
         const ends = heldEnds.splice(0);
         for (const e of ends) if (isMine(e.turnId)) void classify(e);

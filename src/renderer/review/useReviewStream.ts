@@ -9,6 +9,40 @@ import {
   type ActivityLog,
 } from '../screens/review/scan-activity';
 
+/**
+ * 一条追问在途(或刚中断)的回复。它是**未落库**的:turn 收尾成功后由权威 message 事件接手,
+ * 中断的那份只留在屏上 —— 落库会让半句话被下一轮追问的历史回顾原样重述。
+ */
+export interface ReplyStream {
+  /**
+   * 本地稳定 id。turnId 顶不了这个用 —— 起跑那刻它还是空串,而这时已经要拿 key 渲染了。
+   */
+  id: string;
+  /**
+   * 这一问对应的 turn;delta 与收尾按它对号入座。**起跑那一刻还是空串** ——
+   * 起跑报的是出队,而 id 要到 turn/start 应答才有,故空串一律当「还不知道」处理。
+   */
+  turnId: string;
+  /** 已到的正文;起跑但还没出字时为空串 */
+  text: string;
+  startedAt: number;
+  /**
+   * 这一问在途期间 agent 的动作。与机审动作流分开存:合在一起的话,「本轮改动文件已读 N/M」
+   * 会被讨论期读的文件顶高,而那个分母计的是**那一轮机审**取证到哪儿了。
+   */
+  activity: ActivityLog;
+  /**
+   * **这一问**产生的回写提案 id。不能拿「还没挂上消息」当判据 —— 上一问若空回复 / 失败 /
+   * 被叫停,它的提案永远挂不上消息(见 ReviewSession.bindProposals),照那个判据会被算成
+   * 这一问的产出,挂在一句它没说过的话下面,而卡片是真会改 finding 的。
+   */
+  proposalIds: string[];
+  /** 失败或被叫停:文字定格保留,不再有后续 delta */
+  interrupted: boolean;
+  /** 定格于哪一刻。计时器必须在这里停住 —— 一个不断往上走的钟等于说它还在跑。 */
+  endedAt?: number;
+}
+
 export interface ReviewStreamState {
   review: Review | null;
   findings: Finding[];
@@ -22,6 +56,12 @@ export interface ReviewStreamState {
   diffReady: boolean;
   /** 按 discussionId 聚合的消息(user/agent),随 message 事件增量追加 */
   messages: Record<string, Message[]>;
+  /**
+   * 一条讨论的回复流,按起跑先后排。**至多一条在途**(turn 是串行的),其余都是失败 / 被叫停后
+   * 定格的残文 —— 存成列表而不是一条,是因为后者会被下一问的起跑就地顶掉:
+   * 卡上写着「换个问法再问一次即可」,照做那一下恰好把它抹了,而它哪儿都没落库。
+   */
+  streams: Record<string, ReplyStream[]>;
   /** agent 在讨论里提出的回写提案(含已落定的,它们是改动来由的凭据) */
   proposals: FindingProposal[];
   status: Review['status'] | null;
@@ -47,6 +87,24 @@ export interface ReviewStreamState {
   dropMessage: (discussionId: string, id: string) => void;
 }
 
+type Streams = Record<string, ReplyStream[]>;
+
+/** 这条讨论正在跑的那一条;至多一条(turn 串行),没有则 null。 */
+export function liveReplyOf(list: readonly ReplyStream[] | undefined): ReplyStream | null {
+  return list?.find((s) => !s.interrupted) ?? null;
+}
+
+/** 换掉一条讨论的整份列表;空列表即摘掉这个键,不存在时原样返回(省一次重渲染)。 */
+function putStreams(prev: Streams, discussionId: string, next: ReplyStream[]): Streams {
+  if (next.length === 0) {
+    if (!prev[discussionId]) return prev;
+    const out = { ...prev };
+    delete out[discussionId];
+    return out;
+  }
+  return { ...prev, [discussionId]: next };
+}
+
 /**
  * 穷尽性哨兵:ReviewEvent 的分支被全部消费时,参数才是 never —— 新增一支而漏处理即编译失败。
  * 运行时只告警不抛:main 比 renderer 新时(热更/回滚)收到未知事件应静默跳过,而非崩掉整条事件流。
@@ -66,6 +124,25 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
   const [diff, setDiff] = useState<DiffFile[]>([]);
   const [diffReady, setDiffReady] = useState(false);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
+  const [streams, setStreams] = useState<Streams>({});
+  const streamSeq = useRef(0);
+  const newStream = useCallback(
+    (turnId = '', text = ''): ReplyStream => ({
+      id: `s-${streamSeq.current++}`,
+      turnId,
+      text,
+      startedAt: Date.now(),
+      activity: EMPTY_ACTIVITY_LOG,
+      proposalIds: [],
+      interrupted: false,
+    }),
+    [],
+  );
+  /**
+   * 正在跑的那条追问。agent 事件流本身不带讨论归属,而 turn 是串行的(见 ReviewSession.turnChain),
+   * 故「此刻有没有一条追问在跑」就足以给这段时间里的动作定归属。
+   */
+  const activeReply = useRef<{ discussionId: string } | null>(null);
   const [proposals, setProposals] = useState<FindingProposal[]>([]);
   const [status, setStatus] = useState<Review['status'] | null>(null);
   const [rounds, setRounds] = useState<ReviewRound[]>([]);
@@ -126,6 +203,8 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     setActivity(EMPTY_ACTIVITY_LOG);
     setRetrying(null);
     setMessages({});
+    setStreams({});
+    activeReply.current = null;
     setProposals([]);
     setDiff([]);
     setDiffReady(false);
@@ -195,11 +274,30 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
                 : bucket;
             return { ...prev, [m.discussionId]: [...cleaned, m] };
           });
+          // 权威回复接手,在途那份就地退场 —— 同批提交,不会有一帧两个气泡。
+          // **只摘在途的**:定格的残文属于更早那一问,与这条回复无关。
+          if (m.role === 'agent')
+            setStreams((prev) => {
+              const list = prev[m.discussionId];
+              if (!list) return prev;
+              const next = list.filter((s) => s.interrupted);
+              return next.length === list.length ? prev : putStreams(prev, m.discussionId, next);
+            });
           return;
         }
         case 'finding-proposal': {
           // upsert:新提案追加,落定(applied/skipped)或回挂 messageId 后就地替换
           const p = e.payload;
+          // 在途期间产生的记到这一问名下,好让它只挂在**产生它的**那条回复下
+          if (activeReply.current?.discussionId === p.discussionId)
+            setStreams((prev) => {
+              const list = prev[p.discussionId] ?? [];
+              const i = list.findIndex((x) => !x.interrupted);
+              if (i < 0 || list[i].proposalIds.includes(p.id)) return prev;
+              const next = list.slice();
+              next[i] = { ...next[i], proposalIds: [...next[i].proposalIds, p.id] };
+              return putStreams(prev, p.discussionId, next);
+            });
           setProposals((prev) => {
             const i = prev.findIndex((x) => x.id === p.id);
             if (i < 0) return [...prev, p];
@@ -212,6 +310,56 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
         case 'messages-cleared': {
           const { discussionId } = e;
           setMessages((prev) => (prev[discussionId] ? { ...prev, [discussionId]: [] } : prev));
+          // 定格的中断残文也一并清掉:它挂在这条线程上,清空讨论就该连它一起
+          setStreams((prev) => putStreams(prev, discussionId, []));
+          return;
+        }
+        case 'reply-started': {
+          const { discussionId } = e;
+          activeReply.current = { discussionId };
+          setStreams((prev) => {
+            const list = prev[discussionId] ?? [];
+            // 上一条按说已经收过尾。真漏了也不能让它挡着新的那条:有字就定格留下,没字才丢。
+            const kept = list.flatMap((s) =>
+              s.interrupted ? [s] : s.text ? [{ ...s, interrupted: true, endedAt: Date.now() }] : [],
+            );
+            return putStreams(prev, discussionId, [...kept, newStream()]);
+          });
+          return;
+        }
+        case 'reply-delta': {
+          const { discussionId, turnId, text } = e;
+          // 起跑事件可能落在本组件挂载之前(中途切走再切回来),据此把动作归属补回来
+          activeReply.current = { discussionId };
+          setStreams((prev) => {
+            const list = prev[discussionId] ?? [];
+            const i = list.findIndex((x) => !x.interrupted);
+            // 起跑事件必然在前(runTurn 出队即报),漏了也别把正文丢掉
+            if (i < 0) return putStreams(prev, discussionId, [...list, newStream(turnId, text)]);
+            const cur = list[i];
+            // 空串 = id 还没到手,认下即可;后端只会把属于这一问的 delta 喂进来(见 isMine)
+            if (cur.turnId && cur.turnId !== turnId) return prev;
+            const next = list.slice();
+            next[i] = { ...cur, turnId, text: cur.text + text };
+            return putStreams(prev, discussionId, next);
+          });
+          return;
+        }
+        case 'reply-ended': {
+          const { discussionId, turnId, outcome } = e;
+          if (activeReply.current?.discussionId === discussionId) activeReply.current = null;
+          setStreams((prev) => {
+            const list = prev[discussionId];
+            // 一个字都没出的那一问,stream 上的 id 仍是空串 —— 按不匹配丢掉就再也清不干净
+            const i =
+              list?.findIndex((x) => !x.interrupted && (!x.turnId || x.turnId === turnId)) ?? -1;
+            if (!list || i < 0) return prev;
+            const next = list.slice();
+            // 落定的交给权威 message;一个字都没出的中断也没什么可留,失败原因由 replyFailure 说
+            if (outcome === 'ok' || !next[i].text) next.splice(i, 1);
+            else next[i] = { ...next[i], interrupted: true, endedAt: Date.now() };
+            return putStreams(prev, discussionId, next);
+          });
           return;
         }
         case 'round': {
@@ -263,11 +411,34 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     });
 
     function applyAgentEvent(ev: AgentEvent): void {
+      // token 是整条 thread 的账,不分轮次归属
       if (ev.kind === 'token-usage')
         setTokenUsage({ used: ev.used, cumulative: ev.cumulative, total: ev.total });
       if (ev.kind === 'tool-call') setLastTool(`${ev.server}/${ev.tool} · ${ev.status}`);
+      const now = Date.now();
+      const live = activeReply.current;
+      if (live) {
+        // 追问在跑:这段时间里的动作属于那条讨论,不并进机审动作流 ——
+        // 并进去的话「本轮改动文件已读 N/M」会被讨论期读的文件顶高,而那个分母计的是机审。
+        const note =
+          ev.kind === 'turn-retrying' ? `agent 正在自行重试:${ev.error}` : null;
+        setStreams((prev) => {
+          const list = prev[live.discussionId] ?? [];
+          const i = list.findIndex((x) => !x.interrupted);
+          if (i < 0) return prev;
+          const cur = list[i];
+          const activity = note
+            ? appendNote(cur.activity, note, now)
+            : pushActivity(cur.activity, ev, now);
+          if (activity === cur.activity) return prev;
+          const next = list.slice();
+          next[i] = { ...cur, activity };
+          return putStreams(prev, live.discussionId, next);
+        });
+        return;
+      }
       // 动作流自己认哪些 kind 该上屏(工具调用 / shell 命令 / web 检索),这里不重复判别
-      setActivity((prev) => pushActivity(prev, ev, Date.now()));
+      setActivity((prev) => pushActivity(prev, ev, now));
       // codex 不上报第几次重试,只说"还会再试";次数由我们数事件得出
       if (ev.kind === 'turn-retrying')
         setRetrying((prev) => ({ count: (prev?.count ?? 0) + 1, error: ev.error }));
@@ -287,6 +458,7 @@ export function useReviewStream(reviewId: string | null): ReviewStreamState {
     diff,
     diffReady,
     messages,
+    streams,
     proposals,
     status,
     rounds,

@@ -85,6 +85,16 @@ codex 在自己那侧拒掉对自建 MCP 的调用时,turn **照常跑完并 com
 - `item/*` 的 `mcpToolCall` —— **参数那半才是信息**(`get_file` 的 path、`report_finding` 的 file/severity);只说「调用了 get_file」等于没说。
 - `item/*` 的 `commandExecution` —— 只读会话里全是 rg / sed / cat 这类取证动作。**别自己解析 shell**:codex 的 `commandActions` 已按管道逐段解析成 read / search / listFiles + path / query,自己解析一旦错就是往界面上报假动作。
 - `item/*` 的 `webSearch`;以及两者共有的 `durationMs`。
+- `item/agentMessage/delta` —— 追问回复的正文本来就只由它累加而成,故「能不能流式」从来不是能力问题。
+  **只有追问轮的 delta 外发**:它带得到讨论归属,机审轮的没有(见 [ui](ui.md))。
+
+  同一批 rollout 里追问 turn 的实测(n=94):整轮墙钟中位 12.6s / p90 33s / max 191s;工具调用中位 1 次,
+  32 轮一次都不调;回复长度中位 147 字 / p90 372;最后一个 item 到回复落地中位 3.6s。
+  **正文只占等待的最后一小截** —— 这个数是「在途气泡要画的是整段等待、不是只把字流出来」的依据。
+
+  另外两条形状上的事实,查过就别再查:一个追问 turn 的 assistant message **中位 1、p90 1、max 1**
+  (「一轮多条消息被拼成一段」实际不发生);`phase` 字段确实到货(478 条里 470 `final_answer` /
+  8 `commentary`),但样本太少,不作判据。
 
 **拿得到,但已决定不做** —— 推理摘要(`item/reasoning/summaryTextDelta`):
 

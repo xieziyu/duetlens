@@ -88,6 +88,9 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
   });
   ipcMain.handle(IpcChannels.reviewRetryRound, (_e, reviewId: string) => manager.retryRound(reviewId));
   ipcMain.handle(IpcChannels.reviewStopScan, (_e, reviewId: string) => manager.stopScan(reviewId));
+  ipcMain.handle(IpcChannels.reviewStopReply, (_e, reviewId: string, discussionId: string) =>
+    manager.stopReply(reviewId, discussionId),
+  );
   ipcMain.handle(IpcChannels.reviewRounds, (_e, reviewId: string) => manager.getRounds(reviewId));
   ipcMain.handle(IpcChannels.reviewResume, (_e, reviewId: string) => manager.resumeReview(reviewId));
   ipcMain.handle(IpcChannels.reviewCapacity, () => manager.getLiveCapacity());
