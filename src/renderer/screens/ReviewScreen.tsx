@@ -4,7 +4,7 @@ import { DEFAULT_UI_SETTINGS, VERDICT_LABELS } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type { AddFindingInput, DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
-import { useReviewStream } from '../review/useReviewStream';
+import { useReviewStream, type ReplyStream } from '../review/useReviewStream';
 import { useReviewUiState } from '../review/useReviewUiState';
 import { FileTree } from './review/FileTree';
 import { DiffPane, type DiffView } from './review/DiffPane';
@@ -90,6 +90,7 @@ export function ReviewScreen({
     activity,
     retrying,
     ensureMessages,
+    streams,
     addPendingMessage,
     dropMessage,
   } = useReviewStream(reviewId);
@@ -201,6 +202,16 @@ export function ReviewScreen({
       }
     },
     [reviewId, addPendingMessage, dropMessage],
+  );
+
+  // 叫停这一问。不动轮次与 review 状态 —— 停的只是一句追问;问题本身留在线程里,
+  // 已出的半句由在途气泡定格保留(见 LiveReply)。失败原样抛回按钮就地回显。
+  const onStopReply = useCallback(
+    async (discussionId: string) => {
+      if (!reviewId) return;
+      await window.duetlens.review.stopReply(reviewId, discussionId);
+    },
+    [reviewId],
   );
 
   // 没发出去的原文连同它本来要问的线程一起收着(见 UnsentDraft.discussionId);
@@ -704,6 +715,8 @@ export function ReviewScreen({
             activeDiscussionId={activeDiscussionId}
             onSelectDiscussion={focusDiscussion}
             awaitingReply={awaitingReply}
+            streams={streams}
+            onStopReply={onStopReply}
             replyFailure={replyFailure}
             unsent={unsent}
             onRestoreUnsent={(d) => {
@@ -808,6 +821,8 @@ function RightPanel({
   activeDiscussionId,
   onSelectDiscussion,
   awaitingReply,
+  streams,
+  onStopReply,
   replyFailure,
   unsent,
   onRestoreUnsent,
@@ -848,6 +863,8 @@ function RightPanel({
   activeDiscussionId: string | null;
   onSelectDiscussion: (id: string) => void;
   awaitingReply: ReadonlySet<string>;
+  streams: Record<string, ReplyStream[]>;
+  onStopReply: (discussionId: string) => Promise<unknown>;
   replyFailure: Record<string, string>;
   unsent: UnsentDraft[];
   onRestoreUnsent: (d: UnsentDraft) => void;
@@ -1099,6 +1116,8 @@ function RightPanel({
           activeId={activeDiscussionId}
           onSelect={onSelectDiscussion}
           awaitingReply={awaitingReply}
+          streams={streams}
+          onStopReply={onStopReply}
           replyFailure={replyFailure}
           unsent={unsent}
           onRestoreUnsent={onRestoreUnsent}

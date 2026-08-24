@@ -6,6 +6,7 @@
 import { parseUnifiedDiff } from '@shared/diff';
 import type { AgentEvent } from '@shared/agent-events';
 import { MCP_TOOL } from '@shared/mcp-contract';
+import { FOLLOWUP_REPLY_FAILED_CODE } from '@shared/ipc';
 import type {
   BusyReview,
   CompletionNotice,
@@ -23,6 +24,23 @@ import { mergeLayers } from '@shared/prompt';
 import { readThemeQuery } from '../settings/SettingsProvider';
 import { APP_VERSION } from '@shared/version';
 import type { UpdateStatus } from '@shared/update';
+
+/** 预览用的追问回复正文:含粗体、行内代码与围栏块,专为自查流式期的 markdown 抖动。 */
+const REPLY_TEXT = [
+  '这段改动把顺序循环换成了 `spawn` 并发,**进度计数因此不再安全**:',
+  '',
+  '- `counter.set(counter.get() + 1)` 是读-改-写三步,并发下会互相覆盖;',
+  '- `run` 在 `spawn` 之后立刻返回,调用方拿到的 `Result` 早于实际编码完成。',
+  '',
+  '建议改成原子累加,并让 `run` 等齐所有分段:',
+  '',
+  '```ts',
+  'const counter = new AtomicCell(0);',
+  'await Promise.all(segments.map((seg) => this.encode(seg).then(() => counter.inc())));',
+  '```',
+  '',
+  '这样每段完成时的增量上报仍然成立,而总数不会丢。',
+].join('\n');
 
 const UPDATE_FIXTURES: Record<string, UpdateStatus> = {
   unsupported: { phase: 'unsupported' },
@@ -653,6 +671,8 @@ export function installPreviewApi(): void {
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const proposals: FindingProposal[] =
     asClean || asStream ? [] : structuredClone(SEED_PROPOSALS);
+  /** 正在流式回复的讨论 → turnId;叫停与「已被停掉」的判定都看它 */
+  const liveReplies = new Map<string, string>();
   const listeners = new Set<(e: ReviewEvent) => void>();
   const startListeners = new Set<(p: ReviewStartProgress) => void>();
   const fire = (e: ReviewEvent) => {
@@ -894,7 +914,10 @@ export function installPreviewApi(): void {
         fire({ reviewId: 'demo', type: 'discussion', payload: d });
         return d;
       },
-      // 模拟真实回路:先回推 user 消息,延迟后回推 agent 回复;返回 agent 消息。
+      /**
+       * 走完整条在途气泡的四个阶段:排队 → 起跑取证 → 逐段出字 → 落定。
+       * `?reply=fail|stop` 分别自查中断态(残文定格)与「停止」按钮。
+       */
       sendMessage: async (_r, discussionId, text) => {
         const userMsg: Message = {
           id: `m-${Date.now()}-u`,
@@ -905,17 +928,100 @@ export function installPreviewApi(): void {
         };
         (msgStore[discussionId] ??= []).push(userMsg);
         fire({ reviewId: 'demo', type: 'message', payload: userMsg });
-        await new Promise((r) => setTimeout(r, 900));
+
+        const mode = params.get('reply') ?? '';
+        const turnId = `t-${Date.now()}`;
+        const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        // 排队:真实里这一段可能长达整轮扫描,预览给够看清那一格的时间
+        await wait(mode === 'queue' ? 6_000 : 1_200);
+        fire({ reviewId: 'demo', type: 'reply-started', discussionId });
+        liveReplies.set(discussionId, turnId);
+
+        // 取证:两条动作走 started → completed,与真实事件形状一致
+        const act = (ev: AgentEvent) => fire({ reviewId: 'demo', type: 'agent', payload: ev });
+        act({ kind: 'command', command: 'cat src/pipeline.ts', status: 'inProgress', actions: [{ type: 'read', path: 'src/pipeline.ts' }] });
+        await wait(1_100);
+        act({ kind: 'command', command: 'cat src/pipeline.ts', status: 'completed', actions: [{ type: 'read', path: 'src/pipeline.ts' }], durationMs: 1_050 });
+        act({ kind: 'command', command: 'rg "counter" src', status: 'inProgress', actions: [{ type: 'search', query: 'counter', path: 'src' }] });
+        await wait(900);
+        act({ kind: 'command', command: 'rg "counter" src', status: 'completed', actions: [{ type: 'search', query: 'counter', path: 'src' }], durationMs: 880 });
+        if (!liveReplies.has(discussionId)) return userMsg;
+
+        // 工具调用先于回复文本:提案卡应挂在**产生它的**这条在途回复下。
+        // `?reply=orphan` 让这一问提完提案就空手收尾 —— 它此后永远挂不上消息,
+        // 下一问不许把它认领过去(见 useReviewStream 的 proposalIds)。
+        let livePropId: string | null = null;
+        if (mode === 'propose' || mode === 'orphan') {
+          const p: FindingProposal = {
+            id: `p-live-${turnId}`,
+            reviewId: 'demo',
+            discussionId,
+            messageId: null,
+            findingId: findings[0]?.id ?? null,
+            kind: 'update',
+            patch: { severity: 'low', title: `这一问提的改法(${turnId})` },
+            before: null,
+            baseUpdatedAt: findings[0]?.updatedAt ?? Date.now(),
+            status: 'pending',
+            createdAt: Date.now(),
+            resolvedAt: null,
+          } as FindingProposal;
+          proposals.push(p);
+          livePropId = p.id;
+          fire({ reviewId: 'demo', type: 'finding-proposal', payload: p });
+          if (mode === 'orphan') {
+            await wait(700);
+            liveReplies.delete(discussionId);
+            fire({ reviewId: 'demo', type: 'reply-ended', discussionId, turnId, outcome: 'stopped' });
+            return userMsg; // 空手收尾:提案留下,回复没有
+          }
+        }
+
+        // 出字:按真实观测的粒度(一次几个字)推,好看清吸底与 markdown 抖动
+        const full = REPLY_TEXT;
+        let sent = 0;
+        while (sent < full.length) {
+          await wait(55);
+          if (liveReplies.get(discussionId) !== turnId) return userMsg; // 被停了
+          const step = Math.min(4 + Math.floor(sent / 40), 12);
+          const chunk = full.slice(sent, sent + step);
+          sent += chunk.length;
+          fire({ reviewId: 'demo', type: 'reply-delta', discussionId, turnId, text: chunk });
+          if (mode === 'fail' && sent > full.length / 3) {
+            liveReplies.delete(discussionId);
+            fire({ reviewId: 'demo', type: 'reply-ended', discussionId, turnId, outcome: 'failed' });
+            throw new Error(
+              `Error invoking remote method 'review:send-message': Error: ${FOLLOWUP_REPLY_FAILED_CODE} 追问失败: stream disconnected before completion`,
+            );
+          }
+        }
+        liveReplies.delete(discussionId);
         const agentMsg: Message = {
           id: `m-${Date.now()}-a`,
           discussionId,
           role: 'agent',
-          text: '收到。我基于本讨论看了这段改动,建议用原子计数替代共享 Cell,并在每段完成时增量上报进度。',
+          text: full,
           createdAt: Date.now(),
         };
         msgStore[discussionId].push(agentMsg);
         fire({ reviewId: 'demo', type: 'message', payload: agentMsg });
+        // 与 ReviewSession.bindProposals 同语义:turn 收尾后才知道该挂哪条消息
+        if (livePropId) {
+          const i = proposals.findIndex((x) => x.id === livePropId);
+          proposals[i] = { ...proposals[i], messageId: agentMsg.id };
+          fire({ reviewId: 'demo', type: 'finding-proposal', payload: proposals[i] });
+        }
+        fire({ reviewId: 'demo', type: 'reply-ended', discussionId, turnId, outcome: 'ok' });
         return agentMsg;
+      },
+      // 叫停这一问:与后端同语义 —— 残文留在屏上、不落库,轮次与 review 状态一个字不动
+      stopReply: async (_r, discussionId) => {
+        const turnId = liveReplies.get(discussionId);
+        if (!turnId) throw new Error(
+          "Error invoking remote method 'review:stop-reply': Error: 这一问没有在跑的轮次,停不下来",
+        );
+        liveReplies.delete(discussionId);
+        fire({ reviewId: 'demo', type: 'reply-ended', discussionId, turnId, outcome: 'stopped' });
       },
       clearDiscussion: async (_r, discussionId) => {
         msgStore[discussionId] = [];

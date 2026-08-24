@@ -28,6 +28,8 @@ const api: DuetlensApi = {
     rerun: (reviewId, input) => ipcRenderer.invoke(IpcChannels.reviewRerun, reviewId, input),
     retryRound: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewRetryRound, reviewId),
     stopScan: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewStopScan, reviewId),
+    stopReply: (reviewId, discussionId) =>
+      ipcRenderer.invoke(IpcChannels.reviewStopReply, reviewId, discussionId),
     rounds: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewRounds, reviewId),
     resume: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewResume, reviewId),
     capacity: () => ipcRenderer.invoke(IpcChannels.reviewCapacity),

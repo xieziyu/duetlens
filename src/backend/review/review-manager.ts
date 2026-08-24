@@ -157,6 +157,9 @@ const SESSION_FORWARDERS: {
   'finding-proposal': (reviewId, payload) => ({ reviewId, type: 'finding-proposal', payload }),
   status: (reviewId, payload) => ({ reviewId, type: 'status', payload }),
   'agent-event': (reviewId, payload) => ({ reviewId, type: 'agent', payload }),
+  'reply-started': (reviewId, payload) => ({ reviewId, type: 'reply-started', ...payload }),
+  'reply-delta': (reviewId, payload) => ({ reviewId, type: 'reply-delta', ...payload }),
+  'reply-ended': (reviewId, payload) => ({ reviewId, type: 'reply-ended', ...payload }),
   'selfcheck-skipped': (reviewId, payload) => ({
     reviewId,
     type: 'selfcheck-skipped',
@@ -908,6 +911,16 @@ export class ReviewManager extends EventEmitter {
     if (!session) throw new Error('该 review 无活跃会话,无法停止');
     // 收轮仍走 launch 那条链(叫停后 start 照常 resolve),轮次与状态经事件回推
     await session.stopScan();
+  }
+
+  /**
+   * 叫停某条讨论正在跑的那一问。不动轮次与 review 状态 —— 被停的只是一句追问,
+   * 那一问的 user 消息照旧留在线程里(见 ReviewSession.sendMessage 的 stopped 分支)。
+   */
+  async stopReply(reviewId: string, discussionId: string): Promise<void> {
+    const session = this.sessions.get(reviewId);
+    if (!session) throw new Error('该 review 无活跃会话,无法停止');
+    await session.stopReply(discussionId);
   }
 
   /**

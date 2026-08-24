@@ -1,11 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Discussion, Finding, FindingProposal, Message } from '@shared/domain';
+import { liveReplyOf, type ReplyStream } from '../../review/useReviewStream';
 import { Composer, type UnsentDraft } from './Composer';
+import { CopyButton } from './CopyButton';
+import { LiveReply } from './LiveReply';
 import { renderMarkdown } from './markdown';
 import { ProposalCard } from './ProposalCard';
 import { stripIpcWrapper } from './round-error';
 
 const basename = (p: string) => p.split('/').pop() ?? p;
+
+/** 稳定空数组:每次现造会让下游 memo 每帧失效。 */
+const EMPTY_STREAMS: ReplyStream[] = [];
+
+/** 距底多少像素内仍算「停在底部」;留一点余量,免得小数像素让吸底反复脱开。 */
+const STICK_SLACK = 40;
 
 /** reviewer(用户)侧头像图标,替代原先的「你」字形 */
 function UserGlyph() {
@@ -22,8 +31,12 @@ export interface DiscussionTabProps {
   messages: Record<string, Message[]>;
   activeId: string | null;
   onSelect: (id: string) => void;
-  /** 有在途追问的 discussionId(显示打字指示);同一线程可以有多条,故按集合认人 */
+  /** 有在途追问的 discussionId(含还排在队里、尚未起跑的);同一线程可以有多条,故按集合认人 */
   awaitingReply: ReadonlySet<string>;
+  /** 每条讨论的回复流(至多一条在途,其余是中断后定格的残文),按 discussionId */
+  streams: Record<string, ReplyStream[]>;
+  /** 叫停某条讨论正在跑的那一问;失败原样抛出,由按钮就地回显 */
+  onStopReply: (discussionId: string) => Promise<unknown>;
   /** 问题已发出、agent 没能回复的线程 → 原因;就地显示在该线程末尾 */
   replyFailure: Record<string, string>;
   /** 没发出去的原文(含框选发起的首问),待用户放回输入框 */
@@ -105,12 +118,38 @@ export function DiscussionTab(props: DiscussionTabProps) {
 
   const activeMsgCount = activeId ? (messages[activeId]?.length ?? 0) : 0;
   const activeAwaiting = !!activeId && awaitingReply.has(activeId);
+  const activeStreams = activeId ? props.streams[activeId] ?? EMPTY_STREAMS : EMPTY_STREAMS;
+  const liveStream = liveReplyOf(activeStreams);
   const activeFailure = activeId ? props.replyFailure[activeId] ?? null : null;
-  // 新消息 / 切换线程 / agent 打字或报错时滚到底,始终看得到最新
-  useEffect(() => {
+
+  // 吸底:流式回复每几十毫秒长一截,无条件回底会把正在往回读的人一直往下拽。
+  // 只要用户还停在底部就跟着走,一旦上滚就撒手,并给一枚回吸按钮。
+  const stick = useRef(true);
+  const [detached, setDetached] = useState(false);
+  const onThreadScroll = useCallback(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_SLACK;
+    stick.current = bottom;
+    setDetached(!bottom);
+  }, []);
+  const toBottom = useCallback(() => {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [activeId, activeMsgCount, activeAwaiting, activeFailure]);
+    stick.current = true;
+    setDetached(false);
+  }, []);
+  // 换线程一律重新吸住:上一条线程读到哪儿与这条无关
+  useEffect(() => {
+    stick.current = true;
+    setDetached(false);
+  }, [activeId]);
+  // 新消息 / 切换线程 / 流式增量 / 报错时跟到底(仍吸着才跟)
+  useEffect(() => {
+    if (!stick.current) return;
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [activeId, activeMsgCount, activeAwaiting, activeFailure, liveStream?.text]);
 
   // 待恢复原文的去向:它记着自己本来问的是哪条线程,放回输入框会切回去。与当前线程一致时
   // 不必多说;原线程已不在(如换了 review 的残留)就直说会落到当前线程,别让人以为还发得回去。
@@ -148,6 +187,39 @@ export function DiscussionTab(props: DiscussionTabProps) {
   }, [findings]);
   const findingOf = (p: FindingProposal): Finding | null =>
     (p.findingId ? findingById.get(p.findingId) : null) ?? null;
+  // 在途气泡该不该出:还没等到回复(含排队中),或正有一条在跑
+  const liveShown = activeAwaiting || !!liveStream;
+
+  // 挂不上消息的提案按**产生它的那一问**归位:上一问空回复 / 失败 / 被叫停留下的孤儿
+  // 混进这一问,就成了「挂在一句它没说过的话下面」,而卡片是真会改 finding 的。
+  // 认领不到任何一条流的(如更早版本的残留)继续待在线程末尾 —— 不渲染就等于凭空消失。
+  const proposalsByStream = useMemo(() => {
+    const owner = new Map<string, string>(); // proposalId → streamId
+    for (const s of activeStreams) for (const id of s.proposalIds) owner.set(id, s.id);
+    const byStream = new Map<string, FindingProposal[]>();
+    const orphan: FindingProposal[] = [];
+    for (const p of looseProposals) {
+      const sid = owner.get(p.id);
+      if (!sid) orphan.push(p);
+      else byStream.set(sid, [...(byStream.get(sid) ?? []), p]);
+    }
+    return { byStream, orphan };
+  }, [looseProposals, activeStreams]);
+
+  /**
+   * 消息与中断残文按时间穿插成一条线。残文**不能一律排到末尾** —— 它答的是更早那一问,
+   * 摆在后来的问题下面就成了那一问的回答。
+   */
+  const timeline = useMemo(() => {
+    const items = [
+      ...activeMsgs.map((m) => ({ at: m.createdAt, msg: m, cut: null as ReplyStream | null })),
+      ...activeStreams
+        .filter((s) => s.interrupted)
+        .map((s) => ({ at: s.startedAt, msg: null as Message | null, cut: s })),
+    ];
+    items.sort((a, b) => a.at - b.at);
+    return items;
+  }, [activeMsgs, activeStreams]);
   const anchorLabel = active?.file
     ? `${basename(active.file)}:${active.line ?? ''}${active.lineEnd ? `–${active.lineEnd}` : ''}`
     : null;
@@ -224,7 +296,8 @@ export function DiscussionTab(props: DiscussionTabProps) {
             </div>
           )}
 
-          <div className="thread" ref={threadRef}>
+          <div className="thread-wrap">
+          <div className="thread" ref={threadRef} onScroll={onThreadScroll}>
             {rootFinding && (
               <MessageBubble
                 role="agent"
@@ -233,26 +306,40 @@ export function DiscussionTab(props: DiscussionTabProps) {
                 text={rootFinding.body || rootFinding.title}
               />
             )}
-            {activeMsgs.map((m) => (
-              <MessageBubble
-                key={m.id}
-                role={m.role}
-                name={m.role === 'agent' ? 'agent' : 'reviewer'}
-                text={m.text}
-                proposals={proposalsByMessage.get(m.id)}
-                findingOf={findingOf}
-                onApplyProposal={props.onApplyProposal}
-                onSkipProposal={props.onSkipProposal}
-                onUndoProposal={props.onUndoProposal}
-              />
-            ))}
+            {timeline.map((it) =>
+              it.msg ? (
+                <MessageBubble
+                  key={it.msg.id}
+                  role={it.msg.role}
+                  name={it.msg.role === 'agent' ? 'agent' : 'reviewer'}
+                  text={it.msg.text}
+                  proposals={proposalsByMessage.get(it.msg.id)}
+                  findingOf={findingOf}
+                  onApplyProposal={props.onApplyProposal}
+                  onSkipProposal={props.onSkipProposal}
+                  onUndoProposal={props.onUndoProposal}
+                />
+              ) : (
+                <LiveReply
+                  key={it.cut!.id}
+                  stream={it.cut}
+                  proposals={proposalsByStream.byStream.get(it.cut!.id)}
+                  findingOf={findingOf}
+                  onApplyProposal={props.onApplyProposal}
+                  onSkipProposal={props.onSkipProposal}
+                  onUndoProposal={props.onUndoProposal}
+                />
+              ),
+            )}
             {/* 还没回挂到消息上的提案(turn 没给回复文本,或消息被清空过)接在线程末尾 ——
-                挂不上就不渲染的话,一张待确认卡片会凭空消失,而它是唯一的确认入口 */}
-            {looseProposals.length > 0 && (
+                挂不上就不渲染的话,一张待确认卡片会凭空消失,而它是唯一的确认入口。
+                产生它的那一问还在跑时它归在途气泡:提案先于回复文本产生,是**这一条**回复的
+                一部分,单摆在外面会排在解释它的那句话上面。 */}
+            {proposalsByStream.orphan.length > 0 && (
               <div className="msg">
                 <span className="av agent">◆</span>
                 <div className="body">
-                  {looseProposals.map((p) => (
+                  {proposalsByStream.orphan.map((p) => (
                     <ProposalCard
                       key={p.id}
                       proposal={p}
@@ -265,20 +352,16 @@ export function DiscussionTab(props: DiscussionTabProps) {
                 </div>
               </div>
             )}
-            {activeAwaiting && (
-              <div className="msg">
-                <span className="av agent">◆</span>
-                <div className="body">
-                  <div className="nm">
-                    <b className="agent-name">agent</b> <span className="t">正在回复</span>
-                  </div>
-                  <div className="bubble agent">
-                    <span className="typing">
-                      <i /> <i /> <i />
-                    </span>
-                  </div>
-                </div>
-              </div>
+            {liveShown && (
+              <LiveReply
+                stream={liveStream}
+                proposals={liveStream ? proposalsByStream.byStream.get(liveStream.id) : undefined}
+                findingOf={findingOf}
+                onApplyProposal={props.onApplyProposal}
+                onSkipProposal={props.onSkipProposal}
+                onUndoProposal={props.onUndoProposal}
+                onStop={active ? () => props.onStopReply(active.id) : undefined}
+              />
             )}
             {/* 问题已经在上面了,缺的只是回复 —— 说清楚缺在哪,别让人以为自己没发出去。
                 本线程还有别的追问在途时先不报:那句正等着回复,失败结论此刻下得太早。 */}
@@ -292,6 +375,12 @@ export function DiscussionTab(props: DiscussionTabProps) {
                 </div>
               </div>
             )}
+          </div>
+          {detached && (
+            <button className="thread-jump" onClick={toBottom}>
+              ↓ 有新内容
+            </button>
+          )}
           </div>
         </>
       ) : (
@@ -346,32 +435,6 @@ function ClearButton({ onConfirm }: { onConfirm: () => void }) {
       onClick={() => setConfirming(true)}
     >
       ↻ 清空讨论
-    </button>
-  );
-}
-
-/** 复制 agent 回答原文(markdown 源码,非渲染后的富文本);成功后短暂回显。 */
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1400);
-    return () => clearTimeout(t);
-  }, [copied]);
-  return (
-    <button
-      className={`msg-copy${copied ? ' on' : ''}`}
-      title="复制这条回答"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-        } catch {
-          /* 剪贴板不可用时静默 */
-        }
-      }}
-    >
-      {copied ? '✓ 已复制' : '⧉ 复制'}
     </button>
   );
 }

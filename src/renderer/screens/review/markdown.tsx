@@ -63,6 +63,29 @@ export function renderMarkdown(src: string): ReactNode[] {
   return out;
 }
 
+/**
+ * 流式期把**末行**未闭合的行内标记先藏起来。半个 `` ` `` 或 `**` 会先以字面出现、
+ * 下一帧再变成代码/粗体 —— 一行字要抖两次,读起来像在闪。
+ *
+ * 只动最后一行,且**围栏代码块内不动**:那里的反引号本来就是内容,数奇偶只会误伤。
+ */
+export function trimDanglingMarks(src: string): string {
+  const lines = src.split('\n');
+  // 围栏行数为奇数 = 正开着一个代码块,此时末行属于代码内容
+  const fences = lines.filter((l) => /^\s*```/.test(l)).length;
+  if (fences % 2 === 1) return src;
+  const last = lines[lines.length - 1];
+  if (last === undefined || /^\s*```/.test(last)) return src;
+  let cut = last;
+  const ticks = (cut.match(/`/g) ?? []).length;
+  if (ticks % 2 === 1) cut = cut.slice(0, cut.lastIndexOf('`'));
+  const bolds = (cut.match(/\*\*/g) ?? []).length;
+  if (bolds % 2 === 1) cut = cut.slice(0, cut.lastIndexOf('**'));
+  if (cut === last) return src;
+  lines[lines.length - 1] = cut;
+  return lines.join('\n');
+}
+
 function renderInline(text: string): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((seg, i) => {
     if (seg.startsWith('**') && seg.endsWith('**')) return <strong key={i}>{seg.slice(2, -2)}</strong>;

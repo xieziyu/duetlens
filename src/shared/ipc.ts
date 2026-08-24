@@ -48,6 +48,7 @@ export const IpcChannels = {
   reviewRerun: 'review:rerun',
   reviewRetryRound: 'review:retry-round',
   reviewStopScan: 'review:stop-scan',
+  reviewStopReply: 'review:stop-reply',
   reviewRounds: 'review:rounds',
   reviewResume: 'review:resume',
   reviewCapacity: 'review:capacity',
@@ -319,6 +320,18 @@ export type ReviewEvent =
   | { reviewId: string; type: 'review'; payload: Review }
   | { reviewId: string; type: 'status'; payload: Review['status'] }
   | { reviewId: string; type: 'agent'; payload: AgentEvent }
+  /** 追问出队开跑(此前一直排在扫描/前一问后面);turnId 要到 turn/start 应答才有,故不带 */
+  | { reviewId: string; type: 'reply-started'; discussionId: string }
+  /** 追问回复的流式增量(后端已合流) */
+  | { reviewId: string; type: 'reply-delta'; discussionId: string; turnId: string; text: string }
+  /** 追问 turn 收尾;`ok` 表示正文已作为 message 事件到过 */
+  | {
+      reviewId: string;
+      type: 'reply-ended';
+      discussionId: string;
+      turnId: string;
+      outcome: 'ok' | 'failed' | 'stopped';
+    }
   | { reviewId: string; type: 'selfcheck-skipped'; reason: 'no-findings' };
 
 /** contextBridge 暴露到 renderer 的 API 形状。 */
@@ -357,6 +370,8 @@ export interface DuetlensApi {
      * 本轮已结束(或无活跃会话)时抛错。
      */
     stopScan(reviewId: string): Promise<void>;
+    /** 叫停某条讨论正在跑的那一问(只对已起跑的有效;排队中的没有 turn 可打断)。 */
+    stopReply(reviewId: string, discussionId: string): Promise<void>;
     /** 该 review 的轮次履历(首轮 + 每次重跑),用于展示轮次与各轮统计。 */
     rounds(reviewId: string): Promise<ReviewRound[]>;
     /** 续接一个非活跃 review(app 重启后按 codexThreadId 恢复会话),之后可追问。 */

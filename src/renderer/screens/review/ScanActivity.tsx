@@ -34,13 +34,13 @@ function secs(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function clock(ms: number): string {
+export function clock(ms: number): string {
   const t = Math.max(0, Math.floor(ms / 1000));
   return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 }
 
 /** 从某时刻起的已耗时;时刻一变就重算 —— 报的是「这一步跑了多久」,不是总时长。 */
-function useElapsed(since: number | null): number {
+export function useElapsed(since: number | null): number {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (since == null) return;
