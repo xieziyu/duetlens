@@ -14,7 +14,6 @@ import {
   MACHINE_TURN_KINDS,
   reportFindingSchema,
   resolveFindingSchema,
-  scanDoneStatus,
   updateFindingSchema,
   type Discussion,
   type Finding,
@@ -510,8 +509,9 @@ export class ReviewSession {
       if (pending.length === 0) this.emit('selfcheck-skipped', { reason: 'no-findings' });
       else await this.runTurn('selfcheck', selfCheckPrompt(pending));
     }
-    const source = this.store.getReview(this.reviewId)?.source;
-    this.setStatus(source ? scanDoneStatus(source) : 'reviewing');
+    // 跑完的父状态**不在这里写**:它与「收轮次」是两次写库,而收尾路径是先收轮次后写状态。
+    // 两边写序相反的话,崩在中间会留下「轮次还 scanning、父记录已完成」—— 冷启动就再也分不清
+    // 这一轮是跑完了还是被人叫停。故交给 ReviewManager.launch 在收轮之后统一写。
     return this.store.listFindings(this.reviewId);
   }
 
