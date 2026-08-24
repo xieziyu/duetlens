@@ -4,6 +4,84 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.8.0] - 2026-08-24
+
+### Added
+
+- **Agent replies in a discussion now stream in, and the whole wait is drawn in the bubble the
+  answer will land in.** Measured over real follow-up turns, a turn takes a median of 12.6s (p90
+  33s) and the final text only occupies the last two or three seconds — everything before it was a
+  bare three-dot indicator, even though the backend already knew which file the agent was reading.
+  The bubble now evolves in place through four phases — queued, gathering evidence, replying,
+  interrupted — with an evidence row saying what was read, what was searched and how long it took,
+  and nothing jumps when the text settles. Follow-up evidence is also attributed to the discussion
+  instead of being merged into the scan log, where it was inflating the "N/M changed files read"
+  coverage. A reply can be interrupted: the partial text stays on screen and can be copied, but is
+  never persisted — storing half a sentence would have it replayed as context in the next turn. It
+  is render state, so it disappears on a review switch or when the discussion is cleared, and the
+  card says so. Scroll sticks to the bottom only while you are already there, with a jump-back
+  button once you scroll away. Known limit: a follow-up still queued has no turn to interrupt, so
+  the stop button only appears once it starts. (#74)
+- **Several reviews can be open as tabs at once, up to 20.** A tab is only a handle on a view;
+  closing one never touches the codex session behind it, and closing one that is still scanning says
+  so and offers a way back. Background tabs stay mounted: in-flight reply text, the round activity
+  log, unsent drafts and scroll position are all still there when you switch back. The set of open
+  tabs is restored across restarts, dropping ids the database no longer resolves so you never get a
+  hollow tab that never finishes loading. `ctrl-tab` steps through tabs; findings reported while a
+  tab sat in the background show an unread count that clears on activation; closing a tab that still
+  holds unsent text asks first. Submit/export became a view inside a tab rather than a screen beside
+  it — as a sibling screen there is no answer to which review it belongs to after a tab switch. When
+  the strip overflows it scrolls horizontally and always keeps the active tab in view (narrowing the
+  window, closing a neighbour, and the at-limit notice appearing all count), the overflowing edges
+  fade to show there is more, and a vertical wheel is translated into horizontal scroll. (#78, #80)
+- **Headings and ordered lists render properly in agent prose.** `###` and `1.` used to show up
+  literally, and consecutive lines were joined into one run-on paragraph. Headings keep the host font
+  size and mark a section by weight, color and spacing alone, so a chat bubble never shows a second
+  body size; h1 and h2 add a hairline rule. This also fixes a hang present since finding cards gained
+  markdown: a fence with an info string such as `c++` or `objective-c` matched neither branch, so the
+  renderer spun in place until it ran out of memory. (#75)
+
+### Fixed
+
+- **A review left scanning when the app exited no longer spins forever.** A codex session dies with
+  the process, but the database row does not: the review stays `scanning`. Now that tabs are restored
+  across restarts, that becomes a spinner that never stops on the next launch. Cold start settles
+  every half-written shape the last process left behind — a genuinely interrupted round, a half-written
+  settle, and a review with no round row at all. Whichever side already landed repairs the other: a
+  round left scanning under a finished parent becomes done, not failed, since labelling a completed
+  scan as interrupted would hand you a bogus failure card and retry button. A single-instance lock is
+  taken before the database is opened; without it a second instance would fail rounds the first one is
+  actively running. A second launch now focuses the running window, or creates one if the last window
+  was closed. (#77)
+- **A codex resource probe no longer fails the whole round.** From codex 0.149 on, a builtin
+  `list_mcp_resources` tool ships whenever an MCP server is configured, and its description tells the
+  model to prefer resources over web search. When the model takes that advice, codex sends
+  `resources/list` to Duetlens, which declared only the `tools` capability, so the SDK answered -32601.
+  codex reported that failure as an MCP tool call under `server: "duetlens"`, and the undelivered-call
+  safety net matched on the server name alone — killing the scan round and tearing down the session.
+  It depends on whether the model decides to probe, so it was intermittent, and the error text pointed
+  at a codex version mismatch, which was misleading. The server now declares the `resources` capability
+  and answers both resource lists with an empty list (we publish no resources; empty is the honest
+  answer), and the guard additionally requires the tool to be one we declare, so future codex builtins
+  get the same treatment. (#76)
+- **Tab labels no longer say the same thing twice.** The backend composes review titles as
+  `<identity> · <subject>`, and the tab already draws that identity next to the source icon, so a PR
+  read `#4218` + `#4218 · refactor(...)` and a GitButler branch read `feat/x` + `GitButler · feat/x`,
+  with both halves truncated. The duplicated leading segments are now stripped off the title (the
+  review topbar had the same duplication), and the title shrinks all the way to zero before the
+  identity loses a character. The native `title` tooltip never showed up on the tab strip and is
+  replaced by an in-app hover card: project plus full identity on one line, the full title on the next.
+  Also fixes a pre-existing case where a full PR URL resolved to the owner instead of the repo. (#79)
+
+### Upgrade notes
+
+- The database schema moves to v22 (0.7.2 was v21); an existing database migrates on first launch with
+  nothing to do. **The migration is one-way** — going back to 0.7.x still opens the migrated database,
+  but what lives in the new columns (which review tabs were open and which one was active) is invisible
+  to it and never written back. Back up `~/Library/Application Support/Duetlens/duetlens.db` before
+  downgrading.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.7.2] - 2026-08-24
 
 ### Fixed
@@ -399,6 +477,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.8.0]: https://github.com/xieziyu/duetlens/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/xieziyu/duetlens/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/xieziyu/duetlens/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/xieziyu/duetlens/compare/v0.6.0...v0.7.0
