@@ -36,9 +36,7 @@ import type { AgentErrorKind } from '@shared/agent-events';
 import type { AgentEvent, ConversationalAgent } from '../agent/conversational-agent';
 import type { ReviewStore } from '../db/review-store';
 import { BUILTIN_BASE_INSTRUCTIONS } from '../prompt/review-prompt';
-
-/** 首轮机审的缺省指令(未附加用户上下文时使用)。 */
-export const DEFAULT_SCAN_PROMPT = '请审核本次改动,对每个问题调用 report_finding 上报。';
+import { DEFAULT_SCAN_PROMPT } from '../prompt/scan-prompt';
 
 /**
  * 一轮机审因 agent 侧 turn 失败而中止。带上归因是为了让上层能落库、让 UI 能给出处置建议 ——

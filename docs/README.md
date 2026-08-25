@@ -20,7 +20,7 @@ codex app-server 把「一次常驻会话」本身称作 `thread`。为避免冲
 | [data-model.md](design/data-model.md) | review / round / discussion / finding 的结构与状态,历史保留策略 | 改 schema / 数据流前 |
 | [codex-integration.md](design/codex-integration.md) | app-server 协议的实测结论、MCP HTTP 注入、elicitation / sandbox / 审批 | 碰 codex 集成前 |
 | [discussion-proposals.md](design/discussion-proposals.md) | 讨论里 agent 的回写提案:提案而非直接改、剔除独立成档、卡片挂消息与过期口径 | 碰 discussion 回写 / MCP 写工具前 |
-| [rerun.md](design/rerun.md) | 多轮复审:轮次模型、三态表态、剔除抑制、PR 协作上下文、失败留证 | 碰复审 / 轮次 / 去重前 |
+| [rerun.md](design/rerun.md) | 多轮复审:轮次模型、三态表态、剔除抑制、PR 协作上下文(首轮与复审共用)、失败留证 | 碰复审 / 轮次 / 去重 / 首轮 prompt 前 |
 | [findings-submit.md](design/findings-submit.md) | findings 筛选与提交 PR review / 导出 Markdown,422 失效锚点 | 碰提交流程 / finding 状态前 |
 | [ui.md](design/ui.md) | 各屏的锚点决策与易踩约束 | 做界面前 |
 | [design-system.md](design/design-system.md) | tokens 语义、表面与文字阶梯、对比度规则、品牌标记 | 改配色 / 抽组件前 |
