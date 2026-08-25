@@ -1,0 +1,7 @@
+/* 预览卡模板把 body 底色写死为 #fff,且那条内联 <style> 排在样式表之后。
+   duetlens 是 dark-first(DEFAULT_UI_SETTINGS.dataMode = 'dark'),浅色正文落到白底上
+   几乎读不出来 —— 用 !important 把 DS 自己的底拿回来,才是产品真实的样子。
+   只夺底色:留着模板的 margin/padding。 */
+body {
+  background-color: var(--bg) !important;
+}

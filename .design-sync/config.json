@@ -1,0 +1,54 @@
+{
+  "projectId": "b0b2eca6-87cf-41b9-93c4-61de7cd6006d",
+  "shape": "package",
+  "pkg": "duetlens",
+  "globalName": "Duetlens",
+  "entry": ".design-sync/ds-entry.tsx",
+  "tsconfig": "tsconfig.json",
+  "srcDir": "src/renderer/components",
+  "componentSrcMap": {
+    "AppRail": "src/renderer/components/AppRail.tsx",
+    "CapacityNotice": "src/renderer/components/CapacityNotice.tsx",
+    "CompletionToast": "src/renderer/components/CompletionToast.tsx",
+    "KbdHelp": "src/renderer/components/KbdHelp.tsx",
+    "LensScanArt": "src/renderer/components/LensScanArt.tsx",
+    "LogoMark": null,
+    "ReviewTabs": "src/renderer/components/ReviewTabs.tsx",
+    "ScreenPlaceholder": "src/renderer/components/ScreenPlaceholder.tsx",
+    "SourceIcon": "src/renderer/components/SourceIcon.tsx",
+    "StartSteps": "src/renderer/components/StartProgress.tsx",
+    "ThemeControls": "src/renderer/components/ThemeControls.tsx",
+    "Wordmark": "src/renderer/components/Wordmark.tsx"
+  },
+  "provider": {
+    "component": "SettingsProvider"
+  },
+  "dtsPropsFor": {
+    "AppRail": "/** 当前高亮的屏 */\nactive: 'entry' | 'review' | 'history' | 'prompt' | 'settings';\n/** 无活跃 review 时「当前审核」不可达 */\nreviewAvailable: boolean;\n/** 新版已下好、只差重启 —— 设置钮挂未读点 */\nupdateReady?: boolean;\nonNavigate: (s: 'entry' | 'review' | 'history' | 'prompt' | 'settings') => void;",
+    "CapacityNotice": "/** 并发容量快照:坐满且每个都在跑才算满载 */\ncapacity: { max: number; live: number; busy: Array<{ reviewId: string; title: string; sourceRef: string; source: 'github-pr' | 'local-branch' | 'gitbutler-vbranch'; round: number; /** true = 在机审扫描;false = 在回答追问 */ scanning: boolean }> };\n/** 这次被挡下的是什么;缺省「暂时开不了新的」 */\nblocked?: string;\n/** 直达在跑的那条 review;不给 = 渲染成不可点的纯文本 */\nonOpen?: (reviewId: string) => void;\nonRefresh: () => void;\n/** 常驻拦截(入口屏发起门控)不该有出口,故可选 */\nonDismiss?: () => void;\n/** 悬浮呈现:review 屏是三栏满屏,没有能嵌进去的流式位置 */\nfloat?: boolean;",
+    "CompletionToast": "/** 长任务完成提示的载荷 */\nnotice: { reviewId: string; kind: 'scan-done' | 'reply'; title: string; body: string; /** 追问回复所属 discussion;scan-done 无 */ discussionId?: string };\nonOpen: (reviewId: string) => void;\nonDismiss: () => void;",
+    "KbdHelp": "onClose: () => void;",
+    "LensScanArt": "/** 点亮的行数 = 已完成的阶段数,让画面带一点真实进度 */\nlit?: number;\n/** 失败态:扫描停住、镜片居中转红环 */\nfailed?: boolean;\nclassName?: string;",
+    "ReviewTabs": "/** 打开着的 review;reviewId 即身份 */\ntabs: ReadonlyArray<{ reviewId: string; view: 'review' | 'submit' }>;\nactiveId: string | null;\nmeta: Record<string, { title: string; sourceRef: string; source: 'github-pr' | 'local-branch' | 'gitbutler-vbranch'; /** github 源可以没有 */ repoPath: string | null; status: 'scanning' | 'reviewing' | 'completed' | 'submitted' | 'failed' | null; /** 后台期间新报出的 finding 数;激活即清零 */ unread: number }>;\n/** tab 条右侧的一句轻提示;sticky = 不自动消失 */\nnotice: { text: string; action?: { label: string; onRun: () => void }; sticky?: boolean } | null;\nonActivate: (reviewId: string) => void;\nonClose: (reviewId: string) => void;\n/** ＋:回入口发起新审核 */\nonNew: () => void;",
+    "ScreenPlaceholder": "title: string;\n/** 一句话说明该屏怎么进来 / 为何现在是空的 */\nhint: string;\nparts: string[];",
+    "SourceIcon": "source?: 'github-pr' | 'local-branch' | 'gitbutler-vbranch';",
+    "StartSteps": "/** 阶段表;每档带一句滞留过久时的等待预期 */\nsteps: Array<{ stage: 'resolve' | 'diff' | 'record' | 'agent'; label: string; slow: string }>;\n/** 当前阶段,来自后端真实回调 */\nstage: 'resolve' | 'diff' | 'record' | 'agent';\n/** 未进入慢档时的常态提示 */\nhint: string;",
+    "ThemeControls": "/** 不收 props:明暗与配色两轴都经 SettingsProvider 的 context 读写 */",
+    "Wordmark": "className?: string;"
+  },
+  "cssEntry": ".design-sync/ds-preview.css",
+  "overrides": {
+    "CompletionToast": {
+      "cardMode": "single",
+      "primaryStory": "ScanDone"
+    },
+    "KbdHelp": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "ReviewTabs": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
