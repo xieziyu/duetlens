@@ -192,6 +192,11 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
   ipcMain.handle(IpcChannels.promptGet, (_e, cwd?: string) => manager.getReviewPrompt(cwd));
   ipcMain.handle(IpcChannels.promptSave, (_e, input: PromptSaveInput) => manager.saveReviewPrompt(input));
 
+  // ⌘W 落在没有 tab 可关的屏上时的回落:renderer 认不出「关窗」这件事,只能回来找 main
+  ipcMain.handle(IpcChannels.windowClose, (e) => {
+    BrowserWindow.fromWebContents(e.sender)?.close();
+  });
+
   ipcMain.handle(IpcChannels.dialogPickDirectory, async () => {
     const win = BrowserWindow.getFocusedWindow();
     const opts = { properties: ['openDirectory' as const] };

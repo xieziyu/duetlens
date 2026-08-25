@@ -16,6 +16,8 @@ const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
     title: '审核 tab',
     rows: [
       { label: '切到下一枚 / 上一枚 review tab', keys: ['⌃⇥', '⌃⇧⇥'] },
+      { label: '关闭当前 review tab', keys: ['⌘', 'W'] },
+      { label: '关闭窗口', keys: ['⌘', '⇧', 'W'] },
     ],
   },
   {

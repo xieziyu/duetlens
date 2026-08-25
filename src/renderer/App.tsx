@@ -55,6 +55,15 @@ const RAIL_OF: Record<Screen, RailScreen> = {
 
 const NOTICE_MS = 8000;
 
+/**
+ * 屏上有没有开着的模态。**判据要排除隐藏 tab 里那些开着的模态** —— 它们还在 DOM 里,却连屏都不在。
+ */
+function modalOpen(): boolean {
+  return [...document.querySelectorAll('[role="dialog"]')].some((el) =>
+    el.checkVisibility ? el.checkVisibility() : (el as HTMLElement).offsetParent !== null,
+  );
+}
+
 /** 冷启动的 tab 集合;production 只可能有 0 或 1 枚,多枚来自 preview 的 `?tabs=`。 */
 function initialTabState(
   initialReviewId: string | null,
@@ -199,18 +208,13 @@ export function App({
   }, [restored, tabState, saveSettings]);
 
   /**
-   * ⌃⇥ / ⌃⇧⇥ 前后切 tab。模态开着时让位:与屏内 ⌘F / ⌘E 遇模态让位是同一条规矩,
-   * 而**判据要排除隐藏 tab 里那些开着的模态** —— 它们还在 DOM 里,却连屏都不在。
+   * ⌃⇥ / ⌃⇧⇥ 前后切 tab。模态开着时让位:与屏内 ⌘F / ⌘E 遇模态让位是同一条规矩。
    */
   useEffect(() => {
     if (tabState.tabs.length < 2) return;
     const onKey = (e: KeyboardEvent) => {
       const step = tabStepKey(e);
-      if (step === null) return;
-      const modal = [...document.querySelectorAll('[role="dialog"]')].some((el) =>
-        el.checkVisibility ? el.checkVisibility() : (el as HTMLElement).offsetParent !== null,
-      );
-      if (modal) return;
+      if (step === null || modalOpen()) return;
       e.preventDefault();
       setTabState((prev) => stepTab(prev, step));
     };
@@ -265,6 +269,28 @@ export function App({
         action: { label: '重新打开', onRun: () => openReview(id) },
       });
   };
+
+  /**
+   * ⌘W(Windows / Linux 为 Ctrl+W)关掉当前 tab。**这一枚不是 window 上的 keydown** ——
+   * 菜单加速键先于渲染层拿到按键,所以它由 main 的菜单项回推(见 backend/menu/app-menu.ts)。
+   *
+   * tab 条不在屏上(入口 / 历史 / 设置)时不去关一枚看不见的 tab,回落成关窗口 —— 那正是
+   * 这个键在没有 tab 时本来的意思。模态开着则两件都不做(与 ⌃⇥ 同一条让位规矩):越过模态
+   * 关掉它底下那枚 tab 比不响应更难解释,而关窗那一路更狠 —— 入口屏发起审核的浮层也是模态。
+   *
+   * 订阅只装一次,动作放 ref:handler 要读 `screen` / `unsaved` / `meta`,按依赖重挂订阅的话
+   * 每次这些一变都要拆装一轮,而 ref 里永远是这一帧的那个。
+   */
+  const closeActiveTabRef = useRef<() => void>(() => {});
+  closeActiveTabRef.current = () => {
+    // 模态先判:入口屏发起审核时那层浮层也是模态,漏在关窗这一路的话,⌘W 会在审核起跑到一半时
+    // 端掉整扇窗(Windows / Linux 上连 app 一起退)
+    if (modalOpen()) return;
+    const id = screen === 'review' ? tabStateRef.current.activeId : null;
+    if (id) onCloseTab(id);
+    else void window.duetlens.window.close();
+  };
+  useEffect(() => window.duetlens.window.onCloseTab(() => closeActiveTabRef.current()), []);
 
   // 通知点击「聚焦+定位」挂在常驻的 App:onOpenReview 打开 review;onInApp 弹轻提示。
   // 用 ref 记住当前所看,避免为订阅重挂而随导航变化。

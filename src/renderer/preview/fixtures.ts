@@ -1368,6 +1368,21 @@ export function installPreviewApi(): void {
         return () => inAppListeners.delete(handler);
       },
     },
+    /**
+     * 预览没有 Electron 菜单,⌘W 到不了这里(浏览器自己吃掉)。改用一个自定义 DOM 事件
+     * 顶替那条回推,便于在预览面板里验渲染层这半边:`dispatchEvent(new Event('preview:close-tab'))`。
+     */
+    window: {
+      close: async () => {
+        // eslint-disable-next-line no-console
+        console.log('[preview] window.close()');
+      },
+      onCloseTab: (handler) => {
+        const listener = () => handler();
+        globalThis.addEventListener('preview:close-tab', listener);
+        return () => globalThis.removeEventListener('preview:close-tab', listener);
+      },
+    },
     ui: {
       getSettings: async () => uiSettings,
       saveSettings: async (s) => {
