@@ -4,6 +4,34 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.9.0] - 2026-08-25
+
+### Added
+
+- **`cmd+w` closes the active review tab.** Tabs could only be closed with the mouse (the x button
+  or a middle click), because the key belonged to Electron's default "Close Window" — a menu
+  accelerator is handled before the renderer ever sees the keydown, so no amount of front-end
+  handling could win it back. Closing the window moved to `shift+cmd+w`. Closing a tab reuses the
+  existing path, so the "still running in the background" notice and the unsent-draft confirmation
+  both still apply; with no tab strip on screen (entry, history, settings) the key still closes the
+  window, which is what it means when there are no tabs; and with a modal open it does nothing at
+  all, the same way `ctrl-tab` yields. (#84)
+- **The first scan now sees the PR title, body and comments.** PR context only ever fed reruns, so
+  the first-round agent had nothing but a diff, and the built-in Scope check ("the body promises
+  something the diff does not implement") had no description to compare against until round two.
+  The first round now gets the title, body, PR-level comments and review verdicts. Loose inline
+  threads still wait for the first rerun: there is no finding of ours to attach them to yet, and
+  they are the bulkiest part of the block; the fetch that does not need them now also skips the
+  most expensive part of the query. PR descriptions longer than 6000 characters keep their head and
+  tail with an explicit note about how much was elided, because checklists live at the end of a
+  description and that is exactly what the Scope check needs to read. (#85)
+
+### Upgrade notes
+
+- The database schema is unchanged at v22, so this version and 0.8.0 can be installed in either
+  order.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.8.0] - 2026-08-24
 
 ### Added
@@ -477,6 +505,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.9.0]: https://github.com/xieziyu/duetlens/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/xieziyu/duetlens/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/xieziyu/duetlens/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/xieziyu/duetlens/compare/v0.7.0...v0.7.1
