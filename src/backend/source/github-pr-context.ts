@@ -13,19 +13,30 @@ import { resolvePrRef } from './github-pr-source';
 const PAGE = 100;
 const THREAD_COMMENTS = 50;
 
+/**
+ * inline thread 是这份查询里最贵的一块(最多 PAGE × THREAD_COMMENTS 条评论正文),
+ * 而首轮扫描根本不用它(见 prompt/scan-prompt.ts)。用 `@include` 把它整段开关掉:
+ * 同一份查询兼两种用法,既不必维护第二份字段清单,也不靠 `first:0` 这类没进文档的容忍值。
+ * 关掉时响应里**没有** reviewThreads 这个键 —— 下面的解析本来就按缺省处理。
+ */
 const QUERY = `
-query($owner:String!,$name:String!,$num:Int!,$page:Int!,$tc:Int!){
+query($owner:String!,$name:String!,$num:Int!,$page:Int!,$tc:Int!,$wantThreads:Boolean!){
   viewer{ login }
   repository(owner:$owner,name:$name){
     pullRequest(number:$num){
       title body headRefOid author{login}
-      reviewThreads(first:$page){ nodes{ isResolved isOutdated path line originalLine
+      reviewThreads(first:$page) @include(if:$wantThreads){ nodes{ isResolved isOutdated path line originalLine
         comments(first:$tc){ nodes{ databaseId createdAt body author{login} } } } }
       comments(last:$page){ nodes{ createdAt body author{login} } }
       reviews(last:$page){ nodes{ state submittedAt body author{login} } }
     }
   }
 }`;
+
+export interface PrContextOptions {
+  /** 是否连 inline review thread 一并取。首轮扫描不用,给 false 可省掉整份查询里最贵的一块。 */
+  threads?: boolean;
+}
 
 interface GqlActor {
   login?: string | null;
@@ -76,11 +87,14 @@ interface GqlResponse {
 const login = (a?: GqlActor | null): string => a?.login ?? '(unknown)';
 
 /** 按 review 的 source 取上下文;非 github-pr source 或引用解析失败都返回空上下文。 */
-export async function fetchPrContextForReview(review: Review): Promise<PrContext> {
+export async function fetchPrContextForReview(
+  review: Review,
+  opts: PrContextOptions = {},
+): Promise<PrContext> {
   if (review.source !== 'github-pr') return emptyPrContext();
   try {
     const { nwo, num } = await resolvePrRef(review.sourceRef, review.repoPath);
-    return await fetchPrContext(nwo, num);
+    return await fetchPrContext(nwo, num, opts);
   } catch {
     return emptyPrContext();
   }
@@ -90,7 +104,11 @@ export async function fetchPrContextForReview(review: Review): Promise<PrContext
  * 拉取 PR 上下文。**任何失败都降级为空上下文**而非抛错 —— 少一份参考材料可以照常复审,
  * 因为 gh 掉线就跑不了整轮复审是不可接受的。
  */
-export async function fetchPrContext(nwo: string, num: string): Promise<PrContext> {
+export async function fetchPrContext(
+  nwo: string,
+  num: string,
+  opts: PrContextOptions = {},
+): Promise<PrContext> {
   const [owner, name] = nwo.split('/');
   if (!owner || !name) return emptyPrContext();
 
@@ -103,6 +121,7 @@ export async function fetchPrContext(nwo: string, num: string): Promise<PrContex
       '-F', `name=${name}`,
       '-F', `num=${num}`,
       '-F', `page=${PAGE}`,
+      '-F', `wantThreads=${opts.threads !== false}`,
       '-F', `tc=${THREAD_COMMENTS}`,
     ]);
     parsed = JSON.parse(out) as GqlResponse;

@@ -18,6 +18,7 @@ import type {
   UiSettings,
 } from '@shared/domain';
 import type { AgentErrorKind } from '@shared/agent-events';
+import type { PrContext } from '@shared/github-context';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, BusyReview, DiffStatInput, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import { LIVE_SESSION_LIMIT_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
@@ -29,6 +30,7 @@ import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
 import { loadBaseInstructions, loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
 import { buildRerunPrompt } from '../prompt/rerun-prompt';
+import { buildScanPrompt } from '../prompt/scan-prompt';
 import { createSource } from '../source/create-source';
 import { fetchPrContextForReview } from '../source/github-pr-context';
 import { checkEnvironment } from '../env/environment-check';
@@ -56,7 +58,7 @@ import type {
   RepoRemoteInfo,
 } from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
-import { AgentTurnError, DEFAULT_SCAN_PROMPT, ReviewSession, type ReviewSessionEvents } from './review-session';
+import { AgentTurnError, ReviewSession, type ReviewSessionEvents } from './review-session';
 
 /**
  * 已提交到 GitHub 的 finding,正文类字段锁定。UI 早就按这条画(卡片的 `writable` 排除 submitted),
@@ -101,13 +103,6 @@ function targetOf(review: Review): ReviewTarget {
     baseRef: review.baseRef ?? undefined,
     repoPath: review.repoPath ?? '',
   };
-}
-
-/** 首轮扫描指令:有附加上下文时拼在缺省指令之后一并注入,否则用缺省。 */
-function buildScanPrompt(context?: string): string | undefined {
-  const ctx = context?.trim();
-  if (!ctx) return undefined;
-  return `${DEFAULT_SCAN_PROMPT}\n\n用户附加上下文(审核时一并考虑):\n${ctx}`;
 }
 
 /**
@@ -367,6 +362,20 @@ export class ReviewManager extends EventEmitter {
    * searchCode 随 source 有无而定(github-pr 无本地代码树,缺省即让 MCP 不声明该工具);
    * findingFile 走库而非内存 —— 复审轮要裁决的是上一轮报的条目,不在本次会话的 findings 里。
    */
+  /**
+   * 拉 PR 协作上下文(首轮与复审共用)。非 github-pr source 直接为 null;
+   * gh 拉不到时 fetchPrContextForReview 降级为空上下文而非抛错 —— 少一份参考材料照常审,
+   * 但那份空壳不该被当成"拿到了",故按 fetchedAt 收敛成 null。
+   *
+   * `round === 1` 不取 inline thread:首轮 prompt 本就不注入它们,而它是这份查询里最贵的一块 ——
+   * 拉回来只为丢掉,等于让用户在入口多等一次大 PR 的往返。
+   */
+  private async prContext(review: Review, round: number): Promise<PrContext | null> {
+    if (review.source !== 'github-pr') return null;
+    const pr = await fetchPrContextForReview(review, { threads: round > 1 });
+    return pr.fetchedAt ? pr : null;
+  }
+
   private buildProviders(
     reviewId: string,
     source: Source,
@@ -888,6 +897,7 @@ export class ReviewManager extends EventEmitter {
       this.store.setDiff(review.id, rawDiff);
       // 首轮也建轮次记录:轮次表是完整履历,复审只是往后追加,不是另一套东西。
       this.store.startRound(review.id, 1, { headSha: prepared.headSha, note: target.context });
+      const pr = await this.prContext(review, 1);
       onStage?.('agent');
       const baseInstructions = await loadBaseInstructions({
         cwd: prepared.cwd,
@@ -896,7 +906,7 @@ export class ReviewManager extends EventEmitter {
       });
       launched = true;
       this.launch(review, prepared.cwd, this.buildProviders(review.id, source, () => rawDiff),
-        () => source.dispose(), baseInstructions, buildScanPrompt(target.context), 1,
+        () => source.dispose(), baseInstructions, buildScanPrompt({ pr, note: target.context }), 1,
         // 这条 review 刚建出来,id 还没出过本方法,外部无从释放它;代次只能是初始值。
         this.teardownEpoch(review.id));
       return review;
@@ -1040,8 +1050,7 @@ export class ReviewManager extends EventEmitter {
       const codeChanged = Boolean(opts.priorChanged?.codeChanged) || prevDiff !== rawDiff;
       this.store.setDiff(reviewId, rawDiff);
 
-      // gh 拉不到就是空上下文,不阻断复审(见 fetchPrContextForReview)
-      const pr = review.source === 'github-pr' ? await fetchPrContextForReview(review) : null;
+      const pr = await this.prContext(review, opts.round);
 
       const findings = this.store.listFindings(reviewId);
       const openFindings = findings.filter((f) => f.triage !== 'dismiss');
@@ -1061,7 +1070,7 @@ export class ReviewManager extends EventEmitter {
       prompt =
         round.round === 1
           ? // 首轮重试:那轮的 note 就是入口填的附加上下文
-            buildScanPrompt(opts.note ?? undefined)
+            buildScanPrompt({ pr, note: opts.note })
           : buildRerunPrompt({
               round: round.round,
               prevRound,
@@ -1071,7 +1080,7 @@ export class ReviewManager extends EventEmitter {
               openFindings,
               dismissedFindings,
               messagesByDiscussion,
-              pr: pr && pr.fetchedAt ? pr : null,
+              pr,
               note: opts.note,
             });
       opts.onStage?.('agent');
