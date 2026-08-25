@@ -11,8 +11,9 @@
 
 /* ---- 共享 primitives(与明暗/主题无关)---- */
 :root{
-  --mono:"IBM Plex Mono",ui-monospace,monospace;
-  --sans:"IBM Plex Sans",system-ui,sans-serif;
+  /* 只用系统字体栈:不打包也不外链第三方字体 */
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:system-ui,-apple-system,sans-serif;
   --r:8px;
   /* 实心按钮的 hover 往**深**走,不能用 filter:brightness() 提亮:
      filter 连白字一起作用(白字已到顶,只有底变亮),对比度必然下降 —— 深色 4.92 → 4.32,hover 时重新不达标。
