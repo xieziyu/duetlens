@@ -7,6 +7,7 @@ import { ReviewManager } from '@backend/review/review-manager';
 import { createCompletionNotifier } from '@backend/notify/completion-notifier';
 import { hydrateEnv } from '@backend/env/shell-env';
 import { createUpdater } from '@backend/update/updater';
+import { installAppMenu } from '@backend/menu/app-menu';
 import { IpcEvents, type CompletionNotice, type ReviewEvent } from '@shared/ipc';
 
 // 开发态与打包版可能同时开着:各自独立 userData,否则两个进程写同一个 sqlite,
@@ -178,6 +179,8 @@ app.whenReady().then(async () => {
   });
   manager.on('review-event', (e: ReviewEvent) => notifier(e));
 
+  // 菜单先于窗口装:⌘W 归它接管(见 app-menu.ts),晚装会有一小段窗口已在、⌘W 仍是关窗的空当
+  installAppMenu();
   createWindow();
   ready = true;
 

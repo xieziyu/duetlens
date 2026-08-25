@@ -30,7 +30,7 @@ export function primaryModifier(e: { metaKey: boolean; ctrlKey: boolean }): bool
 /**
  * 重跑快捷键 ⌘E(Windows / Linux 为 Ctrl+E)。审核屏与提交/导出屏共用这一份判据。
  *
- * 不用 R 这个助记:`⌘R` / `⌘⇧R` 归 Electron 默认菜单的 Reload / Force Reload,按下去整屏重载。
+ * 不用 R 这个助记:`⌘R` / `⌘⇧R` 归应用菜单的 Reload / Force Reload,按下去整屏重载。
  * 也不带 ⌥ —— Windows / Linux 的 AltGr 就是以 ctrl+alt 上报的,国际布局下用 AltGr 打字会撞上;
  * 排除 alt 比事后查 getModifierState('AltGraph') 更彻底,顺带躲开 macOS 上 ⌥ 作为字符合成键的那一面。
  */
@@ -46,6 +46,9 @@ export function isRerunKey(e: {
 
 /**
  * review tab 前后切:⌃⇥ / ⌃⇧⇥,返回 +1 / -1,不是这个组合则 null。
+ *
+ * 关 tab 的 ⌘W **不在这里** —— 菜单加速键先于渲染层拿到按键,它由主进程的菜单项回推
+ * (见 backend/menu/app-menu.ts 与 App 的订阅)。
  *
  * 用 ⌃⇥ 而不是屏内那套 ⌘ 组合:**⌘1/2/3 已经归右栏三 tab**,再拿 ⌘ 数字键切 review tab
  * 就是同一组键在两层导航上打架。⌃⇥ 是跨平台的 tab 惯例,两边都不必分支。

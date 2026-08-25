@@ -90,6 +90,7 @@ export const IpcChannels = {
   dialogPickDirectory: 'dialog:pick-directory',
   dialogPickFile: 'dialog:pick-file',
   dialogSaveTextFile: 'dialog:save-text-file',
+  windowClose: 'window:close',
   updateGetStatus: 'update:get-status',
   updateCheck: 'update:check',
   updateInstall: 'update:install',
@@ -288,6 +289,8 @@ export const IpcEvents = {
   notifyInApp: 'notify:in-app',
   /** 自动更新状态推进 */
   updateStatus: 'update:status',
+  /** 菜单「关闭 tab」(⌘W)被触发;菜单加速键归 main,关谁由 renderer 定 */
+  menuCloseTab: 'menu:close-tab',
 } as const;
 
 /** 长任务完成提示的载荷(扫描完成 / 追问回复);原生通知与应用内提示共用。 */
@@ -431,6 +434,16 @@ export interface DuetlensApi {
     onOpenReview(handler: (payload: { reviewId: string; discussionId?: string }) => void): () => void;
     /** 窗口聚焦时的应用内轻提示(扫描完成/追问回复);返回取消订阅函数。 */
     onInApp(handler: (notice: CompletionNotice) => void): () => void;
+  };
+  /**
+   * 窗口层面的动作。⌘W 这类菜单加速键由 main 独占(菜单先于渲染层拿到按键),
+   * renderer 只能被动收到回推,再决定是关一枚 tab 还是关掉整个窗口。
+   */
+  window: {
+    /** 关闭当前窗口(⌘W 落在没有 tab 可关的屏上时的回落)。 */
+    close(): Promise<void>;
+    /** 订阅菜单「关闭 tab」;返回取消订阅函数。 */
+    onCloseTab(handler: () => void): () => void;
   };
   ui: {
     getSettings(): Promise<UiSettings>;

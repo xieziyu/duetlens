@@ -86,6 +86,14 @@ const api: DuetlensApi = {
       return () => ipcRenderer.off(IpcEvents.notifyInApp, listener);
     },
   },
+  window: {
+    close: () => ipcRenderer.invoke(IpcChannels.windowClose),
+    onCloseTab: (handler: () => void) => {
+      const listener = () => handler();
+      ipcRenderer.on(IpcEvents.menuCloseTab, listener);
+      return () => ipcRenderer.off(IpcEvents.menuCloseTab, listener);
+    },
+  },
   ui: {
     getSettings: () => ipcRenderer.invoke(IpcChannels.uiGetSettings),
     saveSettings: (settings: UiSettings) => ipcRenderer.invoke(IpcChannels.uiSaveSettings, settings),
