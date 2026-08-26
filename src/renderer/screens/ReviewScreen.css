@@ -1832,7 +1832,7 @@ body.rz-dragging * {
   align-items: center;
   justify-content: center;
   font-size: 7px;
-  color: var(--on-solid);
+  color: var(--on-accent);
 }
 .scanbar .sb-step.active .sb-dot {
   border-color: var(--agent);
@@ -1929,7 +1929,7 @@ body.rz-dragging * {
 }
 .scanbar .ss-yes {
   font-weight: 600;
-  color: var(--on-solid);
+  color: var(--on-accent);
   background: var(--sev-high);
   border: 1px solid transparent;
 }
@@ -2023,7 +2023,7 @@ body.rz-dragging * {
   align-items: center;
   justify-content: center;
   font-size: 7px;
-  color: var(--on-solid);
+  color: var(--on-accent);
 }
 .tl.failed .tl-l {
   color: var(--sev-high);
@@ -2422,13 +2422,15 @@ body.rz-dragging * {
 .scanbar .se-act button.primary {
   border-color: transparent;
   background: var(--sev-high);
-  /* --sev-high 深色下是浅红(本是给文字用的),白字压上去只有 2.7:1;
-     --on-accent 随模式翻转(深色近黑 / 浅色纯白),两边都过 */
+  /* --sev-high / --agent 深色下都是浅色调(本是给文字用的),白字压上去只有 1.7~3:1;
+     --on-accent 随模式翻转(深色近黑 / 浅色纯白),两边都过。
+     扫描条与时间线上的实心 ✓ / ✕ 同此,包括它们的 hover 变体。 */
   color: var(--on-accent);
 }
 .scanbar .se-act button.primary:hover:not(:disabled) {
   background: color-mix(in oklab, var(--sev-high) 85%, black);
-  color: var(--on-solid);
+  /* hover 只压深 15%,深色下仍是浅红:跟着基态走 --on-accent,别在这里切回白字 */
+  color: var(--on-accent);
 }
 .scanbar .se-act button:disabled {
   opacity: 0.55;
@@ -2527,7 +2529,7 @@ body.rz-dragging * {
   align-items: center;
   justify-content: center;
   font-size: 8px;
-  color: var(--on-solid);
+  color: var(--on-accent);
 }
 .tl.done::before {
   background: var(--agent-line);
