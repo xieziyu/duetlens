@@ -284,6 +284,7 @@
 .ga-actions { display: flex; align-items: center; gap: 14px; margin-top: 13px; }
 .ga-retry {
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   border: 0;
   border-radius: 8px;
@@ -1057,6 +1058,7 @@
   align-items: center;
   gap: 8px;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   border: 0;
   border-radius: 11px;

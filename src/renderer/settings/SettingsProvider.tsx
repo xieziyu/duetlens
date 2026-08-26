@@ -41,7 +41,12 @@ export function readThemeQuery(): Partial<Pick<UiSettings, 'dataMode' | 'dataThe
   const theme = q.get('theme');
   return {
     ...(mode === 'light' || mode === 'dark' || mode === 'system' ? { dataMode: mode } : {}),
-    ...(theme === 'duetlens' || theme === 'github' || theme === 'parchment' ? { dataTheme: theme } : {}),
+    ...(theme === 'duetlens' ||
+    theme === 'github' ||
+    theme === 'parchment' ||
+    theme === 'cyberpunk'
+      ? { dataTheme: theme }
+      : {}),
   };
 }
 

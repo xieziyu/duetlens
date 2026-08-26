@@ -108,6 +108,7 @@
   padding: 5px 12px;
   border-radius: 8px;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   font-weight: 600;
   font-size: 12px;
@@ -3168,6 +3169,7 @@ body.rz-dragging * {
 }
 .fe-foot .save {
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   font-weight: 600;
   border: 0;
@@ -4049,6 +4051,7 @@ body.rz-dragging * {
 .composer .send {
   margin-left: auto;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   font-weight: 600;
   border: 0;
@@ -4378,6 +4381,7 @@ body.rz-dragging * {
 .sum-submit {
   width: 100%;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   font-weight: 600;
   border: 0;
@@ -4740,6 +4744,7 @@ body.rz-dragging * {
   line-height: 1;
   color: var(--on-solid);
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   border: 1px solid transparent;
   border-radius: 7px;
   padding: 6px 12px;
@@ -4973,6 +4978,7 @@ body.rz-dragging * {
 .rp-go {
   border: 1px solid transparent;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
 }
 .rp-go:hover:not(:disabled) {
@@ -5197,6 +5203,7 @@ body.rz-dragging * {
 .pb.go {
   border-color: transparent;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   font-weight: 600;
 }

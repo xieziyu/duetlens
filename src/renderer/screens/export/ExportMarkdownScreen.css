@@ -455,6 +455,7 @@
 .btn-copy {
   width: 100%;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   font-weight: 600;
   border: 0;
