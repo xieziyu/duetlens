@@ -152,8 +152,12 @@ export interface DiffPaneProps {
   discussions?: Discussion[];
   /** 左栏选中的文件路径;变化时滚动到对应 file-header */
   activePath: string | null;
+  /** 定位请求序号:每次点选自增,让重复点同一个文件也能重新滚回去 */
+  activePathNonce?: number;
   /** 右栏点选的 finding;变化时滚动到内联卡并高亮 */
   focusFindingId: string | null;
+  /** 定位请求序号:每次点选自增,让重复点同一条 finding 也能重新滚回去 */
+  focusFindingNonce?: number;
   /** review 当前轮次;内联卡据此显示「本轮新增 / 已修复」标记 */
   currentRound?: number;
   /** finding 写路径:裁决 / 就地编辑,缺省则内联卡为只读 */
@@ -349,7 +353,7 @@ export function DiffPane(props: DiffPaneProps) {
     () => {
       if (activePath) scrollToFile(activePath);
     },
-    [activePath, activeCollapsed, scrollToFile],
+    [activePath, activeCollapsed, props.activePathNonce, scrollToFile],
   );
 
   // 标记已看会把当前文件折叠掉,滚动位置不变则视口塌进下一个文件的中段;
@@ -388,7 +392,7 @@ export function DiffPane(props: DiffPaneProps) {
       const el = ref.current.querySelector(`#${CSS.escape(`finding-${focusFindingId}`)}`);
       el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     },
-    [focusFindingId, focusCollapsed],
+    [focusFindingId, focusCollapsed, props.focusFindingNonce],
   );
 
   // 长代码行只让 code 表自己横滚(文件头/hunk 头/内联卡片不跟着滑走);

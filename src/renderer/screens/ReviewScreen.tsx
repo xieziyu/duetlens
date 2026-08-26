@@ -120,6 +120,19 @@ export function ReviewScreen({
   const { settings, update } = useSettings();
   const [activePath, setActivePath] = useState<string | null>(null);
   const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
+  // 定位是「请求」不是「状态」:滚走之后再点同一处,值没变则 DiffPane 的定位 effect 不会重跑,
+  // 于是那次点击落空。每发起一次定位就自增,让重复定位也带得动。
+  const [focusFindingNonce, setFocusFindingNonce] = useState(0);
+  const requestFocusFinding = (id: string) => {
+    setFocusFindingId(id);
+    setFocusFindingNonce((n) => n + 1);
+  };
+  const [activePathNonce, setActivePathNonce] = useState(0);
+  // 只给「用户要求跳过去」用;DiffPane 自己滚完回报的选中文件走 setActivePath,否则会再滚一次
+  const requestFocusFile = (path: string) => {
+    setActivePath(path);
+    setActivePathNonce((n) => n + 1);
+  };
   // 左栏文件检索:纯导航态不持久化;由屏持有才能在换 review 时清掉,并让 ⌘⇧F 把焦点甩进输入框
   const [fileQuery, setFileQuery] = useState('');
   const fileQueryRef = useRef<HTMLInputElement>(null);
@@ -167,13 +180,13 @@ export function ReviewScreen({
   // 折叠的文件整段内容都不在 DOM 里,内联卡自然也没有 —— 任何跳到代码的动作都得先把它放出来,
   // 否则滚动落空、中栏停在上一处。展开与两处状态更新同批提交,effect 跑时卡片已经在了。
   const revealFile = (path: string) => {
-    setActivePath(path);
+    requestFocusFile(path);
     expandFile(path);
   };
 
   const focusFinding = (f: Finding) => {
     revealFile(f.file);
-    setFocusFindingId(f.id);
+    requestFocusFinding(f.id);
     // 点 finding 亦选中其讨论线程,切到 Discussion 栏即见对话(不强制换 tab)
     setActiveDiscussionId(f.discussionId);
   };
@@ -182,7 +195,7 @@ export function ReviewScreen({
   // 与 focusFinding 的区别只在强制换 tab —— 后者是定位,这里是明确要开聊。
   const discussFinding = (f: Finding) => {
     expandFile(f.file);
-    setFocusFindingId(f.id);
+    requestFocusFinding(f.id);
     setActiveDiscussionId(f.discussionId);
     setTab('discussion');
   };
@@ -194,7 +207,7 @@ export function ReviewScreen({
     const d = discussions.find((x) => x.id === id);
     if (d?.file) revealFile(d.file);
     const f = findings.find((x) => x.discussionId === id);
-    if (f) setFocusFindingId(f.id);
+    if (f) requestFocusFinding(f.id);
   };
 
   // 向某条 discussion 追问:先乐观上屏 user 气泡再显打字指示(否则 IPC/续接延迟会让「回复中」抢先出现),
@@ -300,9 +313,9 @@ export function ReviewScreen({
         line: anchor.line,
         ...draft,
       });
-      setActivePath(f.file);
+      requestFocusFile(f.file);
       expandFile(f.file);
-      setFocusFindingId(f.id);
+      requestFocusFinding(f.id);
       setTab('findings');
     },
     [reviewId, diffReady, expandFile],
@@ -372,7 +385,7 @@ export function ReviewScreen({
   const jumpToCode = (d: Discussion) => {
     if (d.file) revealFile(d.file);
     const f = findings.find((x) => x.discussionId === d.id);
-    if (f) setFocusFindingId(f.id);
+    if (f) requestFocusFinding(f.id);
   };
 
   // 提升 user discussion 为 finding:落库后经事件回推(finding + discussion),再聚焦新 finding 就地编辑
@@ -380,9 +393,9 @@ export function ReviewScreen({
     async (discussionId: string) => {
       if (!reviewId) return;
       const f = await window.duetlens.review.promoteDiscussion(reviewId, discussionId);
-      setActivePath(f.file);
+      requestFocusFile(f.file);
       expandFile(f.file);
-      setFocusFindingId(f.id);
+      requestFocusFinding(f.id);
     },
     [reviewId, expandFile],
   );
@@ -802,7 +815,7 @@ export function ReviewScreen({
             files={diff}
             findings={findings}
             activePath={activePath}
-            onSelect={setActivePath}
+            onSelect={requestFocusFile}
             viewed={viewed}
             onToggleViewed={onToggleViewed}
             query={fileQuery}
@@ -826,7 +839,9 @@ export function ReviewScreen({
             findings={findings}
             discussions={discussions}
             activePath={activePath}
+            activePathNonce={activePathNonce}
             focusFindingId={focusFindingId}
+            focusFindingNonce={focusFindingNonce}
             currentRound={currentRound}
             onTriage={onTriage}
             onUpdate={onUpdate}
