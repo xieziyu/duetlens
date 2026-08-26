@@ -18,6 +18,7 @@ export function ThemeControls() {
         <option value="github">github</option>
         <option value="parchment">parchment</option>
         <option value="cyberpunk">cyberpunk</option>
+        <option value="xianxia">xianxia</option>
       </select>
       <button
         className="mode-toggle"

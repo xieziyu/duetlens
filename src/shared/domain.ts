@@ -671,7 +671,7 @@ export function isProposalUndoBlocked(p: FindingProposal, finding: Finding | nul
 export interface UiSettings {
   /** 用户选的档;`system` 需在渲染层解析成 light/dark 才能落到 `data-mode` 上 */
   dataMode: 'light' | 'dark' | 'system';
-  dataTheme: 'duetlens' | 'github' | 'parchment' | 'cyberpunk';
+  dataTheme: 'duetlens' | 'github' | 'parchment' | 'cyberpunk' | 'xianxia';
   leftWidth: number;
   rightWidth: number;
   defaultTab: 'discussion' | 'findings' | 'summary';
