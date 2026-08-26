@@ -4,6 +4,45 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.9.1] - 2026-08-26
+
+### Added
+
+- **Two new color themes: Cyberpunk and Xianxia.** The theme picker in settings now offers five,
+  each with a dark and a light variant. Cyberpunk is an indigo night canvas lit by cyan and magenta
+  neon — the agent channel takes electric cyan, the human channel neon magenta, so the primary CTA
+  hands itself to violet (magenta there would read as "the human side"). Neon does not glow in
+  daylight, so the light variant keeps only hue and area: text stays dark, fills come from the
+  bright end. Xianxia pairs an ink-teal night with a celadon day, jade for the agent, gilt for the
+  human, and ochre for the CTA — the warm end is already crowded by severity red, deleted-line red
+  and the human channel's gold, and that slot is the only one with room left. The glow is
+  Cyberpunk's signature and runs through a single new `--glow-accent` token, so the other four
+  themes render exactly as they did before. (#88, #90)
+
+### Fixed
+
+- **Clicking the same finding card or the same file re-locates again.** Clicking a finding card
+  scrolls the diff to its inline card, but after scrolling away, clicking that same card did
+  nothing; the file tree behaved the same way once you scrolled off a file. Both locate paths were
+  keyed on a value: clicking again writes the same id, no dependency changes, the effect never
+  re-runs and the click is dropped. A locate request now carries a nonce that increments on every
+  request — the id still drives the highlight, the nonce only says "this is a new request". Gutter
+  dots, selecting a discussion, jumping to code, adding a finding and promoting a discussion all
+  count as requests. (#87)
+- **In dark themes, the scanbar check marks, failure crosses and the stop-scan confirm button are
+  no longer nearly invisible.** `--sev-high` and `--agent` are tuned as text colors and are
+  therefore light-toned in dark mode, yet five places still painted white on top of them: measured
+  contrast was 2.46 / 2.66 on duetlens, 2.99 / 2.52 on github, 1.74 / 2.87 on cyberpunk. Switching
+  them to `--on-accent` brings dark mode to 7.13–11.72; light mode is unaffected, since
+  `--on-accent` resolves to white there. This was not introduced by the new themes — every dark
+  theme had it. (#89)
+
+### Upgrade notes
+
+- The database schema is unchanged at v22, so this version and 0.9.0 can be installed in either
+  order.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.9.0] - 2026-08-25
 
 ### Added
@@ -505,6 +544,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.9.1]: https://github.com/xieziyu/duetlens/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xieziyu/duetlens/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/xieziyu/duetlens/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/xieziyu/duetlens/compare/v0.7.1...v0.7.2
