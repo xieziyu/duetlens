@@ -2,7 +2,7 @@
    Duetlens design tokens — 单一来源
    两个正交的配色轴:
      data-mode  = dark | light                    (明暗模式 · 给出 chrome 的默认档)
-     data-theme = duetlens | github | parchment | cyberpunk
+     data-theme = duetlens | github | parchment | cyberpunk | xianxia
                                                   (配色主题 · 成套:语法 token + diff + severity + 代码高亮)
    配色主题跟随 data-mode 自动切子模式(GitHub → Dark/Light)。
    THEME 默认只管代码那一半,chrome 由 data-mode 给;但**主题可以整套覆写 chrome**(parchment / github 即如此),
@@ -313,4 +313,73 @@
   --code-hl:color-mix(in oklab,oklch(.72 .17 202) 26%,transparent);
   --find-hl:color-mix(in oklab,oklch(.62 .24 300) 34%,transparent); --find-hl-on:oklch(.50 .24 300); --find-hl-fg:#fff;
   --sev-high:oklch(.47 .21 20); --sev-med:oklch(.46 .13 80); --sev-low:oklch(.47 .20 296);
+}
+
+/* ---- THEME: Xianxia · dark ---- */
+/* 「青冥」:青墨夜色 + 石青 / 鎏金两条声道。整套覆写 chrome —— 中国画的底色从来不是中性灰,墨里带青,
+   只换语法色留一块冷灰画布等于没做。
+   双声道换了色值没换角色:agent 拿青碧(灵气 / 剑气,冷),human 拿鎏金(人间,暖),仍是一冷一暖各占一个色相区。
+   human 比 duetlens 的琥珀更黄一档(84 而非 62):画布整体偏青之后,琥珀那一档的暖会被读薄。
+   CTA 走赭石,不跟 agent 同色:暖色能站的区间很窄 —— 红(20–40)归 severity 与删除行、
+   金(70–95)归 human,赭石 h50 是唯一两头都留出距离的一格,而它本来就是青绿山水里配石青的那一色。
+   按 --accent-solid 的两条闸定标:白字 4.97、实心块对卡片抬起 3.80,与 duetlens 的 4.92 / 3.71 持平。
+   不点亮 --glow-accent:水墨与漆器都不发光,辉光是赛博朋克那套主题的签名。 */
+:root[data-mode="dark"][data-theme="xianxia"]{
+  --bg:oklch(13% .024 218); --surface:oklch(17.5% .026 218); --card:oklch(17.5% .026 218);
+  --surface-2:oklch(21.5% .028 216); --surface-3:oklch(25.5% .030 214);
+  --border:oklch(41% .044 214); --border-soft:oklch(29% .032 216);
+  --text:oklch(93% .014 210); --text-dim:oklch(72% .022 210); --text-faint:oklch(66% .024 210); --text-deco:oklch(50% .026 212);
+  --agent:oklch(.78 .11 196); --agent-2:oklch(.86 .085 194);
+  --agent-soft:color-mix(in oklab,var(--agent) 14%,transparent);
+  --agent-line:color-mix(in oklab,var(--agent) 40%,transparent);
+  --accent-solid:oklch(.545 .12 50); --on-solid:#fff;
+  --human:oklch(.81 .14 84);
+  --human-soft:color-mix(in oklab,var(--human) 15%,transparent);
+  --human-line:color-mix(in oklab,var(--human) 40%,transparent);
+  --on-accent:oklch(13% .024 218); --hover:oklch(88% .06 200/.045);
+  --sel:color-mix(in oklab,var(--agent) 26%,transparent);
+  --scroll:oklch(28% .032 216); --scroll-h:oklch(36% .040 214);
+  --shadow:0 8px 26px -14px oklch(5% .024 218/.85);
+  --glow1:color-mix(in oklab,var(--agent) 10%,transparent); --glow2:color-mix(in oklab,var(--human) 6%,transparent);
+  --code-text:oklch(88% .016 214);
+  --k:oklch(.77 .13 302); --fn:oklch(.83 .105 228); --s:oklch(.81 .125 156); --n:oklch(.86 .12 92); --c:oklch(.66 .026 212); --ty:oklch(.81 .10 62); --mac:oklch(.77 .145 352);
+  --add:oklch(.81 .14 154); --del:oklch(.72 .17 22);
+  --add-bg:color-mix(in oklab,var(--add) 11%,transparent); --del-bg:color-mix(in oklab,var(--del) 11%,transparent);
+  --add-gutter:color-mix(in oklab,var(--add) 24%,transparent); --del-gutter:color-mix(in oklab,var(--del) 24%,transparent);
+  --code-hl:color-mix(in oklab,var(--agent) 14%,transparent);
+  --find-hl:color-mix(in oklab,oklch(.70 .15 300) 34%,transparent); --find-hl-on:oklch(.75 .15 300); --find-hl-fg:oklch(13% .024 218);
+  --sev-high:oklch(.72 .17 22); --sev-med:oklch(.84 .13 88); --sev-low:oklch(.75 .13 296);
+}
+/* ---- THEME: Xianxia · light ---- */
+/* 「雨过天青」:青瓷色画布 + 宣纸白卡片。白昼档不是把夜色调亮,是换一种成像方式 ——
+   夜里靠灵光提亮的那一层在白天不存在,剩下的只有矿物颜料本身(石青 / 石绿 / 藤黄 / 朱)。
+   画布真的带青(不是近白灰),白卡片才有得浮;暖白留给羊皮纸,这套走冷的一头,两者的色相区不重叠。
+   前景与底色分开取色:文字取深石青(要读),-soft / diff 底 / 命中底一律从各自的**亮档**现推(要是颜料);
+   从深前景 color-mix 只会得到脏灰蓝。
+   THEME 变量必须给全(见文件头的说明),否则缺哪个就掉回 :root 的深色值。 */
+:root[data-mode="light"][data-theme="xianxia"]{
+  --bg:oklch(93.6% .021 192); --surface:oklch(97.2% .012 192); --card:oklch(99.4% .005 192);
+  --surface-2:oklch(95.6% .015 192); --surface-3:oklch(91.2% .026 190);
+  --border:oklch(79.5% .034 192); --border-soft:oklch(88% .022 192);
+  --text:oklch(21% .022 215); --text-dim:oklch(43% .028 210); --text-faint:oklch(49.5% .030 208); --text-deco:oklch(59% .028 202);
+  --agent:oklch(.45 .105 222); --agent-2:oklch(.38 .11 226);
+  --agent-soft:color-mix(in oklab,oklch(.74 .11 196) 24%,transparent);
+  --agent-line:color-mix(in oklab,oklch(.62 .12 200) 58%,transparent);
+  --accent-solid:oklch(.485 .12 50); --on-solid:#fff;
+  --human:oklch(.49 .105 60);
+  --human-soft:color-mix(in oklab,oklch(.76 .12 68) 26%,transparent);
+  --human-line:color-mix(in oklab,oklch(.64 .13 62) 55%,transparent);
+  --on-accent:#ffffff; --hover:color-mix(in oklab,var(--text) 4.5%,transparent);
+  --sel:color-mix(in oklab,oklch(.72 .12 198) 26%,transparent);
+  --scroll:oklch(84% .028 192); --scroll-h:oklch(74% .040 192);
+  --shadow:0 1px 2px oklch(35% .06 215/.08),0 8px 22px -14px oklch(35% .07 215/.30);
+  --glow1:color-mix(in oklab,oklch(.70 .12 195) 10%,transparent); --glow2:color-mix(in oklab,oklch(.70 .12 70) 8%,transparent);
+  --code-text:oklch(21% .022 215);
+  --k:oklch(.46 .19 300); --fn:oklch(.44 .12 236); --s:oklch(.42 .12 158); --n:oklch(.47 .12 62); --c:oklch(.49 .030 200); --ty:oklch(.46 .10 68); --mac:oklch(.47 .18 350);
+  --add:oklch(.43 .13 158); --del:oklch(.47 .18 26);
+  --add-bg:oklch(94.2% .055 158); --del-bg:oklch(94% .050 24);
+  --add-gutter:color-mix(in oklab,oklch(.60 .15 158) 32%,transparent); --del-gutter:color-mix(in oklab,oklch(.62 .19 24) 30%,transparent);
+  --code-hl:color-mix(in oklab,oklch(.72 .13 198) 26%,transparent);
+  --find-hl:color-mix(in oklab,oklch(.62 .20 300) 32%,transparent); --find-hl-on:oklch(.50 .22 300); --find-hl-fg:#fff;
+  --sev-high:oklch(.47 .19 24); --sev-med:oklch(.46 .12 76); --sev-low:oklch(.47 .17 292);
 }

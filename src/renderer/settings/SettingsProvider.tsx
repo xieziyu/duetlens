@@ -44,7 +44,8 @@ export function readThemeQuery(): Partial<Pick<UiSettings, 'dataMode' | 'dataThe
     ...(theme === 'duetlens' ||
     theme === 'github' ||
     theme === 'parchment' ||
-    theme === 'cyberpunk'
+    theme === 'cyberpunk' ||
+    theme === 'xianxia'
       ? { dataTheme: theme }
       : {}),
   };

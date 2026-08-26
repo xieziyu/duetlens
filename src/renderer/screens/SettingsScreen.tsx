@@ -193,6 +193,7 @@ export function SettingsScreen({
                 <option value="github">GitHub</option>
                 <option value="parchment">羊皮纸</option>
                 <option value="cyberpunk">赛博朋克</option>
+                <option value="xianxia">仙侠</option>
               </select>
             </Row>
           </section>
