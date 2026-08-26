@@ -215,6 +215,7 @@
 .pr-pick button {
   flex: none;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   border: 0;
   border-radius: 7px;
@@ -364,6 +365,7 @@
 .pr-save {
   margin-left: auto;
   background: var(--accent-solid);
+  box-shadow: var(--glow-accent);
   color: var(--on-solid);
   border: 0;
   border-radius: 7px;

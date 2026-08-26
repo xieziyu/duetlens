@@ -2,7 +2,8 @@
    Duetlens design tokens — 单一来源
    两个正交的配色轴:
      data-mode  = dark | light                    (明暗模式 · 给出 chrome 的默认档)
-     data-theme = duetlens | github | parchment   (配色主题 · 成套:语法 token + diff + severity + 代码高亮)
+     data-theme = duetlens | github | parchment | cyberpunk
+                                                  (配色主题 · 成套:语法 token + diff + severity + 代码高亮)
    配色主题跟随 data-mode 自动切子模式(GitHub → Dark/Light)。
    THEME 默认只管代码那一半,chrome 由 data-mode 给;但**主题可以整套覆写 chrome**(parchment / github 即如此),
    此时它的选择器带两个属性,特异性高于 data-mode 那档,与书写顺序无关。
@@ -24,6 +25,9 @@
      属性不与类型同色、注释不斜体;duetlens/parchment 维持原样(默认值即旧行为)。
      var() 在同一元素上按最终生效的主槽求值,所以主题只改 --k/--ty 时这些跟随槽也跟着变。 */
   --lit:var(--k); --tag:var(--k); --prop:var(--ty); --re:var(--s); --c-style:italic;
+  /* 实心主按钮往外溢的光。默认是一条不可见的阴影而不是 none —— 组件里要能无条件写
+     `box-shadow: var(--glow-accent)`,不必按主题分支;只有自认发光的主题才把它点亮。 */
+  --glow-accent:0 0 0 0 transparent;
   /* hunk 头的带子:duetlens 借 agent 档,GitHub 有自己的一条蓝带 */
   --hunk-bg:var(--agent-soft); --hunk-fg:var(--agent-2);
 }
@@ -231,4 +235,82 @@
   --code-hl:rgba(84,174,255,.28);
   --find-hl:color-mix(in oklab,oklch(.52 .17 285) 26%,transparent); --find-hl-on:oklch(.52 .17 285); --find-hl-fg:#fff;
   --sev-high:#cf222e; --sev-med:#7d4e00; --sev-low:#0969da;
+}
+
+/* ---- THEME: Cyberpunk · dark ---- */
+/* 「雨夜霓虹」:靛紫夜色画布 + 青 / 洋红两管霓虹。整套覆写 chrome —— 夜色本身就是这套主题要传达的东西。
+   双声道换了色值但没换角色:agent 拿电子青(机器 / 数据),human 拿霓虹洋红(人 / 街面),仍是一冷一暖、各占一个色相区。
+   洋红被 human 占走之后,主按钮不能再用它,否则实心 CTA 会被读成「人的那一路」——
+   与 GitHub 档把 agent 让出蓝是同一条推理。CTA 因此落在紫(320),不属于任何一条声道。
+   severity 的红压到 18 与洋红 340 拉开;low 与检索命中同走紫,与 duetlens 档一致(检索只要不借声道与 diff)。
+   圆角收到 4px:霓虹招牌与机械外壳没有软边,方一点才对味。辉光是这套主题唯一开大的地方。 */
+:root[data-mode="dark"][data-theme="cyberpunk"]{
+  --r:4px;
+  --bg:oklch(11.5% .035 288); --surface:oklch(16% .042 288); --card:oklch(16% .042 288);
+  --surface-2:oklch(20% .048 290); --surface-3:oklch(24% .052 292);
+  --border:oklch(43% .085 294); --border-soft:oklch(30% .06 292);
+  --text:oklch(93% .022 300); --text-dim:oklch(73% .045 300); --text-faint:oklch(67% .05 300); --text-deco:oklch(51% .06 298);
+  --agent:oklch(.80 .145 195); --agent-2:oklch(.88 .11 196);
+  --agent-soft:color-mix(in oklab,var(--agent) 15%,transparent);
+  --agent-line:color-mix(in oklab,var(--agent) 42%,transparent);
+  /* CTA 的明度按「实心块对卡片的抬起量」定标,与 duetlens / GitHub 两档持平(3.7:1):
+     再深下去按钮就沉进夜色里,再浅白字就没余量。 */
+  --accent-solid:oklch(.56 .21 322); --on-solid:#fff;
+  --human:oklch(.74 .19 342);
+  --human-soft:color-mix(in oklab,var(--human) 15%,transparent);
+  --human-line:color-mix(in oklab,var(--human) 42%,transparent);
+  --on-accent:oklch(11.5% .035 288); --hover:oklch(85% .12 200/.05);
+  --sel:color-mix(in oklab,var(--agent) 28%,transparent);
+  --scroll:oklch(27% .05 292); --scroll-h:oklch(35% .07 294);
+  --shadow:0 8px 26px -14px oklch(4% .04 290/.85);
+  --glow1:color-mix(in oklab,var(--agent) 13%,transparent); --glow2:color-mix(in oklab,var(--human) 8%,transparent);
+  /* 光晕取比按钮本体更亮的一档紫:直接拿 --accent-solid 去发光,在夜色里几乎看不出来 */
+  --glow-accent:0 0 5px -2px oklch(.72 .22 322),0 0 20px -4px oklch(.66 .24 322);
+  --code-text:oklch(88% .03 292);
+  --k:oklch(.76 .20 340); --fn:oklch(.82 .14 196); --s:oklch(.82 .18 150); --n:oklch(.83 .15 72); --c:oklch(.65 .05 300); --ty:oklch(.87 .14 96); --mac:oklch(.78 .17 315);
+  --add:oklch(.82 .19 150); --del:oklch(.72 .20 18);
+  --add-bg:color-mix(in oklab,var(--add) 11%,transparent); --del-bg:color-mix(in oklab,var(--del) 11%,transparent);
+  --add-gutter:color-mix(in oklab,var(--add) 24%,transparent); --del-gutter:color-mix(in oklab,var(--del) 24%,transparent);
+  --code-hl:color-mix(in oklab,var(--agent) 14%,transparent);
+  --find-hl:color-mix(in oklab,oklch(.68 .22 300) 36%,transparent); --find-hl-on:oklch(.72 .22 300); --find-hl-fg:oklch(11.5% .035 288);
+  --sev-high:oklch(.72 .20 18); --sev-med:oklch(.83 .15 78); --sev-low:oklch(.74 .16 296);
+}
+/* ---- THEME: Cyberpunk · light ---- */
+/* 「全息投影」:白昼档不是把夜色调亮,是换一种成像方式 —— 霓虹在白天不发光,只剩下**色相与色块**。
+   于是三件事一起做,才不至于退化成「紫调的浅色 duetlens」:
+   1) 画布真的带紫(不是近白灰),白卡片浮在紫底上,层级由色温差而不只是明度差给出;
+   2) **前景与底色分开取色**:文字要深才能读,色块要亮才是霓虹 —— -soft / diff 底 / 命中底一律从
+      各自的**亮档**霓虹色现推,不再从深前景混出来(从深色混只会得到脏灰蓝);
+   3) 色块面积整体放大一档(soft 底、diff 底、选中态都比基础浅色档浓),让颜色成为面而不是描边。
+   THEME 变量必须给全(见文件头的说明),否则缺哪个就掉回 :root 的深色值。 */
+:root[data-mode="light"][data-theme="cyberpunk"]{
+  --r:4px;
+  --bg:oklch(92.6% .036 292); --surface:oklch(96.6% .022 294); --card:oklch(99.6% .006 300);
+  --surface-2:oklch(95% .028 292); --surface-3:oklch(90.4% .042 290);
+  --border:oklch(76% .07 292); --border-soft:oklch(86% .046 292);
+  --text:oklch(20% .055 300); --text-dim:oklch(43% .075 300); --text-faint:oklch(49% .08 300); --text-deco:oklch(60% .07 298);
+  /* 前景取深青(要读),底与线取亮青(要亮) —— 两者同一色相区,只是分工不同 */
+  --agent:oklch(.45 .115 210); --agent-2:oklch(.39 .12 214);
+  --agent-soft:color-mix(in oklab,oklch(.78 .15 200) 23%,transparent);
+  --agent-line:color-mix(in oklab,oklch(.66 .16 202) 62%,transparent);
+  --accent-solid:oklch(.54 .24 322); --on-solid:#fff;
+  --human:oklch(.48 .22 348);
+  --human-soft:color-mix(in oklab,oklch(.74 .21 345) 22%,transparent);
+  --human-line:color-mix(in oklab,oklch(.64 .23 345) 60%,transparent);
+  --on-accent:#ffffff; --hover:color-mix(in oklab,oklch(.55 .20 300) 7%,transparent);
+  --sel:color-mix(in oklab,oklch(.72 .17 202) 26%,transparent);
+  --scroll:oklch(83% .05 294); --scroll-h:oklch(73% .08 296);
+  --shadow:0 1px 2px oklch(30% .12 300/.08),0 8px 22px -14px oklch(30% .14 300/.32);
+  --glow1:color-mix(in oklab,oklch(.70 .16 200) 12%,transparent); --glow2:color-mix(in oklab,oklch(.68 .22 345) 10%,transparent);
+  /* 白昼档只留一圈近处的溢色:浅底上大半径光晕只会糊成一团脏紫 */
+  --glow-accent:0 0 10px -4px oklch(.56 .25 322);
+  --code-text:oklch(20% .055 300);
+  --k:oklch(.47 .22 340); --fn:oklch(.44 .12 226); --s:oklch(.42 .13 168); --n:oklch(.46 .13 52); --c:oklch(.49 .05 300); --ty:oklch(.46 .11 74); --mac:oklch(.47 .21 316);
+  --add:oklch(.43 .14 168); --del:oklch(.47 .20 10);
+  /* 增删底色比基础浅色档浓近一倍,并各自往青 / 品红偏 —— 这是「全息」与常规粉绿 diff 最好认的一处差别 */
+  --add-bg:oklch(93.4% .062 168); --del-bg:oklch(93.2% .058 8);
+  --add-gutter:color-mix(in oklab,oklch(.62 .16 168) 34%,transparent); --del-gutter:color-mix(in oklab,oklch(.62 .21 10) 32%,transparent);
+  --code-hl:color-mix(in oklab,oklch(.72 .17 202) 26%,transparent);
+  --find-hl:color-mix(in oklab,oklch(.62 .24 300) 34%,transparent); --find-hl-on:oklch(.50 .24 300); --find-hl-fg:#fff;
+  --sev-high:oklch(.47 .21 20); --sev-med:oklch(.46 .13 80); --sev-low:oklch(.47 .20 296);
 }

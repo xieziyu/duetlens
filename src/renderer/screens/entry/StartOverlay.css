@@ -103,6 +103,7 @@
 .sbtn.primary {
   border-color: transparent;
   background: var(--accent-solid, var(--agent));
+  box-shadow: var(--glow-accent);
   color: var(--on-solid, var(--on-accent));
   font-weight: 500;
 }
