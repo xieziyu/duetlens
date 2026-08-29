@@ -4,6 +4,40 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.10.0] - 2026-08-29
+
+### Added
+
+- **A github-pr review can be scoped to a single commit.** The entry screen gains a scope row for
+  github-pr sources: review the whole PR (the default), or pin one commit inside it. With a commit
+  pinned, the diff is taken against its parent, and rerun, resume and submit all stay on that same
+  commit — a moved PR head can no longer silently turn round two into a whole-PR review. The review
+  screen and the history / recent lists carry an `@sha` marker, so a commit-scoped review is
+  distinguishable at a glance. Once a commit is pinned the base picker becomes a read-only note: a
+  commit's only sensible baseline is its parent. The 422 pre-check on submit uses that commit's
+  diff as well, so anchors are no longer cleared by comparing against the whole-PR diff. Reviewing
+  a large PR in one pass is impractical; going commit by commit splits it into steps that each
+  stand on their own, without leaving the PR. Known limit: GitHub returns at most 250 commits for a
+  PR, and past that the picker shows the most recent 250 and says so. (#92)
+
+### Fixed
+
+- **GitButler sources no longer fail on every diff.** but 0.22 removed `--no-tui` from `but diff`,
+  and we passed it unconditionally, so every GitButler review stopped at `unexpected argument`. The
+  flag is now probed through `but diff --help` before being passed — dropping it outright is not an
+  option either, because 0.20.0 and older fall back to the `but.ui.tui` git config, and with that
+  enabled a review hangs on a TUI you cannot see. The two failure modes are asymmetric (new
+  versions error out, old ones stall silently), so this has to be asked rather than tried. (#93)
+
+### Upgrade notes
+
+- The database schema moves to v23 (0.9.1 was v22); an existing database migrates automatically on
+  first launch, with nothing to do by hand. **The migration is one-way** — 0.9.x can still open a
+  migrated database, it simply cannot see the new column (which commit a review pinned) and never
+  writes it back. If you really need to downgrade, back up
+  `~/Library/Application Support/Duetlens/duetlens.db` first.
+- The update arrives through the in-app updater; there is no need to download the dmg again.
+
 ## [0.9.1] - 2026-08-26
 
 ### Added
@@ -544,6 +578,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.10.0]: https://github.com/xieziyu/duetlens/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/xieziyu/duetlens/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xieziyu/duetlens/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/xieziyu/duetlens/compare/v0.7.2...v0.8.0
