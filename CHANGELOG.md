@@ -3,6 +3,21 @@
 本文件只记**对使用者可见**的变化。内部重构、文档与 CI 调整不单列,查 `git log`。
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/);`0.x` 阶段 minor 位即破坏性变更位。
 
+## [0.10.0] - 2026-08-29
+
+### 新增
+
+- **github-pr 可以只审其中一个 commit。** 入口屏为 github-pr 多了一行范围选择:默认审整个 PR,也可以钉住 PR 里的某一个 commit —— 此时 diff 取它与父提交之间的那一段,重跑、恢复、提交都跟着同一个 commit 走,不会因为 PR 的 head 挪动而在第二轮悄悄换成整个 PR。审核屏与历史 / 最近列表都带上 `@sha` 标记,一眼看得出这是一次 commit 范围的审核。钉住 commit 之后基线选择器换成一行只读说明 —— 一个 commit 唯一说得通的基线就是它的父提交。提交回 GitHub 时的锚点预判也以这个 commit 的 diff 为准,不会再被整个 PR 的 diff 判成失效。大 PR 一轮审完并不现实,逐个 commit 审可以把它拆成几段各自成立的工作,而不用离开这个 PR。已知限制:GitHub 一个 PR 最多返回 250 个 commit,超过这个数只列出最近 250 个并写明。(#92)
+
+### 修复
+
+- **GitButler 源不再每次取 diff 都失败。** but 0.22 拿掉了 `but diff` 的 `--no-tui`,而我们一直无条件带着它,于是所有 GitButler 审核都停在 `unexpected argument` 上。现在改为先问 `but diff --help` 有没有这个参数,再决定带不带 —— 不能一律不带:0.20.0 及更早的版本会去读 `but.ui.tui` 配置,那里开着的话审核会挂在一个你看不见的 TUI 上。两侧的失败方式不对称(新版本报错,老版本静默卡住),所以这件事只能问,不能试。(#93)
+
+### 升级须知
+
+- 数据库结构升级到 v23(0.9.1 是 v22),旧库首次启动自动迁移,无需操作。**迁移是单向的** —— 装回 0.9.x 仍能打开迁移过的库,只是新增列上的内容(某次审核钉住的是哪个 commit)它看不见,也不会写回去。真要降级,先备份 `~/Library/Application Support/Duetlens/duetlens.db`。
+- 更新由应用内 updater 接手,无需重新下载 dmg。
+
 ## [0.9.1] - 2026-08-26
 
 ### 新增
@@ -217,6 +232,7 @@
 
 首个公开版本。
 
+[0.10.0]: https://github.com/xieziyu/duetlens/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/xieziyu/duetlens/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xieziyu/duetlens/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/xieziyu/duetlens/compare/v0.7.2...v0.8.0
