@@ -16,7 +16,7 @@ import type {
   ReviewStartProgress,
   ReviewStartStage,
 } from '@shared/ipc';
-import type { PrSummary } from '@shared/source-discovery';
+import { PR_COMMITS_CAP, type PrCommit, type PrSummary } from '@shared/source-discovery';
 import { isStillPresent, scanDoneStatus } from '@shared/domain';
 import { hasAnchor, isSubmittable } from '@shared/github-review';
 import type { Discussion, Finding, FindingProposal, Message, ProposalUpdateBefore, ProposalUpdatePatch, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
@@ -149,19 +149,32 @@ const now = Date.now();
 
 const SUMMARY_MODE = new URLSearchParams(window.location.search).get('summary');
 
+/** `?entry-state=commits-error` 的一次性失败闸:只第一次抛,重试即成功。 */
+let commitsErrorSpent = false;
+
+/** 被钉住的那个 commit(?commit-scope):顶栏 chip 与历史短 sha 都认它。 */
+const PINNED_SHA = '9f3c1ad7e2b4508cd1f0a6e8b7c4d2319ae5f60b';
+const COMMIT_SCOPE = new URLSearchParams(window.location.search).has('commit-scope');
+
 const REVIEW: Review = {
   id: 'demo',
-  // 本地分支 source:无 PR 可提交,终点走导出 Markdown(便于自查导出屏)
-  source: 'local-branch',
-  sourceRef: 'feat/streaming-transcode',
+  // 本地分支 source:无 PR 可提交,终点走导出 Markdown(便于自查导出屏)。
+  // ?commit-scope 例外:钉 commit 只存在于 github-pr,来源得跟着换,否则那枚 chip 挂在
+  // 一个根本不可能有 headRef 的 review 上,自查到的就不是真实组合。
+  source: COMMIT_SCOPE ? 'github-pr' : 'local-branch',
+  sourceRef: COMMIT_SCOPE ? 'xieziyu/podcast-go#482' : 'feat/streaming-transcode',
   // 非默认 base:顶栏那枚 ← chip 只在这种情况下出,fixture 里得有一份才看得见
   baseRef: 'release/2.0',
+  // ?commit-scope 钉一个假 sha:顶栏 @sha chip 与「仅审这一个提交」只在这种 review 上出现
+  headRef: COMMIT_SCOPE ? PINNED_SHA : null,
   repoPath: '/Users/dev/podcast-go',
   codexThreadId: 'thread-demo',
   model: 'gpt-5.6-sol',
   reasoningEffort: 'high',
   intensity: 'adversarial',
-  title: 'feat/streaming-transcode · feat: streaming transcode pipeline',
+  title: COMMIT_SCOPE
+    ? '#482 @9f3c1ad · fix: guard nil encoder on cutover'
+    : 'feat/streaming-transcode · feat: streaming transcode pipeline',
   status: 'completed',
   summaryBody: '本次改动引入并发编码管线,整体方向合理,但并发计数存在数据竞争,需修正。',
   summaryFiles: [
@@ -181,16 +194,21 @@ const REVIEW: Review = {
   updatedAt: now,
 };
 
+// 列表行不跟着 ?commit-scope 走:那个开关是给 review 屏用的,让它渗进每一行会把
+// 「只有钉住 commit 的那条才显示短 sha」这个判据糊掉。要显示的那条自己写 headRef。
+const RECENT_BASE: Review = { ...REVIEW, headRef: null };
+
 // 入口「最近的审核」/ 历史屏列表 fixture(覆盖三来源 × 状态 × 时间分桶)
 const RECENT_REVIEWS: RecentReview[] = [
-  { ...REVIEW, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: '#482 · feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 23 * 60_000 },
-  { ...REVIEW, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', title: '#479 · fix: episode duration off-by-one on live cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
-  { ...REVIEW, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding-for-legacy-clients', title: 'fix/feed-encoding-for-legacy-clients · fix: keep latin-1 feed output for legacy clients', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 26 * 3600_000 },
-  { ...REVIEW, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'GitButler · virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
-  { ...REVIEW, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: '#471 · refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, currentRound: 1, summaryRound: 1, updatedAt: now - 10 * 86_400_000 },
-  { ...REVIEW, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout · fix: raise transcode timeout to 5m', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
+  { ...RECENT_BASE, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: '#482 · feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 23 * 60_000 },
+  // 钉住单个 commit 的一条:历史屏与「最近的审核」的元信息行该多出一枚 mono 短 sha
+  { ...RECENT_BASE, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', headRef: PINNED_SHA, title: '#479 @9f3c1ad · fix: guard nil encoder on cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
+  { ...RECENT_BASE, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding-for-legacy-clients', title: 'fix/feed-encoding-for-legacy-clients · fix: keep latin-1 feed output for legacy clients', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 26 * 3600_000 },
+  { ...RECENT_BASE, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'GitButler · virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
+  { ...RECENT_BASE, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: '#471 · refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, currentRound: 1, summaryRound: 1, updatedAt: now - 10 * 86_400_000 },
+  { ...RECENT_BASE, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout · fix: raise transcode timeout to 5m', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
   // 距 30 天保留期只剩 3 天:历史屏的临期标记只有这种行才出现,没有它就自查不到
-  { ...REVIEW, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: '#440 · chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 27 * 86_400_000 },
+  { ...RECENT_BASE, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: '#440 · chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 27 * 86_400_000 },
 ];
 
 // 满载提示 fixture:正在跑的会话(?busy=1..4)
@@ -207,6 +225,30 @@ const OPEN_PRS: PrSummary[] = [
   { number: 479, title: 'fix: episode duration off-by-one on live cutover', author: 'mia', additions: 24, deletions: 9, updatedAt: new Date(now - 5 * 3600_000).toISOString() },
   { number: 475, title: 'refactor: extract feed builder into module', author: 'ryan', additions: 310, deletions: 212, updatedAt: new Date(now - 26 * 3600_000).toISOString() },
 ];
+
+// PR 内 commit 列表 fixture(旧→新,与 GitHub commits 页同序)。含一条 merge commit:
+// 那一行要出 merge 标记,是选择器上唯一需要劝阻的候选
+const PR_COMMITS: PrCommit[] = [
+  { oid: 'c1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4', headline: 'feat(encoder): add streaming pipeline skeleton', author: 'ryan', committedDate: new Date(now - 52 * 3600_000).toISOString(), isMerge: false },
+  { oid: 'd2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5', headline: 'feat(encoder): wire backpressure into the worker pool', author: 'ryan', committedDate: new Date(now - 48 * 3600_000).toISOString(), isMerge: false },
+  { oid: 'e3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6', headline: "Merge branch 'main' into feat/streaming-transcode", author: 'ryan', committedDate: new Date(now - 30 * 3600_000).toISOString(), isMerge: true },
+  { oid: 'f4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7', headline: 'test(encoder): cover the cutover race', author: 'mia', committedDate: new Date(now - 26 * 3600_000).toISOString(), isMerge: false },
+  { oid: PINNED_SHA, headline: 'fix: guard nil encoder on cutover', author: 'mia', committedDate: new Date(now - 4 * 3600_000).toISOString(), isMerge: false },
+];
+
+/**
+ * 长列表用的假 sha。**要长得像真的** —— 规整的 `1010101…` 会让「短 sha 认不认得出」这个
+ * 判断在自查里失真:真实候选之间只差几个乱序字符,规整值看着一眼可辨。
+ */
+function fakeOid(i: number): string {
+  let h = (i + 1) * 2654435761;
+  let out = '';
+  while (out.length < 40) {
+    h = (h * 1103515245 + 12345) >>> 0;
+    out += h.toString(16).padStart(8, '0');
+  }
+  return out.slice(0, 40);
+}
 
 function mkFinding(p: Partial<Finding> & Pick<Finding, 'id' | 'severity' | 'title' | 'file' | 'line'>): Finding {
   return {
@@ -1449,6 +1491,28 @@ export function installPreviewApi(): void {
           bottom,
         ];
       },
+      // ?entry-state=many-commits 演示 30 条的长列表(浮层定高 / 筛选框可用);
+      // capped-commits 拉满 GitHub 的封顶值,验「仅显示最近 250 个提交」那行提示;
+      // commits-error 第一次抛错、重试即成功 —— 错误态与重试闭环都要能走完,
+      // 一直抛的话验不出「重试成功后错误态清干净」这半边
+      listPrCommits: async () => {
+        await new Promise((r) => setTimeout(r, 300));
+        const state = params.get('entry-state');
+        if (state === 'commits-error' && !commitsErrorSpent) {
+          commitsErrorSpent = true;
+          throw new Error('拉取 PR 提交列表失败:API rate limit exceeded(HTTP 403)');
+        }
+        if (state !== 'many-commits' && state !== 'capped-commits') return PR_COMMITS;
+        return Array.from({ length: state === 'capped-commits' ? PR_COMMITS_CAP : 30 }, (_, i) => ({
+          // 第 7 条与第 6 条**刻意共享 7 位前缀**:短 sha 一旦被当成候选身份,
+          // 这两行就会共用 React key、且回查会取错另一条。自查要能真的撞上这一下
+          oid: i === 6 ? `${fakeOid(5).slice(0, 7)}${fakeOid(6).slice(7)}` : fakeOid(i),
+          headline: `refactor(module-${i + 1}): drop the legacy adapter path`,
+          author: i % 3 === 0 ? 'mia' : 'ryan',
+          committedDate: new Date(now - (31 - i) * 3600_000).toISOString(),
+          isMerge: i === 11,
+        }));
+      },
       // entry-state=infer 演示粘贴 PR 后自动反推本地 clone;默认不命中(留空路径)
       inferLocalRepo: async () => (params.get('entry-state') === 'infer' ? '/Users/dev/podcast-go' : null),
       getRepoRemote: async () => ({
@@ -1488,9 +1552,14 @@ export function installPreviewApi(): void {
           branches: state === 'no-branches' ? [] : branches.filter((b) => b.name !== (base ?? 'main')),
         };
       },
-      // base 换一条,改动面就该跟着变;预览里按 base 名派生一组稳定的假数,让这个联动看得见
+      // base(或钉住的 commit)换一条,改动面就该跟着变;按选择派生一组稳定的假数,让联动看得见。
+      // 钉了 commit 时数明显更小 —— 一个提交的改动面本就该远小于整个 PR,数没变小就是没重算
       diffStat: async (input) => {
         await new Promise((r) => setTimeout(r, 260));
+        if (input.headRef) {
+          const s = [...input.headRef].reduce((n, c) => n + c.charCodeAt(0), 0);
+          return { files: 1 + (s % 4), additions: 6 + (s % 40), deletions: 1 + (s % 12) };
+        }
         const seed = [...(input.baseRef ?? 'default')].reduce((n, c) => n + c.charCodeAt(0), 0);
         return { files: 3 + (seed % 22), additions: 120 + (seed % 700), deletions: 18 + (seed % 130) };
       },

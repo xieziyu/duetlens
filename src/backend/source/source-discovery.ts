@@ -12,6 +12,7 @@ import type {
   PrAncestor,
   LocalBranchList,
   LocalBranchSummary,
+  PrCommit,
   PrPreview,
   PrSummary,
   RepoInspection,
@@ -24,7 +25,7 @@ import { butJson } from './but-cli';
 import { createSource } from './create-source';
 import { run } from './exec';
 import { gitButlerDiff } from './gitbutler-source';
-import { parsePrRef } from './github-pr-source';
+import { fetchPrCommits, parsePrRef, resolvePrRef } from './github-pr-source';
 import type { ReviewTarget } from './source';
 
 /** `gh auth status` 退出码非 0 即未登录;命令缺失(未装 gh)同样视为不可用。 */
@@ -105,6 +106,15 @@ export async function prBaseChain(ref: string, repoPath?: string): Promise<PrAnc
     cursor = parent.baseRefName;
   }
   return chain;
+}
+
+/**
+ * PR 里的 commit 列表(旧→新)。顺序原样保留 API 的返回,与 GitHub PR 的 commits 页一致 ——
+ * 用户是照着那一页找「刚才那个提交」的,倒过来会让他数错位置。
+ */
+export async function listPrCommits(ref: string, repoPath?: string): Promise<PrCommit[]> {
+  const { nwo, num } = await resolvePrRef(ref, repoPath);
+  return fetchPrCommits(nwo, num);
 }
 
 /** 仓库默认分支名;取不到返回 null(那就别去断言某一环是不是它)。 */

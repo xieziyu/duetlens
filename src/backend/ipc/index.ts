@@ -64,6 +64,7 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
         ref: input.ref,
         repoPath: input.repoPath ?? '',
         baseRef: input.baseRef,
+        headRef: input.headRef,
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         intensity: input.intensity,
@@ -187,6 +188,9 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
   ipcMain.handle(IpcChannels.sourceDiffStat, (_e, input: DiffStatInput) => manager.diffStat(input));
   ipcMain.handle(IpcChannels.sourcePrBaseChain, (_e, ref: string, repoPath?: string) =>
     manager.prBaseChain(ref, repoPath),
+  );
+  ipcMain.handle(IpcChannels.sourceListPrCommits, (_e, ref: string, repoPath?: string) =>
+    manager.listPrCommits(ref, repoPath),
   );
 
   ipcMain.handle(IpcChannels.promptGet, (_e, cwd?: string) => manager.getReviewPrompt(cwd));

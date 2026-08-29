@@ -157,6 +157,18 @@
   padding: 2px 7px;
   white-space: nowrap;
 }
+/* 只审一个 commit 的标记:与 basechip 同一档视觉(两者都在说「这次审的范围不是默认的那份」),
+   互斥出现,故不必再区分颜色 */
+.rev-topbar .commitchip {
+  flex: none;
+  font-size: 11px;
+  color: var(--agent-2);
+  background: var(--agent-soft);
+  border: 1px solid var(--agent-line);
+  border-radius: 6px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
 .rev-topbar .spacer {
   flex: 1;
   min-width: 8px;

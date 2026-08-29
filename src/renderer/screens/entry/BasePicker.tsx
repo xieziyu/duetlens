@@ -194,10 +194,13 @@ export function useDiffStat(input: {
   ref: string;
   repoPath: string;
   baseRef: string;
+  /** 钉住的 commit(github-pr);非空时后端按它算,base 不参与 */
+  headRef?: string;
   enabled: boolean;
 }): DiffStatState {
   const [stat, setStat] = useState<{ key: string; value: DiffStatState } | null>(null);
-  const key = [input.source, input.ref, input.repoPath, input.baseRef].join(' ');
+  const headRef = input.headRef ?? '';
+  const key = [input.source, input.ref, input.repoPath, input.baseRef, headRef].join(' ');
   const { enabled, source, ref, repoPath, baseRef } = input;
 
   useEffect(() => {
@@ -207,7 +210,13 @@ export function useDiffStat(input: {
     }
     let alive = true;
     window.duetlens.source
-      .diffStat({ source, ref, repoPath: repoPath || undefined, baseRef: baseRef || undefined })
+      .diffStat({
+        source,
+        ref,
+        repoPath: repoPath || undefined,
+        baseRef: baseRef || undefined,
+        headRef: headRef || undefined,
+      })
       .then((v) => alive && setStat({ key, value: { state: 'value', value: v } }))
       .catch(
         (e: Error) =>
@@ -216,7 +225,7 @@ export function useDiffStat(input: {
     return () => {
       alive = false;
     };
-  }, [key, enabled, source, ref, repoPath, baseRef]);
+  }, [key, enabled, source, ref, repoPath, baseRef, headRef]);
 
   return stat?.key === key ? stat.value : LOADING;
 }

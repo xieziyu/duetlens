@@ -9,6 +9,12 @@ export interface ReviewTarget {
   repoPath: string;
   /** local-branch 的 diff 基线;缺省自动探测默认分支 */
   baseRef?: string;
+  /**
+   * 钉死的被审 head,**仅 github-pr 消费**:给了就只审这一个 commit(base 即其父提交)。
+   * 与 baseRef 互斥且优先 —— 父提交是这个 commit 唯一说得通的基线,再叠一条 base 只会
+   * 得出一份既不是「这个 commit」也不是「整个 PR」的第三种改动面。
+   */
+  headRef?: string;
   /** codex 模型(空=账号默认);仅审核配置,不影响 source 定位 */
   model?: string | null;
   /** reasoning effort(缺省 codex medium) */

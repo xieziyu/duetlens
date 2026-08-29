@@ -123,6 +123,8 @@ const api: DuetlensApi = {
     diffStat: (input) => ipcRenderer.invoke(IpcChannels.sourceDiffStat, input),
     prBaseChain: (ref, repoPath) =>
       ipcRenderer.invoke(IpcChannels.sourcePrBaseChain, ref, repoPath),
+    listPrCommits: (ref, repoPath) =>
+      ipcRenderer.invoke(IpcChannels.sourceListPrCommits, ref, repoPath),
     listRepoPaths: () => ipcRenderer.invoke(IpcChannels.sourceListRepoPaths),
   },
   prompt: {
