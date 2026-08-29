@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { refExists } from './base-ref';
-import { butJson } from './but-cli';
+import { butDiffJson } from './but-cli';
 import { run } from './exec';
 import { gitGrep } from './git-grep';
 import type {
@@ -188,7 +188,7 @@ export async function gitButlerDiff(
         `虚拟分支 ${branch} 与同名 tag 冲突,取不到缺省 diff(删掉 refs/tags/${branch},或改选一个 base)`,
       );
     }
-    const out = await butJson(['diff', branch, '--no-tui'], repo);
+    const out = await butDiffJson(branch, repo);
     return toUnifiedDiff(JSON.parse(out) as ButDiffJson);
   }
   // 两端都先解析成 sha 再拼 range:界面传下来的是短名(stack 内的虚拟分支名,或 workspace target),
