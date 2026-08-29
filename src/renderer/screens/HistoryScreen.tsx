@@ -244,6 +244,13 @@ function metaParts(r: RecentReview, expiring: number | null): React.JSX.Element 
   return (
     <>
       <span>{repoName(r) ?? r.source}</span>
+      {/* 只审一个 commit 的那条要能与「整个 PR」分开:两者的标题都以 #号 开头,不标就认不出 */}
+      {r.headRef && (
+        <>
+          <span className="dot" />
+          <span title="仅审核 PR 中的这一个提交">@{r.headRef.slice(0, 7)}</span>
+        </>
+      )}
       <span className="dot" />
       <span className={r.findingCount === 0 ? 'find zero' : 'find'}>{r.findingCount} findings</span>
       <span className="dot" />

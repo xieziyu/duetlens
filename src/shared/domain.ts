@@ -290,6 +290,11 @@ export interface Review {
    * 落库是为了让复审沿用同一条基线 —— 重新自动探测会让第二轮起悄悄换一份改动面。
    */
   baseRef: string | null;
+  /**
+   * 钉死的被审 head;null = 跟随该 source 的默认 head(PR 的 head 分支)。
+   * 非空表示只审这一个 commit(相对其父提交),此时 {@link baseRef} 不参与定位。
+   */
+  headRef: string | null;
   /** 可选本地仓库路径(github source 也可指定,让 agent 读全量代码) */
   repoPath: string | null;
   /** codex 侧会话 id(续接用) */

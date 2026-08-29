@@ -89,6 +89,7 @@ function fixture() {
     source: 'local-branch',
     sourceRef: 'stub',
     baseRef: null,
+    headRef: null,
     repoPath: null,
     codexThreadId: null,
     model: null,

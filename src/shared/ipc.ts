@@ -27,6 +27,7 @@ import type {
   DiffStat,
   LocalBranchList,
   PrAncestor,
+  PrCommit,
   PrPreview,
   PrSummary,
   RepoInspection,
@@ -84,6 +85,7 @@ export const IpcChannels = {
   sourceInspectRepo: 'source:inspect-repo',
   sourceDiffStat: 'source:diff-stat',
   sourcePrBaseChain: 'source:pr-base-chain',
+  sourceListPrCommits: 'source:list-pr-commits',
   sourceListRepoPaths: 'source:list-repo-paths',
   promptGet: 'prompt:get',
   promptSave: 'prompt:save',
@@ -104,6 +106,8 @@ export interface ReviewStartInput {
   repoPath?: string;
   /** local-branch diff 基线;缺省自动探测默认分支 */
   baseRef?: string;
+  /** github-pr:只审这一个 commit(base 即其父提交);与 baseRef 互斥,给了它 baseRef 不生效 */
+  headRef?: string;
   /** codex 模型(空=账号默认) */
   model?: string;
   /** reasoning effort(缺省 codex medium) */
@@ -122,6 +126,7 @@ export interface DiffStatInput {
   ref: string;
   repoPath?: string;
   baseRef?: string;
+  headRef?: string;
 }
 
 /**
@@ -483,6 +488,8 @@ export interface DuetlensApi {
     diffStat(input: DiffStatInput): Promise<DiffStat>;
     /** 被审 PR 的祖先链(自近及远,[0] 即它自己的 base);非 stacked PR 只有一环。 */
     prBaseChain(ref: string, repoPath?: string): Promise<PrAncestor[]>;
+    /** 列举 PR 里的 commit(旧→新);供「只审其中一个提交」的范围选择。 */
+    listPrCommits(ref: string, repoPath?: string): Promise<PrCommit[]>;
     /** 历史审核用过的本地仓库路径(去重、最近在前),供入口空态快选。 */
     listRepoPaths(): Promise<string[]>;
   };

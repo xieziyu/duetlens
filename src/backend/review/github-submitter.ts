@@ -45,8 +45,13 @@ export class GhReviewSubmitter implements GitHubSubmitter {
 
     // payload 带了 sha 就钉死它:那是 suggestion 补缩进所依据的那份 diff 所属的 commit。
     // 再读一次实时 head 的话,两次读之间的推送会让「按 A 的行补的缩进」提交到 B。
+    // 都没有时,只审一个 commit 的 review 要落回它自己那个 sha 而非 PR 实时 head ——
+    // 行锚点算的是这个 commit 的 diff,报给 GitHub 另一个 commit_id 只会整份被 422 拒。
     const { commitId, ...apiPayload } = payload;
-    const requestBody = JSON.stringify({ commit_id: commitId ?? liveHead, ...apiPayload });
+    const requestBody = JSON.stringify({
+      commit_id: commitId ?? review.headRef ?? liveHead,
+      ...apiPayload,
+    });
     try {
       const out = await run(
         'gh',

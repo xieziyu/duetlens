@@ -46,12 +46,14 @@ import {
   inspectRepo,
   listLocalBranches,
   listOpenPrs,
+  listPrCommits,
   previewPr,
 } from '../source/source-discovery';
 import type {
   DiffStat,
   LocalBranchList,
   PrAncestor,
+  PrCommit,
   PrPreview,
   PrSummary,
   RepoInspection,
@@ -101,6 +103,7 @@ function targetOf(review: Review): ReviewTarget {
     source: review.source,
     ref: review.sourceRef,
     baseRef: review.baseRef ?? undefined,
+    headRef: review.headRef ?? undefined,
     repoPath: review.repoPath ?? '',
   };
 }
@@ -284,12 +287,18 @@ export class ReviewManager extends EventEmitter {
     return prBaseChain(ref, repoPath);
   }
 
+  /** PR 里的 commit(旧→新);供入口选择只审其中一个提交。 */
+  listPrCommits(ref: string, repoPath?: string): Promise<PrCommit[]> {
+    return listPrCommits(ref, repoPath);
+  }
+
   /** 按所选 base 现算改动面(入口切 base 后刷新计量)。 */
   diffStat(input: DiffStatInput): Promise<DiffStat> {
     return diffStat({
       source: input.source,
       ref: input.ref,
       baseRef: input.baseRef,
+      headRef: input.headRef,
       repoPath: input.repoPath ?? '',
     });
   }
@@ -332,6 +341,8 @@ export class ReviewManager extends EventEmitter {
     // 判据永远是「这条锚点在不在这个 PR 自己的 diff 里」。审核时选了更宽的 base 的话,带上它
     // 拉回来的正是那份更宽的 diff —— 于是每条锚在下层 PR 上的 finding 都会被判成有效,
     // 而它们恰恰是提交时唯一会被拒的那批。
+    // **headRef 反过来必须留着**:钉住某个 commit 的 review 提交时用的正是那个 commit_id,
+    // GitHub 校验的也就是它自己那份 diff;清掉会拿整个 PR 的 diff 去判,放行一批实际会被拒的锚点。
     const source = createSource(
       review.source === 'github-pr' ? { ...targetOf(review), baseRef: undefined } : targetOf(review),
     );
@@ -888,6 +899,7 @@ export class ReviewManager extends EventEmitter {
         source: target.source,
         sourceRef: target.ref,
         baseRef: target.baseRef || null,
+        headRef: target.headRef || null,
         repoPath: target.repoPath || null,
         title: prepared.title,
         model: target.model || null,

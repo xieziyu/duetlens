@@ -281,9 +281,17 @@ ALTER TABLE ui_settings ADD COLUMN open_review_ids TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE ui_settings ADD COLUMN active_review_id TEXT NOT NULL DEFAULT '';
 `;
 
+// 钉死的被审 head(github-pr 只审其中一个 commit)。与 base_ref 同理必须落库:复审重新探测
+// 只会拿到 PR 当下的 head,于是第二轮起审的是整个 PR —— 而 findings 锚点、提交时的 422 预判
+// 都以「这一个 commit 自己的 diff」为基准,基准一漂,同一条 finding 还在不在就无从判起。
+// NULL = 跟随该 source 的默认 head(PR 的 head 分支);非空 = 钉死的 commit sha。
+const V23 = `
+ALTER TABLE reviews ADD COLUMN head_ref TEXT;
+`;
+
 const MIGRATIONS: string[] = [
   V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20,
-  V21, V22,
+  V21, V22, V23,
 ];
 
 export function migrate(db: Database): void {

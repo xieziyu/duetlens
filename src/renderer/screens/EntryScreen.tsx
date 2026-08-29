@@ -10,9 +10,11 @@ import {
   type SourceKind,
 } from '@shared/domain';
 import type { LiveCapacity, RecentReview, ReviewStartInput, ReviewStartStage } from '@shared/ipc';
+import { PR_COMMITS_CAP } from '@shared/source-discovery';
 import type {
   LocalBranchList,
   PrAncestor,
+  PrCommit,
   PrPreview,
   PrSummary,
   RepoInspection,
@@ -29,6 +31,13 @@ import {
   type BaseOption,
 } from './entry/BasePicker';
 import { BranchPicker, BranchSummary, type BranchOption } from './entry/BranchPicker';
+import {
+  CommitBaseNote,
+  CommitScopeError,
+  CommitScopeRow,
+  CommitTruncNote,
+  shortOid,
+} from './entry/CommitScopeRow';
 import { Busy } from './entry/Busy';
 import { GhIcon, LocalBranchIcon } from './entry/icons';
 import { baseName, parentDir } from './entry/paths';
@@ -76,6 +85,8 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   const [ref, setRef] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const [baseRef, setBaseRef] = useState('');
+  // github-pr 档:钉住的 commit sha(空 = 整个 PR)。与 baseRef 互斥,由 GitHubPanel 保证只有一个非空
+  const [headRef, setHeadRef] = useState('');
 
   // 本地仓库档:探测结果定模式;forceLocal 是 workspace 仓库上「改按普通 git 分支审核」的手动覆盖
   const [inspection, setInspection] = useState<RepoInspection | null>(null);
@@ -163,6 +174,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
     // base 是「相对哪条 ref 审」,换来源后原来那条多半在新来源里根本不存在;
     // 不清的话它会一路带到发起,把一个 PR 拿去和上一个仓库的分支比。
     setBaseRef('');
+    setHeadRef('');
     setError(null);
     if (next === 'repo' && !repoPath.trim()) setRepoPath(settings.lastRepoPath);
   };
@@ -214,7 +226,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   // (换路径不改查询串,旧 preview 不作废,发起门槛也一直开着)。
   // 身份在解析那一刻就钉死,展示与提交同源,这条缝就不存在了。
   const startRef = tab === 'github-pr' ? ghResolvedRef : ref.trim();
-  const target = useTargetLabel(source, startRef);
+  const target = useTargetLabel(source, startRef, tab === 'github-pr' ? headRef : '');
   const atCapacity = isAtCapacity(capacity);
   const canStart =
     !busy && !atCapacity && !!startRef && (tab === 'github-pr' || !!repoPath.trim());
@@ -232,6 +244,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       ref: startRef,
       repoPath: repoPath.trim() || undefined,
       baseRef: baseRef.trim() || undefined,
+      headRef: headRef.trim() || undefined,
       model: trimmedModel || undefined,
       reasoningEffort: effort,
       intensity,
@@ -328,6 +341,8 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
             setRepoPath={setRepoPath}
             baseRef={baseRef}
             setBaseRef={setBaseRef}
+            headRef={headRef}
+            setHeadRef={setHeadRef}
             pickDir={pickDir}
             busy={busy}
             onResolved={setGhResolvedRef}
@@ -499,6 +514,8 @@ function GitHubPanel({
   setRepoPath,
   baseRef,
   setBaseRef,
+  headRef,
+  setHeadRef,
   pickDir,
   busy,
   onResolved,
@@ -509,6 +526,9 @@ function GitHubPanel({
   setRepoPath: (v: string) => void;
   baseRef: string;
   setBaseRef: (v: string) => void;
+  /** 钉住的 commit sha;空 = 整个 PR */
+  headRef: string;
+  setHeadRef: (v: string) => void;
   pickDir: () => void;
   busy: boolean;
   /** 报上去的是解析出的完整引用(owner/repo#n);空串 = 还不能发起 */
@@ -532,6 +552,10 @@ function GitHubPanel({
   const [chain, setChain] = useState<{ key: string; value: ChainState } | null>(null);
   // 摸链失败后重来一次的闸;链是纯读取,重试无副作用
   const [chainTry, setChainTry] = useState(0);
+  // PR 内的 commit 列表;同祖先链一样连同「是为哪个 PR 拉的」一起存,换 PR 后旧列表立即作废
+  const [commits, setCommits] = useState<{ key: string; value: CommitsState } | null>(null);
+  // 拉取失败后重来一次的闸;列举是纯读取,重试无副作用(同 chainTry)
+  const [commitsTry, setCommitsTry] = useState(0);
 
   const recheckAuth = () => {
     setGhAuth(null);
@@ -628,13 +652,54 @@ function GitHubPanel({
   // 旧 base 会跟着新 PR 一路发起。清空即回到「跟随该 PR 自己的 base」,是安全的那一侧。
   // 手上这条 baseRef 是为哪个 prKey 选的。只在选择事件里写(不在 render 期写),故 render 期读安全。
   const baseOwner = useRef('');
+  const headOwner = useRef('');
   const lastPrKey = useRef(prKey);
   useEffect(() => {
     if (lastPrKey.current === prKey) return;
     lastPrKey.current = prKey;
     baseOwner.current = '';
+    headOwner.current = '';
     setBaseRef('');
-  }, [prKey, setBaseRef]);
+    // 钉住的 commit 更是「某一个 PR 的属性」:sha 换个 PR 根本不存在,留着会让新 PR
+    // 一发起就报「不在这个 PR 里」;更坏的是同一条 sha 恰好在两个 PR 里都在(cherry-pick /
+    // 换基重开),那就悄悄审了另一段。清空即回到「整个 PR」,是安全的那一侧。
+    setHeadRef('');
+  }, [prKey, setBaseRef, setHeadRef]);
+
+  // 解析出 PR 后拉一次 commit 列表(范围选择器的候选)。
+  // **失败不能咽成空数组** —— 空列表在界面上与「这个 PR 没有提交」长得一模一样,
+  // 于是一次限流/断网会被读成事实,用户既不知道该重试,也不知道 commit 粒度这档暂时用不了。
+  useEffect(() => {
+    if (!prKey) {
+      setCommits(null);
+      return;
+    }
+    let alive = true;
+    setCommits(null);
+    window.duetlens.source
+      .listPrCommits(prKey)
+      .then((v) => alive && setCommits({ key: prKey, value: { state: 'value', value: v } }))
+      .catch(
+        (e: Error) =>
+          alive && setCommits({ key: prKey, value: { state: 'error', message: e.message ?? String(e) } }),
+      );
+    return () => {
+      alive = false;
+    };
+  }, [prKey, commitsTry]);
+
+  // 换 PR 的那一帧 commits 还挂着上一个 PR 的结果,按 key 判即作废(同 chainState)
+  const commitsState: CommitsState = commits?.key === prKey ? commits.value : COMMITS_PROBING;
+  const prCommits = commitsState.state === 'value' ? commitsState.value : null;
+
+  // 列表落定后校验手上这条 sha:不在这个 PR 里(拉失败 / force-push 挤掉)就退回「整个 PR」。
+  // 与 base 同理不能连在途一起判 —— 那会把用户刚选好的 commit 白白吞掉。
+  useEffect(() => {
+    if (!prCommits || !headRef) return;
+    if (prCommits.some((c) => c.oid === headRef)) return;
+    headOwner.current = '';
+    setHeadRef('');
+  }, [prCommits, headRef, setHeadRef]);
 
   // 链一落定就用它校验手上这条 base:候选里没有它(探测失败 / 链变短了)就清掉。
   // **不能连 probing 一起判** —— 那会让每次改本地路径都白白吞掉用户选好的 base;
@@ -658,12 +723,16 @@ function GitHubPanel({
   // 请求发出去就撤不回来了。**只能在 render 期派生**。
   // 判据是「这条 base 是为哪个 PR 选的」,不是「它在不在新 PR 的候选表里」——
   // 两个 PR 的候选里撞上同名 ref 是常事(stack 换条线重开就会),按候选表判会把旧 base 放过去。
-  const statBase = baseOwner.current === prKey ? baseRef : '';
+  const statHead = headOwner.current === prKey ? headRef : '';
+  // 钉住 commit 时 base 不参与定位(后端同样 head 优先),计量也必须按同一口径问,
+  // 否则屏上这个数说的是另一份改动面。
+  const statBase = !statHead && baseOwner.current === prKey ? baseRef : '';
   const stat = useDiffStat({
     source: 'github-pr',
     ref: prKey,
     repoPath: repoPath.trim(),
     baseRef: statBase,
+    headRef: statHead,
     enabled: !!preview,
   });
 
@@ -798,10 +867,46 @@ function GitHubPanel({
         </div>
       )}
 
+      {/* 审核范围:整个 PR(默认)/ PR 里的某一个 commit。摆在 base 区之前 ——
+          选了单个 commit,下面那一整区就没有意义了(基线只能是它的父提交)。 */}
+      {preview && (
+        <BaseSection tucked>
+          <CommitScopeRow
+            commits={prCommits ?? []}
+            value={headRef}
+            loading={commitsState.state === 'probing'}
+            onChange={(oid) => {
+              headOwner.current = prKey;
+              setHeadRef(oid);
+              // 两者互斥:钉了 commit 就把 base 收回默认,免得留一条看不见却还在的选择
+              if (oid) {
+                baseOwner.current = '';
+                setBaseRef('');
+              }
+            }}
+            stat={stat}
+          />
+          {prCommits && prCommits.length >= PR_COMMITS_CAP && <CommitTruncNote />}
+          {commitsState.state === 'error' && (
+            <CommitScopeError
+              message={commitsState.message}
+              onRetry={() => setCommitsTry((n) => n + 1)}
+            />
+          )}
+        </BaseSection>
+      )}
+
+      {/* 钉住 commit 后整个 base 区让位给一句只读说明 */}
+      {preview && headRef && (
+        <BaseSection tucked>
+          <CommitBaseNote />
+        </BaseSection>
+      )}
+
       {/* 摸链期间就把这一区摆出来:摸出多个候选就原地换成选择器(两者等高,不推屏);
           非 stacked 则收起 —— 那时 PR 卡片的「← base」已经把话说全了。
           **收起要过渡,不能直接撤**:多数 PR 走的正是这一支,硬撤会让下面凭空上跳一行。 */}
-      {preview && !(chainState.state === 'value' && baseOptions.length > 1) && (
+      {preview && !headRef && !(chainState.state === 'value' && baseOptions.length > 1) && (
         <BaseSection tucked collapsed={chainState.state === 'value'}>
           <BaseProbeRow
             error={chainState.state === 'error' ? chainState.message : undefined}
@@ -809,7 +914,7 @@ function GitHubPanel({
           />
         </BaseSection>
       )}
-      {baseOptions.length > 1 && (
+      {!headRef && baseOptions.length > 1 && (
         <BaseSection tucked>
           <BaseRow
             options={baseOptions}
@@ -1183,6 +1288,14 @@ type ChainState =
 
 const PROBING: ChainState = { state: 'probing' };
 
+/** commit 列表的三态。理由同 ChainState:拉取失败与「没有候选」不能并成一档。 */
+type CommitsState =
+  | { state: 'probing' }
+  | { state: 'value'; value: PrCommit[] }
+  | { state: 'error'; message: string };
+
+const COMMITS_PROBING: CommitsState = { state: 'probing' };
+
 /**
  * stacked PR 的 base 候选:祖先链的每一环。`[0]` 是 PR 自己的 base,即默认基线。
  * 范围标签按「往下数到这一环为止会把哪几个 PR 算进来」写,列 PR 号而不是分支名 ——
@@ -1309,15 +1422,18 @@ function PickRepoEmpty({ pickDir, hint }: { pickDir: () => void; hint: string })
 }
 
 /** 底部 CTA 的目标标签(来源 + 已选 ref)。 */
-function useTargetLabel(source: SourceKind, ref: string): string {
+function useTargetLabel(source: SourceKind, ref: string, headRef = ''): string {
   return useMemo(() => {
     const r = ref.trim();
     if (!r) return '';
     if (source === 'github-pr') {
       const num = r.match(/#?(\d+)\s*$/)?.[1];
-      return num ? `GitHub #${num}` : `GitHub ${r}`;
+      // 钉了 commit 就把它写进目标名:发起前最后一眼看的是这行,「#482」与
+      // 「#482 里的某一个提交」是两次不同的审核,不能长得一模一样
+      const pin = headRef.trim() ? ` @${shortOid(headRef.trim())}` : '';
+      return num ? `GitHub #${num}${pin}` : `GitHub ${r}${pin}`;
     }
     if (source === 'local-branch') return `本地 ${r}`;
     return `vbranch ${r}`;
-  }, [source, ref]);
+  }, [source, ref, headRef]);
 }

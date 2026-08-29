@@ -5,7 +5,10 @@ import { GitButlerIcon, LocalBranchIcon } from './icons';
 
 /** 一个可审核目标(普通 git 分支或 GitButler 虚拟分支)在选择器里的展示形态。 */
 export interface BranchOption {
+  /** 候选身份:选中值、React key、回查都用它,故必须在同一批候选里唯一(commit 用完整 oid) */
   name: string;
+  /** 行内与触发器上实际显示的文字;不给则显示 name。身份与显示分开,短 sha 才不会成为身份 */
+  label?: string;
   kind: 'git' | 'vbranch';
   /** 数据位:普通 git 分支里 HEAD 所在那条(默认选中用),不直接决定渲染 */
   isHead?: boolean;
@@ -52,9 +55,14 @@ export function BranchPicker({
   const selected = options.find((o) => o.name === value) ?? null;
   const disabled = loading || options.length === 0;
 
+  // 身份与显示分开后筛选要两边都认:name 是完整 oid(输入短前缀仍命中),
+  // label 才是屏上那串短 sha / 「整个 PR」这类只存在于显示层的字
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options;
+    if (!q) return options;
+    return options.filter(
+      (o) => o.name.toLowerCase().includes(q) || (o.label?.toLowerCase().includes(q) ?? false),
+    );
   }, [options, query]);
 
   // 候选变空(换仓库 / 改 base)时收起,免得浮层挂在一个不再存在的列表上
@@ -162,7 +170,7 @@ export function BranchPicker({
         {selected ? (
           <>
             <BranchIcon kind={selected.kind} />
-            <span className="bp-name mono">{selected.name}</span>
+            <span className="bp-name mono">{selected.label ?? selected.name}</span>
             {selected.badge && <span className="headtag mono">{selected.badge}</span>}
           </>
         ) : (
@@ -212,7 +220,7 @@ export function BranchPicker({
                 <BranchIcon kind={o.kind} />
                 <div className="m">
                   <div className="bn mono">
-                    {o.name}
+                    {o.label ?? o.name}
                     {o.badge && <span className="headtag mono">{o.badge}</span>}
                   </div>
                   {(o.meta || o.detail) && (
@@ -235,7 +243,7 @@ export function BranchSummary({ option, base }: { option: BranchOption; base?: s
   return (
     <div className="bp-summary derived">
       <span className="mono s-cmp">
-        {option.name}
+        {option.label ?? option.name}
         {base && (
           <>
             {' '}

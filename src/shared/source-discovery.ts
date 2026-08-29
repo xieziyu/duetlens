@@ -28,6 +28,28 @@ export interface PrSummary {
   updatedAt: string;
 }
 
+/**
+ * GitHub 的 PR commits 接口最多只回这么多条。拉满即**可能被截断**(更旧的提交拿不到),
+ * 于是「这个 sha 属不属于本 PR」不能再按列表判 —— 见 GitHubPrSource.prepare 的降级判据。
+ */
+export const PR_COMMITS_CAP = 250;
+
+/**
+ * PR 里的一个 commit(供「只审其中一个提交」的范围选择)。
+ * 顺序由列举方保持为旧→新,与 GitHub PR 的 commits 页一致。
+ */
+export interface PrCommit {
+  oid: string;
+  /** commit message 首行 */
+  headline: string;
+  /** GitHub 账号;账号已注销 / 邮箱未关联时回落 git 署名 */
+  author: string;
+  /** ISO 时间串(提交于) */
+  committedDate: string;
+  /** 多父提交。合并进来的改动不是这一层写的,选它审多半不是用户想要的 */
+  isMerge: boolean;
+}
+
 /** 本地分支的一项(相对 base 领先若干 commit)。 */
 export interface LocalBranchSummary {
   name: string;

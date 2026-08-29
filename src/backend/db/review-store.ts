@@ -46,6 +46,7 @@ interface ReviewRow {
   source: string;
   source_ref: string;
   base_ref: string | null;
+  head_ref: string | null;
   repo_path: string | null;
   codex_thread_id: string | null;
   model: string | null;
@@ -152,6 +153,7 @@ function toReview(r: ReviewRow): Review {
     source: r.source as SourceKind,
     sourceRef: r.source_ref,
     baseRef: r.base_ref,
+    headRef: r.head_ref,
     repoPath: r.repo_path,
     codexThreadId: r.codex_thread_id,
     model: r.model,
@@ -313,6 +315,7 @@ export class ReviewStore {
     source: SourceKind;
     sourceRef: string;
     baseRef?: string | null;
+    headRef?: string | null;
     repoPath?: string | null;
     title?: string | null;
     model?: string | null;
@@ -325,6 +328,7 @@ export class ReviewStore {
       source: input.source,
       source_ref: input.sourceRef,
       base_ref: input.baseRef ?? null,
+      head_ref: input.headRef ?? null,
       repo_path: input.repoPath ?? null,
       codex_thread_id: null,
       model: input.model ?? null,
@@ -341,8 +345,8 @@ export class ReviewStore {
     };
     this.db
       .prepare(
-        `INSERT INTO reviews (id, source, source_ref, base_ref, repo_path, codex_thread_id, model, reasoning_effort, intensity, title, status, summary_body, summary_files, summary_round, current_round, created_at, updated_at)
-         VALUES (@id, @source, @source_ref, @base_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @summary_files, @summary_round, @current_round, @created_at, @updated_at)`,
+        `INSERT INTO reviews (id, source, source_ref, base_ref, head_ref, repo_path, codex_thread_id, model, reasoning_effort, intensity, title, status, summary_body, summary_files, summary_round, current_round, created_at, updated_at)
+         VALUES (@id, @source, @source_ref, @base_ref, @head_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @summary_files, @summary_round, @current_round, @created_at, @updated_at)`,
       )
       .run(row);
     return toReview(row);

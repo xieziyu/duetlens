@@ -743,10 +743,19 @@ export function ReviewScreen({
               <span className="mono ref">{sourceLabel}</span>
             </span>
           )}
-          {/* 只在改过 base 时才出:默认基线不需要解释,而非默认的那份改动面三天后回看根本认不出 */}
-          {review?.baseRef && (
+          {/* 只在改过 base 时才出:默认基线不需要解释,而非默认的那份改动面三天后回看根本认不出。
+              钉了 commit 时 base 不参与定位(见 ReviewTarget.headRef),那枚 chip 也就不该出 */}
+          {review?.baseRef && !review.headRef && (
             <span className="mono basechip" title={`本次改动面相对 ${review.baseRef} 计算`}>
               ← {review.baseRef}
+            </span>
+          )}
+          {review?.headRef && (
+            <span
+              className="mono commitchip"
+              title={`仅审核 PR 中的这一个提交(${review.headRef.slice(0, 7)}),改动面相对其父提交计算`}
+            >
+              @ {review.headRef.slice(0, 7)}
             </span>
           )}
           <span className="title">{review ? titleRest : '加载中…'}</span>
