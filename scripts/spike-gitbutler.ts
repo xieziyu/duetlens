@@ -133,6 +133,29 @@ async function testInspect() {
 }
 
 /**
+ * 把 `but` / git 的用户级数据目录支到 `home` 下,返回还原函数。
+ * GitButlerSource 内部自己 spawn `but`,拿不到 per-call env,只能整段改 process.env(子进程继承)。
+ */
+async function isolateAppData(home: string): Promise<() => void> {
+  await mkdir(home, { recursive: true });
+  const overrides: Record<string, string> = {
+    HOME: home,
+    XDG_DATA_HOME: path.join(home, '.local', 'share'),
+    XDG_CONFIG_HOME: path.join(home, '.config'),
+    APPDATA: path.join(home, 'AppData', 'Roaming'),
+    LOCALAPPDATA: path.join(home, 'AppData', 'Local'),
+  };
+  const saved = Object.keys(overrides).map((k) => [k, process.env[k]] as const);
+  Object.assign(process.env, overrides);
+  return () => {
+    for (const [k, v] of saved) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  };
+}
+
+/**
  * 自建 workspace 上的两组断言(不依赖开发机此刻挂着哪些虚拟分支):
  *   (3) **取证读的是被审分支那棵 commit 树,不是工作区**;
  *   (5) 叠加 base 的三档口径。
@@ -140,13 +163,14 @@ async function testInspect() {
  * (3) 是这个 source 最容易悄悄回退的一条:改回读工作区,在单 lane、无脏改动的机器上完全看不出
  * 差别,只有「另一条 lane 也 applied」或「有未提交改动」时才暴露 —— 而那正是 GitButler 的常态。
  *
- * **必须 teardown** —— `but setup` 会把这个临时仓库登记进全局项目表,不摘掉就在开发机上留一条
- * 指向已删目录的记录。
+ * 全程把 app data 目录支到临时 HOME 下(见 isolateAppData):`but setup` 会把仓库登记进全局项目
+ * 表,而 CLI 没有注销手段(实测 teardown 成功也不删记录),不隔离就每跑一次留一条指向已删目录的
+ * 僵尸项目。
  */
 async function testStackedBase() {
   const outer = await realpath(await mkdtemp(path.join(tmpdir(), 'duetlens-stack-')));
   const repo = path.join(outer, 'repo');
-  let setup = false;
+  const restoreEnv = await isolateAppData(path.join(outer, 'home'));
   try {
     await mkdir(repo, { recursive: true });
     // 被审仓库是**不可信输入**:提交一条指向仓库外的链接,验树读不会把目标内容带出来
@@ -162,7 +186,6 @@ async function testStackedBase() {
     const init = (await run('git', ['-C', repo, 'rev-parse', 'HEAD'])).trim();
     try {
       await run('but', ['setup'], repo);
-      setup = true;
     } catch (e) {
       log(`⚠ (3)(5) 跳过:but setup 失败(${(e as Error).message.split('\n')[0]})`);
       return;
@@ -357,13 +380,9 @@ async function testStackedBase() {
 
     log('✅ (7) 同名 tag:指定 base 仍按 refs/heads 解析,缺省档挡住而不是静默回空 diff');
   } finally {
-    if (setup) {
-      // 摘不掉也不能让整条 spike 挂掉,但要说出来 —— 全局项目表里会留一条脏记录
-      await run('but', ['teardown'], repo).catch((e: Error) =>
-        log(`⚠ but teardown 失败,请手工清理 ${repo}:${e.message.split('\n')[0]}`),
-      );
-    }
-    await rm(outer, { recursive: true, force: true });
+    restoreEnv();
+    // `but` 收尾时还会往 app data 里补写,同目录正被删会撞 ENOTEMPTY,重试几次即可
+    await rm(outer, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 
