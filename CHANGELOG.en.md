@@ -4,7 +4,7 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
-## [0.11.0] - 2026-09-07
+## [0.11.1] - 2026-09-07
 
 ### Added
 
@@ -607,7 +607,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
-[0.11.0]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.0
+[0.11.1]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.1
 [0.10.0]: https://github.com/xieziyu/duetlens/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/xieziyu/duetlens/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xieziyu/duetlens/compare/v0.8.0...v0.9.0

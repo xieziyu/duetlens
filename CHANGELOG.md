@@ -3,7 +3,7 @@
 本文件只记**对使用者可见**的变化。内部重构、文档与 CI 调整不单列,查 `git log`。
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/);`0.x` 阶段 minor 位即破坏性变更位。
 
-## [0.11.0] - 2026-09-07
+## [0.11.1] - 2026-09-07
 
 ### 新增
 
@@ -243,7 +243,7 @@
 
 首个公开版本。
 
-[0.11.0]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.0
+[0.11.1]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.1
 [0.10.0]: https://github.com/xieziyu/duetlens/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/xieziyu/duetlens/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xieziyu/duetlens/compare/v0.8.0...v0.9.0
