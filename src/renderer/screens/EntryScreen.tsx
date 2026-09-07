@@ -36,9 +36,9 @@ import {
   CommitScopeError,
   CommitScopeRow,
   CommitTruncNote,
-  shortOid,
 } from './entry/CommitScopeRow';
 import { Busy } from './entry/Busy';
+import { shortOid } from '../review/source-ref';
 import { GhIcon, LocalBranchIcon } from './entry/icons';
 import { baseName, parentDir } from './entry/paths';
 import { RepoSwitch } from './entry/RepoSwitch';

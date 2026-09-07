@@ -38,6 +38,36 @@ const initialTabs = (params.get('tabs') ?? '')
 // 恢复那条路根本不会跑(见 App 的 restored 起始值)。
 const asRestore = params.has('restore');
 
+/**
+ * `?scope-menu` 出图用:挂载后替按一下顶栏那枚范围 chip。
+ * 弹层是点开的,headless 截图没有手 —— 而它恰恰是这个功能最要看的一屏。
+ * 放在预览入口而不是组件里:production 的组件不该认识 URL 上的自查旋钮。
+ */
+if (params.has('scope-menu')) {
+  // 一直点到弹层真的开着为止:范围落位会把三栏(连同这枚 chip)整棵重挂,
+  // 落位之前那一下点开的弹层会随之消失 —— 只点一次就常常拍到一屏没有弹层的图
+  const click = (tries: number) => {
+    if (document.querySelector('.rev-root:not([hidden]) .scope-menu')) return;
+    document.querySelector<HTMLButtonElement>('.rev-root:not([hidden]) .scopechip')?.click();
+    if (tries > 0) setTimeout(() => click(tries - 1), 120);
+  };
+  setTimeout(() => click(40), 300);
+}
+
+/**
+ * `?open=<reviewId>[&open-discussion=<id>]` 自查「通知点开的是哪条」那条路:走的是真通知
+ * 订阅(fixtures 的 __fireOpenReview),故 id 给成一条提交范围子行时,验得到 tab 认的是容器、
+ * 屏落在那个 commit 上。挂载后再发 —— 订阅是 App 挂载时装的。
+ */
+const openTarget = params.get('open');
+if (openTarget) {
+  setTimeout(() => {
+    (
+      window as unknown as { __fireOpenReview?: (p: { reviewId: string; discussionId?: string }) => void }
+    ).__fireOpenReview?.({ reviewId: openTarget, discussionId: params.get('open-discussion') ?? undefined });
+  }, 600);
+}
+
 createRoot(container).render(
   <StrictMode>
     <SettingsProvider>

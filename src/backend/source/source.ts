@@ -1,4 +1,5 @@
 import type { ReviewIntensity, SourceKind } from '@shared/domain';
+import type { CommitPosition } from '@shared/source-discovery';
 
 /** 一次审核的目标定位(三种 source 共用)。 */
 export interface ReviewTarget {
@@ -35,6 +36,12 @@ export interface PreparedSource {
    * 无稳定 commit 概念的 source(如工作区未提交改动)可为空,此时降级为「无法判定」。
    */
   headSha?: string | null;
+  /**
+   * 钉住某个 commit 时它在 PR 里的位置(仅 github-pr 且 headRef 非空时给出)。
+   * 校验 sha 属不属于本 PR 本就拉了整份提交列表,顺手带出来 —— 为了 prompt 里一句位置
+   * 再打一次 gh,是在每次开跑上白加一次往返。
+   */
+  position?: CommitPosition | null;
 }
 
 /**

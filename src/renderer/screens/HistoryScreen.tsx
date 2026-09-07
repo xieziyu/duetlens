@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RecentReview } from '@shared/ipc';
-import { REVIEW_RETENTION_DAYS, REVIEW_RETENTION_MS, type ReviewStatus, type SourceKind } from '@shared/domain';
+import { isUnscanned, REVIEW_RETENTION_DAYS, REVIEW_RETENTION_MS, UNSCANNED_LABEL, type ReviewStatus, type SourceKind } from '@shared/domain';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './entry/icons';
 import { repoName } from '../review/source-ref';
 import './HistoryScreen.css';
@@ -208,7 +208,7 @@ export function HistoryScreen({ onOpen }: { onOpen: (id: string) => void }): Rea
                           <div className="t">{r.title ?? r.sourceRef}</div>
                           <div className="meta mono">{metaParts(r, daysLeft(r.updatedAt, now))}</div>
                         </div>
-                        <StatusChip status={r.status} />
+                        <StatusChip status={r.status} unscanned={isUnscanned(r)} scanningScopes={r.scanningScopeCount} />
                         <button
                           className="del"
                           title="删除这条历史"
@@ -249,6 +249,15 @@ function metaParts(r: RecentReview, expiring: number | null): React.JSX.Element 
         <>
           <span className="dot" />
           <span title="仅审核 PR 中的这一个提交">@{r.headRef.slice(0, 7)}</span>
+        </>
+      )}
+      {/* 提交范围不单独占行(计数已合计在这一行里),但得让人知道这条 PR 下面还分了几个范围 */}
+      {r.scopeCount > 0 && (
+        <>
+          <span className="dot" />
+          <span title="这个 PR 下另建过几个提交范围,各自有自己的 findings">
+            含 {r.scopeCount} 个提交范围
+          </span>
         </>
       )}
       <span className="dot" />
@@ -307,7 +316,32 @@ const STATUS_META: Record<ReviewStatus, { cls: string; label: string; pulse?: bo
   failed: { cls: 'failed', label: '✕ 失败' },
 };
 
-function StatusChip({ status }: { status: ReviewStatus }): React.JSX.Element {
+function StatusChip({
+  status,
+  unscanned,
+  scanningScopes,
+}: {
+  status: ReviewStatus;
+  unscanned: boolean;
+  scanningScopes: number;
+}): React.JSX.Element {
+  // 子范围在扫就是这条 PR 在扫:容器自己可能一轮都没跑过,只看它的 status 会画成「未机审」
+  if (scanningScopes > 0) {
+    const m = STATUS_META.scanning;
+    return (
+      <span className={`stat ${m.cls}`} title={`${scanningScopes} 个提交范围正在机审`}>
+        <span className="pulse" />
+        {m.label}
+      </span>
+    );
+  }
+  // 只拉了 diff 的 PR 容器 status 就是 reviewing,照它画成脉冲的「审核中」等于说有一轮在跑
+  if (unscanned)
+    return (
+      <span className="stat idle" title="只拉了 diff,还没跑过机审">
+        {UNSCANNED_LABEL}
+      </span>
+    );
   const m = STATUS_META[status];
   return (
     <span className={`stat ${m.cls}`}>

@@ -289,9 +289,24 @@ const V23 = `
 ALTER TABLE reviews ADD COLUMN head_ref TEXT;
 `;
 
+// PR 内的「提交范围」:一条子 review 行代表 PR 里的一个 commit(head_ref = 该 sha)。
+//
+// **为什么是子行,而不是一条 review 挂多份 diff**:每个范围各自有 diff 快照、轮次履历、
+// findings、codex 会话与提交记录 —— 那正好是一条 review 的全部内容。挂在同一行下面就得给
+// 轮次、findings、ui_state 全部再加一列范围键,而它们的每一处读写都要记得带上它;漏一处
+// 就是把另一个范围的 finding 算进本范围的待提交集。
+//
+// current_round = 0 表示「这个范围只拉了 diff,还没机审」(切范围不自动起 agent)。
+// 存量行一律 parent_review_id IS NULL、current_round >= 1,不需要回填。
+const V24 = `
+ALTER TABLE reviews ADD COLUMN parent_review_id TEXT REFERENCES reviews(id) ON DELETE CASCADE;
+CREATE INDEX idx_reviews_parent ON reviews(parent_review_id);
+ALTER TABLE review_ui_state ADD COLUMN active_scope TEXT;
+`;
+
 const MIGRATIONS: string[] = [
   V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20,
-  V21, V22, V23,
+  V21, V22, V23, V24,
 ];
 
 export function migrate(db: Database): void {

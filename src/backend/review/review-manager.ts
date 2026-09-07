@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { isProposalUndoBlocked, REVIEW_RETENTION_MS, scanDoneStatus } from '@shared/domain';
+import { isProposalUndoBlocked, isUnscanned, REVIEW_RETENTION_MS, scanDoneStatus } from '@shared/domain';
 import type {
   CodexModelInfo,
   Discussion,
@@ -20,7 +20,7 @@ import type {
 import type { AgentErrorKind } from '@shared/agent-events';
 import type { PrContext } from '@shared/github-context';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { AddFindingInput, BusyReview, DiffStatInput, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewStartStage, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, BusyReview, DiffStatInput, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewScopes, ReviewStartStage, ScopeState, StartScanInput, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import { LIVE_SESSION_LIMIT_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 import { isCodexProtocolError } from '@shared/codex';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
@@ -49,15 +49,16 @@ import {
   listPrCommits,
   previewPr,
 } from '../source/source-discovery';
-import type {
-  DiffStat,
-  LocalBranchList,
-  PrAncestor,
-  PrCommit,
-  PrPreview,
-  PrSummary,
-  RepoInspection,
-  RepoRemoteInfo,
+import {
+  PR_COMMITS_CAP,
+  type DiffStat,
+  type LocalBranchList,
+  type PrAncestor,
+  type PrCommit,
+  type PrPreview,
+  type PrSummary,
+  type RepoInspection,
+  type RepoRemoteInfo,
 } from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
 import { AgentTurnError, ReviewSession, type ReviewSessionEvents } from './review-session';
@@ -766,13 +767,19 @@ export class ReviewManager extends EventEmitter {
     await this.teardown(reviewId);
   }
 
-  /** 删除一次审核:先释放活跃会话(子进程/MCP),再连同 findings/discussions 级联删库。 */
+  /**
+   * 删除一次审核:先释放活跃会话(子进程/MCP),再连同 findings/discussions 级联删库。
+   *
+   * 提交范围的子行随父级联删,但它们各自的会话是**进程内的活物**,没有任何一步会替它们收尾 ——
+   * 漏拆就留下一批指着已删行的 codex 子进程与 MCP server。故连子行一起拆。
+   */
   async deleteReview(reviewId: string): Promise<void> {
-    await this.teardown(reviewId);
+    const ids = [...this.store.listChildren(reviewId).map((c) => c.id), reviewId];
+    for (const id of ids) await this.teardown(id);
     this.store.deleteReview(reviewId);
     // 第一次 teardown 释放会话要 await,那期间来的追问读到的还是删除前的行,会照常续接上来。
     // 再拆一次收掉它:此后新来的续接第一步就查不到 review,这条路到此为止。
-    await this.teardown(reviewId);
+    for (const id of ids) await this.teardown(id);
   }
 
   /**
@@ -879,8 +886,71 @@ export class ReviewManager extends EventEmitter {
   /**
    * 起真实审核:按 target 建 source,拉元数据落库,后台跑首轮扫描。
    * onStage 逐阶段回调(入口等待浮层据此显示真实进度);拉取失败时不留下半张 review 记录。
+   *
+   * **入口选了「只审 PR 里的某个提交」时先建 PR 容器**:那一枚 tab 从头到尾认的是这个 PR,
+   * 用户随时要能一键切回整个 PR。容器只拉 diff、不机审(current_round = 0),机审的是选中的
+   * 那个提交范围;返回的是容器,进屏后按 active_scope 落到该提交上。
    */
   async startReview(target: ReviewTarget, onStage?: (s: ReviewStartStage) => void): Promise<Review> {
+    const pinned = target.source === 'github-pr' ? target.headRef?.trim() : '';
+    if (!pinned) return this.launchNewReview(target, null, onStage);
+
+    onStage?.('resolve');
+    // 满载要在**拉 PR 之前**就答复:真正的预留在 launchNewReview 里,而那之前隔着容器的两次 gh
+    // 往返 —— 不先探一下的话,一次注定被拒的发起要让用户白等完整个 PR 的拉取。
+    this.reserveCapacity()();
+    const container = await this.createScopeContainer(target);
+    try {
+      // 子行的 head_ref 要与 active_scope 逐字一致 —— 差一个空白,进屏时 getChildByHead 就落空,
+      // 于是又建一条同 sha 的范围出来。
+      await this.launchNewReview({ ...target, headRef: pinned }, container.id, onStage);
+      this.store.setActiveScope(container.id, pinned);
+      return container;
+    } catch (e) {
+      // 子行没起来,容器就是一条用户当次看不见、也不知从何而来的空 PR 记录 —— 整条回滚。
+      this.store.deleteReview(container.id);
+      throw e;
+    }
+  }
+
+  /**
+   * 建 PR 容器行:只拉整个 PR 的 diff 快照落库,**不占会话位、不建轮次、不 launch**。
+   * 它是范围切换的落脚点,不是一次机审。
+   */
+  private async createScopeContainer(target: ReviewTarget): Promise<Review> {
+    const source = createSource({ ...target, headRef: undefined });
+    let container: Review | undefined;
+    try {
+      const prepared = await source.prepare();
+      const rawDiff = await source.getDiff();
+      container = this.store.createReview({
+        source: target.source,
+        sourceRef: target.ref,
+        baseRef: target.baseRef || null,
+        headRef: null,
+        repoPath: target.repoPath || null,
+        title: prepared.title,
+        model: target.model || null,
+        reasoningEffort: target.reasoningEffort || null,
+        intensity: target.intensity ?? 'standard',
+        currentRound: 0,
+        status: scanDoneStatus(target.source),
+      });
+      this.store.setDiff(container.id, rawDiff);
+      return container;
+    } catch (e) {
+      if (container) this.store.deleteReview(container.id);
+      throw e;
+    } finally {
+      await source.dispose().catch(() => undefined);
+    }
+  }
+
+  private async launchNewReview(
+    target: ReviewTarget,
+    parentReviewId: string | null,
+    onStage?: (s: ReviewStartStage) => void,
+  ): Promise<Review> {
     // 会话位在**建库记录之前**先占住,拿不到就直接回绝(下面的拉取一步都不做)。
     const release = this.reserveCapacity();
     const source = createSource(target);
@@ -900,6 +970,7 @@ export class ReviewManager extends EventEmitter {
         sourceRef: target.ref,
         baseRef: target.baseRef || null,
         headRef: target.headRef || null,
+        parentReviewId,
         repoPath: target.repoPath || null,
         title: prepared.title,
         model: target.model || null,
@@ -918,7 +989,8 @@ export class ReviewManager extends EventEmitter {
       });
       launched = true;
       this.launch(review, prepared.cwd, this.buildProviders(review.id, source, () => rawDiff),
-        () => source.dispose(), baseInstructions, buildScanPrompt({ pr, note: target.context }), 1,
+        () => source.dispose(), baseInstructions,
+        buildScanPrompt({ pr, note: target.context, position: prepared.position }), 1,
         // 这条 review 刚建出来,id 还没出过本方法,外部无从释放它;代次只能是初始值。
         this.teardownEpoch(review.id));
       return review;
@@ -938,6 +1010,159 @@ export class ReviewManager extends EventEmitter {
   /** 某次 review 的全部轮次履历(首轮 + 每次重跑)。 */
   getRounds(reviewId: string): ReviewRound[] {
     return this.store.listRounds(reviewId);
+  }
+
+  /** 一个范围(容器或子行)的现状,供切换器逐行显示。 */
+  private scopeStateOf(review: Review): ScopeState {
+    const findings = this.store.listFindings(review.id);
+    return {
+      reviewId: review.id,
+      status: review.status,
+      currentRound: review.currentRound,
+      findingCount: findings.length,
+      submittableCount: findings.filter((f) => isSubmittable(f, review.currentRound)).length,
+      submittedCount: findings.filter((f) => f.submission === 'submitted').length,
+    };
+  }
+
+  /**
+   * 某个 PR 容器下可切换的审核范围:整个 PR + 它的每个 commit(旧→新,与 PR 的 commits 页同序)。
+   * 还没打开过的 commit 没有 review 行,那几行的 reviewId 为 null(点它才现建,见 {@link openScope})。
+   */
+  async listScopes(parentId: string): Promise<ReviewScopes> {
+    const parent = this.requireContainer(parentId);
+    const commits = await listPrCommits(parent.sourceRef, parent.repoPath ?? undefined);
+    const byHead = new Map(this.store.listChildren(parentId).map((c) => [c.headRef ?? '', c]));
+    return {
+      pr: this.scopeStateOf(parent),
+      commits: commits.map((commit) => {
+        const child = byHead.get(commit.oid);
+        return {
+          commit,
+          ...(child
+            ? this.scopeStateOf(child)
+            : {
+                reviewId: null,
+                status: null,
+                currentRound: null,
+                findingCount: 0,
+                submittableCount: 0,
+                submittedCount: 0,
+              }),
+        };
+      }),
+      capped: commits.length >= PR_COMMITS_CAP,
+    };
+  }
+
+  /**
+   * 切到 PR 里某个 commit 的范围。已建过就直接返回;没有则现拉它相对父提交的 diff 建一条子 review。
+   *
+   * **不建轮次、不占会话位、不 launch** —— 切范围只是换一份改动面来看,机审由用户按需触发
+   * (见 {@link startScan})。中途失败不留半张记录,同 startReview 的约定。
+   */
+  async openScope(parentId: string, sha: string): Promise<Review> {
+    const parent = this.requireContainer(parentId);
+    const existing = this.store.getChildByHead(parentId, sha);
+    if (existing) {
+      this.store.setActiveScope(parentId, sha);
+      return existing;
+    }
+    const source = createSource({
+      source: 'github-pr',
+      ref: parent.sourceRef,
+      headRef: sha,
+      repoPath: parent.repoPath ?? '',
+    });
+    let child: Review | undefined;
+    try {
+      const prepared = await source.prepare();
+      const rawDiff = await source.getDiff();
+      // 拉取要几秒,这段里另一次 openScope(⌥↓ 连按、或落位与点击撞上)可能已经把同一个 sha
+      // 建出来了。此刻再查一次并让给它,两条同 sha 的子行就不会各持一份 diff 与 findings。
+      const raced = this.store.getChildByHead(parentId, sha);
+      if (raced) {
+        this.store.setActiveScope(parentId, sha);
+        return raced;
+      }
+      child = this.store.createReview({
+        source: parent.source,
+        sourceRef: parent.sourceRef,
+        // 钉住 commit 时基线只能是它的父提交,容器选的 base 在这里不参与定位(见 ReviewTarget.headRef)
+        baseRef: null,
+        headRef: sha,
+        parentReviewId: parentId,
+        repoPath: parent.repoPath,
+        title: prepared.title,
+        // 审核配置继承容器:同一个 PR 的几个范围用不同模型/强度审,结论之间就没法比
+        model: parent.model,
+        reasoningEffort: parent.reasoningEffort,
+        intensity: parent.intensity,
+        currentRound: 0,
+        status: scanDoneStatus(parent.source),
+      });
+      this.store.setDiff(child.id, rawDiff);
+      this.store.setActiveScope(parentId, sha);
+      return child;
+    } catch (e) {
+      if (child) this.store.deleteReview(child.id);
+      throw e;
+    } finally {
+      await source.dispose().catch(() => undefined);
+    }
+  }
+
+  /**
+   * 对一个尚未机审的范围跑第 1 轮。已机审过的走重跑,不从这里再来一次首轮 ——
+   * 那会把上一轮的 findings 连同它们的轮次归属一起架空。
+   */
+  async startScan(
+    reviewId: string,
+    input: StartScanInput = {},
+    onStage?: (s: ReviewStartStage) => void,
+  ): Promise<ReviewRound> {
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    if (!isUnscanned(review)) throw new Error('这个范围已经机审过了,再跑一轮请用重跑');
+
+    const intensity = input.intensity ?? review.intensity;
+    if (input.intensity && input.intensity !== review.intensity) {
+      this.store.setReviewIntensity(reviewId, input.intensity);
+    }
+    return this.launchRound(review, { round: 1, note: input.note ?? null, intensity, onStage });
+  }
+
+  /**
+   * 该容器的其它范围里还有多少条待提交。GitHub 一份 review 只认一个 commit_id,故各范围各自提交 ——
+   * 提交屏用这个数提一句「别处还有」,免得用户提完 PR 那份就以为全发出去了。
+   */
+  scopePending(reviewId: string): number {
+    return this.store
+      .listChildren(reviewId)
+      .reduce(
+        (n, c) => n + this.store.listFindings(c.id).filter((f) => isSubmittable(f, c.currentRound)).length,
+        0,
+      );
+  }
+
+  /** 范围只挂在顶层的 github-pr review 下;子行与本地来源都没有「PR 里的提交」这回事。 */
+  private requireContainer(reviewId: string): Review {
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new Error(`review 不存在: ${reviewId}`);
+    if (review.source !== 'github-pr') throw new Error('只有 GitHub PR 的审核才有提交范围可切换');
+    if (review.parentReviewId) throw new Error('这已经是一个提交范围,不能再往下分');
+    // 本功能之前发起的「只审一个提交」是顶层行,但它的 diff 快照就是那个提交的 ——
+    // 拿它当容器的话,「整个 PR」那一档会指着一份 commit 级的改动面。
+    if (review.headRef) throw new Error('这条审核发起时就钉死在一个提交上,没有整个 PR 的范围');
+    return review;
+  }
+
+  getActiveScope(reviewId: string): string | null {
+    return this.store.getActiveScope(reviewId);
+  }
+
+  setActiveScope(reviewId: string, scope: string | null): void {
+    this.store.setActiveScope(reviewId, scope);
   }
 
   /**
@@ -1082,7 +1307,7 @@ export class ReviewManager extends EventEmitter {
       prompt =
         round.round === 1
           ? // 首轮重试:那轮的 note 就是入口填的附加上下文
-            buildScanPrompt({ pr, note: opts.note })
+            buildScanPrompt({ pr, note: opts.note, position: prepared.position })
           : buildRerunPrompt({
               round: round.round,
               prevRound,

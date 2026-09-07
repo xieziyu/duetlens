@@ -22,6 +22,7 @@ const review: Review = {
   sourceRef: 'feat/streaming-transcode',
   baseRef: null,
   headRef: null,
+  parentReviewId: null,
   repoPath: '/repo',
   codexThreadId: null,
   model: null,

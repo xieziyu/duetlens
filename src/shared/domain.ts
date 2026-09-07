@@ -123,6 +123,20 @@ export function scanDoneStatus(source: SourceKind): 'reviewing' | 'completed' {
 }
 
 /**
+ * 这条 review 还没跑过任何一轮机审(只拉了 diff 快照,供人先自己看)。
+ *
+ * 不为它另加一枚 status:`status` 说的是「agent 那边现在怎么样」,而这里要说的是「还没开始过」——
+ * 混进同一枚枚举里,每个读 status 的地方都得再分一次「是没跑还是跑完了」。轮次号本就从 1 起,
+ * 0 是它天然的空位。状态栏胶囊 / 顶栏 CTA / 右栏空态三处一律问这一个判据,别各自比 0。
+ */
+export function isUnscanned(review: Pick<Review, 'currentRound'>): boolean {
+  return review.currentRound === 0;
+}
+
+/** {@link isUnscanned} 的显示名;状态栏 / 历史 / 最近列表 / 范围弹层同一个字眼。 */
+export const UNSCANNED_LABEL = '未机审';
+
+/**
  * codex reasoning effort(透传 config.toml 的 model_reasoning_effort)。
  * codex 全集含 none/max/ultra,此处取通用且对审核有意义的子集;medium 为 codex 缺省。
  */
@@ -295,6 +309,11 @@ export interface Review {
    * 非空表示只审这一个 commit(相对其父提交),此时 {@link baseRef} 不参与定位。
    */
   headRef: string | null;
+  /**
+   * 所属容器 review;null = 顶层。非空即「PR 里的一个提交范围」——
+   * 每个范围各自持有 diff 快照、轮次、findings 与 codex 会话,故是一整行而不是容器里的一份附属数据。
+   */
+  parentReviewId: string | null;
   /** 可选本地仓库路径(github source 也可指定,让 agent 读全量代码) */
   repoPath: string | null;
   /** codex 侧会话 id(续接用) */
@@ -313,7 +332,7 @@ export interface Review {
   summaryFiles: SummaryFile[];
   /** 总结写于第几轮(write_summary 时记下);从未写过为 null。见 {@link isSummaryStale} */
   summaryRound: number | null;
-  /** 已跑到第几轮机审(首轮=1;每次重跑 +1) */
+  /** 已跑到第几轮机审(首轮=1;每次重跑 +1);0 = 尚未机审,见 {@link isUnscanned} */
   currentRound: number;
   createdAt: number;
   updatedAt: number;

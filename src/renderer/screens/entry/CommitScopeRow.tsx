@@ -2,6 +2,7 @@ import { PR_COMMITS_CAP, type PrCommit } from '@shared/source-discovery';
 import { BranchPicker, type BranchOption } from './BranchPicker';
 import { Busy } from './Busy';
 import type { DiffStatState } from './BasePicker';
+import { commitAge, shortOid } from '../../review/source-ref';
 
 /** 「整个 PR」这一档的取值。空串而非 sha —— 与 BaseRow 同一约定:默认档落库必须是 NULL。 */
 export const WHOLE_PR = '';
@@ -11,13 +12,6 @@ export const WHOLE_PR = '';
  * 而这一档没有 oid,故给个不可能与 40 位十六进制撞上的哨兵值(含非 hex 字母)。
  */
 const WHOLE_PR_KEY = 'whole-pr';
-
-/**
- * 短 sha 一律 7 位:GitHub 自己也这么截,两边对照时不用数位数。
- * **只用于显示** —— 选中值、React key、落库一律走完整 oid,
- * 否则同一个 PR 里撞前缀的两条 commit 会共用 key、并让回查取错另一条。
- */
-export const shortOid = (oid: string): string => oid.slice(0, 7);
 
 /**
  * 「审核范围」一行:整个 PR / PR 里的某一个 commit + 按所选范围现算的改动面。
@@ -57,7 +51,7 @@ export function CommitScopeRow({
         kind: 'git',
         badge: c.isMerge ? 'merge' : undefined,
         tag: '',
-        meta: `@${c.author}${c.committedDate ? ` · ${relTime(c.committedDate)}` : ''}`,
+        meta: `@${c.author}${c.committedDate ? ` · ${commitAge(c.committedDate)}` : ''}`,
         detail: c.headline,
       }),
     ),
@@ -109,14 +103,14 @@ export function CommitScopeError({ message, onRetry }: { message: string; onRetr
 
 /**
  * 列表被 GitHub 封顶截断时的说明。不做懒加载:>250 个提交的 PR 靠翻列表找目标本就不现实,
- * 说清楚「只有最近这些」比默默少给要好。
+ * 说清楚「最新的那些不在列表里」比默默少给要好。
  */
 export function CommitTruncNote() {
   return (
     <div className="commit-basenote derived">
       <span className="ci">◇</span>
       <div>
-        该 PR 提交数超出 GitHub 单次列举上限,仅显示<b>最近 {PR_COMMITS_CAP} 个提交</b>。
+        该 PR 提交数超出 GitHub 单次列举上限,仅列出<b>最早的 {PR_COMMITS_CAP} 个提交</b>,最新的那些不在其中。
       </div>
     </div>
   );
@@ -155,14 +149,3 @@ export function CommitBaseNote() {
   );
 }
 
-/** 相对时间(与 BranchSummary 同口径,只是入参是 ISO 串)。 */
-function relTime(iso: string): string {
-  const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return '';
-  const min = Math.round((Date.now() - ts) / 60_000);
-  if (min < 1) return '刚刚';
-  if (min < 60) return `${min} 分钟前`;
-  const h = Math.round(min / 60);
-  if (h < 24) return `${h} 小时前`;
-  return `${Math.round(h / 24)} 天前`;
-}

@@ -1,5 +1,5 @@
 import type { RecentReview } from '@shared/ipc';
-import type { ReviewStatus, SourceKind } from '@shared/domain';
+import { isUnscanned, UNSCANNED_LABEL, type ReviewStatus, type SourceKind } from '@shared/domain';
 import { GhIcon, GitButlerIcon, LocalBranchIcon } from './icons';
 import { repoName } from '../../review/source-ref';
 
@@ -46,6 +46,14 @@ export function RecentReviews({
                       <span title="仅审核 PR 中的这一个提交">@{r.headRef.slice(0, 7)}</span>
                     </>
                   )}
+                  {r.scopeCount > 0 && (
+                    <>
+                      <span className="dot" />
+                      <span title="这个 PR 下另建过几个提交范围,各自有自己的 findings">
+                        含 {r.scopeCount} 个提交范围
+                      </span>
+                    </>
+                  )}
                   <span className="dot" />
                   <span className={r.findingCount === 0 ? 'find zero' : 'find'}>{r.findingCount} findings</span>
                   {r.submittedCount > 0 ? (
@@ -61,7 +69,7 @@ export function RecentReviews({
                   ) : null}
                 </div>
               </div>
-              <StatusChip status={r.status} />
+              <StatusChip status={r.status} unscanned={isUnscanned(r)} scanningScopes={r.scanningScopeCount} />
               <span className="arrow">→</span>
             </div>
           ))}
@@ -105,7 +113,31 @@ const STATUS_META: Record<ReviewStatus, { cls: string; label: string; pulse?: bo
   failed: { cls: 'failed', label: '✕ 失败' },
 };
 
-function StatusChip({ status }: { status: ReviewStatus }) {
+function StatusChip({
+  status,
+  unscanned,
+  scanningScopes,
+}: {
+  status: ReviewStatus;
+  unscanned: boolean;
+  scanningScopes: number;
+}) {
+  // 与历史屏同一口径:子范围在扫即整条 PR 在扫;轮次 0 的容器不能借 agent 那套运行态文案
+  if (scanningScopes > 0) {
+    const m = STATUS_META.scanning;
+    return (
+      <span className={`stat ${m.cls}`} title={`${scanningScopes} 个提交范围正在机审`}>
+        <span className="pulse" />
+        {m.label}
+      </span>
+    );
+  }
+  if (unscanned)
+    return (
+      <span className="stat idle" title="只拉了 diff,还没跑过机审">
+        {UNSCANNED_LABEL}
+      </span>
+    );
   const m = STATUS_META[status];
   return (
     <span className={`stat ${m.cls}`}>

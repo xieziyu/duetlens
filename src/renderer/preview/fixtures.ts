@@ -156,25 +156,38 @@ let commitsErrorSpent = false;
 const PINNED_SHA = '9f3c1ad7e2b4508cd1f0a6e8b7c4d2319ae5f60b';
 const COMMIT_SCOPE = new URLSearchParams(window.location.search).has('commit-scope');
 
+/**
+ * `?scope=idle|fetching|scanning|done` —— review 屏直接落在「PR 里某个提交范围」的那一档。
+ *
+ * demo 这条因此变成 **PR 容器**(headRef 为空、可切范围)。子行与容器在这里共用同一份
+ * demo 数据、只调轮次/状态/findings:预览要验的是屏上那几个分支(chip 文案、未机审空态、
+ * 状态栏胶囊、CTA 槽位),它们都只读这几个字段;真后端会给一条 id 不同的子 review。
+ */
+const SCOPE_MODE = new URLSearchParams(window.location.search).get('scope');
+
 const REVIEW: Review = {
   id: 'demo',
   // 本地分支 source:无 PR 可提交,终点走导出 Markdown(便于自查导出屏)。
   // ?commit-scope 例外:钉 commit 只存在于 github-pr,来源得跟着换,否则那枚 chip 挂在
   // 一个根本不可能有 headRef 的 review 上,自查到的就不是真实组合。
-  source: COMMIT_SCOPE ? 'github-pr' : 'local-branch',
-  sourceRef: COMMIT_SCOPE ? 'xieziyu/podcast-go#482' : 'feat/streaming-transcode',
+  source: COMMIT_SCOPE || SCOPE_MODE ? 'github-pr' : 'local-branch',
+  sourceRef: COMMIT_SCOPE || SCOPE_MODE ? 'xieziyu/podcast-go#482' : 'feat/streaming-transcode',
   // 非默认 base:顶栏那枚 ← chip 只在这种情况下出,fixture 里得有一份才看得见
   baseRef: 'release/2.0',
-  // ?commit-scope 钉一个假 sha:顶栏 @sha chip 与「仅审这一个提交」只在这种 review 上出现
-  headRef: COMMIT_SCOPE ? PINNED_SHA : null,
+  // ?commit-scope 钉一个假 sha:顶栏 @sha chip 与「仅审这一个提交」只在这种 review 上出现。
+  // ?scope= 反过来必须留空 —— 容器行钉死在某个 commit 上就没有「整个 PR」这一档了
+  headRef: COMMIT_SCOPE && !SCOPE_MODE ? PINNED_SHA : null,
+  parentReviewId: null,
   repoPath: '/Users/dev/podcast-go',
   codexThreadId: 'thread-demo',
   model: 'gpt-5.6-sol',
   reasoningEffort: 'high',
   intensity: 'adversarial',
-  title: COMMIT_SCOPE
-    ? '#482 @9f3c1ad · fix: guard nil encoder on cutover'
-    : 'feat/streaming-transcode · feat: streaming transcode pipeline',
+  title: SCOPE_MODE
+    ? '#482 · feat: streaming transcode pipeline'
+    : COMMIT_SCOPE
+      ? '#482 @9f3c1ad · fix: guard nil encoder on cutover'
+      : 'feat/streaming-transcode · feat: streaming transcode pipeline',
   status: 'completed',
   summaryBody: '本次改动引入并发编码管线,整体方向合理,但并发计数存在数据竞争,需修正。',
   summaryFiles: [
@@ -198,17 +211,28 @@ const REVIEW: Review = {
 // 「只有钉住 commit 的那条才显示短 sha」这个判据糊掉。要显示的那条自己写 headRef。
 const RECENT_BASE: Review = { ...REVIEW, headRef: null };
 
+/**
+ * 一条**提交范围子行**。用来验「通知里的 reviewId 是子行」那条路:`?open=demo-scope` 应当
+ * 复用容器 demo 那枚 tab(而不是另开一枚以子行为身份的),并把屏落到它的 headRef 上。
+ * 内容仍共用 demo 那份数据 —— 这里要验的是身份归属,不是两份真 diff。
+ */
+export const SCOPE_CHILD_ID = 'demo-scope';
+const SCOPE_CHILD_SHA = '4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5';
+
 // 入口「最近的审核」/ 历史屏列表 fixture(覆盖三来源 × 状态 × 时间分桶)
+// r1 下挂了两个提交范围:元信息行的「含 N 个提交范围」只有这种行才出现
 const RECENT_REVIEWS: RecentReview[] = [
-  { ...RECENT_BASE, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: '#482 · feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 23 * 60_000 },
+  { ...RECENT_BASE, id: 'r1', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#482', title: '#482 · feat: streaming transcode', status: 'reviewing', findingCount: 3, discussionCount: 2, scopeCount: 2, scanningScopeCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 23 * 60_000 },
+  // 只建了容器、还没机审的一条(current_round = 0):状态字该是「未机审」而不是脉冲的「审核中」
+  { ...RECENT_BASE, id: 'r0', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#486', title: '#486 · perf: reuse encoder pool across segments', status: 'reviewing', findingCount: 0, discussionCount: 0, scopeCount: 1, scanningScopeCount: 1, submittedCount: 0, currentRound: 0, summaryRound: null, summaryBody: null, updatedAt: now - 6 * 60_000 },
   // 钉住单个 commit 的一条:历史屏与「最近的审核」的元信息行该多出一枚 mono 短 sha
-  { ...RECENT_BASE, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', headRef: PINNED_SHA, title: '#479 @9f3c1ad · fix: guard nil encoder on cutover', status: 'submitted', findingCount: 5, discussionCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
-  { ...RECENT_BASE, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding-for-legacy-clients', title: 'fix/feed-encoding-for-legacy-clients · fix: keep latin-1 feed output for legacy clients', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 26 * 3600_000 },
-  { ...RECENT_BASE, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'GitButler · virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
-  { ...RECENT_BASE, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: '#471 · refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, submittedCount: 6, currentRound: 1, summaryRound: 1, updatedAt: now - 10 * 86_400_000 },
-  { ...RECENT_BASE, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout · fix: raise transcode timeout to 5m', status: 'failed', findingCount: 1, discussionCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
+  { ...RECENT_BASE, id: 'r2', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#479', headRef: PINNED_SHA, title: '#479 @9f3c1ad · fix: guard nil encoder on cutover', status: 'submitted', findingCount: 5, discussionCount: 0, scopeCount: 0, scanningScopeCount: 0, submittedCount: 4, updatedAt: now - 5 * 3600_000 },
+  { ...RECENT_BASE, id: 'r3', source: 'local-branch', sourceRef: 'fix/feed-encoding-for-legacy-clients', title: 'fix/feed-encoding-for-legacy-clients · fix: keep latin-1 feed output for legacy clients', repoPath: '/Users/dev/podcast-go', status: 'completed', findingCount: 0, discussionCount: 0, scopeCount: 0, scanningScopeCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 26 * 3600_000 },
+  { ...RECENT_BASE, id: 'r4', source: 'gitbutler-vbranch', sourceRef: 'virtual/api-cleanup', title: 'GitButler · virtual/api-cleanup', repoPath: '/Users/dev/duetlens', status: 'completed', findingCount: 2, discussionCount: 1, scopeCount: 0, scanningScopeCount: 0, submittedCount: 0, updatedAt: now - 4 * 86_400_000 },
+  { ...RECENT_BASE, id: 'r5', source: 'github-pr', sourceRef: 'xieziyu/duetlens#471', title: '#471 · refactor: extract prompt resolver into shared', repoPath: null, status: 'submitted', findingCount: 8, discussionCount: 0, scopeCount: 0, scanningScopeCount: 0, submittedCount: 6, currentRound: 1, summaryRound: 1, updatedAt: now - 10 * 86_400_000 },
+  { ...RECENT_BASE, id: 'r6', source: 'local-branch', sourceRef: 'fix/transcode-timeout', repoPath: '/Users/dev/podcast-go', title: 'fix/transcode-timeout · fix: raise transcode timeout to 5m', status: 'failed', findingCount: 1, discussionCount: 0, scopeCount: 0, scanningScopeCount: 0, submittedCount: 0, updatedAt: now - 17 * 86_400_000 },
   // 距 30 天保留期只剩 3 天:历史屏的临期标记只有这种行才出现,没有它就自查不到
-  { ...RECENT_BASE, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: '#440 · chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 27 * 86_400_000 },
+  { ...RECENT_BASE, id: 'r7', source: 'github-pr', sourceRef: 'xieziyu/podcast-go#440', title: '#440 · chore: bump ffmpeg to 7.1', status: 'completed', findingCount: 2, discussionCount: 0, scopeCount: 0, scanningScopeCount: 0, submittedCount: 0, currentRound: 1, summaryRound: 1, updatedAt: now - 27 * 86_400_000 },
 ];
 
 // 满载提示 fixture:正在跑的会话(?busy=1..4)
@@ -234,6 +258,20 @@ const PR_COMMITS: PrCommit[] = [
   { oid: 'e3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6', headline: "Merge branch 'main' into feat/streaming-transcode", author: 'ryan', committedDate: new Date(now - 30 * 3600_000).toISOString(), isMerge: true },
   { oid: 'f4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f7', headline: 'test(encoder): cover the cutover race', author: 'mia', committedDate: new Date(now - 26 * 3600_000).toISOString(), isMerge: false },
   { oid: PINNED_SHA, headline: 'fix: guard nil encoder on cutover', author: 'mia', committedDate: new Date(now - 4 * 3600_000).toISOString(), isMerge: false },
+];
+
+/**
+ * `?scope=` 那一档用的提交列表(7 条,旧→新):三种范围状态各有一行 ——
+ * 未机审 / 已有 findings / 已提交,切换器的状态点与徽标只有这样才验得全。
+ */
+const SCOPE_COMMITS: { oid: string; headline: string; author: string; hoursAgo: number; round: number; findings: number; submitted: number }[] = [
+  { oid: 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4', headline: 'refactor(source): extract pr commit listing', author: 'xieziyu', hoursAgo: 72, round: 0, findings: 0, submitted: 0 },
+  { oid: '4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5', headline: 'feat(source): fetch single commit diff via gh api', author: 'xieziyu', hoursAgo: 70, round: 1, findings: 2, submitted: 0 },
+  { oid: PINNED_SHA, headline: 'fix: guard nil encoder on cutover', author: 'xieziyu', hoursAgo: 48, round: 0, findings: 0, submitted: 0 },
+  { oid: 'b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f7a8b', headline: 'test(spike): cover pinned commit after force-push', author: 'xieziyu', hoursAgo: 46, round: 0, findings: 0, submitted: 0 },
+  { oid: 'c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0', headline: 'docs(design): note commit scope in ui.md', author: 'xieziyu', hoursAgo: 20, round: 0, findings: 0, submitted: 0 },
+  { oid: 'd4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d', headline: 'fix(entry): keep whole-pr default when list fails', author: 'xieziyu', hoursAgo: 18, round: 2, findings: 1, submitted: 1 },
+  { oid: 'e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6', headline: 'chore: bump codex target version', author: 'xieziyu', hoursAgo: 5, round: 0, findings: 0, submitted: 0 },
 ];
 
 /**
@@ -723,6 +761,16 @@ export function installPreviewApi(): void {
   let activitySimulated = false;
   let usageSimulated = false;
   // 可变:重跑 stub 会改 currentRound / status,模拟后端回推后的新值
+  // ?scope= 落在某个提交范围上:轮次 0 = 未机审,scanning / done 各推进一档。
+  // 屏上认的是这几个字段(见 domain.isUnscanned),故这里只调它们
+  const scopeOverride: Partial<Review> =
+    SCOPE_MODE === 'scanning'
+      ? { currentRound: 1, status: 'scanning' as const, summaryRound: null }
+      : SCOPE_MODE === 'done'
+        ? { currentRound: 1, status: 'reviewing' as const, summaryRound: 1 }
+        : SCOPE_MODE
+          ? { currentRound: 0, status: 'reviewing' as const, summaryRound: null, summaryBody: null }
+          : {};
   let review: Review = {
     ...REVIEW,
     ...(asGithub
@@ -730,7 +778,10 @@ export function installPreviewApi(): void {
       : {}),
     ...(asScanning ? { status: 'scanning' as const } : {}),
     ...(asRoundFailed ? { status: 'failed' as const } : {}),
+    ...scopeOverride,
   };
+  /** 未机审那两档:findings / 轮次都还不存在 */
+  const scopeIdle = SCOPE_MODE != null && SCOPE_MODE !== 'scanning' && SCOPE_MODE !== 'done';
   // entry-state=pick 清掉记住的仓库,自查本地仓库档的选目录空态
   // ?mode= / ?theme= 直接开在某套配色上:出图与逐屏比色都要它,靠点 rail 那颗钮只能切明暗、切不了主题。
   // SettingsProvider 拿同一个查询串播首帧种子,这里再喂给「持久化值」,免得种子被这份 stub 覆盖回来。
@@ -749,9 +800,28 @@ export function installPreviewApi(): void {
         ? forcedTab
         : null,
   };
-  const findings = asClean || asStream ? [] : FINDINGS.map((f) => ({ ...f }));
+  const findings =
+    asClean || asStream || scopeIdle
+      ? []
+      : SCOPE_MODE === 'scanning'
+        ? []
+        : SCOPE_MODE === 'done'
+          ? FINDINGS.slice(0, 3).map((f) => ({ ...f, round: 1, lastSeenRound: 1 }))
+          : FINDINGS.map((f) => ({ ...f }));
   const rounds: ReviewRound[] =
-    asClean || asStream
+    scopeIdle
+      ? []
+      : SCOPE_MODE
+        ? [
+            {
+              ...ROUNDS[0],
+              round: 1,
+              status: SCOPE_MODE === 'scanning' ? ('scanning' as const) : ('done' as const),
+              startedAt: Date.now() - 48_000,
+              endedAt: SCOPE_MODE === 'scanning' ? null : Date.now() - 6_000,
+            },
+          ]
+        : asClean || asStream
       // 零 finding + 扫描中 = 首条结论出来之前那几分钟(最难熬的一段),仍然要有在跑的轮次
       ? asScanning ? [{ ...ROUNDS[1] }] : []
       : asRoundFailed
@@ -771,12 +841,35 @@ export function installPreviewApi(): void {
   const msgStore: Record<string, Message[]> = structuredClone(SEED_MESSAGES);
   const proposals: FindingProposal[] =
     asClean || asStream ? [] : structuredClone(SEED_PROPOSALS);
+  // ?scope= 一律落在被钉住的那个 commit 上;不给就停在整个 PR
+  let activeScope: string | null = SCOPE_MODE ? PINNED_SHA : null;
+  /**
+   * 屏上那条**子行**:身份是被钉住的那个 commit(baseRef 为空 —— 钉在 commit 上时基线只能是
+   * 它的父提交,顶栏那枚 ← base chip 因此不该出),轮次 / findings 仍取可变的 demo 那份,
+   * 好让 ?scope= 的几档落在同一条上。
+   */
+  const scopeChild = (sha: string): Review => ({
+    ...review,
+    id: SCOPE_CHILD_ID,
+    parentReviewId: 'demo',
+    headRef: sha,
+    baseRef: null,
+    title: `#482 @${sha.slice(0, 7)} · ${
+      SCOPE_COMMITS.find((c) => c.oid === sha)?.headline ??
+      PR_COMMITS.find((c) => c.oid === sha)?.headline ??
+      'fix: guard nil encoder on cutover'
+    }`,
+  });
   /** 正在流式回复的讨论 → turnId;叫停与「已被停掉」的判定都看它 */
   const liveReplies = new Map<string, string>();
   const listeners = new Set<(e: ReviewEvent) => void>();
   const startListeners = new Set<(p: ReviewStartProgress) => void>();
+  // 屏落在某个提交范围上时收件人是那条子行(总线按 reviewId 分发);仍写死容器 id 的话,
+  // 开跑 / 重跑 / 叫停在预览里全是「点了没反应」
   const fire = (e: ReviewEvent) => {
-    for (const l of listeners) l(e);
+    const ev: ReviewEvent =
+      activeScope && e.reviewId === 'demo' ? { ...e, reviewId: SCOPE_CHILD_ID } : e;
+    for (const l of listeners) l(ev);
   };
   /** 按给定时刻推进启动阶段(首发浮层与重跑面板的慢启动自查共用) */
   const stageAt = (startId: string | undefined, stage: ReviewStartStage, ms: number) =>
@@ -855,6 +948,7 @@ export function installPreviewApi(): void {
         // 认不出的 id 一律 null,与真实后端一致 —— 回落到 demo 的话,`?restore=` 里那些
         // 已删 / 已过期的 id 会被喂成一条真 review,恢复时该被剔除的那一支就永远验不到。
         if (id === 'demo') return review;
+        if (id === SCOPE_CHILD_ID) return scopeChild(activeScope ?? SCOPE_CHILD_SHA);
         return recentReviewOf(id);
       },
       findings: async () => findings,
@@ -1000,6 +1094,83 @@ export function installPreviewApi(): void {
         fire({ reviewId: 'demo', type: 'round', payload: stopped });
         fire({ reviewId: 'demo', type: 'status', payload: settled });
       },
+      // ---- 审核范围(整个 PR ⇄ PR 里的某个提交)----
+      //
+      // 子行与容器在预览里共用同一份 demo 数据:要验的是屏上那几个分支,它们只读
+      // currentRound / status / findings。真后端会给一条 id 不同的子 review。
+      listScopes: async (parentId) => {
+        await new Promise((r) => setTimeout(r, 220));
+        if (params.get('scopes') === 'error') throw new Error('gh: Not Found (HTTP 404)');
+        return {
+          pr: {
+            reviewId: parentId,
+            status: 'reviewing' as const,
+            currentRound: 2,
+            findingCount: 7,
+            submittableCount: 5,
+            submittedCount: 0,
+          },
+          commits: SCOPE_COMMITS.map((c) => {
+            // 当前停着的那个 commit 的状态跟着 ?scope= 走,其余按 fixture 里写死的
+            const here = SCOPE_MODE != null && c.oid === PINNED_SHA;
+            const round = here ? review.currentRound : c.round;
+            const nf = here ? findings.length : c.findings;
+            return {
+              commit: {
+                oid: c.oid,
+                headline: c.headline,
+                author: c.author,
+                committedDate: new Date(now - c.hoursAgo * 3600_000).toISOString(),
+                isMerge: false,
+              },
+              reviewId: round > 0 || here ? `scope-${c.oid.slice(0, 7)}` : null,
+              status: here ? review.status : round > 0 ? ('reviewing' as const) : null,
+              currentRound: round > 0 || here ? round : null,
+              findingCount: nf,
+              submittableCount: here ? nf : Math.max(0, nf - c.submitted),
+              submittedCount: here ? 0 : c.submitted,
+            };
+          }),
+          capped: false,
+        };
+      },
+      // 切范围只拉 diff、不起 agent。?scope=fetching 让它一直不返回,好把在途占位拍下来。
+      // 返回的必须是**子行**:回容器那条的话,commit 范围下仍会画出 PR 的标题与 base chip。
+      openScope: async (_p, sha) => {
+        await new Promise((r) => setTimeout(r, SCOPE_MODE === 'fetching' ? 600_000 : 260));
+        if (params.get('scopes') === 'open-error')
+          throw new Error('commit 9f3c1ad 不在 #482 里(可能已被 force-push 挤掉);请重新选择审核范围');
+        activeScope = sha;
+        return scopeChild(sha);
+      },
+      startScan: async (_r, input) => {
+        const at = (stage: ReviewStartStage, ms: number) => stageAt(input?.startId, stage, ms);
+        at('diff', 700);
+        at('record', 1_800);
+        at('agent', 2_600);
+        await new Promise((r) => window.setTimeout(r, 3_200));
+        if (params.get('scopes') === 'scan-error')
+          throw new Error(
+            "Error invoking remote method 'review:start-scan': Error: Command failed: gh pr diff 482\ngh: Not Found (HTTP 404)\n",
+          );
+        const round: ReviewRound = {
+          ...ROUNDS[0],
+          reviewId: 'demo',
+          round: 1,
+          status: 'scanning',
+          note: input?.note ?? null,
+          newFindings: 0,
+          fixedCount: 0,
+          startedAt: Date.now(),
+          endedAt: null,
+        };
+        rounds.push(round);
+        review = { ...review, currentRound: 1, status: 'scanning' };
+        fire({ reviewId: 'demo', type: 'round', payload: round });
+        fire({ reviewId: 'demo', type: 'status', payload: 'scanning' });
+        return round;
+      },
+      scopePending: async () => (SCOPE_MODE ? 4 : 0),
       resume: async () => review,
       // ?busy=N 模拟 N 条会话正在跑;=4 即满载,入口据此显示拦截面板
       capacity: async () => {
@@ -1329,6 +1500,10 @@ export function installPreviewApi(): void {
         return { ok: true, url };
       },
       getUiState: async () => reviewUiState,
+      getActiveScope: async () => activeScope,
+      setActiveScope: async (_r, scope) => {
+        activeScope = scope;
+      },
       saveUiState: async (_r, state) => {
         reviewUiState = state;
       },

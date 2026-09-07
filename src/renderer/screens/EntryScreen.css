@@ -1155,6 +1155,8 @@
 .recent-rev .stat.done { color: var(--text-dim); }
 .recent-rev .stat.submitted { color: var(--add); }
 .recent-rev .stat.failed { color: var(--sev-high); }
+/* 未机审:中性色,与审核屏状态栏那枚胶囊同一口径 */
+.recent-rev .stat.idle { color: var(--text-dim); }
 .recent-rev .arrow { color: var(--text-faint); font-size: 16px; flex: none; }
 .recent-rev:hover .arrow { color: var(--agent-2); }
 

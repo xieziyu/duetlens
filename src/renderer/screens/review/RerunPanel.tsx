@@ -12,7 +12,7 @@ import {
 import type { ReviewStartStage } from '@shared/ipc';
 import { imeComposing } from '../../keys';
 import { LensScanArt, LENS_ART_ROWS } from '../../components/LensScanArt';
-import { StartSteps, newStartId, stepIndex, type StartStep } from '../../components/StartProgress';
+import { roundSteps, StartSteps, newStartId, stepIndex } from '../../components/StartProgress';
 import { LaunchError } from './LaunchError';
 
 /**
@@ -24,32 +24,6 @@ import { LaunchError } from './LaunchError';
  * 开跑后原地转等待画面:大 PR 光是拉 diff、读 PR 评论就要十几秒,期间面板不可关闭;
  * 失败则退回表单并就地报错,已填的说明与强度原样留着。
  */
-
-/** 重跑的阶段表(与后端 launchRound 的 onStage 一一对应)。 */
-function rerunSteps(isGithub: boolean): StartStep[] {
-  return [
-    {
-      stage: 'resolve',
-      label: '收束上一轮会话 · 读取最新元信息',
-      slow: '正在释放上一轮的 codex 会话并解析最新 HEAD',
-    },
-    {
-      stage: 'diff',
-      label: '拉取最新改动的 diff',
-      slow: '改动量大时 diff 要下载十几秒,这是正常的',
-    },
-    {
-      stage: 'record',
-      label: isGithub ? '比对变更 · 汇总上轮结论与 PR 评论' : '比对变更 · 汇总上轮结论',
-      slow: isGithub ? '正在读取 PR 描述、评论与 thread 状态' : '正在比对与上一轮之间的改动',
-    },
-    {
-      stage: 'agent',
-      label: '装配审核规则 · 开新的 agent 会话',
-      slow: '正在拉起 codex 会话',
-    },
-  ];
-}
 
 export function RerunPanel({
   review,
@@ -96,7 +70,7 @@ export function RerunPanel({
   const last = rounds.length ? rounds[rounds.length - 1] : null;
   const isGithub = review?.source === 'github-pr';
 
-  const steps = useMemo(() => rerunSteps(isGithub), [isGithub]);
+  const steps = useMemo(() => roundSteps({ isGithub }), [isGithub]);
 
   const run = async () => {
     const startId = newStartId();

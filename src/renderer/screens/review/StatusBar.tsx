@@ -1,4 +1,4 @@
-import { REVIEW_STATUS_LABELS, type ReviewStatus } from '@shared/domain';
+import { REVIEW_STATUS_LABELS, UNSCANNED_LABEL, type ReviewStatus } from '@shared/domain';
 import type { TokenUsage } from '@shared/agent-events';
 
 /**
@@ -28,6 +28,7 @@ function contextTitle({ used, cumulative, total }: TokenUsage): string {
 
 export function ReviewStatusBar({
   status,
+  unscanned,
   round,
   model,
   effort,
@@ -38,6 +39,8 @@ export function ReviewStatusBar({
   onOpenHelp,
 }: {
   status: ReviewStatus | null;
+  /** 这个范围还没机审过:胶囊给中性的「未机审」,不借 agent 那套运行态配色 */
+  unscanned?: boolean;
   /** 多轮复审时的轮次摘要(如「第 2 轮 · 修复 3 · 新增 1」);单轮为 null */
   round: string | null;
   model: string | null;
@@ -50,7 +53,7 @@ export function ReviewStatusBar({
   onOpenHelp: () => void;
 }): React.JSX.Element {
   const st = status ?? 'scanning';
-  const running = st === 'scanning' || st === 'reviewing';
+  const running = !unscanned && (st === 'scanning' || st === 'reviewing');
   const pct = tokenUsage?.total
     ? Math.min(100, Math.round((tokenUsage.used / tokenUsage.total) * 100))
     : null;
@@ -66,6 +69,10 @@ export function ReviewStatusBar({
           {REVIEW_STATUS_LABELS[st]}
           <span className="sb-why">查看原因</span>
         </button>
+      ) : unscanned ? (
+        <span className="sb-status s-idle" title="这个范围只拉了 diff,还没跑过机审">
+          {UNSCANNED_LABEL}
+        </span>
       ) : (
         <span className={`sb-status s-${st}`}>
           {running && <span className="pulse" />}

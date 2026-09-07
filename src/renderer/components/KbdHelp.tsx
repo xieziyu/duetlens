@@ -21,6 +21,13 @@ const GROUPS: { title: string; rows: { label: string; keys: string[] }[] }[] = [
     ],
   },
   {
+    title: '审核范围(PR)',
+    rows: [
+      { label: '切到后一个 / 前一个提交范围', keys: ['⌥↓', '⌥↑'] },
+      { label: '打开范围切换器', keys: ['点顶栏范围 chip'] },
+    ],
+  },
+  {
     title: '重跑',
     rows: [
       { label: '弹出重跑面板(提交 / 导出屏则先返回 diff)', keys: ['⌘', 'E'] },

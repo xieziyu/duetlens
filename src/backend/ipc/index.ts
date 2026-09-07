@@ -14,6 +14,7 @@ import {
   type ReviewEvent,
   type ReviewStartInput,
   type ReviewStartProgress,
+  type StartScanInput,
   type SubmitReviewInput,
 } from '@shared/ipc';
 import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
@@ -93,6 +94,22 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
     manager.stopReply(reviewId, discussionId),
   );
   ipcMain.handle(IpcChannels.reviewRounds, (_e, reviewId: string) => manager.getRounds(reviewId));
+  ipcMain.handle(IpcChannels.reviewListScopes, (_e, parentId: string) => manager.listScopes(parentId));
+  ipcMain.handle(IpcChannels.reviewOpenScope, (_e, parentId: string, sha: string) =>
+    manager.openScope(parentId, sha),
+  );
+  ipcMain.handle(IpcChannels.reviewStartScan, (_e, reviewId: string, input?: StartScanInput) => {
+    const { startId, ...rest } = input ?? {};
+    return manager.startScan(
+      reviewId,
+      rest,
+      startId
+        ? (stage) =>
+            broadcast(IpcEvents.reviewStartProgress, { startId, stage } satisfies ReviewStartProgress)
+        : undefined,
+    );
+  });
+  ipcMain.handle(IpcChannels.reviewScopePending, (_e, reviewId: string) => manager.scopePending(reviewId));
   ipcMain.handle(IpcChannels.reviewResume, (_e, reviewId: string) => manager.resumeReview(reviewId));
   ipcMain.handle(IpcChannels.reviewCapacity, () => manager.getLiveCapacity());
   ipcMain.handle(IpcChannels.reviewRelease, (_e, reviewId: string) => manager.disposeReview(reviewId));
@@ -154,6 +171,12 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
   );
   ipcMain.handle(IpcChannels.reviewSaveUiState, (_e, reviewId: string, state: ReviewUiState) =>
     manager.saveReviewUiState(reviewId, state),
+  );
+  ipcMain.handle(IpcChannels.reviewGetActiveScope, (_e, reviewId: string) =>
+    manager.getActiveScope(reviewId),
+  );
+  ipcMain.handle(IpcChannels.reviewSetActiveScope, (_e, reviewId: string, scope: string | null) =>
+    manager.setActiveScope(reviewId, scope),
   );
 
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());

@@ -103,6 +103,11 @@ export function App({
   const [focusDiscussion, setFocusDiscussion] = useState<{ reviewId: string; id: string } | null>(null);
   // 提交/导出视图的「返回 diff 并重跑」:回到 review 视图后由它弹出重跑面板,兑现一次即消费。
   const [rerunRequest, setRerunRequest] = useState<{ reviewId: string } | null>(null);
+  /**
+   * 要屏内落到哪个提交范围上。通知 / 提示里的 reviewId 可能是子行,而 tab 认的是容器 ——
+   * 这条请求就是那半边身份的去处。同 focusRequest:认 tab 的 id,兑现一次即消费。
+   */
+  const [scopeRequest, setScopeRequest] = useState<{ reviewId: string; sha: string } | null>(null);
   // 设置屏的定位请求(目前只有 rail 上那颗更新未读点会发);同样兑现一次即消费。
   const [settingsFocus, setSettingsFocus] = useState<{ section: 'about' } | null>(null);
   /** tab 条上的一句轻提示(满载 / 关掉了一条在跑的审核),到点自己消失。 */
@@ -112,6 +117,12 @@ export function App({
    * 那些草稿一个字都不落库,关 tab 的人看不见它们还在。
    */
   const [unsaved, setUnsaved] = useState<Record<string, boolean>>({});
+  /**
+   * 每枚 tab 屏上正在看的那条 review(PR 容器 → 它的某个提交范围)。tab 认的始终是容器,
+   * 而提交/导出与重跑都作用在**看着的那一份**上 —— 各范围的 findings 与 diff 基准不互通。
+   */
+  const [scopeIds, setScopeIds] = useState<Record<string, string>>({});
+  const scopeOf = (tabReviewId: string) => scopeIds[tabReviewId] ?? tabReviewId;
   const { settings, update: saveSettings, loaded: settingsLoaded } = useSettings();
   /**
    * tab 集合是否已从上次的记录恢复完。preview 用 `?tabs=` 直接给定,就不再从库里恢复 ——
@@ -222,8 +233,16 @@ export function App({
     return () => window.removeEventListener('keydown', onKey);
   }, [tabState.tabs.length]);
 
-  const openReview = (id: string, discussionId?: string) => {
-    const r = openTab(tabStateRef.current, id);
+  /**
+   * 打开一条 review。传进来的 id 可能是**某个提交范围的子行**(完成通知、满载提示里的 reviewId
+   * 都可能是它)—— 而 tab 认的始终是它所属的 PR 容器,范围在 tab 内切(见 ReviewScreen)。
+   * 直接以子行开 tab 的话,那枚 tab 既切不回整个 PR,同一个 PR 还会开出第二枚。
+   */
+  const openReview = async (id: string, discussionId?: string) => {
+    const target = await window.duetlens.review.get(id).catch(() => null);
+    const scopeSha = target?.parentReviewId ? target.headRef : null;
+    const tabId = target?.parentReviewId ?? id;
+    const r = openTab(tabStateRef.current, tabId);
     if (!r.ok) {
       // 提示只画在 tab 条上,而 tab 条只在 review 屏 —— 停在入口 / 历史屏原地不动地
       // 设一条看不见的提示,在用户那儿就是「点了没反应」。所以连人一起带过去
@@ -231,11 +250,12 @@ export function App({
       setScreen('review');
       return;
     }
-    setTabState(setTabView(r.state, id, 'review'));
+    setTabState(setTabView(r.state, tabId, 'review'));
     setScreen('review');
     setToast(null);
-    setFocusDiscussion(discussionId ? { reviewId: id, id: discussionId } : null);
+    setFocusDiscussion(discussionId ? { reviewId: tabId, id: discussionId } : null);
     setRerunRequest(null);
+    setScopeRequest(scopeSha ? { reviewId: tabId, sha: scopeSha } : null);
   };
 
   /**
@@ -385,11 +405,18 @@ export function App({
               onOpenSubmit={() => setTabState((prev) => setTabView(prev, t.reviewId, 'submit'))}
               focusRequest={focusDiscussion?.reviewId === t.reviewId ? { id: focusDiscussion.id } : null}
               onFocusHandled={() => setFocusDiscussion(null)}
-              rerunRequest={rerunRequest?.reviewId === t.reviewId ? rerunRequest : null}
+              rerunRequest={rerunRequest?.reviewId === scopeOf(t.reviewId) ? rerunRequest : null}
               onRerunHandled={() => setRerunRequest(null)}
+              scopeRequest={scopeRequest?.reviewId === t.reviewId ? scopeRequest : null}
+              onScopeHandled={() => setScopeRequest(null)}
               onOpenReview={openReview}
               onUnsavedChange={(has) =>
                 setUnsaved((prev) => (!!prev[t.reviewId] === has ? prev : { ...prev, [t.reviewId]: has }))
+              }
+              onScopeChange={(scopeReviewId) =>
+                setScopeIds((prev) =>
+                  prev[t.reviewId] === scopeReviewId ? prev : { ...prev, [t.reviewId]: scopeReviewId },
+                )
               }
             />
           </TabVisibilityProvider>
@@ -416,10 +443,10 @@ export function App({
       {screen === 'review' && tab?.view === 'submit' && (
         <main className="screen-host">
           <SubmitExportScreen
-            reviewId={tab.reviewId}
+            reviewId={scopeOf(tab.reviewId)}
             onBack={() => setTabState((prev) => setTabView(prev, tab.reviewId, 'review'))}
             onRerun={() => {
-              setRerunRequest({ reviewId: tab.reviewId });
+              setRerunRequest({ reviewId: scopeOf(tab.reviewId) });
               setTabState((prev) => setTabView(prev, tab.reviewId, 'review'));
             }}
           />

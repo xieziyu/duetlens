@@ -47,6 +47,7 @@ interface ReviewRow {
   source_ref: string;
   base_ref: string | null;
   head_ref: string | null;
+  parent_review_id: string | null;
   repo_path: string | null;
   codex_thread_id: string | null;
   model: string | null;
@@ -154,6 +155,7 @@ function toReview(r: ReviewRow): Review {
     sourceRef: r.source_ref,
     baseRef: r.base_ref,
     headRef: r.head_ref,
+    parentReviewId: r.parent_review_id,
     repoPath: r.repo_path,
     codexThreadId: r.codex_thread_id,
     model: r.model,
@@ -316,11 +318,16 @@ export class ReviewStore {
     sourceRef: string;
     baseRef?: string | null;
     headRef?: string | null;
+    /** 归到哪个容器下(PR 里的一个提交范围);缺省 = 顶层行 */
+    parentReviewId?: string | null;
     repoPath?: string | null;
     title?: string | null;
     model?: string | null;
     reasoningEffort?: string | null;
     intensity?: Review['intensity'];
+    /** 起始轮次;缺省 1(建出来就要开跑)。传 0 = 只落 diff 快照、尚未机审 */
+    currentRound?: number;
+    status?: ReviewStatus;
   }): Review {
     const ts = now();
     const row: ReviewRow = {
@@ -329,24 +336,25 @@ export class ReviewStore {
       source_ref: input.sourceRef,
       base_ref: input.baseRef ?? null,
       head_ref: input.headRef ?? null,
+      parent_review_id: input.parentReviewId ?? null,
       repo_path: input.repoPath ?? null,
       codex_thread_id: null,
       model: input.model ?? null,
       reasoning_effort: input.reasoningEffort ?? null,
       intensity: input.intensity ?? 'standard',
       title: input.title ?? null,
-      status: 'scanning',
+      status: input.status ?? 'scanning',
       summary_body: null,
       summary_files: '[]',
       summary_round: null,
-      current_round: 1,
+      current_round: input.currentRound ?? 1,
       created_at: ts,
       updated_at: ts,
     };
     this.db
       .prepare(
-        `INSERT INTO reviews (id, source, source_ref, base_ref, head_ref, repo_path, codex_thread_id, model, reasoning_effort, intensity, title, status, summary_body, summary_files, summary_round, current_round, created_at, updated_at)
-         VALUES (@id, @source, @source_ref, @base_ref, @head_ref, @repo_path, @codex_thread_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @summary_files, @summary_round, @current_round, @created_at, @updated_at)`,
+        `INSERT INTO reviews (id, source, source_ref, base_ref, head_ref, parent_review_id, repo_path, codex_thread_id, model, reasoning_effort, intensity, title, status, summary_body, summary_files, summary_round, current_round, created_at, updated_at)
+         VALUES (@id, @source, @source_ref, @base_ref, @head_ref, @parent_review_id, @repo_path, @codex_thread_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @summary_files, @summary_round, @current_round, @created_at, @updated_at)`,
       )
       .run(row);
     return toReview(row);
@@ -364,24 +372,59 @@ export class ReviewStore {
     return rows.map(toReview);
   }
 
-  /** 最近审核列表:每条 review 附带 finding / 用户 discussion / 已提交计数(入口展示用)。 */
+  /**
+   * 最近审核列表:每条 review 附带 finding / 用户 discussion / 已提交计数(入口展示用)。
+   *
+   * **一行一个顶层 review**:PR 里的提交范围不单独列 —— 它们是同一个 PR 的几个视角,
+   * 各占一行会让「最近审过什么」被同一个 PR 的七八条刷屏。计数因此按容器 + 其全部范围合计,
+   * 否则一条 PR 上明明有 findings、行上却写着 0(它们都记在子行名下)。
+   */
   listRecentReviews(): RecentReview[] {
+    const scope = "(f.review_id = r.id OR f.review_id IN (SELECT id FROM reviews WHERE parent_review_id = r.id))";
     const rows = this.db
       .prepare(
         `SELECT r.*,
-            (SELECT COUNT(*) FROM findings f WHERE f.review_id = r.id) AS finding_count,
-            (SELECT COUNT(*) FROM discussions d WHERE d.review_id = r.id AND d.kind = 'user') AS discussion_count,
-            (SELECT COUNT(*) FROM findings f WHERE f.review_id = r.id AND f.submission = 'submitted') AS submitted_count
+            (SELECT COUNT(*) FROM findings f WHERE ${scope}) AS finding_count,
+            (SELECT COUNT(*) FROM discussions d WHERE d.kind = 'user'
+               AND (d.review_id = r.id OR d.review_id IN (SELECT id FROM reviews WHERE parent_review_id = r.id))) AS discussion_count,
+            (SELECT COUNT(*) FROM findings f WHERE f.submission = 'submitted' AND ${scope}) AS submitted_count,
+            (SELECT COUNT(*) FROM reviews c WHERE c.parent_review_id = r.id) AS scope_count,
+            (SELECT COUNT(*) FROM reviews c WHERE c.parent_review_id = r.id AND c.status = 'scanning') AS scanning_scope_count
          FROM reviews r
+         WHERE r.parent_review_id IS NULL
          ORDER BY r.updated_at DESC`,
       )
-      .all() as (ReviewRow & { finding_count: number; discussion_count: number; submitted_count: number })[];
+      .all() as (ReviewRow & {
+      finding_count: number;
+      discussion_count: number;
+      submitted_count: number;
+      scope_count: number;
+      scanning_scope_count: number;
+    })[];
     return rows.map((r) => ({
       ...toReview(r),
       findingCount: r.finding_count,
       discussionCount: r.discussion_count,
       submittedCount: r.submitted_count,
+      scopeCount: r.scope_count,
+      scanningScopeCount: r.scanning_scope_count,
     }));
+  }
+
+  /** 某容器下的全部提交范围(建出来的那些);未打开过的 commit 没有行,不在此列。 */
+  listChildren(parentId: string): Review[] {
+    const rows = this.db
+      .prepare('SELECT * FROM reviews WHERE parent_review_id = ? ORDER BY created_at ASC')
+      .all(parentId) as ReviewRow[];
+    return rows.map(toReview);
+  }
+
+  /** 按被钉住的 sha 找已建出的范围行;没有即这个 commit 还没被打开过。 */
+  getChildByHead(parentId: string, headRef: string): Review | null {
+    const r = this.db
+      .prepare('SELECT * FROM reviews WHERE parent_review_id = ? AND head_ref = ?')
+      .get(parentId, headRef) as ReviewRow | undefined;
+    return r ? toReview(r) : null;
   }
 
   /** 历史审核用过的本地仓库路径(去重、最近在前),供 PR 反推本地 clone 时优先比对与取扫描根。 */
@@ -398,19 +441,57 @@ export class ReviewStore {
     return rows.map((r) => r.repo_path);
   }
 
-  /** 删除一次审核;discussions / findings / messages / ui_state / diffs 经 FK 级联清理。 */
+  /**
+   * 删除一次审核;discussions / findings / messages / ui_state / diffs 经 FK 级联清理。
+   *
+   * 删的是子行时同一事务里清掉容器指向它的 `active_scope` —— 留着的话下次进屏会按一个
+   * 已经不存在的范围落位,openScope 于是照着那个 sha 把它整条重新拉出来。
+   */
   deleteReview(id: string): void {
-    this.db.prepare('DELETE FROM reviews WHERE id = ?').run(id);
+    this.db.transaction(() => {
+      const row = this.db.prepare('SELECT parent_review_id, head_ref FROM reviews WHERE id = ?').get(id) as
+        | { parent_review_id: string | null; head_ref: string | null }
+        | undefined;
+      if (row?.parent_review_id && row.head_ref) {
+        this.db
+          .prepare(
+            'UPDATE review_ui_state SET active_scope = NULL WHERE review_id = ? AND active_scope = ?',
+          )
+          .run(row.parent_review_id, row.head_ref);
+      }
+      this.db.prepare('DELETE FROM reviews WHERE id = ?').run(id);
+    })();
   }
 
-  /** 按最后更新时间删除过期审核(级联同 deleteReview);返回删掉的条数。 */
+  /**
+   * 按最后更新时间删除过期审核(级联同 deleteReview);返回删掉的**顶层**条数。
+   *
+   * **只判顶层行**:提交范围的存活由它所属的 PR 决定,随父级联删。逐行判的话,一个几周前
+   * 看过、之后没再动的提交范围会先于 PR 消失,而 PR 还在列表里 —— 点进去范围少了几个,
+   * 界面上没有任何地方解释得了。冒泡(见 touchReview)保证父行的时间不早于任何子行。
+   */
   pruneReviewsBefore(cutoff: number): number {
-    return this.db.prepare('DELETE FROM reviews WHERE updated_at < ?').run(cutoff).changes;
+    return this.db
+      .prepare('DELETE FROM reviews WHERE updated_at < ? AND parent_review_id IS NULL')
+      .run(cutoff).changes;
   }
 
-  /** 把父 review 的 updated_at 推到 ts;调用方须已在事务内(见 withReviewTouch)。 */
+  /**
+   * 把 review 的 updated_at 推到 ts,**并连带推它的容器行**;调用方须已在事务内(见 withReviewTouch)。
+   *
+   * 冒泡到容器是保留窗口的前提:30 天按 PR 整体算。只推子行的话,一条被反复追问的
+   * 提交范围会随着从不更新的 PR 容器一起过期,而容器一走,它自己也被级联带走。
+   */
   private touchReview(reviewId: string, ts: number): void {
     this.db.prepare('UPDATE reviews SET updated_at = ? WHERE id = ?').run(ts, reviewId);
+    this.touchParent(reviewId, ts);
+  }
+
+  /** 只推容器行;供那些自己已经写过 updated_at 的 UPDATE 补上冒泡。顶层行无父,空转。 */
+  private touchParent(reviewId: string, ts: number): void {
+    this.db
+      .prepare('UPDATE reviews SET updated_at = ? WHERE id = (SELECT parent_review_id FROM reviews WHERE id = ?)')
+      .run(ts, reviewId);
   }
 
   /**
@@ -426,36 +507,44 @@ export class ReviewStore {
     const ts = now();
     return this.db.transaction(() => {
       const written = write(ts);
-      if ('review' in scope) this.touchReview(scope.review, ts);
-      else if ('finding' in scope)
-        this.db
-          .prepare('UPDATE reviews SET updated_at = ? WHERE id = (SELECT review_id FROM findings WHERE id = ?)')
-          .run(ts, scope.finding);
-      else
-        this.db
-          .prepare('UPDATE reviews SET updated_at = ? WHERE id = (SELECT review_id FROM discussions WHERE id = ?)')
-          .run(ts, scope.discussion);
+      // 先定位到那条 review 再统一 touch:容器冒泡只写在 touchReview 一处,
+      // 三个入口各拼一条 UPDATE 的话,新增入口时漏掉冒泡不会有任何报错。
+      const reviewId =
+        'review' in scope
+          ? scope.review
+          : 'finding' in scope
+            ? (this.db.prepare('SELECT review_id FROM findings WHERE id = ?').get(scope.finding) as
+                | { review_id: string }
+                | undefined
+              )?.review_id
+            : (this.db.prepare('SELECT review_id FROM discussions WHERE id = ?').get(scope.discussion) as
+                | { review_id: string }
+                | undefined
+              )?.review_id;
+      if (reviewId) this.touchReview(reviewId, ts);
       return written;
     })();
   }
 
   setCodexThreadId(reviewId: string, threadId: string): void {
+    const ts = now();
     this.db
       .prepare('UPDATE reviews SET codex_thread_id = ?, updated_at = ? WHERE id = ?')
-      .run(threadId, now(), reviewId);
+      .run(threadId, ts, reviewId);
+    this.touchParent(reviewId, ts);
   }
 
   /** 记下 agent 侧实际生效的模型(用户未指定时由 thread 起会话后回填)。 */
   setReviewModel(reviewId: string, model: string): void {
-    this.db
-      .prepare('UPDATE reviews SET model = ?, updated_at = ? WHERE id = ?')
-      .run(model, now(), reviewId);
+    const ts = now();
+    this.db.prepare('UPDATE reviews SET model = ?, updated_at = ? WHERE id = ?').run(model, ts, reviewId);
+    this.touchParent(reviewId, ts);
   }
 
   setReviewStatus(reviewId: string, status: ReviewStatus): void {
-    this.db
-      .prepare('UPDATE reviews SET status = ?, updated_at = ? WHERE id = ?')
-      .run(status, now(), reviewId);
+    const ts = now();
+    this.db.prepare('UPDATE reviews SET status = ?, updated_at = ? WHERE id = ?').run(status, ts, reviewId);
+    this.touchParent(reviewId, ts);
   }
 
   /**
@@ -464,18 +553,22 @@ export class ReviewStore {
    * (同一条 UPDATE 内,不经应用层往返),之后靠它判断屏上这份是不是本轮的结论。
    */
   writeAgentSummary(reviewId: string, body: string, files: readonly SummaryFile[]): void {
+    const ts = now();
     this.db
       .prepare(
         'UPDATE reviews SET summary_body = ?, summary_files = ?, summary_round = current_round, updated_at = ? WHERE id = ?',
       )
-      .run(body, JSON.stringify(files.slice(0, SUMMARY_FILES_LIMIT)), now(), reviewId);
+      .run(body, JSON.stringify(files.slice(0, SUMMARY_FILES_LIMIT)), ts, reviewId);
+    this.touchParent(reviewId, ts);
   }
 
   /** 调整审核强度(重跑时可改档;续接与后续轮次沿用)。 */
   setReviewIntensity(reviewId: string, intensity: Review['intensity']): void {
+    const ts = now();
     this.db
       .prepare('UPDATE reviews SET intensity = ?, updated_at = ? WHERE id = ?')
-      .run(intensity, now(), reviewId);
+      .run(intensity, ts, reviewId);
+    this.touchParent(reviewId, ts);
   }
 
   // ---- diff 缓存(unified 原文;renderer 侧解析成结构化 diff 渲染)----
@@ -551,6 +644,7 @@ export class ReviewStore {
       this.db
         .prepare('UPDATE reviews SET current_round = ?, updated_at = ? WHERE id = ?')
         .run(round, ts, reviewId);
+      this.touchParent(reviewId, ts);
     })();
     return toRound(row);
   }
@@ -1272,5 +1366,28 @@ export class ReviewStore {
         viewedFiles: JSON.stringify(state.viewedFiles),
         lastActiveTab: state.lastActiveTab ?? null,
       });
+  }
+
+  /**
+   * 这枚 tab 上次停在哪个提交范围(容器行上的一列;null = 整个 PR)。
+   *
+   * **刻意不并进 {@link ReviewUiState}**:那一份是去抖写回的整行快照,而切范围是一次即时动作 ——
+   * 切换前 400ms 内碰过「已看」的话,那次滞后的 flush 会拿着切换前的快照把刚切好的范围写回去。
+   */
+  getActiveScope(reviewId: string): string | null {
+    const r = this.db
+      .prepare('SELECT active_scope FROM review_ui_state WHERE review_id = ?')
+      .get(reviewId) as { active_scope: string | null } | undefined;
+    return r?.active_scope ?? null;
+  }
+
+  setActiveScope(reviewId: string, scope: string | null): void {
+    this.db
+      .prepare(
+        `INSERT INTO review_ui_state (review_id, viewed_files, last_active_tab, active_scope)
+         VALUES (@reviewId, '[]', NULL, @scope)
+         ON CONFLICT(review_id) DO UPDATE SET active_scope = @scope`,
+      )
+      .run({ reviewId, scope });
   }
 }
