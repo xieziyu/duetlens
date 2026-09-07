@@ -4,6 +4,35 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.11.0] - 2026-09-07
+
+### Added
+
+- **A PR review can switch between the whole PR and any single commit in it, and switching does not
+  start a scan.** The read-only `@sha` marker in the top bar becomes a dropdown listing the whole PR
+  and every commit in it (oldest to newest, matching GitHub), each row carrying its own state — not
+  scanned / scanning / N findings / N submitted. `⌥↑` / `⌥↓` step through them without opening the
+  menu. Switching to a commit that has not been reviewed only fetches its diff against its parent;
+  the agent starts when you press "run review" — looking at a single commit is usually about
+  understanding what that step does first, not about getting an opinion right away. Each scope keeps
+  its own diff snapshot, rounds, findings, conversation and submission record, with no bleed between
+  them; the first-round prompt tells the agent this is commit k of N and what sits on either side,
+  and PR-level findings are not mixed in. Picking a commit at the entry screen now also creates the
+  PR level, so the whole PR is one click away. History and the recent list still show one row per
+  PR, with child scopes folded in as "N commit scopes", counts aggregated, and the row showing as
+  scanning while any of them is. Submitting stays per scope (GitHub accepts one commit id per
+  review), and submitting at the PR level points out how many findings are still pending in the
+  other scopes. (#98)
+
+### Upgrade notes
+
+- The database schema moves to v24 (0.10.0 was v23); an existing database migrates on first launch,
+  with nothing to do. **The migration is one-way** — 0.10.x can still open a migrated database, it
+  just cannot see or write back what lives in the new columns (the commit scopes under a PR, and
+  which scope you last stopped on). To downgrade for real, back up
+  `~/Library/Application Support/Duetlens/duetlens.db` first.
+- The in-app updater handles the update; there is no need to download the dmg again.
+
 ## [0.10.0] - 2026-08-29
 
 ### Added
@@ -578,6 +607,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.11.0]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/xieziyu/duetlens/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/xieziyu/duetlens/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/xieziyu/duetlens/compare/v0.8.0...v0.9.0
