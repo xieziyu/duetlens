@@ -174,6 +174,436 @@
   min-width: 8px;
 }
 
+/* ---------- 审核范围切换器(整个 PR ⇄ PR 里的某个提交)---------- */
+/* 与 basechip / commitchip 同一档视觉:三者说的都是「这次看的范围不是默认那份」,
+   只是这一枚可点开换范围,故补上 hover 与箭头 */
+.rev-topbar .scopewrap {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+.rev-topbar .scopechip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 24px;
+  padding: 0 7px 0 8px;
+  border-radius: 6px;
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--agent-2);
+  background: var(--agent-soft);
+  border: 1px solid var(--agent-line);
+  cursor: pointer;
+}
+.rev-topbar .scopechip:hover,
+.rev-topbar .scopechip.open {
+  background: color-mix(in oklab, var(--agent) 24%, transparent);
+}
+.rev-topbar .scopechip .pos {
+  color: var(--text-faint);
+}
+.rev-topbar .scopechip .chev {
+  width: 6px;
+  height: 6px;
+  margin-left: 1px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+.rev-topbar .scopechip.open .chev {
+  transform: translateY(1px) rotate(-135deg);
+}
+
+.scope-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 470px;
+  z-index: 40;
+  background: var(--surface-2);
+  border: 1px solid var(--agent-line);
+  border-radius: 11px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+  font-family: var(--sans);
+  font-size: 12px;
+  text-align: left;
+}
+.scope-menu .sm-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.scope-menu .sm-head b {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12px;
+}
+.scope-menu .sm-head .sp {
+  flex: 1;
+}
+.scope-menu .sm-filter {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.scope-menu .sm-filter input {
+  width: 100%;
+  padding: 6px 9px;
+  border-radius: 8px;
+  outline: none;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.scope-menu .sm-filter input:focus {
+  border-color: var(--agent-line);
+}
+.scope-menu .sm-rows {
+  max-height: 330px;
+  overflow: auto;
+  padding: 5px;
+}
+.sm-sep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px 3px;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  letter-spacing: 0.03em;
+}
+.sm-sep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-soft);
+}
+.sm-note {
+  padding: 9px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+.sm-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  font-size: 11.5px;
+  color: var(--sev-high);
+}
+.sm-error span {
+  flex: 1;
+  min-width: 0;
+}
+.sm-error button {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+.sm-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.sm-row:hover,
+.sm-row.active {
+  background: var(--surface-3);
+}
+.sm-row.sel {
+  background: color-mix(in oklab, var(--agent) 12%, var(--surface-2));
+}
+.sm-row .sha {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  flex: none;
+  width: 56px;
+}
+.sm-row.sel .sha {
+  color: var(--agent-2);
+}
+.sm-row .m {
+  flex: 1;
+  min-width: 0;
+}
+.sm-row .hl {
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sm-row .meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+.sm-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.sm-foot .sp {
+  flex: 1;
+}
+.sm-foot kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+}
+
+/* 范围的状态点与徽标:切换器里逐行共用一套(未机审 / 扫描中 / 有 findings / 已提交) */
+.scope-menu .st {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  box-sizing: border-box;
+  border: 1.5px solid var(--text-deco);
+}
+.scope-menu .st.done {
+  background: var(--agent);
+  border-color: var(--agent);
+}
+.scope-menu .st.submitted {
+  background: var(--add);
+  border-color: var(--add);
+}
+.scope-menu .st.scanning {
+  border-color: var(--agent);
+  border-top-color: transparent;
+  animation: scope-spin 1s linear infinite;
+}
+.scope-menu .badge {
+  flex: none;
+  font-size: 10.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--text-faint);
+  border: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+.scope-menu .badge.done {
+  color: var(--agent-2);
+  background: var(--agent-soft);
+  border-color: var(--agent-line);
+}
+.scope-menu .badge.scanning {
+  color: var(--agent-2);
+  border-color: var(--agent-line);
+}
+.scope-menu .badge.submitted {
+  color: var(--add);
+  background: var(--add-bg);
+  border-color: transparent;
+}
+
+@keyframes scope-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 顶栏 CTA 槽位在未机审范围里换成「运行机审」;沿用 submit-cta 的实心档 */
+.rev-topbar .run-cta .tri {
+  font-size: 9px;
+}
+/* 在途(开跑中 / 切范围中)的 CTA:点了也没有意义,收掉 hover 与指针 */
+.rev-topbar .submit-cta:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.rev-topbar .submit-cta:disabled:hover {
+  background: var(--accent-solid);
+}
+
+/* 切范围失败:就地一条,留在原范围 */
+.scope-err {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--sev-high);
+  background: var(--del-bg);
+  border-bottom: 1px solid var(--border);
+}
+.scope-err .m {
+  flex: 1;
+  min-width: 0;
+}
+.scope-err button {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* 拉取新范围 diff 期间的内联占位:等待留在答案会出现的那两栏里 */
+.scope-fetch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.scope-fetch .spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--agent-line);
+  border-top-color: var(--agent);
+  animation: scope-spin 0.9s linear infinite;
+}
+.tree .tree-fetch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 14px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.tree .tree-fetch .spin {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--agent-line);
+  border-top-color: var(--agent);
+  animation: scope-spin 0.9s linear infinite;
+  flex: none;
+}
+
+/* 未机审范围的 Findings 空态:开跑的按钮放在 findings 将来会出现的那一格 */
+.scope-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 34px 22px 0;
+}
+.scope-idle .si-ic {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--agent-soft);
+  border: 1px solid var(--agent-line);
+  color: var(--agent-2);
+}
+.scope-idle .si-title {
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.scope-idle .si-sub {
+  margin: 6px 0 0;
+  max-width: 292px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+.scope-idle .si-cta {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 8px;
+  background: var(--accent-solid);
+  color: var(--on-solid);
+  font-weight: 600;
+  font-size: 12.5px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: var(--glow-accent);
+}
+.scope-idle .si-cta:hover {
+  background: var(--accent-solid-hover);
+}
+.scope-idle .si-cta:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.scope-idle .si-cta .tri {
+  font-size: 9px;
+}
+/* 开跑后按钮原地转阶段进度;轮次一建立就交给 scanbar,故这块只服务开跑前那几秒 */
+.scope-idle .si-run {
+  width: 100%;
+  max-width: 292px;
+  margin-top: 16px;
+  text-align: left;
+}
+.scope-idle .si-err {
+  width: 100%;
+  max-width: 292px;
+  margin-top: 14px;
+  text-align: left;
+}
+.scope-idle .si-alt {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.scope-idle .si-alt b {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.scope-idle .si-cfg {
+  margin-top: 18px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.scope-idle .si-cfg span {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  font-family: var(--mono);
+}
+.scope-idle .si-cfg .si-cfg-note {
+  font-family: var(--sans);
+}
+
 /* ---------- 底部状态栏:agent 运行态 + 全局 diff 视图 + 通读进度 ---------- */
 .rev-statusbar {
   grid-area: foot;
@@ -273,6 +703,11 @@
 .rev-statusbar .sb-status.s-submitted {
   color: var(--add);
   background: var(--add-bg);
+}
+/* 未机审:中性色 —— 还没有任何 agent 动作,不借 agent 蓝也不借完成绿 */
+.rev-statusbar .sb-status.s-idle {
+  color: var(--text-dim);
+  background: var(--surface-3);
 }
 .rev-statusbar .sb-status.s-failed {
   color: var(--sev-high);

@@ -12,6 +12,7 @@ import type {
   Review,
   ReviewIntensity,
   ReviewRound,
+  ReviewStatus,
   ReviewUiState,
   SourceKind,
   Triage,
@@ -51,6 +52,10 @@ export const IpcChannels = {
   reviewStopScan: 'review:stop-scan',
   reviewStopReply: 'review:stop-reply',
   reviewRounds: 'review:rounds',
+  reviewListScopes: 'review:list-scopes',
+  reviewOpenScope: 'review:open-scope',
+  reviewStartScan: 'review:start-scan',
+  reviewScopePending: 'review:scope-pending',
   reviewResume: 'review:resume',
   reviewCapacity: 'review:capacity',
   reviewRelease: 'review:release',
@@ -73,6 +78,8 @@ export const IpcChannels = {
   reviewOpenInBrowser: 'review:open-in-browser',
   reviewGetUiState: 'review:get-ui-state',
   reviewSaveUiState: 'review:save-ui-state',
+  reviewGetActiveScope: 'review:get-active-scope',
+  reviewSetActiveScope: 'review:set-active-scope',
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
   agentListModels: 'agent:list-models',
@@ -158,12 +165,59 @@ export interface OpenExternalResult {
   message?: string;
 }
 
-/** 入口「最近的审核」列表项:review 附带 finding/discussion/已提交计数(展示用)。 */
+/**
+ * 入口「最近的审核」列表项:review 附带 finding/discussion/已提交计数(展示用)。
+ * 计数按容器 + 其全部提交范围合计 —— 列表一行一个顶层 review,子行不单独出现。
+ */
 export interface RecentReview extends Review {
   findingCount: number;
   /** 用户发起的 discussion 数(不含 finding 承载的 discussion) */
   discussionCount: number;
   submittedCount: number;
+  /** 这条 PR 下已建出的提交范围数;0 = 只审过整个 PR */
+  scopeCount: number;
+  /**
+   * 其中正在机审的提交范围数。行上的状态字要认它:容器可能一轮都没跑过(未机审),
+   * 而某个提交范围正在扫 —— 只看容器 status 的话,这条 PR 在列表里就是一副什么都没在跑的样子。
+   */
+  scanningScopeCount: number;
+}
+
+/** 一个审核范围(整个 PR 或其中一个提交)的现状;范围还没建出来时 reviewId 为 null。 */
+export interface ScopeState {
+  reviewId: string | null;
+  status: ReviewStatus | null;
+  /** 0 = 尚未机审(见 domain.isUnscanned);null = 这个范围还没建出来 */
+  currentRound: number | null;
+  findingCount: number;
+  /** 保留中、可提交到 GitHub 的条数(见 github-review.isSubmittable) */
+  submittableCount: number;
+  submittedCount: number;
+}
+
+/** 切换器里的一行:PR 里的一个 commit + 它作为审核范围的现状。 */
+export interface ScopeCommit extends ScopeState {
+  commit: PrCommit;
+}
+
+/** 某个 PR 容器下可切换的全部范围。 */
+export interface ReviewScopes {
+  /** 整个 PR(容器行自己),始终存在 */
+  pr: ScopeState;
+  /** 旧→新,与 GitHub PR 的 commits 页同序 */
+  commits: ScopeCommit[];
+  /** 列表被 GitHub 封顶截断(更旧的提交拿不到),见 PR_COMMITS_CAP */
+  capped: boolean;
+}
+
+/** 对一个尚未机审的范围跑第 1 轮。 */
+export interface StartScanInput {
+  /** 本轮额外说明,随首轮指令注入(可选) */
+  note?: string;
+  /** 本轮起调整审核强度;缺省沿用该范围现有档(建出来时继承容器) */
+  intensity?: ReviewIntensity;
+  /** renderer 生成的一次性 id;启动阶段事件按它回关 */
+  startId?: string;
 }
 
 /** 用户就地编辑一条 finding 的可编辑字段(缺省字段不改;suggestion 传 null 清空)。 */
@@ -382,6 +436,23 @@ export interface DuetlensApi {
     stopReply(reviewId: string, discussionId: string): Promise<void>;
     /** 该 review 的轮次履历(首轮 + 每次重跑),用于展示轮次与各轮统计。 */
     rounds(reviewId: string): Promise<ReviewRound[]>;
+    /**
+     * 某个 PR 容器下可切换的审核范围(整个 PR + 每个 commit);要现拉一次 PR 的提交列表。
+     * 非 github-pr 或已是某个范围的 review 抛错。
+     */
+    listScopes(parentId: string): Promise<ReviewScopes>;
+    /**
+     * 切到 PR 里某个 commit 的范围:已建过就直接返回,没有则现拉它的 diff 建一条子 review。
+     * **不起 agent**(见 startScan)—— 切范围只是换一份改动面来看。
+     */
+    openScope(parentId: string, sha: string): Promise<Review>;
+    /**
+     * 对一个尚未机审的范围跑第 1 轮。已机审过的抛错(那是重跑的事)。
+     * 阶段推进与 rerun 同走 onStartProgress。
+     */
+    startScan(reviewId: string, input?: StartScanInput): Promise<ReviewRound>;
+    /** 该容器的其它范围里还有多少条待提交(提交屏的一句提示);非容器返回 0。 */
+    scopePending(reviewId: string): Promise<number>;
     /** 续接一个非活跃 review(app 重启后按 codexThreadId 恢复会话),之后可追问。 */
     resume(reviewId: string): Promise<Review>;
     /** 活跃会话并发容量快照(入口据此表达还能再开几个、满载时列出在跑的)。 */
@@ -429,6 +500,10 @@ export interface DuetlensApi {
     getUiState(reviewId: string): Promise<ReviewUiState>;
     /** 写某 review 的 per-review UI 进度态(前端去抖调用)。 */
     saveUiState(reviewId: string, state: ReviewUiState): Promise<void>;
+    /** 这枚 tab 上次停在哪个提交范围(null = 整个 PR)。 */
+    getActiveScope(reviewId: string): Promise<string | null>;
+    /** 记下停在哪个范围;切换即写,不随 UI 进度态的去抖快照回写(见 ReviewStore.getActiveScope)。 */
+    setActiveScope(reviewId: string, scope: string | null): Promise<void>;
     /** 订阅领域事件;返回取消订阅函数。 */
     onEvent(handler: (e: ReviewEvent) => void): () => void;
     /** 订阅 start 的阶段推进(入口等待浮层用);返回取消订阅函数。 */

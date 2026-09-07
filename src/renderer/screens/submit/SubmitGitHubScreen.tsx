@@ -88,10 +88,25 @@ export function SubmitGitHubScreen({
   /** 上次被 422 拒后、按最新 diff 定位到的失效锚点条数(null=尚未定位/拉取失败)。 */
   const [rejectStale, setRejectStale] = useState<number | null>(null);
 
+  /**
+   * 这个 PR 的其它提交范围里还有多少条待提交。GitHub 一份 review 只认一个 commit_id,
+   * 故各范围各自提交 —— 提完这一份就以为全发出去了是最容易犯的那一下。
+   */
+  const [pendingElsewhere, setPendingElsewhere] = useState(0);
+
   // 先用审核时的 diff 快照即时预判哪条行锚点已失效(GitHub 422 不告知是哪条)
   useEffect(() => {
     void window.duetlens.review.diff(reviewId).then(setDiff);
   }, [reviewId]);
+
+  // 只问容器那条:范围之间不做跨范围提交,子行的提交屏不需要回头统计兄弟范围
+  useEffect(() => {
+    if (review.headRef || review.parentReviewId) return;
+    void window.duetlens.review
+      .scopePending(reviewId)
+      .then(setPendingElsewhere)
+      .catch(() => setPendingElsewhere(0));
+  }, [reviewId, review.headRef, review.parentReviewId]);
 
   /** 现拉 PR 最新 diff 并据此重判锚点;返回最新 diff(拉取失败返回 null)。 */
   const syncLatest = useCallback(async () => {
@@ -288,6 +303,13 @@ export function SubmitGitHubScreen({
               <span className="drop">剔除 {dismissed.length}</span>
             </div>
           </div>
+
+          {pendingElsewhere > 0 && (
+            <div className="scopebar">
+              ◇ 这个 PR 的其它提交范围里还有 <b>{pendingElsewhere}</b> 条待提交 —— 各范围各自提交,
+              这一次只发本范围的。
+            </div>
+          )}
 
           {submitted.length > 0 && (
             <div className="incbar">

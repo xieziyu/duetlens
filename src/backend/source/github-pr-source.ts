@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { PR_COMMITS_CAP, type PrCommit } from '@shared/source-discovery';
+import { PR_COMMITS_CAP, type CommitPosition, type PrCommit } from '@shared/source-discovery';
 import { run } from './exec';
 import type { PreparedSource, ReviewTarget, Source } from './source';
 
@@ -123,23 +123,39 @@ export class GitHubPrSource implements Source {
     // 校验这个 sha 确实属于本 PR。**不属于就抛** —— force-push 后原 commit 被挤出 PR 正是这条路,
     // 而静默回落到整个 PR 会让复审悄悄换成另一份改动面(锚点与 422 预判的基准全跟着漂)。
     const list = await fetchPrCommits(this.nwo, this.num);
-    const hit = list.find((c) => c.oid === pinned);
-    const headline = hit
-      ? hit.headline
-      : // 列表拉满上限 = 可能被截断,「不在列表里」这时**不足以**判定它不属于本 PR:
-        // 超过 250 个提交的 PR 里,先前钉住的旧提交本来就落在拿不到的那一段,
-        // 照严格判法会把一条完全正常的 review 判成 force-push 失效,复审与提交一起断掉。
-        // 故降级为问 compare:该 sha 是 PR head 的祖先(ahead)或就是它(identical)即算数。
-        list.length >= PR_COMMITS_CAP
-        ? await this.headlineIfAncestor(pinned, meta.number)
-        : null;
+    const capped = list.length >= PR_COMMITS_CAP;
+    const at = list.findIndex((c) => c.oid === pinned);
+    const headline =
+      at >= 0
+        ? list[at].headline
+        : // 列表拉满上限 = 可能被截断,「不在列表里」这时**不足以**判定它不属于本 PR:
+          // 超过 250 个提交的 PR 里,先前钉住的旧提交本来就落在拿不到的那一段,
+          // 照严格判法会把一条完全正常的 review 判成 force-push 失效,复审与提交一起断掉。
+          // 故降级为问 compare:该 sha 是 PR head 的祖先(ahead)或就是它(identical)即算数。
+          capped
+          ? await this.headlineIfAncestor(pinned, meta.number)
+          : null;
     if (headline == null) {
       throw new Error(
         `commit ${pinned.slice(0, 7)} 不在 #${meta.number} 里(可能已被 force-push 挤掉);请重新选择审核范围`,
       );
     }
     this.headSha = pinned;
-    return { title: `#${meta.number} @${pinned.slice(0, 7)} · ${headline}`, cwd, headSha: this.headSha };
+    const position: CommitPosition = {
+      sha: pinned,
+      headline,
+      index: at >= 0 ? at + 1 : null,
+      total: list.length,
+      capped,
+      prevHeadline: at > 0 ? list[at - 1].headline : null,
+      nextHeadline: at >= 0 && at < list.length - 1 ? list[at + 1].headline : null,
+    };
+    return {
+      title: `#${meta.number} @${pinned.slice(0, 7)} · ${headline}`,
+      cwd,
+      headSha: this.headSha,
+      position,
+    };
   }
 
   /**

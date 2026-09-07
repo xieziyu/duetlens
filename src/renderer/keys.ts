@@ -7,8 +7,9 @@ import type { KeyboardEvent } from 'react';
  *
  * keyCode 229 是兜底:个别输入法不置 isComposing,但组合期一律报 229。
  */
-export function imeComposing(e: KeyboardEvent): boolean {
-  return e.nativeEvent.isComposing || e.keyCode === 229;
+export function imeComposing(e: KeyboardEvent | globalThis.KeyboardEvent): boolean {
+  const native = 'nativeEvent' in e ? e.nativeEvent : e;
+  return native.isComposing || native.keyCode === 229;
 }
 
 /**

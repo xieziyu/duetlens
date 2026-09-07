@@ -31,6 +31,10 @@ const api: DuetlensApi = {
     stopReply: (reviewId, discussionId) =>
       ipcRenderer.invoke(IpcChannels.reviewStopReply, reviewId, discussionId),
     rounds: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewRounds, reviewId),
+    listScopes: (parentId) => ipcRenderer.invoke(IpcChannels.reviewListScopes, parentId),
+    openScope: (parentId, sha) => ipcRenderer.invoke(IpcChannels.reviewOpenScope, parentId, sha),
+    startScan: (reviewId, input) => ipcRenderer.invoke(IpcChannels.reviewStartScan, reviewId, input),
+    scopePending: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewScopePending, reviewId),
     resume: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewResume, reviewId),
     capacity: () => ipcRenderer.invoke(IpcChannels.reviewCapacity),
     release: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewRelease, reviewId),
@@ -62,6 +66,9 @@ const api: DuetlensApi = {
     getUiState: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewGetUiState, reviewId),
     saveUiState: (reviewId, state) =>
       ipcRenderer.invoke(IpcChannels.reviewSaveUiState, reviewId, state),
+    getActiveScope: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewGetActiveScope, reviewId),
+    setActiveScope: (reviewId, scope) =>
+      ipcRenderer.invoke(IpcChannels.reviewSetActiveScope, reviewId, scope),
     onEvent: (handler: (e: ReviewEvent) => void) => {
       const listener = (_e: IpcRendererEvent, payload: ReviewEvent) => handler(payload);
       ipcRenderer.on(IpcEvents.reviewEvent, listener);

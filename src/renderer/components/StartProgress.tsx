@@ -17,6 +17,44 @@ export interface StartStep {
   slow: string;
 }
 
+/**
+ * 起一轮机审的阶段表(与后端 launchRound 的 onStage 一一对应)。重跑面板与「运行机审」
+ * 共用一份 —— 两处跑的是同一条后端路径,阶段各写各的必然漂移。
+ * 首轮没有上一轮会话要收,第一档因此换个说法。
+ */
+export function roundSteps(opts: { isGithub: boolean; first?: boolean }): StartStep[] {
+  return [
+    opts.first
+      ? { stage: 'resolve', label: '读取最新元信息', slow: '正在解析这个范围的 HEAD' }
+      : {
+          stage: 'resolve',
+          label: '收束上一轮会话 · 读取最新元信息',
+          slow: '正在释放上一轮的 codex 会话并解析最新 HEAD',
+        },
+    {
+      stage: 'diff',
+      label: '拉取最新改动的 diff',
+      slow: '改动量大时 diff 要下载十几秒,这是正常的',
+    },
+    {
+      stage: 'record',
+      label: opts.first
+        ? opts.isGithub
+          ? '汇总 PR 描述与评论'
+          : '记录本轮基线'
+        : opts.isGithub
+          ? '比对变更 · 汇总上轮结论与 PR 评论'
+          : '比对变更 · 汇总上轮结论',
+      slow: opts.isGithub ? '正在读取 PR 描述、评论与 thread 状态' : '正在比对与上一轮之间的改动',
+    },
+    {
+      stage: 'agent',
+      label: '装配审核规则 · 开新的 agent 会话',
+      slow: '正在拉起 codex 会话',
+    },
+  ];
+}
+
 /** 一次性发起 id:阶段事件按它回关,过期的发起不会再往当前等待画面里灌。 */
 export function newStartId(): string {
   return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;

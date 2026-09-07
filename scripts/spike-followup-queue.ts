@@ -103,6 +103,7 @@ function fixture() {
     sourceRef: 'stub',
     baseRef: null,
     headRef: null,
+    parentReviewId: null,
     repoPath: null,
     codexThreadId: null,
     model: null,

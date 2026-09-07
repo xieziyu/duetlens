@@ -12,6 +12,7 @@
  * PR 内容是外部数据,隔离围栏与「任务写在末尾」的约定见 prompt/pr-context.ts。
  */
 import type { PrContext } from '@shared/github-context';
+import type { CommitPosition } from '@shared/source-discovery';
 import { prContextSection } from './pr-context';
 
 /** 没有任何附加材料时的缺省扫描指令;也是 ReviewSession 直调时的兜底。 */
@@ -22,6 +23,30 @@ export interface ScanPromptInput {
   pr: PrContext | null;
   /** 用户在入口填的附加上下文 */
   note?: string | null;
+  /** 只审 PR 里一个提交时,它在 PR 里的位置;整个 PR 传 null */
+  position?: CommitPosition | null;
+}
+
+/**
+ * 「本次只审这一个提交」的交代。**不给的话 agent 读到的是一份没有来龙去脉的 diff**:
+ * 前一个提交刚拆出去的函数在这一份里是凭空调用,后一个提交才补上的测试在这里就是漏测 ——
+ * 两者都会被当成本提交的问题报出来,而它们恰恰是同一个 PR 里已经解决了的事。
+ *
+ * 只讲位置,不注入 PR 级 findings:那些锚在整个 PR 的行号上,与这一份 diff 不是同一套基准。
+ */
+function scopeSection(p: CommitPosition): string[] {
+  // 截断时总数只是下界,`+` 两支都要带:index 拿得到也不代表分母是真的
+  const total = p.capped ? `${p.total}+` : `${p.total}`;
+  const at = p.index ? `第 ${p.index}/${total} 个提交` : `其中一个提交(共 ${total} 个)`;
+  const out = [
+    '## 本次审核范围',
+    `本次只审 PR 的${at} \`${p.sha.slice(0, 7)}\` · ${p.headline};下面这份 diff 是它相对其父提交的改动,不是整个 PR 的。`,
+    '相邻提交里的改动**不属于本次范围**,不要为它们报 finding;但可以据此判断某处是不是已由前后的提交处理过。',
+  ];
+  if (p.prevHeadline) out.push(`- 紧邻的前一个提交:${p.prevHeadline}`);
+  if (p.nextHeadline) out.push(`- 紧邻的后一个提交:${p.nextHeadline}`);
+  out.push('');
+  return out;
 }
 
 /**
@@ -30,10 +55,12 @@ export interface ScanPromptInput {
  */
 export function buildScanPrompt(input: ScanPromptInput): string | undefined {
   const pr = input.pr ? prContextSection(input.pr) : [];
+  const scope = input.position ? scopeSection(input.position) : [];
   const note = input.note?.trim();
-  if (!pr.length && !note) return undefined;
+  if (!pr.length && !scope.length && !note) return undefined;
 
-  const out = [...pr];
+  // 范围排在 PR 上下文之后:那一块是隔离围栏包住的外部材料,而这一句是我们自己的任务交代。
+  const out = [...pr, ...scope];
   if (note) out.push('## 用户附加上下文(审核时一并考虑)', note, '');
   out.push('## 本轮任务', DEFAULT_SCAN_PROMPT);
   return out.join('\n');

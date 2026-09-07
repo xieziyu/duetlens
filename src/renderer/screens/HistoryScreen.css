@@ -240,6 +240,10 @@
 .hist-rev .stat.failed {
   color: var(--sev-high);
 }
+/* 未机审:中性色,与审核屏状态栏那枚胶囊同一口径 */
+.hist-rev .stat.idle {
+  color: var(--text-dim);
+}
 .hist-rev .del {
   opacity: 0;
   flex: none;

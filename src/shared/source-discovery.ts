@@ -50,6 +50,25 @@ export interface PrCommit {
   isMerge: boolean;
 }
 
+/**
+ * 被钉住的那个 commit 在 PR 里的位置(供首轮 prompt 的「本次审核范围」段)。
+ * 只审一个提交时,agent 拿到的 diff 里读不出它前后发生过什么 —— 前一个提交刚拆出去的函数
+ * 在这一份里就是凭空调用,不给位置的话它会当成缺失。
+ */
+export interface CommitPosition {
+  sha: string;
+  headline: string;
+  /** 第几个(1 基);列表被封顶截断时拿不到,为 null */
+  index: number | null;
+  /** 共几个;截断时是「至少这么多」 */
+  total: number;
+  /** 列表拉满 {@link PR_COMMITS_CAP};翻页从最旧一页起,拿不到的是**最新**的那些提交 */
+  capped: boolean;
+  /** 紧邻的前 / 后一个提交的标题;在列表边界或被截断时为 null */
+  prevHeadline: string | null;
+  nextHeadline: string | null;
+}
+
 /** 本地分支的一项(相对 base 领先若干 commit)。 */
 export interface LocalBranchSummary {
   name: string;

@@ -43,6 +43,7 @@
     "spike:add-finding": "tsx scripts/spike-add-finding.ts",
     "spike:notify": "tsx scripts/spike-notify.ts",
     "spike:rerun": "tsx scripts/spike-rerun.ts",
+    "spike:scope": "tsx scripts/spike-scope.ts",
     "spike:absorb": "tsx scripts/spike-absorb.ts",
     "spike:adversarial": "tsx scripts/spike-adversarial.ts",
     "spike:stop-scan": "tsx scripts/spike-stop-scan.ts",

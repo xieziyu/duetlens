@@ -41,12 +41,18 @@ export function sourceTitleRest(
   source: Review['source'] | undefined,
   ref: string,
   title: string | null | undefined,
+  /** 钉在某个提交上的范围;它的 title 身份段是 `#123 @sha7`,同样要剥 */
+  headRef?: string | null,
 ): string {
   if (!title) return '';
+  const label = shortSourceLabel(source, ref);
   const dup = new Set(
-    [shortSourceLabel(source, ref), ref, source ? SOURCE_NAME[source] : undefined].filter(
-      (s): s is string => Boolean(s),
-    ),
+    [
+      label,
+      ref,
+      headRef ? `${label} @${shortOid(headRef)}` : undefined,
+      source ? SOURCE_NAME[source] : undefined,
+    ].filter((s): s is string => Boolean(s)),
   );
   let rest = title;
   for (;;) {
@@ -94,4 +100,23 @@ export function tabTipText(r: {
   const hasNwo = r.source === 'github-pr' && Boolean(parsePrRefLoose(r.sourceRef)?.nwo);
   const repo = hasNwo ? null : repoName(r);
   return repo ? `${repo} · ${id}` : id;
+}
+
+/**
+ * 短 sha 一律 7 位:GitHub 自己也这么截,两边对照时不用数位数。
+ * **只用于显示** —— 选中值、React key、落库一律走完整 oid,
+ * 否则同一个 PR 里撞前缀的两条 commit 会共用 key、并让回查取错另一条。
+ */
+export const shortOid = (oid: string): string => oid.slice(0, 7);
+
+/** commit 时间的相对说法(入参是 ISO 串);入口的范围选择器与 review 屏的切换器共用。 */
+export function commitAge(iso: string): string {
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return '';
+  const min = Math.round((Date.now() - ts) / 60_000);
+  if (min < 1) return '刚刚';
+  if (min < 60) return `${min} 分钟前`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} 小时前`;
+  return `${Math.round(h / 24)} 天前`;
 }

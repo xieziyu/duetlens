@@ -146,6 +146,21 @@
   margin-bottom: 12px;
 }
 
+/* 其它提交范围里还有待提交:各范围各自提交,提完这一份不等于全发出去了 */
+.scopebar {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 12px;
+  margin-bottom: 12px;
+}
+.scopebar b {
+  color: var(--text);
+}
+
 /* 行锚点判定所依据的 diff 有多新 + 成批修锚入口 */
 .freshbar {
   border: 1px solid var(--border);

@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Discussion, Finding, FindingProposal, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
-import { DEFAULT_UI_SETTINGS, VERDICT_LABELS } from '@shared/domain';
+import { DEFAULT_UI_SETTINGS, INTENSITY_LABELS, isUnscanned, VERDICT_LABELS } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
-import type { AddFindingInput, DiscussionAnchor, FindingEditInput, LiveCapacity } from '@shared/ipc';
+import type {
+  AddFindingInput,
+  DiscussionAnchor,
+  FindingEditInput,
+  LiveCapacity,
+  ReviewScopes,
+  ReviewStartStage,
+} from '@shared/ipc';
 import { useSettings } from '../settings/SettingsProvider';
 import { SourceIcon } from '../components/SourceIcon';
 import { parsePrRefLoose, sourceTitleRest } from '../review/source-ref';
@@ -31,6 +38,9 @@ import { Resizer } from './review/Resizer';
 import { ReviewStatusBar } from './review/StatusBar';
 import { describeRoundError, describeSendFailure } from './review/round-error';
 import { RerunPanel } from './review/RerunPanel';
+import { ScopeSwitcher } from './review/ScopeMenu';
+import { newStartId, roundSteps, StartSteps, type StartStep } from '../components/StartProgress';
+import { LaunchError } from './review/LaunchError';
 import { isRerunKey, primaryModifier } from '../keys';
 import { LogoMark } from '../components/LogoMark';
 import { Wordmark } from '../components/Wordmark';
@@ -65,8 +75,275 @@ function dropKey<T>(map: Record<string, T>, key: string): Record<string, T> {
 const RIGHT_TABS: RightTab[] = ['discussion', 'findings', 'summary'];
 const isRightTab = (t: string | null): t is RightTab => t !== null && RIGHT_TABS.includes(t as RightTab);
 
+/**
+ * 一枚 tab 里的范围绑定。tab 认的始终是 PR 容器那条 review,屏内看的可以是它的某个提交范围 ——
+ * 两者是**两条 review 行**(各自的 diff / 轮次 / findings / 会话),故三栏整体跟着切,不做合并。
+ */
+export interface ScopeBinding {
+  /** 当前停在哪个 commit;null = 整个 PR */
+  activeSha: string | null;
+  /** 正在拉取 diff 的那个范围;非 null 期间左/中栏内联占位 */
+  pending: string | null;
+  error: string | null;
+  onPick: (sha: string | null) => void;
+  /** 前后切一个范围(⌥↑ / ⌥↓);到头不回环 */
+  onStep: (delta: 1 | -1) => void;
+  onDismissError: () => void;
+  /** 范围列表;拉取归外壳,免得三栏按范围重挂时跟着重拉一次(chip 的 k/N 会跟着闪) */
+  scopes: ReviewScopes | null;
+  scopesLoading: boolean;
+  scopesError: string | null;
+  onReloadScopes: () => void;
+}
+
+/**
+ * review 屏的外壳:把「这枚 tab 是哪条 PR」与「屏上正在看哪个范围」分开。
+ *
+ * 范围切换会换掉整棵三栏的数据源(diff / findings / 讨论 / 已看进度),故按范围 id 重挂 ——
+ * 与换 review 同一条约定(见 App 的 key):屏内本地态全锚在「这一份改动面」上,
+ * 逐项 reset 的清单没法保证不漏,而漏一项就是把上一个范围的行号写到这一个上。
+ */
+export function ReviewScreen(props: {
+  reviewId: string | null;
+  onOpenSubmit?: () => void;
+  focusRequest?: { id: string } | null;
+  onFocusHandled?: () => void;
+  rerunRequest?: { reviewId: string } | null;
+  onRerunHandled?: () => void;
+  onOpenReview?: (reviewId: string) => void;
+  onUnsavedChange?: (hasUnsaved: boolean) => void;
+  /** 屏上正在看的那条 review 变了(切范围);提交/导出屏与重跑请求都要认这一条 */
+  onScopeChange?: (scopeReviewId: string) => void;
+  /** 要落到哪个提交范围上(通知里的 reviewId 是子行时由 App 下发);兑现一次即消费 */
+  scopeRequest?: { reviewId: string; sha: string } | null;
+  onScopeHandled?: () => void;
+}) {
+  const { reviewId, onScopeChange, scopeRequest, onScopeHandled } = props;
+  // 容器那条 review 只为判断「这枚 tab 有没有范围可切」;三栏的数据源在 ReviewPane 里各自拉。
+  const [container, setContainer] = useState<Review | null>(null);
+  // undefined = 还没读到上次停在哪(此时先按整个 PR 画,避免首帧闪一下别的范围)
+  const [activeSha, setActiveSha] = useState<string | null | undefined>(undefined);
+  const [scopeId, setScopeId] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+  const [scopeError, setScopeError] = useState<string | null>(null);
+  // 已开过的范围 → 子 review id;同一 tab 内切回去不必再问一次后端
+  const opened = useRef(new Map<string, string>());
+  const shaListRef = useRef<string[]>([]);
+  const [scopes, setScopes] = useState<ReviewScopes | null>(null);
+  const [scopesLoading, setScopesLoading] = useState(false);
+  const [scopesError, setScopesError] = useState<string | null>(null);
+  const scopesReqRef = useRef(0);
+  /**
+   * openScope 的请求代次:一次切换要落 pending / activeSha / scopeId 三处,慢的那一次回来
+   * 会把 chip 与三栏指到不同范围,所以只认最后一次起飞的结果。
+   */
+  const reqRef = useRef(0);
+  /**
+   * 落位已为哪个 sha 发过请求。守卫必须落在 ref 上:失败时 pending 落回 null 恰恰是那个
+   * effect 的依赖变化,只看 pending / scopeId 就成了「拉一次、失败、再拉一次」的死循环
+   * (每次都是一趟真的 gh);而 setPending 落地前 effect 再跑一次也会并发发出两次请求。
+   */
+  const landed = useRef<string | null>(null);
+
+  // 只有顶层、未钉死在某个 commit 上的 PR 才是容器(见 ReviewManager.requireContainer)
+  const isContainer =
+    container?.source === 'github-pr' && !container.headRef && !container.parentReviewId;
+
+  useEffect(() => {
+    if (!reviewId) return;
+    let alive = true;
+    setContainer(null);
+    setActiveSha(undefined);
+    setScopeId(null);
+    setPending(null);
+    setScopeError(null);
+    setScopes(null);
+    setScopesError(null);
+    opened.current = new Map();
+    shaListRef.current = [];
+    reqRef.current += 1;
+    landed.current = null;
+    void window.duetlens.review.get(reviewId).then((r) => alive && setContainer(r));
+    void window.duetlens.review
+      .getActiveScope(reviewId)
+      .then((s) => alive && setActiveSha(s))
+      .catch(() => alive && setActiveSha(null));
+    return () => {
+      alive = false;
+    };
+  }, [reviewId]);
+
+  // 切到某个范围:先拉它的 diff(已开过的直接命中缓存),拿到子行 id 再换屏。
+  // **失败留在原范围** —— 半路把三栏清空换成一句错误,等于把正在读的那份 diff 也一并收走。
+  const goScope = useCallback(
+    (sha: string | null) => {
+      if (!reviewId || !isContainer) return;
+      setScopeError(null);
+      if (sha === null) {
+        reqRef.current += 1;
+        setPending(null);
+        setActiveSha(null);
+        setScopeId(null);
+        void window.duetlens.review.setActiveScope(reviewId, null);
+        return;
+      }
+      const known = opened.current.get(sha);
+      if (known) {
+        reqRef.current += 1;
+        setPending(null);
+        setActiveSha(sha);
+        setScopeId(known);
+        void window.duetlens.review.setActiveScope(reviewId, sha);
+        return;
+      }
+      // 在途时再点即以新的为准:占位直接换成新 sha,不先撤(撤了就闪一下原范围的三栏)
+      const seq = (reqRef.current += 1);
+      setPending(sha);
+      void window.duetlens.review
+        .openScope(reviewId, sha)
+        .then((child) => {
+          if (reqRef.current !== seq) return;
+          opened.current.set(sha, child.id);
+          setActiveSha(sha);
+          setScopeId(child.id);
+        })
+        .catch((e: unknown) => {
+          if (reqRef.current !== seq) return;
+          setScopeError((e as Error).message ?? String(e));
+        })
+        .finally(() => {
+          if (reqRef.current !== seq) return;
+          setPending(null);
+        });
+    },
+    [reviewId, isContainer],
+  );
+
+  // 进屏时按记住的范围落位:子行已经在库里,openScope 只是回查一次。
+  useEffect(() => {
+    if (!reviewId || !isContainer || activeSha === undefined || activeSha === null) return;
+    if (scopeId || pending || landed.current === activeSha) return;
+    // 有未兑现的落位请求就让给它:两条同时拉,谁后到谁说了算,屏上落在哪个范围就成了随机的
+    if (scopeRequest) return;
+    const seq = (reqRef.current += 1);
+    landed.current = activeSha;
+    setPending(activeSha);
+    void window.duetlens.review
+      .openScope(reviewId, activeSha)
+      .then((child) => {
+        if (reqRef.current !== seq) return;
+        opened.current.set(activeSha, child.id);
+        setScopeId(child.id);
+      })
+      .catch((e: unknown) => {
+        if (reqRef.current !== seq) return;
+        setScopeError((e as Error).message ?? String(e));
+      })
+      .finally(() => {
+        if (reqRef.current !== seq) return;
+        setPending(null);
+      });
+  }, [reviewId, isContainer, activeSha, scopeId, pending, scopeRequest]);
+
+  // 通知点开的是某个提交范围时,把屏落到它上面 —— tab 那半边身份已由 App 归到容器。
+  // 等 active_scope 读到再兑现:先兑现的话,那条回来的记忆会把刚落好的范围顶回去。
+  useEffect(() => {
+    if (!scopeRequest || !isContainer || activeSha === undefined) return;
+    goScope(scopeRequest.sha);
+    onScopeHandled?.();
+  }, [scopeRequest, isContainer, activeSha, goScope, onScopeHandled]);
+
+  // ⌥↑ / ⌥↓ 的前后切要知道提交顺序;切换器拉到列表时报上来,没拉过就只能不动。
+  const onStep = useCallback(
+    (delta: 1 | -1) => {
+      const list = shaListRef.current;
+      if (!list.length) return;
+      const at = activeSha ? list.indexOf(activeSha) : -1;
+      // 整个 PR 排在所有提交之前:从它往下即第一个提交,往上则到头
+      const next = at < 0 ? (delta > 0 ? 0 : -1) : at + delta;
+      if (next < -1 || next >= list.length) return;
+      goScope(next < 0 ? null : list[next]);
+    },
+    [activeSha, goScope],
+  );
+
+  /**
+   * 范围列表拉在外壳而不是切换器里:切换器挂在按范围重挂的三栏中,搁在那里等于每切一次范围
+   * 就重拉一次(chip 的 k/N 也跟着闪一下)。而这份列表只随 PR 变,与看的是哪个范围无关。
+   */
+  const loadScopes = useCallback(() => {
+    if (!reviewId || !isContainer) return;
+    const seq = (scopesReqRef.current += 1);
+    setScopesLoading(true);
+    setScopesError(null);
+    void window.duetlens.review
+      .listScopes(reviewId)
+      .then((s) => {
+        if (scopesReqRef.current !== seq) return;
+        setScopes(s);
+        shaListRef.current = s.commits.map((c) => c.commit.oid);
+      })
+      .catch((e: unknown) => {
+        if (scopesReqRef.current !== seq) return;
+        setScopesError((e as Error).message ?? String(e));
+      })
+      .finally(() => {
+        if (scopesReqRef.current !== seq) return;
+        setScopesLoading(false);
+      });
+  }, [reviewId, isContainer]);
+
+  /**
+   * 进屏即拉一次。挂载就拉是有代价的(一次 gh 往返),但换来两件不能没有的东西:chip 上的
+   * 「N 个提交 / k/N」——「整个 PR」四个字自己说不出这个 PR 还能怎么拆;以及 ⌥↑ / ⌥↓ 的
+   * 提交顺序 —— 那是一条**不开弹层**的路径,要它先开一次弹层才生效等于这个键位默认是坏的。
+   */
+  useEffect(() => {
+    loadScopes();
+  }, [loadScopes]);
+
+  const scopeReviewId = isContainer && activeSha ? scopeId : reviewId;
+  useEffect(() => {
+    if (scopeReviewId) onScopeChange?.(scopeReviewId);
+  }, [scopeReviewId, onScopeChange]);
+
+  const scope: ScopeBinding | null = isContainer
+    ? {
+        activeSha: activeSha ?? null,
+        pending,
+        error: scopeError,
+        onPick: goScope,
+        onStep,
+        onDismissError: () => setScopeError(null),
+        scopes,
+        scopesLoading,
+        scopesError,
+        onReloadScopes: loadScopes,
+      }
+    : null;
+
+  /**
+   * 范围已经落定(此刻挂着的 pane 就是最终那一份)。定位请求要等它 —— 在容器那枚 pane 上
+   * 兑现的话,请求当场被消费,而下一拍换成子行的 pane 已经没有它可用了。
+   */
+  const scopeSettled =
+    container !== null &&
+    (!isContainer || (activeSha === null ? true : activeSha !== undefined && !pending && scopeId !== null));
+
+  return (
+    <ReviewPane
+      {...props}
+      // 子行还没拿到之前先挂着容器那条:三栏此刻被占位盖住,只是别让整屏空一拍
+      key={scopeReviewId ?? reviewId}
+      reviewId={scopeReviewId ?? reviewId}
+      focusRequest={scopeSettled ? props.focusRequest : null}
+      scope={scope}
+    />
+  );
+}
+
 // 合并单顶栏 + 三栏(file tree | diff | right panel)。
-export function ReviewScreen({
+function ReviewPane({
   reviewId,
   onOpenSubmit,
   focusRequest,
@@ -75,6 +352,7 @@ export function ReviewScreen({
   onRerunHandled,
   onOpenReview,
   onUnsavedChange,
+  scope,
 }: {
   reviewId: string | null;
   onOpenSubmit?: () => void;
@@ -90,6 +368,8 @@ export function ReviewScreen({
   onOpenReview?: (reviewId: string) => void;
   /** 屏上有「关掉就没了」的东西时上报;App 据此在关 tab 前拦一下 */
   onUnsavedChange?: (hasUnsaved: boolean) => void;
+  /** 范围切换绑定;这条 review 不是 PR 容器时为 null(没有范围这回事) */
+  scope?: ScopeBinding | null;
 }) {
   // 多 tab 下所有已开的 review 都挂载着,只有活跃那枚可见(语义见 TabVisibility)。
   // 全局键位、定位请求、滚动位置三件事都按它收口。
@@ -489,15 +769,61 @@ export function ReviewScreen({
     if (!activePath && diff.length > 0) setActivePath(diff[0].path);
   }, [diff, activePath]);
 
-  const scanning = status === 'scanning' || !status;
+  // 尚未机审的范围只拉了 diff,没有任何 agent 动作在跑 —— 拿 status 判会把它读成「扫描中」,
+  // 于是右栏摆出扫描动画、顶栏禁掉重跑,而实际上一个 turn 都没起过。
+  const unscanned = review ? isUnscanned(review) : false;
+  const scanning = !unscanned && (status === 'scanning' || !status);
+
+  // ---- 「运行机审」:对一个尚未机审的范围跑第 1 轮 ----
+  //
+  // 不弹面板(重跑那张面板讲的是「会带上上一轮的什么」,首轮没有那些可讲),按钮原地转阶段进度;
+  // 轮次一建立,现有 scanbar 就接手了,故这里只负责开跑前那几秒。
+  const [scanStartId, setScanStartId] = useState<string | null>(null);
+  const [scanStage, setScanStage] = useState<ReviewStartStage>('resolve');
+  const [scanError, setScanError] = useState<string | null>(null);
+  const scanSteps = useMemo(() => roundSteps({ isGithub: review?.source === 'github-pr', first: true }), [review?.source]);
+  useEffect(
+    () =>
+      window.duetlens.review.onStartProgress((p) => {
+        setScanStartId((cur) => {
+          if (p.startId === cur) setScanStage(p.stage);
+          return cur;
+        });
+      }),
+    [],
+  );
+  const onStartScan = useCallback(async () => {
+    if (!reviewId) return;
+    const startId = newStartId();
+    setScanStartId(startId);
+    setScanStage('resolve');
+    setScanError(null);
+    try {
+      await window.duetlens.review.startScan(reviewId, { startId });
+    } catch (e) {
+      const message = (e as Error).message ?? String(e);
+      // 满载与重跑同一套提示:名单先备好,原文剥掉给程序认的那段码再就地回显
+      if (isLiveSessionLimit(message)) {
+        void hitCapacity('暂时跑不了新的一轮');
+        setScanError(stripLimitCode(message));
+      } else setScanError(message);
+    } finally {
+      setScanStartId(null);
+    }
+  }, [reviewId, hitCapacity]);
+  const scanStarting = scanStartId !== null;
 
   // 通知点击带 discussionId 时定位到该线程(切 Discussion 栏);兑现后即刻消费掉这条请求。
   // 不可见时**不消费**:隐藏态里滚动落空,消费掉这条请求就等于把定位吞了。攒到重新可见再兑现。
   useEffect(() => {
     if (!focusRequest || !active) return;
+    // 线程列表还没到也先攒着:此刻 focusDiscussion 找不到锚点文件与那处的 finding,只切了个
+    // tab,而请求已被消费,diff 再也不会跳过去。diff 落定即不再等 —— 那条线程也可能真的没了,
+    // 不能为它把定位永远吊着。
+    if (!discussions.some((d) => d.id === focusRequest.id) && !diffReady) return;
     focusDiscussion(focusRequest.id);
     onFocusHandled?.();
-  }, [focusRequest, active]);
+  }, [focusRequest, active, discussions, diffReady]);
 
   // 提交/导出屏按下「返回 diff 并重跑」后进到本屏:直接把重跑面板顶出来,兑现即消费。
   // 判据用 status 而非 scanning:重挂到 review 到达前 status 还是 undefined,按 scanning
@@ -544,6 +870,9 @@ export function ReviewScreen({
     [],
   );
 
+  // scope 每次渲染都是新对象,直接进上面那个 effect 的依赖会让全局键 handler 每帧重注册
+  const stepScope = scope?.onStep;
+
   // 有模态压在上面时,导航键一律挂起。判据必须是**所有**打开中的模态,不能只认帮助层:
   // 重跑面板同样是带 scrim 的 dialog,漏掉它时在说明输入框里按 ⌘F 会把焦点抢到对话框背后的
   // 检索条,⌘G 还会在背后换命中并滚动 diff。DiffPane 自带的 ⌘G 也吃这同一个判据。
@@ -576,9 +905,18 @@ export function ReviewScreen({
       }
       // 重跑(键位选型见 isRerunKey)。扫描中无从重跑,与顶栏 CTA 同一判据。
       if (isRerunKey(e)) {
-        if (modalOpen || scanning) return;
+        if (modalOpen || scanning || unscanned) return;
         e.preventDefault();
         setRerunOpen(true);
+        return;
+      }
+      // ⌥↑ / ⌥↓ 前后切范围,不开弹层。与其它全局键同一规矩:模态压着时让位。
+      // 不带 ⌘ 的键位在输入框里要让位 —— ⌥↑ / ⌥↓ 在文本控件里是「跳到首/末行」。
+      if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (typing) return;
+        if (modalOpen || !stepScope) return;
+        e.preventDefault();
+        stepScope(e.key === 'ArrowDown' ? 1 : -1);
         return;
       }
       if (!mod || e.altKey || modalOpen) return; // 模态打开时不抢导航键
@@ -610,7 +948,7 @@ export function ReviewScreen({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, helpOpen, modalOpen, scanning, diffView, update, setActiveTab]);
+  }, [active, helpOpen, modalOpen, scanning, unscanned, stepScope, diffView, update, setActiveTab]);
 
   // ---- 滚动位置跨隐藏保活 ----
   //
@@ -695,7 +1033,9 @@ export function ReviewScreen({
   const pr = isGithub ? parsePrRefLoose(review.sourceRef) : null;
   const sourceLabel = pr ? `#${pr.num}` : (review?.sourceRef ?? '…');
   // 标题去掉与 chip 重复的开头(backend 按 `<身份> · <正文>` 拼);剥空就只剩 chip
-  const titleRest = review ? sourceTitleRest(review.source, review.sourceRef, review.title) : '';
+  const titleRest = review
+    ? sourceTitleRest(review.source, review.sourceRef, review.title, review.headRef)
+    : '';
 
   // URL 解析与打开都在 main 侧(ref 可能只有 PR 号,需借 repoPath 推断仓库)
   const openInBrowser = useCallback(() => {
@@ -750,34 +1090,66 @@ export function ReviewScreen({
               ← {review.baseRef}
             </span>
           )}
-          {review?.headRef && (
-            <span
-              className="mono commitchip"
-              title={`仅审核 PR 中的这一个提交(${review.headRef.slice(0, 7)}),改动面相对其父提交计算`}
-            >
-              @ {review.headRef.slice(0, 7)}
-            </span>
+          {scope ? (
+            <ScopeSwitcher
+              prLabel={sourceLabel}
+              activeSha={scope.activeSha}
+              pending={scope.pending}
+              onPick={scope.onPick}
+              scopes={scope.scopes}
+              loading={scope.scopesLoading}
+              error={scope.scopesError}
+              onReload={scope.onReloadScopes}
+            />
+          ) : (
+            /* 本功能之前发起的「只审一个提交」是一条顶层 review,没有可切换的范围,
+               仍按当年那枚静态标记显示 */
+            review?.headRef && (
+              <span
+                className="mono commitchip"
+                title={`仅审核 PR 中的这一个提交(${review.headRef.slice(0, 7)}),改动面相对其父提交计算`}
+              >
+                @ {review.headRef.slice(0, 7)}
+              </span>
+            )
           )}
           <span className="title">{review ? titleRest : '加载中…'}</span>
           {pr?.nwo && <span className="mono nwo">{pr.nwo}</span>}
         </div>
         <span className="spacer" />
-        <button
-          className="rerun-cta"
-          onClick={() => setRerunOpen(true)}
-          disabled={scanning}
-          title={scanning ? '本轮扫描进行中,结束后可重跑' : '带上本轮结论与你的处置,再跑一轮机审 (⌘E)'}
-        >
-          ↻ 重跑
-        </button>
-        <button
-          className="submit-cta"
-          onClick={onOpenSubmit}
-          title={isGithub ? '进入筛选并提交 review 到 GitHub' : '导出 review 为 Markdown'}
-        >
-          {isGithub ? '提交 review' : '↓ 导出 review'}
-          {ctaCount > 0 && <span className="cta-badge">{ctaCount}</span>}
-        </button>
+        {/* 还没机审过就没有「上一轮」可带,重跑那颗按钮在这里指向一件不存在的事 */}
+        {!unscanned && (
+          <button
+            className="rerun-cta"
+            onClick={() => setRerunOpen(true)}
+            disabled={scanning}
+            title={scanning ? '本轮扫描进行中,结束后可重跑' : '带上本轮结论与你的处置,再跑一轮机审 (⌘E)'}
+          >
+            ↻ 重跑
+          </button>
+        )}
+        {/* 未机审的范围里,常驻 CTA 槽位让给「运行机审」—— 那才是这一屏此刻唯一的下一步;
+            但手记的 finding 已经可提交时不能把出口收走,那时仍出提交按钮 */}
+        {unscanned && ctaCount === 0 ? (
+          <button
+            className="submit-cta run-cta"
+            onClick={() => void onStartScan()}
+            disabled={scanStarting || !!scope?.pending}
+            title="以 PR 上下文机审这一个范围;findings 单独归在它名下"
+          >
+            <span className="tri">▶</span> {scanStarting ? '正在开跑…' : '运行机审'}
+          </button>
+        ) : (
+          <button
+            className="submit-cta"
+            onClick={onOpenSubmit}
+            disabled={!!scope?.pending}
+            title={isGithub ? '进入筛选并提交 review 到 GitHub' : '导出 review 为 Markdown'}
+          >
+            {isGithub ? '提交 review' : '↓ 导出 review'}
+            {ctaCount > 0 && <span className="cta-badge">{ctaCount}</span>}
+          </button>
+        )}
       </header>
       {helpOpen && <KbdHelp onClose={() => setHelpOpen(false)} />}
       {rerunOpen && (
@@ -803,6 +1175,15 @@ export function ReviewScreen({
       )}
 
       <div className="rev-host">
+        {/* 切范围失败:就地说一句、留在原范围 —— 半路把三栏清空换成一句错误,
+            等于把正在读的那份 diff 也一并收走 */}
+        {scope?.error && (
+          <div className="scope-err">
+            <span className="ic">✕</span>
+            <span className="m">切不过去:{scope.error}</span>
+            <button onClick={scope.onDismissError}>知道了</button>
+          </div>
+        )}
         {showScanbar && (
           <ScanProgressBar
             findingCount={roundFindings.length}
@@ -820,6 +1201,16 @@ export function ReviewScreen({
           />
         )}
         <div className="rev-main">
+          {/* 拉取新范围的 diff 期间**内联占位**,不弹浮层:等待留在答案会出现的那两栏里,
+              上下文(顶栏、tab、右栏)一格都不动 */}
+          {scope?.pending ? (
+            <div className="tree pane">
+              <div className="tree-fetch">
+                <span className="spin" />
+                正在拉取 @{scope.pending.slice(0, 7)} 的 diff…
+              </div>
+            </div>
+          ) : (
           <FileTree
             files={diff}
             findings={findings}
@@ -833,6 +1224,7 @@ export function ReviewScreen({
             view={settings.fileListView}
             onViewChange={(v) => update({ fileListView: v })}
           />
+          )}
           <Resizer
             cssVar="--left-w"
             capVar="--left-cap"
@@ -843,6 +1235,14 @@ export function ReviewScreen({
             defaultWidth={DEFAULT_UI_SETTINGS.leftWidth}
             onCommit={(w) => update({ leftWidth: w })}
           />
+          {scope?.pending ? (
+            <div className="diff pane">
+              <div className="scope-fetch">
+                <span className="spin" />
+                正在拉取 @{scope.pending.slice(0, 7)} 相对其父提交的 diff…
+              </div>
+            </div>
+          ) : (
           <DiffPane
             files={diff}
             findings={findings}
@@ -874,6 +1274,7 @@ export function ReviewScreen({
             keysSuspended={modalOpen}
             onComposeDraftChange={setAnnotateDraft}
           />
+          )}
           <Resizer
             cssVar="--right-w"
             capVar="--right-cap"
@@ -894,6 +1295,14 @@ export function ReviewScreen({
             review={review}
             diff={diff}
             scanning={scanning}
+            unscanned={unscanned}
+            scopePinned={Boolean(scope?.activeSha ?? review?.headRef)}
+            scanBlocked={Boolean(scope?.pending)}
+            scanSteps={scanSteps}
+            scanStage={scanStage}
+            scanStarting={scanStarting}
+            scanError={scanError}
+            onStartScan={onStartScan}
             scanLit={scanLit}
             activity={activity.items}
             roundStartedAt={currentRoundRec?.startedAt ?? null}
@@ -935,11 +1344,12 @@ export function ReviewScreen({
 
       <ReviewStatusBar
         status={status}
-        round={roundSummary(rounds, currentRound)}
+        unscanned={unscanned}
+        round={unscanned ? null : roundSummary(rounds, currentRound)}
         model={review?.model ?? null}
         effort={review?.reasoningEffort ?? null}
-        tokenUsage={tokenUsage}
-        lastTool={lastTool}
+        tokenUsage={unscanned ? null : tokenUsage}
+        lastTool={unscanned ? null : lastTool}
         failureHint={failedRound ? describeRoundError(failedRound.errorKind).title : null}
         onShowFailure={() => setRevealFailure((n) => n + 1)}
         onOpenHelp={() => setHelpOpen(true)}
@@ -969,6 +1379,14 @@ function RightPanel({
   review,
   diff,
   scanning,
+  unscanned,
+  scopePinned,
+  scanBlocked,
+  scanSteps,
+  scanStage,
+  scanStarting,
+  scanError,
+  onStartScan,
   scanLit,
   activity,
   roundStartedAt,
@@ -1009,6 +1427,17 @@ function RightPanel({
   review: Review | null;
   diff: DiffFile[];
   scanning: boolean;
+  /** 这个范围还没机审过:Findings 栏摆「运行机审」而不是扫描/干净通过的结论 */
+  unscanned: boolean;
+  /** 看的是 PR 里的一个提交(而不是整个 PR);空态文案据此说清审的是哪一份 */
+  scopePinned: boolean;
+  /** 正在切到别的范围:此刻开跑会打在马上要被换掉的那一份上 */
+  scanBlocked: boolean;
+  scanSteps: StartStep[];
+  scanStage: ReviewStartStage;
+  scanStarting: boolean;
+  scanError: string | null;
+  onStartScan: () => Promise<void>;
   /** 扫描空态动画点亮的行数 = 已完成的阶段数 */
   scanLit: number;
   /** 本轮 agent 的动作流;扫描空态那块大空白就靠它说话 */
@@ -1164,6 +1593,19 @@ function RightPanel({
           {shown.length === 0 && fixed.length === 0 && wontFix.length === 0 && droppedList.length === 0 &&
             (categoryFilter ? (
               <p className="empty-note">无 {categoryFilter} 分类的 findings。</p>
+            ) : unscanned ? (
+              // 还没机审过:这一格将来会出 findings,所以开跑的按钮就放在这里 ——
+              // 藏进顶栏或另开一张面板的话,人会盯着一栏空白等一件根本没开始的事
+              <ScopeIdle
+                review={review}
+                pinned={scopePinned}
+                blocked={scanBlocked}
+                steps={scanSteps}
+                stage={scanStage}
+                starting={scanStarting}
+                error={scanError}
+                onRun={onStartScan}
+              />
             ) : scanning ? (
               // 扫描期零 finding 只是「还没报出来」,不能给干净通过的结论。这一屏空着最久,
               // 用启动浮层同一套镜片扫描画面把「还在读」画出来,而不是一行容易被当成结论的短提示。
@@ -1296,7 +1738,11 @@ function RightPanel({
         />
       )}
       {tab === 'summary' &&
-        (scanning ? (
+        (unscanned ? (
+          <div className="tab-body">
+            <div className="scan-note">这个范围还没机审,运行之后 agent 会在这里写下总结。</div>
+          </div>
+        ) : scanning ? (
           <div className="tab-body">
             <div className="scan-note">
               <span className="pulse" /> 扫描完成后生成审核总结…
@@ -1312,6 +1758,70 @@ function RightPanel({
             onOpenFile={onOpenFile}
           />
         ))}
+    </div>
+  );
+}
+
+/**
+ * 未机审范围的 Findings 空态:说清「现在有什么、跑了会得到什么」,并把开跑的按钮放在
+ * findings 将来会出现的那一格。开跑后原地转阶段进度 —— 轮次一建立,scanbar 就接手了。
+ */
+function ScopeIdle({
+  review,
+  pinned,
+  blocked,
+  steps,
+  stage,
+  starting,
+  error,
+  onRun,
+}: {
+  review: Review | null;
+  pinned: boolean;
+  blocked: boolean;
+  steps: StartStep[];
+  stage: ReviewStartStage;
+  starting: boolean;
+  error: string | null;
+  onRun: () => Promise<void>;
+}): React.JSX.Element {
+  return (
+    <div className="scope-idle">
+      <span className="si-ic">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M12 2.5v6.3M12 15.2v6.3" />
+        </svg>
+      </span>
+      <div className="si-title">{pinned ? '这个提交还没有机审' : '整个 PR 还没有机审'}</div>
+      <p className="si-sub">
+        {pinned
+          ? '目前只拉了它相对父提交的 diff。运行机审会带上 PR 的标题、描述与讨论,只审这一个提交;findings 单独归在这个范围下,可以单独提交。'
+          : '目前只拉了这个 PR 的 diff。运行机审会通读整份改动并逐条上报 findings。'}
+      </p>
+      {starting ? (
+        <div className="si-run">
+          <StartSteps steps={steps} stage={stage} hint="启动后本轮机审在后台跑,不用守着这一栏" />
+        </div>
+      ) : (
+        <button className="si-cta" onClick={() => void onRun()} disabled={blocked}>
+          <span className="tri">▶</span> 运行机审
+        </button>
+      )}
+      {error && (
+        <div className="si-err">
+          <LaunchError message={error} />
+        </div>
+      )}
+      <div className="si-alt">
+        或先自己看:在左侧 diff 上<b>框选提问</b>
+      </div>
+      <div className="si-cfg">
+        <span>{INTENSITY_LABELS[review?.intensity ?? 'standard']}</span>
+        {review?.model && <span>{review.model}</span>}
+        {review?.reasoningEffort && <span>{review.reasoningEffort}</span>}
+        <span className="si-cfg-note">沿用整个 PR 的设置</span>
+      </div>
     </div>
   );
 }
