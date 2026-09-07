@@ -4,6 +4,28 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.11.2] - 2026-09-07
+
+### Fixed
+
+- **Commit scopes are listed newest first, and huge PRs no longer drop the recent commits.** The
+  review-screen scope switcher and the entry-screen scope picker used to follow GitHub's order,
+  oldest to newest, so switching to the commit you just pushed meant scrolling all the way down.
+  Both now list newest first, and `⌥↑` / `⌥↓` follow the same row order (the k/N in the top-bar chip
+  still counts oldest to newest, matching the position the agent is told in the first-round prompt).
+  The bigger problem was how the list was fetched: the REST endpoint returns at most the **oldest**
+  250 commits, so on a PR with hundreds of them the ones cut off were exactly the ones you were
+  looking for. The list now comes from GraphQL, paging backwards from the newest commit —
+  truncation drops the oldest, the total is exact, and the pinned commit's ordinal accounts for the
+  commits that were cut. The menu also scrolls its keyboard cursor into view on long lists, and
+  reopening it within a session recomputes local scan states instead of hitting gh again. (#103)
+
+### Upgrade notes
+
+- The database schema is unchanged at v24, so 0.11.1 and this release can be installed either way
+  around.
+- The in-app updater handles the update; there is no need to download the dmg again.
+
 ## [0.11.1] - 2026-09-07
 
 ### Added
@@ -607,6 +629,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.11.2]: https://github.com/xieziyu/duetlens/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.1
 [0.10.0]: https://github.com/xieziyu/duetlens/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/xieziyu/duetlens/compare/v0.9.0...v0.9.1
