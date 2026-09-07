@@ -253,13 +253,13 @@ export function ReviewScreen(props: {
     onScopeHandled?.();
   }, [scopeRequest, isContainer, activeSha, goScope, onScopeHandled]);
 
-  // ⌥↑ / ⌥↓ 的前后切要知道提交顺序;切换器拉到列表时报上来,没拉过就只能不动。
+  // ⌥↑ / ⌥↓ 沿弹层里的行序走(新→旧),与人在弹层里按 ↑↓ 看到的方向一致;没拉过列表就只能不动。
   const onStep = useCallback(
     (delta: 1 | -1) => {
       const list = shaListRef.current;
       if (!list.length) return;
       const at = activeSha ? list.indexOf(activeSha) : -1;
-      // 整个 PR 排在所有提交之前:从它往下即第一个提交,往上则到头
+      // 整个 PR 排在所有提交之前:从它往下即最新的那个提交,往上则到头
       const next = at < 0 ? (delta > 0 ? 0 : -1) : at + delta;
       if (next < -1 || next >= list.length) return;
       goScope(next < 0 ? null : list[next]);
@@ -281,7 +281,7 @@ export function ReviewScreen(props: {
       .then((s) => {
         if (scopesReqRef.current !== seq) return;
         setScopes(s);
-        shaListRef.current = s.commits.map((c) => c.commit.oid);
+        shaListRef.current = s.commits.map((c) => c.commit.oid).reverse();
       })
       .catch((e: unknown) => {
         if (scopesReqRef.current !== seq) return;

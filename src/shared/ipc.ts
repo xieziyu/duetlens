@@ -206,7 +206,7 @@ export interface ReviewScopes {
   pr: ScopeState;
   /** 旧→新,与 GitHub PR 的 commits 页同序 */
   commits: ScopeCommit[];
-  /** 列表被 GitHub 封顶截断(更旧的提交拿不到),见 PR_COMMITS_CAP */
+  /** 列表超过封顶值被截断,只含最新的一段(更早的提交拿不到),见 PR_COMMITS_CAP */
   capped: boolean;
 }
 

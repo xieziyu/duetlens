@@ -35,23 +35,62 @@ export async function resolvePrRef(
   return { nwo: out.trim(), num: parsed.num };
 }
 
-interface RawCommit {
-  sha: string;
-  commit: { message: string; committer?: { date?: string }; author?: { name?: string } };
-  author?: { login?: string } | null;
-  parents: unknown[];
-}
-
 const PR_COMMITS_PAGE = 100;
 
-const toPrCommit = (c: RawCommit): PrCommit => ({
-  oid: c.sha,
-  headline: firstLine(c.commit.message),
-  // 账号注销 / 提交邮箱没关联到账号时顶层 author 为 null,回落 git 署名
-  author: c.author?.login || c.commit.author?.name || '',
-  committedDate: c.commit.committer?.date ?? '',
-  isMerge: c.parents.length > 1,
-});
+/**
+ * 走 GraphQL 而不是 REST 的 `pulls/{num}/commits`:那个接口**最多只给最早的 250 条**,
+ * 几百个提交的 PR 上被截掉的恰恰是最新的那些 —— 而人切过来找的正是它们。
+ * GraphQL 的 connection 支持 `last` + `before`,能从最新一页倒着翻,总数也一并给出。
+ */
+const COMMITS_QUERY = `
+query($owner:String!,$name:String!,$num:Int!,$page:Int!,$before:String){
+  repository(owner:$owner,name:$name){
+    pullRequest(number:$num){
+      commits(last:$page,before:$before){
+        totalCount
+        pageInfo{ hasPreviousPage startCursor }
+        nodes{ commit{ oid messageHeadline committedDate author{ name user{ login } } parents(first:1){ totalCount } } }
+      }
+    }
+  }
+}`;
+
+interface GqlCommitNode {
+  commit?: {
+    oid?: string | null;
+    messageHeadline?: string | null;
+    committedDate?: string | null;
+    author?: { name?: string | null; user?: { login?: string | null } | null } | null;
+    parents?: { totalCount?: number | null } | null;
+  } | null;
+}
+
+interface GqlCommitsResponse {
+  data?: {
+    repository?: {
+      pullRequest?: {
+        commits?: {
+          totalCount?: number | null;
+          pageInfo?: { hasPreviousPage?: boolean | null; startCursor?: string | null } | null;
+          nodes?: (GqlCommitNode | null)[] | null;
+        } | null;
+      } | null;
+    } | null;
+  };
+}
+
+const toPrCommit = (n: GqlCommitNode): PrCommit | null => {
+  const c = n.commit;
+  if (!c?.oid) return null;
+  return {
+    oid: c.oid,
+    headline: c.messageHeadline ?? '',
+    // 账号注销 / 提交邮箱没关联到账号时 user 为 null,回落 git 署名
+    author: c.author?.user?.login || c.author?.name || '',
+    committedDate: c.committedDate ?? '',
+    isMerge: (c.parents?.totalCount ?? 0) > 1,
+  };
+};
 
 const firstLine = (msg: string): string => msg.split('\n')[0];
 
@@ -65,26 +104,47 @@ function isHttp404(e: unknown): boolean {
   return /\(HTTP 404\)|"status":\s*"404"/.test(text);
 }
 
+export interface PrCommitList {
+  /** 旧→新,与 GitHub PR 的 commits 页同序;超过封顶值时只含**最新**的那一段 */
+  commits: PrCommit[];
+  /** PR 的提交总数;大于 commits.length 即被截断 */
+  total: number;
+}
+
 /**
- * PR 里的 commit 列表(旧→新,即 GitHub commits 页的顺序)。
+ * PR 里的 commit 列表。从最新一页往回翻,凑够 {@link PR_COMMITS_CAP} 即停 ——
+ * 几百个提交的 PR 靠翻列表找目标本就不现实,截掉的是最早的那段,与人找提交的方向一致。
  * 放在本模块而非 source-discovery:后者已依赖本模块的 parsePrRef,反向再引一次会成环。
- *
- * **手动翻页而不是 `gh api --paginate`**:数组端点分页时,部分 gh 版本把每页各自的 JSON 数组
- * 背靠背拼在一起输出(`][`),`JSON.parse` 当场就抛 —— 而这只在提交数过百的 PR 上才现形,
- * 属于「本机验不出、用户那儿才炸」的那类。自己按 page 取,拿到的每一份都是独立合法的 JSON。
  */
-export async function fetchPrCommits(nwo: string, num: string): Promise<PrCommit[]> {
-  const out: PrCommit[] = [];
-  for (let page = 1; ; page++) {
-    const json = await run('gh', [
-      'api',
-      `repos/${nwo}/pulls/${num}/commits?per_page=${PR_COMMITS_PAGE}&page=${page}`,
-    ]);
-    const raw = JSON.parse(json) as RawCommit[];
-    out.push(...raw.map(toPrCommit));
-    // 不满一页 = 已到末页;上限那一条兜住封顶值日后变大(再翻也只会拿到空页)
-    if (raw.length < PR_COMMITS_PAGE || out.length >= PR_COMMITS_CAP) return out;
+export async function fetchPrCommits(nwo: string, num: string): Promise<PrCommitList> {
+  const [owner, name] = nwo.split('/');
+  const pages: PrCommit[][] = [];
+  let count = 0;
+  let total = 0;
+  let before: string | null = null;
+  for (;;) {
+    const args = [
+      'api', 'graphql',
+      '-f', `query=${COMMITS_QUERY}`,
+      '-F', `owner=${owner}`,
+      '-F', `name=${name}`,
+      '-F', `num=${num}`,
+      // 最后一页只取补足封顶值的那几条,别多拉一页再切
+      '-F', `page=${Math.min(PR_COMMITS_PAGE, PR_COMMITS_CAP - count)}`,
+    ];
+    if (before) args.push('-f', `before=${before}`);
+    const parsed = JSON.parse(await run('gh', args)) as GqlCommitsResponse;
+    const conn = parsed.data?.repository?.pullRequest?.commits;
+    if (!conn) throw new Error(`拉不到 ${nwo}#${num} 的提交列表`);
+    total = conn.totalCount ?? 0;
+    const page = (conn.nodes ?? []).flatMap((n) => (n ? (toPrCommit(n) ?? []) : []));
+    pages.unshift(page);
+    count += page.length;
+    const cursor = conn.pageInfo?.startCursor ?? null;
+    if (!conn.pageInfo?.hasPreviousPage || !cursor || count >= PR_COMMITS_CAP || page.length === 0) break;
+    before = cursor;
   }
+  return { commits: pages.flat(), total };
 }
 
 /**
@@ -122,16 +182,15 @@ export class GitHubPrSource implements Source {
 
     // 校验这个 sha 确实属于本 PR。**不属于就抛** —— force-push 后原 commit 被挤出 PR 正是这条路,
     // 而静默回落到整个 PR 会让复审悄悄换成另一份改动面(锚点与 422 预判的基准全跟着漂)。
-    const list = await fetchPrCommits(this.nwo, this.num);
-    const capped = list.length >= PR_COMMITS_CAP;
+    const { commits: list, total } = await fetchPrCommits(this.nwo, this.num);
+    const capped = total > list.length;
     const at = list.findIndex((c) => c.oid === pinned);
     const headline =
       at >= 0
         ? list[at].headline
-        : // 列表拉满上限 = 可能被截断,「不在列表里」这时**不足以**判定它不属于本 PR:
-          // 超过 250 个提交的 PR 里,先前钉住的旧提交本来就落在拿不到的那一段,
-          // 照严格判法会把一条完全正常的 review 判成 force-push 失效,复审与提交一起断掉。
-          // 故降级为问 compare:该 sha 是 PR head 的祖先(ahead)或就是它(identical)即算数。
+        : // 列表被截断时「不在列表里」**不足以**判定它不属于本 PR:先前钉住的旧提交
+          // 本来就落在截掉的那一段,照严格判法会把一条完全正常的 review 判成 force-push 失效,
+          // 复审与提交一起断掉。故降级为问 compare:该 sha 是 PR head 的祖先(ahead)或就是它(identical)即算数。
           capped
           ? await this.headlineIfAncestor(pinned, meta.number)
           : null;
@@ -144,9 +203,9 @@ export class GitHubPrSource implements Source {
     const position: CommitPosition = {
       sha: pinned,
       headline,
-      index: at >= 0 ? at + 1 : null,
-      total: list.length,
-      capped,
+      // 列表只含最新一段时,序号要把截掉的前面那些算上
+      index: at >= 0 ? total - list.length + at + 1 : null,
+      total,
       prevHeadline: at > 0 ? list[at - 1].headline : null,
       nextHeadline: at >= 0 && at < list.length - 1 ? list[at + 1].headline : null,
     };

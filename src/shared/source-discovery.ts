@@ -29,8 +29,8 @@ export interface PrSummary {
 }
 
 /**
- * GitHub 的 PR commits 接口最多只回这么多条。拉满即**可能被截断**(更旧的提交拿不到),
- * 于是「这个 sha 属不属于本 PR」不能再按列表判 —— 见 GitHubPrSource.prepare 的降级判据。
+ * 提交列表最多列这么多条,超过只保留**最新**的一段(更早的拿不到)。>250 个提交的 PR 靠翻列表
+ * 找目标本就不现实;截断后「这个 sha 属不属于本 PR」不能再按列表判 —— 见 GitHubPrSource.prepare 的降级判据。
  */
 export const PR_COMMITS_CAP = 250;
 
@@ -58,12 +58,10 @@ export interface PrCommit {
 export interface CommitPosition {
   sha: string;
   headline: string;
-  /** 第几个(1 基);列表被封顶截断时拿不到,为 null */
+  /** 第几个(1 基,按旧→新);被钉的提交落在截掉的那段里时为 null */
   index: number | null;
-  /** 共几个;截断时是「至少这么多」 */
+  /** PR 的提交总数 */
   total: number;
-  /** 列表拉满 {@link PR_COMMITS_CAP};翻页从最旧一页起,拿不到的是**最新**的那些提交 */
-  capped: boolean;
   /** 紧邻的前 / 后一个提交的标题;在列表边界或被截断时为 null */
   prevHeadline: string | null;
   nextHeadline: string | null;
