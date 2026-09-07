@@ -197,6 +197,9 @@ export function describeRoundFailure(cause: unknown): {
  * main 侧 review 编排入口:持久化 + 活跃 ReviewSession,把领域事件归一成 IPC ReviewEvent 外发。
  * IPC 层订阅本类 'review-event' 转发到 renderer(见 backend/ipc)。
  */
+/** 容器提交列表的缓存时限;屏幕开着期间 PR 有新 push,最多这么久后切换器能看到。 */
+const SCOPE_COMMITS_TTL_MS = 60_000;
+
 export class ReviewManager extends EventEmitter {
   /** 活跃会话;按 Map 插入序当 LRU,访问时 touch 到队尾。 */
   private readonly sessions = new Map<string, ReviewSession>();
@@ -211,6 +214,12 @@ export class ReviewManager extends EventEmitter {
    * 见 {@link teardownEpoch}。不清理:代次归零会让在途的旧代次重新对上,反而放它登记回来。
    */
   private readonly teardowns = new Map<string, number>();
+  /**
+   * 各 PR 容器的提交列表缓存。切换器每次打开都要重算各范围的机审状态(本地库,毫秒级),
+   * 但提交列表走 gh 要 1~3 次往返,而它只在 PR 被 push 时才变 —— 容器重跑机审时清掉
+   * (那是唯一会拿到新 head 的路径),再加 TTL 兜住屏幕开着期间的新 push。
+   */
+  private readonly scopeCommits = new Map<string, { commits: PrCommit[]; at: number }>();
   private readonly maxLiveSessions: number;
   /** 已预留、会话还没建出来的位子数,见 {@link reserveCapacity}。 */
   private pendingSessions = 0;
@@ -777,6 +786,7 @@ export class ReviewManager extends EventEmitter {
     const ids = [...this.store.listChildren(reviewId).map((c) => c.id), reviewId];
     for (const id of ids) await this.teardown(id);
     this.store.deleteReview(reviewId);
+    this.scopeCommits.delete(reviewId);
     // 第一次 teardown 释放会话要 await,那期间来的追问读到的还是删除前的行,会照常续接上来。
     // 再拆一次收掉它:此后新来的续接第一步就查不到 review,这条路到此为止。
     for (const id of ids) await this.teardown(id);
@@ -1031,7 +1041,7 @@ export class ReviewManager extends EventEmitter {
    */
   async listScopes(parentId: string): Promise<ReviewScopes> {
     const parent = this.requireContainer(parentId);
-    const commits = await listPrCommits(parent.sourceRef, parent.repoPath ?? undefined);
+    const commits = await this.prCommitsOf(parent);
     const byHead = new Map(this.store.listChildren(parentId).map((c) => [c.headRef ?? '', c]));
     return {
       pr: this.scopeStateOf(parent),
@@ -1053,6 +1063,14 @@ export class ReviewManager extends EventEmitter {
       }),
       capped: commits.length >= PR_COMMITS_CAP,
     };
+  }
+
+  private async prCommitsOf(parent: Review): Promise<PrCommit[]> {
+    const hit = this.scopeCommits.get(parent.id);
+    if (hit && Date.now() - hit.at < SCOPE_COMMITS_TTL_MS) return hit.commits;
+    const commits = await listPrCommits(parent.sourceRef, parent.repoPath ?? undefined);
+    this.scopeCommits.set(parent.id, { commits, at: Date.now() });
+    return commits;
   }
 
   /**
@@ -1263,6 +1281,8 @@ export class ReviewManager extends EventEmitter {
     // 每轮新 thread:先彻底释放上一轮的会话、MCP 与 source,再重建。
     opts.onStage?.('resolve');
     await this.teardown(reviewId);
+    // 重跑会按 PR 当前 head 重新 prepare,提交列表可能已经不是缓存里那份
+    this.scopeCommits.delete(reviewId);
     // 代次在 teardown 之后取:本轮要作废的是这次拆完之后又来的释放/删除。
     const epoch = this.teardownEpoch(reviewId);
     // 刚腾出的位子立刻占住:下面还要 await 好几步拉取,期间被别的发起抢走的话,

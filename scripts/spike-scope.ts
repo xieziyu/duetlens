@@ -19,7 +19,7 @@ import { ReviewManager } from '../src/backend/review/review-manager';
 import { setToolPath } from '../src/backend/config/tool-paths';
 import { buildScanPrompt } from '../src/backend/prompt/scan-prompt';
 import { isUnscanned, REVIEW_RETENTION_MS } from '../src/shared/domain';
-import type { CommitPosition } from '../src/shared/source-discovery';
+import { PR_COMMITS_CAP, type CommitPosition } from '../src/shared/source-discovery';
 
 function log(msg: string) {
   process.stdout.write(`[scope] ${msg}\n`);
@@ -31,30 +31,44 @@ const SHAS = [
   'ccccccc3333333333333333333333333333cccc3',
 ];
 
+/** 第 i 个(0 基)提交的 oid:前三个用 SHAS,再往后合成 —— 假 gh 与断言两边要算得一样。 */
+const oidAt = (i: number): string => SHAS[i] ?? (i + 1).toString(16).padStart(40, '0');
+
 /**
- * 假 gh:认 `pr view` / `pulls/N/commits` / `commits/<sha>`(diff 媒体类型)三条路径。
+ * 假 gh:认 `pr view` / GraphQL 的 PR commits 连接 / `commits/<sha>`(diff 媒体类型)/ compare 几条路径。
  * 写成 node 脚本而不是 shell —— 参数里带 `Accept: ...` 空格与冒号,shell 引用一错就变成静默走空分支。
+ *
+ * 提交总数由环境变量 SPIKE_COMMIT_TOTAL 定(缺省 3),GraphQL 侧按 `last` / `before` 真分页:
+ * 封顶截断那条路只有靠几百个提交才走得到。
  */
 function fakeGh(): string {
   const dir = mkdtempSync(path.join(tmpdir(), 'duetlens-spike-gh-'));
   const bin = path.join(dir, 'gh');
-  const commits = SHAS.map((sha, i) => ({
-    sha,
-    commit: { message: `feat: step ${i + 1}\n\nbody`, committer: { date: '2026-09-01T00:00:00Z' }, author: { name: 'dev' } },
-    author: { login: 'dev' },
-    parents: [{}],
-  }));
   writeFileSync(
     bin,
     `#!/usr/bin/env node
 const a = process.argv.slice(2);
 const joined = a.join(' ');
+const SHAS = ${JSON.stringify(SHAS)};
+const oidAt = (i) => SHAS[i] ?? (i + 1).toString(16).padStart(40, '0');
+const total = Number(process.env.SPIKE_COMMIT_TOTAL || 3);
 if (a[0] === 'pr' && a[1] === 'view') {
   process.stdout.write(JSON.stringify({ title: 'streaming pipeline', number: 42, headRefOid: ${JSON.stringify(SHAS[2])}, url: 'https://github.com/acme/repo/pull/42' }));
   process.exit(0);
 }
-if (/pulls\\/42\\/commits/.test(joined)) {
-  process.stdout.write(/page=1(&|$)/.test(joined) ? ${JSON.stringify(JSON.stringify(commits))} : '[]');
+if (a[0] === 'api' && a[1] === 'graphql' && /commits\\(last/.test(joined)) {
+  const opt = (k) => { const t = a.find((x) => x.startsWith(k + '=')); return t ? t.slice(k.length + 1) : null; };
+  const page = Number(opt('page'));
+  const before = opt('before');
+  const end = before ? Number(before.slice(1)) : total;
+  const start = Math.max(0, end - page);
+  const nodes = [];
+  for (let i = start; i < end; i++) nodes.push({ commit: { oid: oidAt(i), messageHeadline: 'feat: step ' + (i + 1), committedDate: '2026-09-01T00:00:00Z', author: { name: 'dev', user: { login: 'dev' } }, parents: { totalCount: 1 } } });
+  process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { commits: { totalCount: total, pageInfo: { hasPreviousPage: start > 0, startCursor: 'c' + start }, nodes } } } } }));
+  process.exit(0);
+}
+if (/compare\\//.test(joined)) {
+  process.stdout.write(JSON.stringify({ status: 'ahead', base_commit: { commit: { message: 'feat: step 2\\n\\nbody' } } }));
   process.exit(0);
 }
 if (/repos\\/[^ ]+\\/commits\\//.test(joined)) {
@@ -234,6 +248,19 @@ async function main() {
   assert.equal(scopes.capped, false);
   log('listScopes:⋈ 子行 / 顺序 / 未建出的为 null ok');
 
+  // 提交列表有缓存:PR 那头多了一个提交,TTL 内再开切换器看到的还是旧列表;清掉缓存才重拉
+  const scopeCache = (manager as unknown as { scopeCommits: Map<string, unknown> }).scopeCommits;
+  process.env.SPIKE_COMMIT_TOTAL = '4';
+  try {
+    assert.equal((await manager.listScopes(container.id)).commits.length, 3, 'TTL 内命中缓存');
+    scopeCache.clear();
+    assert.equal((await manager.listScopes(container.id)).commits.length, 4, '失效后重拉');
+  } finally {
+    scopeCache.clear();
+    delete process.env.SPIKE_COMMIT_TOTAL;
+  }
+  log('listScopes 提交列表缓存 ok');
+
   // 非 github-pr 与子行都不该有范围
   const local = store.createReview({ source: 'local-branch', sourceRef: 'feat/x' });
   await assert.rejects(() => manager.listScopes(local.id), /GitHub PR/);
@@ -281,7 +308,6 @@ async function main() {
     headline: 'feat: step 2',
     index: 2,
     total: 3,
-    capped: false,
     prevHeadline: 'feat: step 1',
     nextHeadline: 'feat: step 3',
   };
@@ -299,7 +325,7 @@ async function main() {
   // 列表被截断时说不出第几个,但仍要交代这是单个提交
   const cappedPrompt = buildScanPrompt({
     pr: null,
-    position: { ...position, index: null, total: 250, capped: true, prevHeadline: null, nextHeadline: null },
+    position: { ...position, index: null, total: 260, prevHeadline: null, nextHeadline: null },
   })!;
   assert.ok(cappedPrompt.includes('## 本次审核范围'));
   assert.ok(!cappedPrompt.includes('第 2/3'), '拿不到位置就别编一个');
@@ -315,6 +341,36 @@ async function main() {
   assert.equal(prepared.position?.nextHeadline, 'feat: step 2');
   await src.dispose();
   log('prepare 回带 position ok');
+
+  // ---- 8b. 几百个提交:列表从最新一页倒着翻、封顶后截掉的是最早那段,位置序号把截掉的算上 ----
+  const { fetchPrCommits } = await import('../src/backend/source/github-pr-source');
+  process.env.SPIKE_COMMIT_TOTAL = '260';
+  try {
+    const big = await fetchPrCommits('acme/repo', '42');
+    assert.equal(big.total, 260);
+    assert.equal(big.commits.length, PR_COMMITS_CAP, '凑够封顶值就停');
+    assert.equal(big.commits[0].headline, 'feat: step 11', '截掉的是最早的 10 个');
+    assert.equal(big.commits[PR_COMMITS_CAP - 1].headline, 'feat: step 260', '最新的一个在末尾');
+    assert.equal(big.commits[0].oid, oidAt(10));
+    // 钉在列表里的第一条(全 PR 第 11 个):序号按总数算,前一个提交在截掉的那段里、给不出
+    const pinnedIn = new source({ source: 'github-pr', ref: 'acme/repo#42', repoPath: '', headRef: oidAt(10) });
+    const inList = await pinnedIn.prepare();
+    assert.equal(inList.position?.index, 11);
+    assert.equal(inList.position?.total, 260);
+    assert.equal(inList.position?.prevHeadline, null);
+    assert.equal(inList.position?.nextHeadline, 'feat: step 12');
+    await pinnedIn.dispose();
+    // 钉在被截掉那段里的提交:不在列表里不算 force-push 失效,走 compare 兜底,拿得到标题、给不出序号
+    const pinnedOut = new source({ source: 'github-pr', ref: 'acme/repo#42', repoPath: '', headRef: SHAS[1] });
+    const outList = await pinnedOut.prepare();
+    assert.equal(outList.position?.index, null);
+    assert.equal(outList.position?.headline, 'feat: step 2');
+    assert.equal(outList.position?.total, 260);
+    await pinnedOut.dispose();
+  } finally {
+    delete process.env.SPIKE_COMMIT_TOTAL;
+  }
+  log('封顶截断走最新一段 ok');
 
   // ---- 9. 删 PR:子范围的会话也要拆 ----
   //

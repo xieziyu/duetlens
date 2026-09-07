@@ -68,13 +68,16 @@ export function ScopeSwitcher({
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
 
   // 每次打开刷新一次:别的范围可能已经在后台跑完了
   useEffect(() => {
     if (open) onReload();
   }, [open, onReload]);
 
-  const commits = useMemo(() => scopes?.commits ?? [], [scopes]);
+  // 显示新→旧:人切过来多半是找最近那几个提交,倒过来它们要滚到最底下。
+  // 契约本身仍是旧→新(见 ReviewScopes.commits),只在这一层翻转,别把倒序写回后端。
+  const commits = useMemo(() => [...(scopes?.commits ?? [])].reverse(), [scopes]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commits;
@@ -85,11 +88,21 @@ export function ScopeSwitcher({
 
   const idx = commits.findIndex((c) => c.commit.oid === activeSha);
   const current = idx >= 0 ? commits[idx] : null;
+  // chip 上的 k/N 报的是它在 PR 里的第几个(旧→新计数),与首轮提示词里告诉 agent 的位置同一口径
+  const ordinal = idx >= 0 ? commits.length - idx : 0;
 
   // 键盘选择:行的顺序 = 「整个 PR」+ 过滤后的提交,索引 0 即整个 PR
   const rows: (string | null)[] = useMemo(() => [null, ...filtered.map((c) => c.commit.oid)], [filtered]);
   // 过滤把行数缩短时光标可能落在表外
   const at = Math.min(cursor, rows.length - 1);
+
+  // 光标跟随滚动:行区只放得下十来行,几百个提交的 PR 上光标走出可视区人就不知道自己停在哪;
+  // 刚打开时光标落在当前提交那一行,同样要滚过去。`.sm-row` 的 DOM 顺序与 rows 一致
+  useEffect(() => {
+    if (!open) return;
+    const row = rowsRef.current?.querySelectorAll<HTMLElement>('.sm-row')[at];
+    row?.scrollIntoView({ block: 'nearest' });
+  }, [open, at]);
 
   /**
    * 键盘监听挂在**打开期间的 window** 上,而不是过滤框的 onKeyDown:过滤框只在提交多到一定
@@ -132,8 +145,8 @@ export function ScopeSwitcher({
 
   const label = activeSha ? `@${shortOid(activeSha)}` : '整个 PR';
   const pos = activeSha
-    ? idx >= 0
-      ? `${idx + 1}/${commits.length}`
+    ? ordinal
+      ? `${ordinal}/${commits.length}`
       : ''
     : commits.length
       ? `${commits.length} 个提交`
@@ -168,7 +181,7 @@ export function ScopeSwitcher({
         <div className="scope-menu" role="dialog" aria-label="审核范围">
           <div className="sm-head">
             <b>审核范围</b>
-            <span>提交按 PR 页顺序,旧 → 新</span>
+            <span>提交新 → 旧,最近的在最上面</span>
             <span className="sp" />
             <span>{commits.length ? `${commits.length} 个提交` : loading ? '拉取中…' : ''}</span>
           </div>
@@ -186,7 +199,7 @@ export function ScopeSwitcher({
               />
             </div>
           )}
-          <div className="sm-rows">
+          <div className="sm-rows" ref={rowsRef}>
             <ScopeRow
               sha={null}
               label={prLabel}
@@ -226,9 +239,8 @@ export function ScopeSwitcher({
               />
             ))}
             {scopes?.capped && (
-              <div className="sm-note">
-                这个 PR 的提交超过 GitHub 单次能给的上限,最新的那些没有列出。
-              </div>
+              // 截掉的是最早那段,新→旧下它们本该接在列表末尾,提示就摆在那个位置
+              <div className="sm-note">这个 PR 的提交太多,只列出最新的 {commits.length} 个,更早的没有列出。</div>
             )}
           </div>
           <div className="sm-foot">

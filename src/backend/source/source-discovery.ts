@@ -108,13 +108,10 @@ export async function prBaseChain(ref: string, repoPath?: string): Promise<PrAnc
   return chain;
 }
 
-/**
- * PR 里的 commit 列表(旧→新)。顺序原样保留 API 的返回,与 GitHub PR 的 commits 页一致 ——
- * 用户是照着那一页找「刚才那个提交」的,倒过来会让他数错位置。
- */
+/** PR 里的 commit 列表(旧→新);超过封顶值只给最新的那段,见 {@link fetchPrCommits}。 */
 export async function listPrCommits(ref: string, repoPath?: string): Promise<PrCommit[]> {
   const { nwo, num } = await resolvePrRef(ref, repoPath);
-  return fetchPrCommits(nwo, num);
+  return (await fetchPrCommits(nwo, num)).commits;
 }
 
 /** 仓库默认分支名;取不到返回 null(那就别去断言某一环是不是它)。 */

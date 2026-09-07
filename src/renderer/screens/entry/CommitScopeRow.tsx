@@ -44,7 +44,8 @@ export function CommitScopeRow({
       meta: '',
       detail: '',
     },
-    ...commits.map(
+    // 与 review 屏的切换器同向:新→旧,最近的提交挨着「整个 PR」
+    ...[...commits].reverse().map(
       (c): BranchOption => ({
         name: c.oid,
         label: shortOid(c.oid),
@@ -102,15 +103,15 @@ export function CommitScopeError({ message, onRetry }: { message: string; onRetr
 }
 
 /**
- * 列表被 GitHub 封顶截断时的说明。不做懒加载:>250 个提交的 PR 靠翻列表找目标本就不现实,
- * 说清楚「最新的那些不在列表里」比默默少给要好。
+ * 列表超过封顶值被截断时的说明。不做懒加载:>250 个提交的 PR 靠翻列表找目标本就不现实,
+ * 说清楚「更早的那些不在列表里」比默默少给要好。
  */
 export function CommitTruncNote() {
   return (
     <div className="commit-basenote derived">
       <span className="ci">◇</span>
       <div>
-        该 PR 提交数超出 GitHub 单次列举上限,仅列出<b>最早的 {PR_COMMITS_CAP} 个提交</b>,最新的那些不在其中。
+        该 PR 提交太多,仅列出<b>最新的 {PR_COMMITS_CAP} 个提交</b>,更早的那些不在其中。
       </div>
     </div>
   );

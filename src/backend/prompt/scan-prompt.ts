@@ -35,9 +35,7 @@ export interface ScanPromptInput {
  * 只讲位置,不注入 PR 级 findings:那些锚在整个 PR 的行号上,与这一份 diff 不是同一套基准。
  */
 function scopeSection(p: CommitPosition): string[] {
-  // 截断时总数只是下界,`+` 两支都要带:index 拿得到也不代表分母是真的
-  const total = p.capped ? `${p.total}+` : `${p.total}`;
-  const at = p.index ? `第 ${p.index}/${total} 个提交` : `其中一个提交(共 ${total} 个)`;
+  const at = p.index ? `第 ${p.index}/${p.total} 个提交` : `其中一个提交(共 ${p.total} 个)`;
   const out = [
     '## 本次审核范围',
     `本次只审 PR 的${at} \`${p.sha.slice(0, 7)}\` · ${p.headline};下面这份 diff 是它相对其父提交的改动,不是整个 PR 的。`,
