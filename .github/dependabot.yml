@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # 只保留生产依赖的安全更新 PR:构建链依赖不进安装包,报了也没有攻击面。
+  # open-pull-requests-limit: 0 关掉常规版本更新,安全更新不受此上限约束。
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    allow:
+      - dependency-type: production
