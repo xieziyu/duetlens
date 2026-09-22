@@ -136,9 +136,30 @@ export function isUnscanned(review: Pick<Review, 'currentRound'>): boolean {
 /** {@link isUnscanned} 的显示名;状态栏 / 历史 / 最近列表 / 范围弹层同一个字眼。 */
 export const UNSCANNED_LABEL = '未机审';
 
+/** 跑审核的 agent。按 review 选定、落库后不再变(续接要找回的是同一家的会话)。 */
+export const AGENT_KINDS = ['codex', 'pi'] as const;
+export type AgentKind = (typeof AGENT_KINDS)[number];
+
+/** agent 的显示名;发起表单、设置屏、审核屏元数据行同源。 */
+export const AGENT_LABELS: Record<AgentKind, string> = {
+  codex: 'codex',
+  pi: 'pi',
+};
+
+/** 不指定模型时跑的是谁:codex 是账号默认,pi 是它自己设置里的默认。 */
+export const AGENT_DEFAULT_MODEL_LABELS: Record<AgentKind, string> = {
+  codex: '账号默认',
+  pi: 'pi 默认',
+};
+
+/** 发起表单该预填哪个模型。两家的模型名互不通用,故各存一份。 */
+export function defaultModelFor(s: Pick<UiSettings, 'defaultModel' | 'piDefaultModel'>, agent: AgentKind): string {
+  return agent === 'pi' ? s.piDefaultModel : s.defaultModel;
+}
+
 /**
- * codex reasoning effort(透传 config.toml 的 model_reasoning_effort)。
- * codex 全集含 none/max/ultra,此处取通用且对审核有意义的子集;medium 为 codex 缺省。
+ * reasoning effort。codex 透传 config.toml 的 model_reasoning_effort,pi 映射到 `--thinking` 档位;
+ * 此处取两家都认且对审核有意义的子集。
  */
 export const REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
@@ -316,11 +337,13 @@ export interface Review {
   parentReviewId: string | null;
   /** 可选本地仓库路径(github source 也可指定,让 agent 读全量代码) */
   repoPath: string | null;
-  /** codex 侧会话 id(续接用) */
-  codexThreadId: string | null;
-  /** 用户指定的 codex 模型(null=账号默认);续接会话时复用 */
+  /** 跑这条 review 的 agent;建行时定死,复审与追问都沿用 */
+  agent: AgentKind;
+  /** agent 侧会话 id(续接用);是哪家的会话由 {@link agent} 说了算 */
+  agentSessionId: string | null;
+  /** 用户指定的模型(null = agent 自己的默认);续接会话时复用 */
   model: string | null;
-  /** 用户指定的 reasoning effort(null=codex 缺省 medium) */
+  /** 用户指定的 reasoning effort(null = agent 缺省) */
   reasoningEffort: ReasoningEffort | null;
   /** 审核强度(标准 / 对抗);续接会话与重跑复用同一档 */
   intensity: ReviewIntensity;
@@ -347,7 +370,7 @@ export interface ReviewRound {
   reviewId: string;
   round: number;
   /** 该轮的 codex 会话 id */
-  codexThreadId: string | null;
+  agentSessionId: string | null;
   /** 开跑时被审代码的 head;与上一轮比对即知代码有无变化 */
   headSha: string | null;
   status: RoundStatus;
@@ -710,8 +733,12 @@ export interface UiSettings {
   findingsGrouping: 'severity' | 'file';
   /** 标记「已看」后是否自动折叠该文件的 diff */
   collapseViewedFiles: boolean;
-  /** 发起表单预填的模型(空=账号默认) */
+  /** 发起表单预填的 agent */
+  defaultAgent: AgentKind;
+  /** 发起表单预填的 codex 模型(空=账号默认) */
   defaultModel: string;
+  /** 发起表单预填的 pi 模型(空=pi 自己设置里的默认)。两家模型名互不通用,故分开存 */
+  piDefaultModel: string;
   /** 发起表单预填的 reasoning effort */
   defaultEffort: ReasoningEffort;
   /** 发起表单预填的审核强度 */
@@ -720,6 +747,8 @@ export interface UiSettings {
   notifyOnComplete: boolean;
   /** codex 可执行文件路径(空=用 PATH 中的 codex) */
   codexPath: string;
+  /** pi 可执行文件路径(空=用 PATH 中的 pi) */
+  piPath: string;
   /** gh 可执行文件路径(空=用 PATH 中的 gh) */
   ghPath: string;
   /**
@@ -765,11 +794,14 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   lastRepoPath: '',
   findingsGrouping: 'severity',
   collapseViewedFiles: true,
+  defaultAgent: 'codex',
   defaultModel: '',
+  piDefaultModel: '',
   defaultEffort: DEFAULT_REASONING_EFFORT,
   defaultIntensity: DEFAULT_REVIEW_INTENSITY,
   notifyOnComplete: true,
   codexPath: '',
+  piPath: '',
   ghPath: '',
   openReviewIds: [],
   activeReviewId: '',
@@ -786,9 +818,9 @@ export const DEFAULT_REVIEW_UI_STATE: ReviewUiState = {
   lastActiveTab: null,
 };
 
-/** 发起表单模型下拉的一项(codex `model/list` 归一,只留 UI 用得到的字段)。 */
-export interface CodexModelInfo {
-  /** 传给发起表单 / thread/start 的模型标识 */
+/** 发起表单模型下拉的一项(各家模型列表归一,只留 UI 用得到的字段)。 */
+export interface AgentModelInfo {
+  /** 传给 agent 的模型标识 */
   model: string;
   id: string;
   displayName: string;

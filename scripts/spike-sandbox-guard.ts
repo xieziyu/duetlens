@@ -59,7 +59,6 @@ class StubAgent extends EventEmitter implements ConversationalAgent {
     return () => this.off('event', handler);
   }
   async interrupt(): Promise<void> {}
-  approve(): void {}
   /** 判死之后 codex 侧必须真的停手 —— 只结束本地等待的话,那个 turn 还在跑 */
   disposed = false;
   dispose(): void {

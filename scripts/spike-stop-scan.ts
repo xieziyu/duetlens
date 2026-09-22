@@ -35,7 +35,7 @@ interface Script {
   beforeTurnId?: (agent: StubAgent, turnId: string) => void;
   /** turn/start 应答挂在这里不返回 —— 复现「turn 已发出、id 还没到手」那段窗口 */
   holdTurnId?: () => Promise<void>;
-  /** sendMessage 返回空串 —— 接口允许的「这个 agent 不给 turnId」 */
+  /** sendMessage 返回空串 —— 接口容忍的降级:协议漂移后应答里没带 turnId */
   emptyTurnId?: boolean;
 }
 
@@ -70,7 +70,6 @@ class StubAgent extends EventEmitter implements ConversationalAgent {
     this.interrupts.push({ conversationId, turnId });
     return this.script.onInterrupt(this);
   }
-  approve(): void {}
   dispose(): void {}
 }
 

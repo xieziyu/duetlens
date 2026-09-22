@@ -1,6 +1,6 @@
 /**
  * Headless 端到端验证:thread/resume 续接。
- *   session1 扫描 → 落 findings + codexThreadId → dispose(模拟 app 重启,codex 子进程退出)。
+ *   session1 扫描 → 落 findings + agentSessionId → dispose(模拟 app 重启,codex 子进程退出)。
  *   session2(全新 CodexAgent)按落库的 threadId 从磁盘续接 → 追问 → agent 复用同一 thread 回答。
  * 需 `codex login`;若刚跑过 electron-forge start 先 `npm rebuild better-sqlite3`。
  *   运行:npm run spike:resume
@@ -63,7 +63,7 @@ async function main() {
   } finally {
     await session1.dispose();
   }
-  const threadId = store.getReview(review.id)!.codexThreadId!;
+  const threadId = store.getReview(review.id)!.agentSessionId!;
   log(`session1 扫描完成:${findings.length} findings,threadId=${threadId.slice(0, 8)}… 已 dispose`);
 
   // ---- session2:全新 agent,按 threadId 续接 ----

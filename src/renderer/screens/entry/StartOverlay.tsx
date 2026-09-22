@@ -14,7 +14,7 @@ const STEPS: StartStep[] = [
   { stage: 'resolve', label: '连接来源 · 读取目标元信息', slow: '正在解析仓库与目标引用' },
   { stage: 'diff', label: '拉取本次改动的 diff', slow: '改动量大时 diff 要下载十几秒,这是正常的' },
   { stage: 'record', label: '解析 diff · 建立审核记录', slow: '正在切分文件与 hunk' },
-  { stage: 'agent', label: '装配审核规则 · 启动 agent 会话', slow: '正在拉起 codex 会话' },
+  { stage: 'agent', label: '装配审核规则 · 启动 agent 会话', slow: '正在拉起 agent 会话' },
 ];
 
 export function StartOverlay({

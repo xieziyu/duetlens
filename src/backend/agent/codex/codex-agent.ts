@@ -99,7 +99,10 @@ export interface CodexAgentOptions {
 
 /**
  * ConversationalAgent 的 codex 实现:把 CodexAppServer 的协议事件归一成领域 AgentEvent。
- * 唯一实现(见 ConversationalAgent 说明);findings 不走这里,走 MCP report_finding。
+ * findings 不走这里,codex 直连 Duetlens 的 MCP server 调 report_finding。
+ *
+ * 只读由 OS 级 sandbox 担保,证据是握手回显的策略(见 assertReadOnly);
+ * turn id 由协议给出,打断点名到 turn,协议里没有会话级打断可退。
  */
 export class CodexAgent extends EventEmitter implements ConversationalAgent {
   private readonly server: CodexAppServer;
@@ -146,14 +149,16 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
    */
   static async listModels(opts: CodexAgentOptions = {}): Promise<CodexModel[]> {
     const server = new CodexAppServer({ codexBin: opts.codexBin, codexHome: opts.codexHome, onLog: opts.onLog });
+    const failed = server.failure();
+    const guard = <T>(p: Promise<T>): Promise<T> => Promise.race([p, failed]);
     try {
       server.start();
-      await server.initialize({ name: 'duetlens', version: APP_VERSION });
+      await guard(server.initialize({ name: 'duetlens', version: APP_VERSION }));
       const models: CodexModel[] = [];
       let cursor: string | null | undefined;
       // 分页兜底:cursor 续取,上限防御异常服务端不收敛
       for (let page = 0; page < 20; page++) {
-        const res = await server.listModels({ cursor, includeHidden: false });
+        const res = await guard(server.listModels({ cursor, includeHidden: false }));
         models.push(...res.data);
         cursor = res.nextCursor;
         if (!cursor) break;
@@ -210,10 +215,14 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
     }
   }
 
-  /** 起子进程(带 MCP 令牌 env)并握手。 */
+  /**
+   * 起子进程(带 MCP 令牌 env)并握手。与进程失败赛跑:起不来(没装 codex)时握手只会等到一句
+   * 「connection closed」,真正的原因(spawn ENOENT)在 failure 里。
+   */
   private async launchServer(mcpToken?: string): Promise<void> {
+    const failed = this.server.failure();
     this.server.start(mcpToken ? { [MCP_TOKEN_ENV]: mcpToken } : undefined);
-    await this.server.initialize({ name: 'duetlens', version: APP_VERSION });
+    await Promise.race([this.server.initialize({ name: 'duetlens', version: APP_VERSION }), failed]);
   }
 
   /** per-thread config 覆盖:注入自建 MCP + reasoning effort(config.toml 形状透传)。 */
@@ -228,7 +237,10 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
     return Object.keys(config).length ? config : undefined;
   }
 
-  /** 发一轮对话;resolve 于 turn 启动(带回 turnId),完成经 streamEvents 的 turn-completed。 */
+  /**
+   * 发一轮对话;resolve 于 turn 启动(带回 turnId),完成经 streamEvents 的 turn-completed。
+   * 应答里缺 turn 只会是协议漂移,按接口约定退回空串。
+   */
   async sendMessage(conversationId: string, text: string): Promise<string> {
     const started = await this.server.turnStart({
       threadId: conversationId,
@@ -245,9 +257,6 @@ export class CodexAgent extends EventEmitter implements ConversationalAgent {
   async interrupt(conversationId: string, turnId: string): Promise<void> {
     await this.server.turnInterrupt({ threadId: conversationId, turnId });
   }
-
-  // 受信工具的反向审批由 CodexAppServer 自动 accept;此口子留给未来非受信场景。
-  approve(): void {}
 
   dispose(): void {
     this.server.stop();

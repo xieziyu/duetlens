@@ -3,7 +3,8 @@
  * preload 经 contextBridge 暴露 `window.duetlens`,renderer 只依赖这里的类型。
  */
 import type {
-  CodexModelInfo,
+  AgentKind,
+  AgentModelInfo,
   Discussion,
   Finding,
   FindingProposal,
@@ -115,9 +116,11 @@ export interface ReviewStartInput {
   baseRef?: string;
   /** github-pr:只审这一个 commit(base 即其父提交);与 baseRef 互斥,给了它 baseRef 不生效 */
   headRef?: string;
-  /** codex 模型(空=账号默认) */
+  /** 跑这条 review 的 agent(缺省 codex);建出来就定死 */
+  agent?: AgentKind;
+  /** 模型(空 = agent 自己的默认) */
   model?: string;
-  /** reasoning effort(缺省 codex medium) */
+  /** reasoning effort(缺省由 agent 定) */
   reasoningEffort?: ReasoningEffort;
   /** 审核强度(缺省 standard) */
   intensity?: ReviewIntensity;
@@ -276,6 +279,13 @@ export const FOLLOWUP_REPLY_FAILED_CODE = 'DUETLENS_FOLLOWUP_REPLY_FAILED';
  * 嵌进 message 的理由同 {@link FOLLOWUP_REPLY_FAILED_CODE}:IPC 只把 message 串过去。
  */
 export const SANDBOX_NOT_APPLIED_CODE = 'DUETLENS_SANDBOX_NOT_APPLIED';
+
+/**
+ * pi 的生效工具集里出现了只读白名单之外的工具 —— 与 {@link SANDBOX_NOT_APPLIED_CODE} 同属安全判据,
+ * 但**证实的不是同一件事**:pi 没有沙箱,只读全靠「不给写工具」,证据是 extension 握手报回的工具集。
+ * 两边判据不同、处置建议也不同,故不共用错误码。
+ */
+export const PI_TOOLSET_NOT_READ_ONLY_CODE = 'DUETLENS_PI_TOOLSET_NOT_READ_ONLY';
 
 /**
  * codex 没把对自建 MCP 的调用交给我们 —— **findings 的回传链路断了**。
@@ -453,7 +463,7 @@ export interface DuetlensApi {
     startScan(reviewId: string, input?: StartScanInput): Promise<ReviewRound>;
     /** 该容器的其它范围里还有多少条待提交(提交屏的一句提示);非容器返回 0。 */
     scopePending(reviewId: string): Promise<number>;
-    /** 续接一个非活跃 review(app 重启后按 codexThreadId 恢复会话),之后可追问。 */
+    /** 续接一个非活跃 review(app 重启后按 agentSessionId 恢复会话),之后可追问。 */
     resume(reviewId: string): Promise<Review>;
     /** 活跃会话并发容量快照(入口据此表达还能再开几个、满载时列出在跑的)。 */
     capacity(): Promise<LiveCapacity>;
@@ -540,8 +550,8 @@ export interface DuetlensApi {
     onStatus(handler: (s: UpdateStatus) => void): () => void;
   };
   agent: {
-    /** 列举账号可用的 codex 模型(供发起表单下拉);未登录/出错时抛错,前端降级为手填。 */
-    listModels(): Promise<CodexModelInfo[]>;
+    /** 列举某个 agent 可用的模型(供发起表单下拉);未登录/出错时抛错,前端降级为手填。 */
+    listModels(agent: AgentKind): Promise<AgentModelInfo[]>;
   };
   /** 入口发起页的来源发现(三来源的预检/列举);均只读、不进入 review 生命周期。 */
   source: {

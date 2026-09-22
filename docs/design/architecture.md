@@ -8,8 +8,8 @@
 | --- | --- |
 | 桌面外壳 | **Electron**(自带 Chromium,渲染与 Chrome 一致);目标平台先做 macOS |
 | 后端 | **Node / TypeScript**,写在 Electron main 进程,不引入独立后端进程 |
-| 审核 agent | **codex app-server**(常驻 JSON-RPC 会话),见 [codex-integration](codex-integration.md) |
-| MCP 回传通道 | main 进程内自托管的 **in-process HTTP MCP server**,codex 以 `--url` 连接 |
+| 审核 agent | 每次 review 二选一:**codex app-server**(常驻 JSON-RPC 会话),见 [codex-integration](codex-integration.md);**pi `--mode rpc`**(JSONL over stdio),见 [pi-integration](pi-integration.md) |
+| MCP 回传通道 | main 进程内自托管的 **in-process HTTP MCP server**,codex 以 `--url` 连接;pi 经 extension 桥转成对同一 server 的调用 |
 | 外部依赖 | `gh` CLI(拉 PR / diff、提交 review)、`but` CLI(GitButler 虚拟分支) |
 | 前端 | React SPA,承载于 Electron renderer |
 
@@ -19,18 +19,18 @@
 
 ## 后端分层
 
-- **`ConversationalAgent`(agent 接口层)**:`startConversation` / `sendMessage` / `streamEvents` / `interrupt` / `approve`。codex app-server 是目前唯一实现;把它的 event / approval 模型包薄一层,不让协议细节渗透到 UI。
+- **`ConversationalAgent`(agent 接口层)**:起会话、发 turn、订阅事件、点名打断。把各家 agent 的协议包薄一层,不让协议细节渗透到 UI;契约只写 Duetlens 需要什么,只对一家成立的约束留在那家的实现里(codex 见 [codex-integration](codex-integration.md),pi 见 [pi-integration](pi-integration.md))。
 - **MCP server(控制反转层)**:app 向 agent 暴露的工具集,是 findings 与源码读取的回传通道。
-- **Elicitation / 审批处理器**:codex 执行 MCP 工具前会发反向审批请求,client 必须应答,否则 turn 卡死 —— 属架构必需件。
+- **Elicitation / 审批处理器**(codex 链路):codex 执行 MCP 工具前会发反向审批请求,client 必须应答,否则 turn 卡死 —— 属架构必需件。
 - **source 层**:`github-pr` / `local-branch` / `gitbutler-vbranch` 三种实现,各自负责取 diff 与读文件。
-- **持久化**:本地 sqlite(`better-sqlite3`,WAL + FK)。codex thread 由 codex 侧持久化,我们只存 threadId 做续接。
+- **持久化**:本地 sqlite(`better-sqlite3`,WAL + FK)。agent 会话由各家自己持久化(pi 的放在 `userData/pi-sessions`),我们只存 `agent_session_id` 做续接。
 
 ### 活跃会话并发上限
 
-一个活跃会话 = 一个常驻 codex 子进程 + 一个 MCP server,故上限写死 **4**(`maxLiveSessions`),否则长时间使用会攒下一堆子进程。位置不够时按 LRU 逐出。
+一个活跃会话 = 一个常驻 agent 子进程 + 一个 MCP server,故上限写死 **4**(`maxLiveSessions`),否则长时间使用会攒下一堆子进程。位置不够时按 LRU 逐出。
 
 - **只逐出空闲会话**。忙碌一律避让 —— 拆掉正在跑的会话等于替用户打断一轮机审,那一轮只会以一句莫名其妙的失败收场。这条曾经缺失,4 个都在扫时开第 5 个会**静默**弄挂其中一个。
-- **「忙」从入口算起,不只是在途 turn**:建 MCP、起/恢复 codex thread 的那段一个 turn 都没有,拆掉照样把这次审核打断在起跑线上(`spike:session-busy` 守着这条)。
+- **「忙」从入口算起,不只是在途 turn**:建 MCP、起/恢复 agent 会话的那段一个 turn 都没有,拆掉照样把这次审核打断在起跑线上(`spike:session-busy` 守着这条)。
 - **全在跑就拦下并告知**,列出在跑的是哪几条、可直达。「上限」是用户完全无法预期的内部数,不说清楚只会让人觉得应用坏了。有空闲位时静默回收,不打扰。多 tab 之后「在另一枚 tab 里追问 / 重跑撞上满载」成了常见路径,故这份告知**入口屏与 review 屏共用同一个组件**(含认码与剥码);只有确实拉到满载快照时才接管,拉不到就退回普通报错。
 - 会话位是**原子预留**、不是先判一下:判定与真正建出会话之间隔着拉取与建库几个 await,只判不占的话两个同时发起会在只剩一个位子时双双通过。预留兜不住的残余(判定后有空闲会话转忙)则整条回滚新建的 review/round/diff —— 否则库里会躺着一条用户当次看不见的失败审核。
 - 满载拦截只在**确实拿到满载快照**时接管;容量接口自己失败时退回普通报错,不然点了没反应、原因也一并丢了。
@@ -46,11 +46,11 @@
 
 | 层 | 是什么 | 来源 |
 | --- | --- | --- |
-| **Server state** | review / discussions / findings / messages / summary / diff | 后端 sqlite + codex 事件流,经 IPC 拉取与推送 |
+| **Server state** | review / discussions / findings / messages / summary / diff | 后端 sqlite + agent 事件流,经 IPC 拉取与推送 |
 | **Persisted UI state** | 栏宽 / viewed / 上次 tab / 主题两轴 / diff 视图偏好 | 后端表,见下 |
 | **Ephemeral UI state** | 编辑草稿、popover 显隐、hover、菜单开合 | 组件本地 `useState` |
 
-**Server state 的写路径始终经后端命令**,前端不本地臆造权威数据;后端落库并回推事件,前端据事件更新视图 —— 多处视图(diff 内联卡 ↔ Findings tab ↔ Summary)因此天然一致。finding 的就地编辑与 codex 经 MCP `update_finding` 的回写是**同一后端字段**的两个写入方,由后端串行化。
+**Server state 的写路径始终经后端命令**,前端不本地臆造权威数据;后端落库并回推事件,前端据事件更新视图 —— 多处视图(diff 内联卡 ↔ Findings tab ↔ Summary)因此天然一致。finding 的就地编辑与 agent 经 `update_finding` 的回写是**同一后端字段**的两个写入方,由后端串行化。
 
 **持久化的粒度与存储位置**:
 

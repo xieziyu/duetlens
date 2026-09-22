@@ -41,7 +41,7 @@ export function createCompletionNotifier(deps: CompletionNotifierDeps): (e: Revi
       notice = {
         reviewId: e.reviewId,
         kind: 'reply',
-        title: 'codex 回复',
+        title: 'agent 回复',
         body: `${deps.reviewLabel(e.reviewId)} · 追问有新回复`,
         discussionId: e.payload.discussionId,
       };

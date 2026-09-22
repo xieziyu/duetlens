@@ -179,7 +179,8 @@ const REVIEW: Review = {
   headRef: COMMIT_SCOPE && !SCOPE_MODE ? PINNED_SHA : null,
   parentReviewId: null,
   repoPath: '/Users/dev/podcast-go',
-  codexThreadId: 'thread-demo',
+  agent: 'codex',
+  agentSessionId: 'thread-demo',
   model: 'gpt-5.6-sol',
   reasoningEffort: 'high',
   intensity: 'adversarial',
@@ -422,13 +423,13 @@ const FINDINGS: Finding[] = [
 
 const ROUNDS: ReviewRound[] = [
   {
-    reviewId: 'demo', round: 1, codexThreadId: 'thread-demo-1', headSha: '3f9a1c2e5b7d',
+    reviewId: 'demo', round: 1, agentSessionId: 'thread-demo-1', headSha: '3f9a1c2e5b7d',
     status: 'done', note: null, newFindings: 3, fixedCount: 0, suppressedCount: 0,
     errorMessage: null, errorKind: null, changedFiles: [], codeChanged: false,
     startedAt: now - 3 * 3600_000, endedAt: now - 3 * 3600_000 + 210_000,
   },
   {
-    reviewId: 'demo', round: 2, codexThreadId: 'thread-demo-2', headSha: 'a41d80b6cc02',
+    reviewId: 'demo', round: 2, agentSessionId: 'thread-demo-2', headSha: 'a41d80b6cc02',
     status: 'done', note: '作者说已修了并发那条,重点复核。', newFindings: 1, fixedCount: 1, suppressedCount: 2,
     errorMessage: null, errorKind: null,
     changedFiles: ['src/renderer/screens/EntryScreen.tsx'], codeChanged: true,
@@ -520,11 +521,14 @@ const UI_SETTINGS: UiSettings = {
   lastRepoPath: '/Users/dev/podcast-go',
   findingsGrouping: 'severity',
   collapseViewedFiles: true,
+  defaultAgent: 'codex',
   defaultModel: '',
+  piDefaultModel: '',
   defaultEffort: 'medium',
   defaultIntensity: 'standard',
   notifyOnComplete: true,
   codexPath: '',
+  piPath: '',
   ghPath: '',
 };
 
@@ -926,17 +930,23 @@ export function installPreviewApi(): void {
       node: '20.18',
       platform: 'darwin',
     }),
-    // onboarding 自查:?ob=no-codex|gh-out|ready(缺省 ready);略延时以看 checking 态
+    // onboarding 自查:?ob=ready|no-codex|no-agent|pi-no-cred|gh-out(缺省 ready);略延时以看 checking 态
     checkEnvironment: async () => {
       await new Promise((r) => setTimeout(r, 500));
       const ob = params.get('ob') ?? 'ready';
-      if (ob === 'no-codex') {
-        return { codex: { status: 'missing', version: null }, appServer: { status: 'skipped', error: null }, gh: { status: 'ok', user: 'xieziyu' } };
-      }
-      if (ob === 'gh-out') {
-        return { codex: { status: 'ok', version: '0.144.5' }, appServer: { status: 'ok', error: null }, gh: { status: 'missing', user: null } };
-      }
-      return { codex: { status: 'ok', version: '0.144.5' }, appServer: { status: 'ok', error: null }, gh: { status: 'ok', user: 'xieziyu' } };
+      const codexOk = { codex: { status: 'ok', version: '0.144.5' }, appServer: { status: 'ok', error: null } } as const;
+      const codexMissing = { codex: { status: 'missing', version: null }, appServer: { status: 'skipped', error: null } } as const;
+      const piOk = {
+        status: 'ok', version: '0.87.0', ready: 'ok', models: 64, defaultModel: 'anthropic/claude-opus-5', error: null,
+      } as const;
+      const piMissing = { status: 'missing', version: null, ready: 'skipped', models: 0, defaultModel: null, error: null } as const;
+      const piNoCred = { ...piOk, ready: 'fail', models: 0, defaultModel: null, error: '没有配好凭证的 provider' } as const;
+      const ghOk = { status: 'ok', user: 'xieziyu' } as const;
+      if (ob === 'no-codex') return { ...codexMissing, pi: piOk, gh: ghOk };
+      if (ob === 'no-agent') return { ...codexMissing, pi: piMissing, gh: ghOk };
+      if (ob === 'pi-no-cred') return { ...codexOk, pi: piNoCred, gh: ghOk };
+      if (ob === 'gh-out') return { ...codexOk, pi: piOk, gh: { status: 'missing', user: null } };
+      return { ...codexOk, pi: piOk, gh: ghOk };
     },
     review: {
       list: async () => [review],
@@ -1022,7 +1032,7 @@ export function installPreviewApi(): void {
         const round: ReviewRound = {
           reviewId: 'demo',
           round: rounds.length + 1,
-          codexThreadId: `thread-demo-${rounds.length + 1}`,
+          agentSessionId: `thread-demo-${rounds.length + 1}`,
           headSha: 'bb17e4f0a993',
           status: 'scanning',
           note: input?.note ?? null,
@@ -1625,10 +1635,17 @@ export function installPreviewApi(): void {
     },
     agent: {
       // 预览无 codex:回一组假模型证明下拉渲染(真实里走 model/list)
-      listModels: async () => [
-        { model: 'gpt-5.6-sol', id: 'gpt-5.6-sol', displayName: 'GPT-5.6-Sol', description: '最新旗舰编码模型', isDefault: true },
-        { model: 'gpt-5.6-terra', id: 'gpt-5.6-terra', displayName: 'GPT-5.6-Terra', description: '更快的日常模型', isDefault: false },
-      ],
+      listModels: async (agent) =>
+        agent === 'pi'
+          ? [
+              { model: 'anthropic/claude-opus-5', id: 'anthropic/claude-opus-5', displayName: 'Claude Opus 5 (anthropic)', description: 'anthropic · 1000K ctx · $5/$25 每百万 token', isDefault: true },
+              { model: 'anthropic/claude-sonnet-5', id: 'anthropic/claude-sonnet-5', displayName: 'Claude Sonnet 5 (anthropic)', description: 'anthropic · 1000K ctx · $2/$10 每百万 token', isDefault: false },
+              { model: 'openai/gpt-5', id: 'openai/gpt-5', displayName: 'GPT-5 (openai)', description: 'openai · 400K ctx · $1.25/$10 每百万 token', isDefault: false },
+            ]
+          : [
+              { model: 'gpt-5.6-sol', id: 'gpt-5.6-sol', displayName: 'GPT-5.6-Sol', description: '最新旗舰编码模型', isDefault: true },
+              { model: 'gpt-5.6-terra', id: 'gpt-5.6-terra', displayName: 'GPT-5.6-Terra', description: '更快的日常模型', isDefault: false },
+            ],
     },
     source: {
       // 预览态经 ?entry-state 切换:gh-auth(未登录)/ pr-error(解析失败)/ path-mismatch(remote 不匹配)

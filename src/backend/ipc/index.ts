@@ -17,7 +17,7 @@ import {
   type StartScanInput,
   type SubmitReviewInput,
 } from '@shared/ipc';
-import type { ReviewUiState, Triage, UiSettings } from '@shared/domain';
+import type { AgentKind, ReviewUiState, Triage, UiSettings } from '@shared/domain';
 import type { EnvCheckOptions } from '@shared/environment';
 import type { PromptSaveInput } from '@shared/prompt';
 import type { ReviewManager } from '../review/review-manager';
@@ -66,6 +66,7 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
         repoPath: input.repoPath ?? '',
         baseRef: input.baseRef,
         headRef: input.headRef,
+        agent: input.agent,
         model: input.model,
         reasoningEffort: input.reasoningEffort,
         intensity: input.intensity,
@@ -186,7 +187,7 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
   ipcMain.handle(IpcChannels.updateCheck, () => updater.check());
   ipcMain.handle(IpcChannels.updateInstall, () => updater.install());
 
-  ipcMain.handle(IpcChannels.agentListModels, () => manager.listModels());
+  ipcMain.handle(IpcChannels.agentListModels, (_e, agent: AgentKind) => manager.listModels(agent));
 
   ipcMain.handle(IpcChannels.sourceCheckGhAuth, () => manager.checkGhAuth());
   ipcMain.handle(IpcChannels.sourcePreviewPr, (_e, ref: string, repoPath?: string) =>

@@ -34,11 +34,11 @@ import {
   type ReviewPromptView,
 } from '@shared/prompt';
 
-/** 锁定段之一:角色 + MCP 用法 + 只读约束。注入在最前。 */
-export const BUILTIN_ROLE = `你是 Duetlens 的代码审核 agent。审核本次改动,把发现的每个问题通过 duetlens MCP 的 report_finding 上报。
-- 先调用 get_diff 查看改动,需要上下文时用 get_file 读取。
-- 每个问题调用一次 report_finding,一条 finding 只讲一个问题。
-- 只审核、不修改代码。审完调用一次 write_summary 写下总结与需要人工重点复核的文件。
+/** 锁定段之一:角色 + 工具用法 + 只读约束。注入在最前。工具怎么送到 agent 手上因家而异,措辞不提 MCP。 */
+export const BUILTIN_ROLE = `你是 Duetlens 的代码审核 agent。审核本次改动,把发现的每个问题通过 Duetlens 提供的 ${MCP_TOOL.reportFinding} 工具上报。
+- 先调用 ${MCP_TOOL.getDiff} 查看改动,需要上下文时用 ${MCP_TOOL.getFile} 读取。
+- 每个问题调用一次 ${MCP_TOOL.reportFinding},一条 finding 只讲一个问题。
+- 只审核、不修改代码。审完调用一次 ${MCP_TOOL.writeSummary} 写下总结与需要人工重点复核的文件。
 - 先判断改动属于哪类代码(前端 UI / 后端服务 / 库 / CLI / 基础设施 / 脚本 等),按「审核重点」里与之相符的类别过一遍,不要生搬不适用的检查项。
 - 只报告需要修复的真实问题:把偏离分为有理由的改进 / 可接受的差异 / 有问题的偏离,只标最后一种。`;
 
@@ -149,7 +149,7 @@ function composeMergedRules(resolved: readonly ResolvedPromptSection[]): string 
 }
 
 /**
- * 锁定角色段(+ 对抗立场段,仅对抗档)+ 可配置各节 + 锁定协议段 = 注入 codex 的 baseInstructions。
+ * 锁定角色段(+ 对抗立场段,仅对抗档)+ 可配置各节 + 锁定协议段 = 注入 agent 的 baseInstructions。
  * 立场段紧跟角色、在用户可配置节之前,保证用户口径压不过它,也压不过末尾的字段协议。
  */
 export function composeBaseInstructions(

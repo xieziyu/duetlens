@@ -3,6 +3,7 @@ import path from 'node:path';
 import { registerIpcHandlers } from '@backend/ipc';
 import { openDatabase } from '@backend/db/database';
 import { ReviewStore } from '@backend/db/review-store';
+import { piExtensionPath } from '@backend/agent/pi/pi-agent';
 import { ReviewManager } from '@backend/review/review-manager';
 import { createCompletionNotifier } from '@backend/notify/completion-notifier';
 import { hydrateEnv } from '@backend/env/shell-env';
@@ -144,7 +145,17 @@ app.whenReady().then(async () => {
   await envReady;
 
   const db = openDatabase(path.join(app.getPath('userData'), 'duetlens.db'));
-  manager = new ReviewManager(new ReviewStore(db));
+  manager = new ReviewManager(new ReviewStore(db), undefined, {
+    pi: {
+      extensionPath: piExtensionPath({
+        packaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appPath: app.getAppPath(),
+      }),
+      // 会话放在 Duetlens 自己的目录:审核会话不该混进用户在 pi 里的会话列表,续接也只认这一处
+      sessionDir: path.join(app.getPath('userData'), 'pi-sessions'),
+    },
+  });
 
   // 过期历史在建窗前清一次:此刻还没有活跃会话,删库不会抽走运行中会话的行。
   manager.pruneExpiredReviews();

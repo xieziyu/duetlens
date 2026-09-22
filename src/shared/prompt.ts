@@ -1,7 +1,7 @@
 /**
  * 审核规则提示词的分层模型:project ▸ global ▸ builtin,**按节独立覆盖**。
- * 合并结果注入 codex `thread/start · baseInstructions`(见 docs/design/ui.md 三层编辑器、
- * codex-integration.md)。类型放 shared:后端做合并、renderer 三层编辑器消费。
+ * 合并结果作为 agent 的 baseInstructions 注入(各家注入口见 codex-integration.md / pi-integration.md,
+ * 三层编辑器见 docs/design/ui.md)。类型放 shared:后端做合并、renderer 三层编辑器消费。
  *
  * 可配置面只覆盖「审核口径」;与 MCP 工具契约相关的段落(角色/工具流程/上报字段协议)
  * 是**锁定段**,既不进本模型、也不下发给 renderer —— 见 backend/prompt/review-prompt.ts。

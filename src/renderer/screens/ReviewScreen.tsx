@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Discussion, Finding, FindingProposal, Message, Review, ReviewIntensity, Severity, Triage, UiSettings } from '@shared/domain';
-import { DEFAULT_UI_SETTINGS, INTENSITY_LABELS, isUnscanned, VERDICT_LABELS } from '@shared/domain';
+import { AGENT_LABELS, DEFAULT_UI_SETTINGS, INTENSITY_LABELS, isUnscanned, VERDICT_LABELS } from '@shared/domain';
 import type { DiffFile } from '@shared/diff';
 import type {
   AddFindingInput,
@@ -996,14 +996,14 @@ function ReviewPane({
     [findings, currentRound],
   );
   // 同理 sessionReady 只看本轮信号(lastTool/tokenUsage 已在开轮时清空,见 useReviewStream)。
-  // 落库的 codexThreadId 是这里唯一扛得住重入的信号:实时流信号随组件挂载清空,
+  // 落库的 agentSessionId 是这里唯一扛得住重入的信号:实时流信号随组件挂载清空,
   // 扫描中途退出再从历史进来,进度就会倒退回"建立会话"—— 后端那轮 turn 其实一直在跑。
   const sessionReady =
     lastTool != null ||
     activity.items.length > 0 ||
     tokenUsage != null ||
     roundFindings.length > 0 ||
-    currentRoundRec?.codexThreadId != null;
+    currentRoundRec?.agentSessionId != null;
   // 右栏扫描空态的镜片动画点亮几行 —— 与进度条同一份阶段派生,免得两处对"跑到哪一步"各说一套
   const scanLit = useMemo(
     () =>
@@ -1191,6 +1191,7 @@ function ReviewPane({
             sessionReady={sessionReady}
             currentRound={currentRound}
             failedRound={failedRound}
+            agent={review?.agent ?? 'codex'}
             retrying={retrying}
             onRetry={onRetryRound}
             onStop={scanning ? onStopScan : undefined}
@@ -1346,11 +1347,12 @@ function ReviewPane({
         status={status}
         unscanned={unscanned}
         round={unscanned ? null : roundSummary(rounds, currentRound)}
+        agent={review?.agent ?? 'codex'}
         model={review?.model ?? null}
         effort={review?.reasoningEffort ?? null}
         tokenUsage={unscanned ? null : tokenUsage}
         lastTool={unscanned ? null : lastTool}
-        failureHint={failedRound ? describeRoundError(failedRound.errorKind).title : null}
+        failureHint={failedRound ? describeRoundError(failedRound.errorKind, review?.agent).title : null}
         onShowFailure={() => setRevealFailure((n) => n + 1)}
         onOpenHelp={() => setHelpOpen(true)}
       />
@@ -1818,6 +1820,7 @@ function ScopeIdle({
       </div>
       <div className="si-cfg">
         <span>{INTENSITY_LABELS[review?.intensity ?? 'standard']}</span>
+        {review && <span>{AGENT_LABELS[review.agent]}</span>}
         {review?.model && <span>{review.model}</span>}
         {review?.reasoningEffort && <span>{review.reasoningEffort}</span>}
         <span className="si-cfg-note">沿用整个 PR 的设置</span>

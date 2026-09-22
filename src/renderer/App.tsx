@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CompletionNotice } from '@shared/ipc';
+import { anyAgentReady } from '@shared/environment';
 import { EntryScreen } from './screens/EntryScreen';
 import { ReviewScreen } from './screens/ReviewScreen';
 import { SubmitExportScreen } from './screens/SubmitExportScreen';
@@ -331,12 +332,12 @@ export function App({
     };
   }, []);
 
-  // 首启环境门控:非 preview 冷启动时轻量自检,缺 codex 即落到 onboarding(健康态无感)。
+  // 首启环境门控:非 preview 冷启动时轻量自检,两家 agent 都没装才落到 onboarding(健康态无感)。
   useEffect(() => {
     if (initialScreen != null || initialReviewId != null) return;
     let alive = true;
     void window.duetlens.checkEnvironment({ deep: false }).then((r) => {
-      if (alive && r.codex.status !== 'ok') setScreen('onboarding');
+      if (alive && !anyAgentReady(r)) setScreen('onboarding');
     });
     return () => {
       alive = false;

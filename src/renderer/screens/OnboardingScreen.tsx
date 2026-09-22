@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { EnvironmentReport } from '@shared/environment';
+import { anyAgentReady, codexReady, piReady, type EnvironmentReport } from '@shared/environment';
 import { Wordmark } from '../components/Wordmark';
 import { LogoMark } from '../components/LogoMark';
 import { ThemeControls } from '../components/ThemeControls';
 import './OnboardingScreen.css';
 
 // 首启环境自检屏。
-// codex + app-server 必需就绪才放行;gh 可选(仅 GitHub 来源需要),缺失只提示不拦。
+// 审核 agent 两家(codex / pi)有一家就绪就放行;gh 可选(仅 GitHub 来源需要),缺失只提示不拦。
 
 type StepStatus = 'checking' | 'ok' | 'fail' | 'warn' | 'wait';
 
 interface StepView {
-  key: 'codex' | 'app' | 'gh';
+  key: 'codex' | 'app' | 'pi' | 'gh';
   ico: string;
   name: string;
   optional: boolean;
@@ -29,25 +29,39 @@ interface FixView {
   docHref: string;
 }
 
-const CODEX_DESC = '审核 agent 的运行时;Duetlens 通过它的 app-server 常驻会话驱动机审。';
+const CODEX_DESC = '审核 agent 之一;Duetlens 通过它的 app-server 常驻会话驱动机审,走 codex 账号。';
 const APP_DESC = '与 codex 建立常驻 JSON-RPC 会话;由 Duetlens 自动拉起,无需手动命令。';
+const PI_DESC = '审核 agent 之一;走 pi 里配好的 provider(订阅登录或 API key),与 codex 二选一即可。';
 const GH_DESC = '仅 GitHub PR 来源与提交 review 需要;本地分支 / GitButler 来源无需登录。';
+const PI_DOC = 'https://github.com/earendil-works/pi/tree/main/packages/coding-agent';
 
-/** 后端自检报告 → 三步展示态;codex 缺失时 app-server 显示为「待前一步」。 */
+/**
+ * 后端自检报告 → 展示态。两家 agent 互为备选:另一家已就绪时,这一家缺失只算「可选 · 未配置」,
+ * 不该用红色把人吓住;两家都不行才是真的缺。
+ */
 function toSteps(report: EnvironmentReport | null): StepView[] {
   if (!report) {
+    const pending = (key: StepView['key'], ico: string, name: string, optional: boolean, desc: string): StepView => ({
+      key, ico, name, optional, desc, status: 'checking', detail: '正在检测…', fix: null,
+    });
     return [
-      { key: 'codex', ico: '◆', name: 'codex CLI', optional: false, desc: CODEX_DESC, status: 'checking', detail: '正在检测…', fix: null },
-      { key: 'app', ico: '⇄', name: 'app-server 连通', optional: false, desc: APP_DESC, status: 'checking', detail: '正在检测…', fix: null },
-      { key: 'gh', ico: '⑂', name: 'GitHub CLI', optional: true, desc: GH_DESC, status: 'checking', detail: '正在检测…', fix: null },
+      pending('codex', '◆', 'codex CLI', false, CODEX_DESC),
+      pending('app', '⇄', 'app-server 连通', false, APP_DESC),
+      pending('pi', 'π', 'pi CLI', false, PI_DESC),
+      pending('gh', '⑂', 'GitHub CLI', true, GH_DESC),
     ];
   }
   const codexOk = report.codex.status === 'ok';
+  const codexUsable = codexReady(report);
+  const piUsable = piReady(report);
+  const missingTone = (otherReady: boolean): 'fail' | 'warn' => (otherReady ? 'warn' : 'fail');
   const appStatus: StepStatus = !codexOk
     ? 'wait'
     : report.appServer.status === 'ok'
       ? 'ok'
-      : 'fail';
+      : missingTone(piUsable);
+  const piInstalled = report.pi.status === 'ok';
+  const piStatus: StepStatus = piUsable ? 'ok' : missingTone(codexUsable);
   return [
     {
       key: 'codex',
@@ -55,13 +69,15 @@ function toSteps(report: EnvironmentReport | null): StepView[] {
       name: 'codex CLI',
       optional: false,
       desc: CODEX_DESC,
-      status: codexOk ? 'ok' : 'fail',
+      status: codexOk ? 'ok' : missingTone(piUsable),
       detail: codexOk ? `已安装 · ${report.codex.version}` : '未检测到',
       fix: codexOk
         ? null
         : {
-            tone: 'fail',
-            lead: '在 PATH 中没有找到 codex。安装后点「重新检测」:',
+            tone: missingTone(piUsable),
+            lead: piUsable
+              ? '没有找到 codex。pi 已就绪,不装也能开始;想用 codex 审时再装:'
+              : '在 PATH 中没有找到 codex。安装后点「重新检测」:',
             cmd: 'brew install codex',
             docLabel: 'codex-cli 安装文档',
             docHref: 'https://github.com/openai/codex',
@@ -81,6 +97,38 @@ function toSteps(report: EnvironmentReport | null): StepView[] {
             ? '等待 codex 就绪'
             : report.appServer.error ?? '握手失败',
       fix: null,
+    },
+    {
+      key: 'pi',
+      ico: 'π',
+      name: 'pi CLI',
+      optional: false,
+      desc: PI_DESC,
+      status: piStatus,
+      detail: piUsable
+        ? `已安装 · ${report.pi.version} · 可用 ${report.pi.models} 个模型`
+        : piInstalled
+          ? `已安装 · ${report.pi.version} · ${report.pi.error ?? '没有配好凭证的 provider'}`
+          : '未检测到',
+      fix: piUsable
+        ? null
+        : piInstalled
+          ? {
+              tone: missingTone(codexUsable),
+              lead: 'pi 装好了,但还没有能用的 provider。在终端运行 pi,输入 /login 登录订阅或录入 API key:',
+              cmd: 'pi',
+              docLabel: 'pi provider 配置文档',
+              docHref: `${PI_DOC}/docs/providers.md`,
+            }
+          : {
+              tone: missingTone(codexUsable),
+              lead: codexUsable
+                ? '没有找到 pi。codex 已就绪,不装也能开始;想用 pi 审时再装:'
+                : '在 PATH 中没有找到 pi。安装后点「重新检测」:',
+              cmd: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent',
+              docLabel: 'pi 安装文档',
+              docHref: `${PI_DOC}/docs/quickstart.md`,
+            },
     },
     {
       key: 'gh',
@@ -139,7 +187,7 @@ export function OnboardingScreen({
   }, [check]);
 
   const steps = toSteps(checking ? null : report);
-  const ready = report != null && report.codex.status === 'ok' && report.appServer.status === 'ok';
+  const ready = report != null && anyAgentReady(report);
 
   const copy = async (cmd: string): Promise<void> => {
     try {
@@ -154,8 +202,10 @@ export function OnboardingScreen({
   const hint = checking
     ? '正在检测环境…'
     : !ready
-      ? '需要 codex 就绪才能开始;GitHub 登录可稍后再配。'
-      : report?.gh.status !== 'ok'
+      ? '需要 codex 或 pi 有一个就绪才能开始;GitHub 登录可稍后再配。'
+      : !codexReady(report) || !piReady(report)
+        ? `已就绪。${codexReady(report) ? 'pi' : 'codex'} 未配置,不影响用另一家审核,需要时再装。`
+        : report.gh.status !== 'ok'
         ? '已就绪。gh 未登录只影响 GitHub 来源,可稍后再登。'
         : '全部就绪,开始你的第一次审核。';
 

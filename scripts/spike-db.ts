@@ -41,9 +41,9 @@ function main() {
   db.prepare('DELETE FROM reviews WHERE id = ?').run(configured.id);
   log('review model/effort 往返 ok');
 
-  store.setCodexThreadId(review.id, '019f-thread');
+  store.setAgentSessionId(review.id, '019f-thread');
   store.setReviewStatus(review.id, 'reviewing');
-  assert.equal(store.getReview(review.id)!.codexThreadId, '019f-thread');
+  assert.equal(store.getReview(review.id)!.agentSessionId, '019f-thread');
   assert.equal(store.getReview(review.id)!.status, 'reviewing');
 
   // agent 上报两条 finding(模拟 report_finding ingress)

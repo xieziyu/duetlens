@@ -11,8 +11,9 @@
  */
 
 /**
- * codex 那侧看到的 server 名。注入 config、判「这次调用是不是我们自己的 server」都取它 ——
+ * 我们自己 server 的名字。codex 链路注入 config、判「这次调用是不是我们自己的 server」都取它 ——
  * 后者是安全判据(见 ReviewSession 对未送达调用的兜底),拼错不会报错,只会让兜底静默失效。
+ * pi 链路没有 server 这一层,事件里照样标它,让 renderer 两条链路同一种认法。
  */
 export const MCP_SERVER_NAME = 'duetlens';
 

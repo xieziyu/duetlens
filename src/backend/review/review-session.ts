@@ -70,7 +70,7 @@ export class FollowupReplyError extends Error {
 
 /**
  * 会话已被释放(退出 / LRU 逐出 / 删除审核),手上与队里的 turn 一律就地作废。
- * codex 进程都拆了,终局事件不会再来 —— 不兑现就是让调用方与 UI 永远等下去。
+ * agent 进程都拆了,终局事件不会再来 —— 不兑现就是让调用方与 UI 永远等下去。
  */
 export class SessionDisposedError extends Error {
   constructor(message = '会话已释放,无法继续') {
@@ -93,7 +93,7 @@ export class SessionDisposedError extends Error {
  *    对其保持一致的 ground truth —— 被迫重读原文时,编出来的引用会当场塌掉。
  *    硬闸在 MCP 侧(judge_finding 要求本轮取过证),这里只交代规矩。
  *
- * findings 清单**内联注入**而不依赖会话记忆:codex 的 auto-compact 会摘要掉历史,
+ * findings 清单**内联注入**而不依赖会话记忆:agent 的 auto-compact 会摘要掉历史,
  * 连 report_finding 回传的 id 都可能被摘走,那时 agent 凭记忆调 judge_finding 会引用错 id。
  * 清单内联后这一轮对 compact 免疫 —— 判据来自 prompt,证据来自本轮工具调用。
  */
@@ -267,12 +267,12 @@ interface StopTarget {
   /**
    * 要打断的那个 turn。**两种「没有」必须分开**,处置相反:
    *   `undefined` —— turn/start 应答还没回来,稍等就有;
-   *   `''` —— 应答回来了但 agent 不给 id({@link ConversationalAgent.sendMessage} 允许),等下去也不会有。
+   *   `''` —— 应答回来了但没带 id(协议漂移时的降级,见 {@link ConversationalAgent.sendMessage}),等下去也不会有。
    */
   turnId: () => string | undefined;
   /** 打断已发出、结果未知:此后到达的终局先扣住,等 gate 出结果再定性 */
   begin: (gate: Promise<void>) => void;
-  /** 打断成功:本次等待就地按「已停止」收尾,不再等 codex 的终局 */
+  /** 打断成功:本次等待就地按「已停止」收尾,不再等 agent 的终局 */
   stop: () => void;
 }
 
@@ -324,13 +324,13 @@ export interface StartReviewOptions {
   providers: McpContentProviders;
   baseInstructions?: string;
   scanPrompt?: string;
-  /** 用户指定的 codex 模型(空/缺省=账号默认) */
+  /** 用户指定的模型(空/缺省 = agent 自己的默认) */
   model?: string | null;
-  /** reasoning effort(缺省 codex medium) */
+  /** 推理强度(缺省由 agent 定) */
   reasoningEffort?: string | null;
   /** 审核强度;对抗档在扫描 turn 后追加一轮自检 */
   intensity?: ReviewIntensity;
-  /** 本次扫描属于第几轮;传入则把新建的 codex thread 记到该轮次上 */
+  /** 本次扫描属于第几轮;传入则把新建的 agent 会话记到该轮次上 */
   round?: number;
 }
 
@@ -380,7 +380,7 @@ export class ReviewSession {
   private mcp?: DuetlensMcpServer;
   private unsubscribe?: () => void;
   private conversationId?: string;
-  /** 串行化 turn:codex 单会话不能并发 turn,续问排在扫描/前一轮之后。 */
+  /** 串行化 turn:单会话内 turn 不并发(接口约定),续问排在扫描/前一轮之后。 */
   private turnChain: Promise<unknown> = Promise.resolve();
   /** reviewer 已叫停本轮机审(见 {@link stopScan});收轮时据此记 stopped 而非 done。 */
   private stopped = false;
@@ -401,12 +401,12 @@ export class ReviewSession {
   private readonly liveWaiters = new Set<() => void>();
   /**
    * 在途活动数:建/续会话与每个 turn 各占一份。>0 = 拆掉这个会话会打断 agent 手上的活,
-   * 见 {@link isBusy}。只数 turn 是不够的 —— 会话已入表、MCP 与 codex thread 还在建的那段
+   * 见 {@link isBusy}。只数 turn 是不够的 —— 会话已入表、MCP 与 agent 会话还在建的那段
    * 同样拆不得,那时被逐出只会让这次审核以一句莫名其妙的失败收场。
    */
   private inFlight = 0;
   /**
-   * codex thread 建起来之前的闸门。追问可以早于建会话到达(Discussion 栏空态明说「不必等」),
+   * agent 会话建起来之前的闸门。追问可以早于建会话到达(Discussion 栏空态明说「不必等」),
    * 那一问必须排在建会话之后跑 —— 就地回绝的话,用户按下发送就什么都不剩:输入框已清空,
    * 消息还没落库,界面上只留一条空讨论。会话建不起来 / 被释放时以原因兑现,免得永远干等。
    */
@@ -463,7 +463,7 @@ export class ReviewSession {
   }
 
   /**
-   * 起一个新的 codex thread + 注入 + 跑一轮机审;resolve 于该 turn 完成。
+   * 起一个新的 agent 会话 + 注入 + 跑一轮机审;resolve 于该 turn 完成。
    * 首轮与每次重跑都走这里 —— 复审不复用上一轮会话,靠 scanPrompt 把上下文结构化带过来
    * (复用会话会让新旧 diff 的行号在同一上下文里互相污染)。
    */
@@ -484,7 +484,7 @@ export class ReviewSession {
     });
     this.conversationId = handle.conversationId;
     this.openConversation();
-    this.store.setCodexThreadId(this.reviewId, handle.conversationId);
+    this.store.setAgentSessionId(this.reviewId, handle.conversationId);
     if (opts.round) this.store.setRoundThreadId(this.reviewId, opts.round, handle.conversationId);
     this.recordModel(handle.model);
     this.setStatus('scanning');
@@ -514,7 +514,7 @@ export class ReviewSession {
   }
 
   /**
-   * 续接已存在的 review 会话(app 重启后):按落库的 codexThreadId 从磁盘恢复 codex thread,
+   * 续接已存在的 review 会话(app 重启后):按落库的 agentSessionId 从磁盘恢复 agent 会话,
    * 重新注入 MCP,不重跑扫描。之后即可 sendMessage 追问。返回已落库的 findings。
    */
   resume(opts: StartReviewOptions): Promise<Finding[]> {
@@ -523,8 +523,8 @@ export class ReviewSession {
 
   private async runResume(opts: StartReviewOptions): Promise<Finding[]> {
     const review = this.store.getReview(this.reviewId);
-    const threadId = review?.codexThreadId;
-    if (!threadId) throw new Error('该 review 无 codex thread,无法续接');
+    const threadId = review?.agentSessionId;
+    if (!threadId) throw new Error('该 review 无 agent 会话,无法续接');
 
     const mcpUrl = await this.setupMcp(opts.providers);
     const handle = await this.agent.resumeConversation({
@@ -557,7 +557,7 @@ export class ReviewSession {
 
   /**
    * 就某条 discussion 向 agent 追问:落库用户消息 → 带上下文续一轮 → 落库 agent 回复。
-   * 复用同一 codex thread(全局视野);轮次串行,不与扫描/前一轮并发。
+   * 复用同一 agent 会话(全局视野);轮次串行,不与扫描/前一轮并发。
    */
   async sendMessage(discussionId: string, text: string): Promise<Message> {
     await this.conversationReady; // 会话还在建就排在它后面,别把这一问丢掉
@@ -567,7 +567,7 @@ export class ReviewSession {
     const discussion = this.store.getDiscussion(discussionId);
     if (!discussion) throw new Error(`discussion 不存在: ${discussionId}`);
     // 只认本 review 名下的线程:串号的话,消息会写进上一条 review 的 discussion,
-    // 却由本 review 的 codex thread 作答,两边数据都被污染。
+    // 却由本 review 的 agent 会话作答,两边数据都被污染。
     if (discussion.reviewId !== this.reviewId)
       throw new Error(`discussion 不属于本次审核: ${discussionId}`);
 
@@ -635,7 +635,7 @@ export class ReviewSession {
    * reviewer 中途叫停本轮机审:打断 agent 当前 turn,已上报的 findings 一条不丢,
    * review 直接进入人工审核阶段。
    *
-   * 打断成功后**不再等** codex 为这个 turn 发终局 —— 那条事件不保证会来,
+   * 打断成功后**不再等** agent 为这个 turn 发终局 —— 那条事件不保证会来,
    * 干等就会把这一轮永远挂在「扫描中」;就地兑现等待钩子收轮。
    * 边界行为(打断在途收到终局 / 打断失败 / 终局迟到)见 scripts/spike-stop-scan.ts。
    */
@@ -655,7 +655,7 @@ export class ReviewSession {
     //   - 一个 target 都没有:轮次正卡在两个 turn 之间(如对抗档扫描轮与自检轮),
     //     没有在跑的 turn 可打断 —— 直接算停下,后面那个 turn 由 stopped 旗子拦住。
     //   - id 还没到手:turn/start 应答在途,这一轮**确实在跑**。谎称已停止的话
-    //     codex 会继续跑到底、继续烧 token,故如实抛回让用户重按 —— 重按一下就好了。
+    //     agent 会继续跑到底、继续烧 token,故如实抛回让用户重按 —— 重按一下就好了。
     //   - agent 压根不给 id:等下去也不会有。同样的「稍等再停」会把用户卡在一个
     //     永远不成立的重试里,所以要说的是「这一轮停不下来」。
     const live = targets.map((t) => ({ t, turnId: t.turnId() }));
@@ -731,8 +731,8 @@ export class ReviewSession {
   }
 
   /**
-   * codex thread 是否真的建起来过。**没建起来的会话是死的**:追问会被闸门挡下,
-   * 而它照样占着 codex 子进程、MCP server 与一个 live 名额,故建会话失败时要就地拆掉。
+   * agent 会话是否真的建起来过。**没建起来的会话是死的**:追问会被闸门挡下,
+   * 而它照样占着 agent 子进程、MCP server 与一个 live 名额,故建会话失败时要就地拆掉。
    */
   isOpen(): boolean {
     return this.conversationId !== undefined;
@@ -749,7 +749,7 @@ export class ReviewSession {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    // 排在闸门后的追问跟着这个会话一起完:不兑现的话它们会一直等一个再也不会来的 codex thread
+    // 排在闸门后的追问跟着这个会话一起完:不兑现的话它们会一直等一个再也不会来的 agent 会话
     this.failConversation(new SessionDisposedError('会话已释放,无法追问'));
     // 会话已经建起来的那批更要管:闸门早放行了,正在等终局的 turn 只能由这里终结。
     // 快照迭代 —— 兑现会顺手把自己从表里摘掉。
@@ -766,7 +766,7 @@ export class ReviewSession {
       const parsed = reportFindingSchema.safeParse(raw);
       if (!parsed.success) return; // 非法上报忽略;后续可回错误内容给 agent
       if (this.absorbDuplicate(parsed.data)) return;
-      // 用 MCP 生成的 id 落库,使 codex 侧 id 与存储 id 一致(update_finding 可定位)
+      // 用 MCP 生成的 id 落库,使 agent 侧 id 与存储 id 一致(update_finding 可定位)
       const finding = this.store.addFinding(this.reviewId, parsed.data, 'agent', raw.id, this.turnKind);
       // 承载 discussion 与 finding 同事务建出;不一并外发的话,本轮会话内 Discussion 栏拿不到它,
       // 要等下次进 review 全量拉取才出现。先发 discussion 再发 finding,保证卡片可点即可用。
@@ -892,7 +892,7 @@ export class ReviewSession {
 
   /**
    * 把追问拼上锚点/finding 上下文,让 agent 知道在聊哪一处。
-   * 讨论历史一并重述:每轮复审都换新 thread,且 codex 会 auto-compact ——
+   * 讨论历史一并重述:每轮复审都换新会话,且 agent 会 auto-compact ——
    * 都不能指望会话自身还记得这条线程之前说过什么。
    *
    * finding 的**当前**字段也一并给出:它可能已被 reviewer 就地编辑、被剔除、或被上一条提案改过,
@@ -1061,7 +1061,7 @@ export class ReviewSession {
     this.stopTargets.add(target);
     cleanup.push(() => this.stopTargets.delete(target));
 
-    // 会话被释放时由 dispose 兑现:此后 codex 不会再发终局,干等就是一条永远「回复中」的线程
+    // 会话被释放时由 dispose 兑现:此后 agent 不会再发终局,干等就是一条永远「回复中」的线程
     const abort = () => finish({ kind: 'disposed' });
     this.liveWaiters.add(abort);
     cleanup.push(() => this.liveWaiters.delete(abort));
@@ -1087,6 +1087,7 @@ export class ReviewSession {
 
     cleanup.push(
       this.agent.streamEvents((e) => {
+        // 以下两条哨兵只由 codex 链路触发(approval 与 undelivered 是它独有的事件面)。
         // 注入的 approvalPolicy 把审批闸门全关了,codex 本不该来问这类审批;问了就说明只读策略没生效。
         // 与握手时的读回校验同一个判据,这里是它的兜底。
         if (e.kind === 'approval' && !e.expected && e.gate === 'policy') {

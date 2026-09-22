@@ -8,6 +8,7 @@ import {
   isStillPresent,
   summaryFileSchema,
   SUMMARY_FILES_LIMIT,
+  type AgentKind,
   type Discussion,
   type Finding,
   type FindingProposal,
@@ -49,7 +50,8 @@ interface ReviewRow {
   head_ref: string | null;
   parent_review_id: string | null;
   repo_path: string | null;
-  codex_thread_id: string | null;
+  agent: string;
+  agent_session_id: string | null;
   model: string | null;
   reasoning_effort: string | null;
   intensity: string;
@@ -66,7 +68,7 @@ interface ReviewRow {
 interface RoundRow {
   review_id: string;
   round: number;
-  codex_thread_id: string | null;
+  agent_session_id: string | null;
   head_sha: string | null;
   status: string;
   note: string | null;
@@ -157,7 +159,8 @@ function toReview(r: ReviewRow): Review {
     headRef: r.head_ref,
     parentReviewId: r.parent_review_id,
     repoPath: r.repo_path,
-    codexThreadId: r.codex_thread_id,
+    agent: r.agent as AgentKind,
+    agentSessionId: r.agent_session_id,
     model: r.model,
     reasoningEffort: r.reasoning_effort as Review['reasoningEffort'],
     intensity: r.intensity as Review['intensity'],
@@ -176,7 +179,7 @@ function toRound(r: RoundRow): ReviewRound {
   return {
     reviewId: r.review_id,
     round: r.round,
-    codexThreadId: r.codex_thread_id,
+    agentSessionId: r.agent_session_id,
     headSha: r.head_sha,
     status: r.status as RoundStatus,
     note: r.note,
@@ -322,6 +325,8 @@ export class ReviewStore {
     parentReviewId?: string | null;
     repoPath?: string | null;
     title?: string | null;
+    /** 跑这条 review 的 agent;建出来就定死,复审与追问都沿用 */
+    agent?: AgentKind;
     model?: string | null;
     reasoningEffort?: string | null;
     intensity?: Review['intensity'];
@@ -338,7 +343,8 @@ export class ReviewStore {
       head_ref: input.headRef ?? null,
       parent_review_id: input.parentReviewId ?? null,
       repo_path: input.repoPath ?? null,
-      codex_thread_id: null,
+      agent: input.agent ?? 'codex',
+      agent_session_id: null,
       model: input.model ?? null,
       reasoning_effort: input.reasoningEffort ?? null,
       intensity: input.intensity ?? 'standard',
@@ -353,8 +359,8 @@ export class ReviewStore {
     };
     this.db
       .prepare(
-        `INSERT INTO reviews (id, source, source_ref, base_ref, head_ref, parent_review_id, repo_path, codex_thread_id, model, reasoning_effort, intensity, title, status, summary_body, summary_files, summary_round, current_round, created_at, updated_at)
-         VALUES (@id, @source, @source_ref, @base_ref, @head_ref, @parent_review_id, @repo_path, @codex_thread_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @summary_files, @summary_round, @current_round, @created_at, @updated_at)`,
+        `INSERT INTO reviews (id, source, source_ref, base_ref, head_ref, parent_review_id, repo_path, agent, agent_session_id, model, reasoning_effort, intensity, title, status, summary_body, summary_files, summary_round, current_round, created_at, updated_at)
+         VALUES (@id, @source, @source_ref, @base_ref, @head_ref, @parent_review_id, @repo_path, @agent, @agent_session_id, @model, @reasoning_effort, @intensity, @title, @status, @summary_body, @summary_files, @summary_round, @current_round, @created_at, @updated_at)`,
       )
       .run(row);
     return toReview(row);
@@ -526,10 +532,10 @@ export class ReviewStore {
     })();
   }
 
-  setCodexThreadId(reviewId: string, threadId: string): void {
+  setAgentSessionId(reviewId: string, threadId: string): void {
     const ts = now();
     this.db
-      .prepare('UPDATE reviews SET codex_thread_id = ?, updated_at = ? WHERE id = ?')
+      .prepare('UPDATE reviews SET agent_session_id = ?, updated_at = ? WHERE id = ?')
       .run(threadId, ts, reviewId);
     this.touchParent(reviewId, ts);
   }
@@ -609,7 +615,7 @@ export class ReviewStore {
     const row: RoundRow = {
       review_id: reviewId,
       round,
-      codex_thread_id: null,
+      agent_session_id: null,
       head_sha: input.headSha ?? null,
       status: 'scanning',
       note: input.note?.trim() || null,
@@ -626,10 +632,10 @@ export class ReviewStore {
     this.db.transaction(() => {
       this.db
         .prepare(
-          `INSERT INTO review_rounds (review_id, round, codex_thread_id, head_sha, status, note, new_findings, fixed_count, suppressed_count, error_message, error_kind, changed_files, code_changed, started_at, ended_at)
-           VALUES (@review_id, @round, @codex_thread_id, @head_sha, @status, @note, @new_findings, @fixed_count, @suppressed_count, @error_message, @error_kind, @changed_files, @code_changed, @started_at, @ended_at)
+          `INSERT INTO review_rounds (review_id, round, agent_session_id, head_sha, status, note, new_findings, fixed_count, suppressed_count, error_message, error_kind, changed_files, code_changed, started_at, ended_at)
+           VALUES (@review_id, @round, @agent_session_id, @head_sha, @status, @note, @new_findings, @fixed_count, @suppressed_count, @error_message, @error_kind, @changed_files, @code_changed, @started_at, @ended_at)
            ON CONFLICT(review_id, round) DO UPDATE SET
-             codex_thread_id = excluded.codex_thread_id,
+             agent_session_id = excluded.agent_session_id,
              head_sha = excluded.head_sha,
              status = excluded.status,
              note = excluded.note,
@@ -651,7 +657,7 @@ export class ReviewStore {
 
   setRoundThreadId(reviewId: string, round: number, threadId: string): void {
     this.db
-      .prepare('UPDATE review_rounds SET codex_thread_id = ? WHERE review_id = ? AND round = ?')
+      .prepare('UPDATE review_rounds SET agent_session_id = ? WHERE review_id = ? AND round = ?')
       .run(threadId, reviewId, round);
   }
 
@@ -1301,13 +1307,16 @@ export class ReviewStore {
         (r.findings_grouping as UiSettings['findingsGrouping'] | null) ?? DEFAULT_UI_SETTINGS.findingsGrouping,
       collapseViewedFiles:
         r.collapse_viewed == null ? DEFAULT_UI_SETTINGS.collapseViewedFiles : !!r.collapse_viewed,
+      defaultAgent: (r.default_agent as UiSettings['defaultAgent'] | null) ?? DEFAULT_UI_SETTINGS.defaultAgent,
       defaultModel: (r.default_model as string | null) ?? DEFAULT_UI_SETTINGS.defaultModel,
+      piDefaultModel: (r.pi_default_model as string | null) ?? DEFAULT_UI_SETTINGS.piDefaultModel,
       defaultEffort: (r.default_effort as UiSettings['defaultEffort'] | null) ?? DEFAULT_UI_SETTINGS.defaultEffort,
       defaultIntensity:
         (r.default_intensity as UiSettings['defaultIntensity'] | null) ?? DEFAULT_UI_SETTINGS.defaultIntensity,
       notifyOnComplete:
         r.notify_on_complete == null ? DEFAULT_UI_SETTINGS.notifyOnComplete : !!r.notify_on_complete,
       codexPath: (r.codex_path as string | null) ?? DEFAULT_UI_SETTINGS.codexPath,
+      piPath: (r.pi_path as string | null) ?? DEFAULT_UI_SETTINGS.piPath,
       ghPath: (r.gh_path as string | null) ?? DEFAULT_UI_SETTINGS.ghPath,
       openReviewIds: parseStringList(r.open_review_ids),
       activeReviewId: (r.active_review_id as string | null) ?? DEFAULT_UI_SETTINGS.activeReviewId,
@@ -1317,16 +1326,17 @@ export class ReviewStore {
   saveUiSettings(s: UiSettings): void {
     this.db
       .prepare(
-        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, file_list_view, default_source, last_repo_path, findings_grouping, collapse_viewed, default_model, default_effort, default_intensity, notify_on_complete, codex_path, gh_path, open_review_ids, active_review_id)
-         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @fileListView, @defaultSource, @lastRepoPath, @findingsGrouping, @collapseViewedFiles, @defaultModel, @defaultEffort, @defaultIntensity, @notifyOnComplete, @codexPath, @ghPath, @openReviewIds, @activeReviewId)
+        `INSERT INTO ui_settings (id, data_mode, data_theme, left_width, right_width, default_tab, default_diff_view, file_list_view, default_source, last_repo_path, findings_grouping, collapse_viewed, default_agent, default_model, pi_default_model, default_effort, default_intensity, notify_on_complete, codex_path, pi_path, gh_path, open_review_ids, active_review_id)
+         VALUES (1, @dataMode, @dataTheme, @leftWidth, @rightWidth, @defaultTab, @defaultDiffView, @fileListView, @defaultSource, @lastRepoPath, @findingsGrouping, @collapseViewedFiles, @defaultAgent, @defaultModel, @piDefaultModel, @defaultEffort, @defaultIntensity, @notifyOnComplete, @codexPath, @piPath, @ghPath, @openReviewIds, @activeReviewId)
          ON CONFLICT(id) DO UPDATE SET
            data_mode = @dataMode, data_theme = @dataTheme, left_width = @leftWidth,
            right_width = @rightWidth, default_tab = @defaultTab, default_diff_view = @defaultDiffView,
            file_list_view = @fileListView,
            default_source = @defaultSource, last_repo_path = @lastRepoPath,
            findings_grouping = @findingsGrouping, collapse_viewed = @collapseViewedFiles,
-           default_model = @defaultModel, default_effort = @defaultEffort, default_intensity = @defaultIntensity,
-           notify_on_complete = @notifyOnComplete, codex_path = @codexPath, gh_path = @ghPath,
+           default_agent = @defaultAgent, default_model = @defaultModel, pi_default_model = @piDefaultModel,
+           default_effort = @defaultEffort, default_intensity = @defaultIntensity,
+           notify_on_complete = @notifyOnComplete, codex_path = @codexPath, pi_path = @piPath, gh_path = @ghPath,
            open_review_ids = @openReviewIds, active_review_id = @activeReviewId`,
       )
       // SQLite 既不能绑定 boolean 也不能绑定数组:布尔转 0/1,列表转 JSON

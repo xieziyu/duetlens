@@ -1,6 +1,7 @@
 import type { AgentErrorKind } from '@shared/agent-events';
 import { CODEX_TARGET_VERSION, isCodexProtocolError } from '@shared/codex';
-import { FOLLOWUP_REPLY_FAILED_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
+import type { AgentKind } from '@shared/domain';
+import { FOLLOWUP_REPLY_FAILED_CODE, PI_TOOLSET_NOT_READ_ONLY_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 
 /**
  * 失败归因 → 用户能读懂的结论与处置。原文一律另行原样呈现 ——
@@ -28,6 +29,14 @@ const VERSION_MISMATCH = {
   advice: `这版对齐的是 codex ${CODEX_TARGET_VERSION}。在终端跑 codex --version 看看本机是哪个版本,升到相近版本再试。`,
 };
 
+const TOOLSET_BREACH = {
+  title: 'pi 的工具集不是只读的,已中止',
+  advice:
+    'pi 没有沙箱,只读全靠只给它读类工具;这次它报回的工具集里混进了别的工具,' +
+    '继续跑等于让审核 agent 带着写能力动你的仓库,所以直接停了。多为 pi 版本变了内置工具,升级 Duetlens 或回退 pi 再试。',
+};
+
+/** 按 codex 的处置写的底表;别家处置不同的档在 {@link AGENT_COPY} 里覆盖。 */
 const COPY: Record<AgentErrorKind, RoundErrorCopy> = {
   'usage-limit': {
     title: 'codex 账号用量已达上限',
@@ -59,6 +68,11 @@ const COPY: Record<AgentErrorKind, RoundErrorCopy> = {
     advice: '多为模型名不可用或内容触发策略拦截。换个模型再试;仍失败请看下方原文。',
     retryable: false,
   },
+  'agent-not-installed': {
+    title: '找不到 codex 可执行文件',
+    advice: '在 PATH 里没有找到 codex。用 brew install codex 装上,或在设置 ▸ codex 里指定它的路径,再重试本轮。',
+    retryable: false,
+  },
   'sandbox-not-applied': { ...SANDBOX_BREACH, retryable: false },
   'codex-version-mismatch': { ...VERSION_MISMATCH, retryable: false },
   'mcp-undelivered': {
@@ -69,6 +83,7 @@ const COPY: Record<AgentErrorKind, RoundErrorCopy> = {
       `多为本机 codex 与这版 Duetlens 的审批策略对不上;这版对齐的是 codex ${CODEX_TARGET_VERSION}。`,
     retryable: false,
   },
+  'toolset-not-read-only': { ...TOOLSET_BREACH, retryable: false },
   other: {
     title: '这一轮机审没能跑完',
     advice: '',
@@ -76,8 +91,39 @@ const COPY: Record<AgentErrorKind, RoundErrorCopy> = {
   },
 };
 
-export function describeRoundError(kind: AgentErrorKind | null): RoundErrorCopy {
-  return COPY[kind ?? 'other'] ?? COPY.other;
+/**
+ * 处置因 agent 而异的那几档。两家的凭证与计费体系不同:codex 走订阅账号、`codex login`;
+ * pi 走各 provider 的凭证(订阅登录或 API key),额度看的是 provider 那边。
+ * 写成一句中立的话等于两边都没说清,故分叉。
+ */
+const AGENT_COPY: Partial<Record<AgentKind, Partial<Record<AgentErrorKind, RoundErrorCopy>>>> = {
+  pi: {
+    'usage-limit': {
+      title: 'provider 的额度或速率已达上限',
+      advice: '看一下所用 provider 的余额与速率限制,或换一个 provider / 更省的模型再跑。',
+      retryable: false,
+    },
+    connection: {
+      title: '与模型服务的连接中断',
+      advice: '检查网络与代理(pi 直连各 provider 的 API),恢复后重试本轮。',
+      retryable: true,
+    },
+    'agent-not-installed': {
+      title: '找不到 pi 可执行文件',
+      advice: '在 PATH 里没有找到 pi。按 pi 的安装文档装上,或在设置 ▸ pi 里指定它的路径,再重试本轮。',
+      retryable: false,
+    },
+    unauthorized: {
+      title: 'pi 的 provider 凭证无效',
+      advice: '在终端运行 pi,用 /login 重新登录或录入 API key(也可以设对应的环境变量),再重试本轮。',
+      retryable: false,
+    },
+  },
+};
+
+export function describeRoundError(kind: AgentErrorKind | null, agent: AgentKind = 'codex'): RoundErrorCopy {
+  const k = kind ?? 'other';
+  return AGENT_COPY[agent]?.[k] ?? COPY[k] ?? COPY.other;
 }
 
 // ---- 开跑前的失败(source / gh / 网络)----
@@ -96,6 +142,28 @@ const LAUNCH_PATTERNS: {
   advice: string;
 }[] = [
   { match: new RegExp(SANDBOX_NOT_APPLIED_CODE), ...SANDBOX_BREACH },
+  { match: new RegExp(PI_TOOLSET_NOT_READ_ONLY_CODE), ...TOOLSET_BREACH },
+  {
+    // 排在通用 ENOENT 之前:否则「没装 pi」会被说成「仓库目录不见了」。设了路径时原文是绝对路径
+    match: /spawn \S*\bpi ENOENT/,
+    title: '找不到 pi 可执行文件',
+    advice: '在 PATH 里没有找到 pi。安装后重跑,或在设置 ▸ pi 里指定它的路径。',
+  },
+  {
+    match: /spawn \S*\bcodex ENOENT/,
+    title: '找不到 codex 可执行文件',
+    advice: '在 PATH 里没有找到 codex。安装后重跑,或在设置 ▸ codex 里指定它的路径。',
+  },
+  {
+    match: /pi 没有完成握手/,
+    title: 'pi 没能拉起审核会话',
+    advice: 'pi 在加载 Duetlens 的桥接扩展时就退出了,原因见下方原文。多为 pi 版本与这版 Duetlens 不兼容。',
+  },
+  {
+    match: /pi 在磁盘上找不到会话/,
+    title: '这条审核的 pi 会话已经不在了',
+    advice: '会话文件可能被清理过。findings 与你的处置都还在;要继续追问,重跑一轮机审即可开新会话。',
+  },
   {
     // codex 的 JSON-RPC 参数/方法校验失败。与业务无关,一律是版本对不上 ——
     // 不认出来的话,用户看到的就是一句「Invalid request: missing field ... (code -32600)」。

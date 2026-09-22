@@ -59,7 +59,6 @@ class StubAgent extends EventEmitter implements ConversationalAgent {
     this.interrupts.push(turnId);
     this.onInterrupt?.(this);
   }
-  approve(): void {}
   dispose(): void {}
 }
 

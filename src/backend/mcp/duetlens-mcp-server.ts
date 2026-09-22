@@ -462,7 +462,7 @@ export class DuetlensMcpServer extends EventEmitter {
   private httpServer?: http.Server;
   private readonly transports = new Map<string, StreamableHTTPServerTransport>();
   readonly findings: ReportedFinding[] = [];
-  /** 本 server 的 bearer 令牌;codex 经 bearer_token_env_var 携带,隔离本地其他进程。 */
+  /** 本 server 的 bearer 令牌;agent 经环境变量携带,隔离本地其他进程。 */
   readonly token: string;
   private turn: TurnKind = 'scan';
   /**

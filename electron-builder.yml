@@ -14,6 +14,12 @@ asar: true
 asarUnpack:
   - node_modules/better-sqlite3/**
 
+# pi 在自己的 Node 进程里经 jiti 读 extension,读不了 asar —— 落成 Resources/pi/ 下的散文件。
+# 路径与 src/backend/agent/pi/pi-agent.ts 的 piExtensionPath 成对。
+extraResources:
+  - from: src/backend/agent/pi/duetlens-extension.ts
+    to: pi/duetlens-extension.ts
+
 # Electron 安全基线,与 docs/architecture.md 一致;electron-builder 在打包后、签名前翻转
 electronFuses:
   runAsNode: false

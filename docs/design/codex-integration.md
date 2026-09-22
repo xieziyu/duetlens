@@ -2,7 +2,7 @@
 
 > 返回 [文档索引](../README.md)
 >
-> 审核 agent 完全建立在 codex-cli 的 `app-server` 之上。下列是**实测结论**(0.144.x 字节级验证,0.149.1 端到端复跑并修正),不是文档臆测。协议随版本演进,升级后重新导出比对。
+> 这是两条 agent 链路里 codex 那条,建立在 codex-cli 的 `app-server` 之上;pi 那条见 [pi-integration](pi-integration.md),两边不共享中间件。下列是**实测结论**(0.144.x 字节级验证,0.149.1 端到端复跑并修正),不是文档臆测。协议随版本演进,升级后重新导出比对。
 
 ## 关键假设验证
 
@@ -11,7 +11,7 @@
 | app-server 常驻会话取代 one-shot exec | ✅ `initialize` → `thread/start` → `turn/start` → `turn/completed` 跑通 |
 | Duetlens 暴露 MCP、codex 调 `report_finding` 回传 | ✅ 事件流与 server 端 `tools/call` **双向观测** —— 「不再 watch 文件」坐实 |
 | 只读 sandbox 锁定 | ✅ `read-only` 生效 |
-| `ConversationalAgent` 抽象可落地 | ✅ 协议方法逐条对上 start / send / stream / interrupt / approve |
+| `ConversationalAgent` 抽象可落地 | ✅ 协议方法逐条对上 start / send / stream / interrupt(`approve` 无调用方,接 pi 时删掉,见 [pi-integration](pi-integration.md)) |
 | token 膨胀有治理原语 | ✅ 内置 auto-compact + `thread/tokenUsage/updated` |
 
 **版本稳定性**:`generate-ts` 全量导出在 **0.144.1 → 0.144.6 逐字节完全一致**(方法名 / 通知名 / 反向请求名全同),即 0.144.x 内 wire 契约无变化。升级到不同 minor 时按此法重导比对。我们只手写最小协议子集,全量重导有专门脚本。
