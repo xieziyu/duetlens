@@ -3,6 +3,19 @@
 本文件只记**对使用者可见**的变化。内部重构、文档与 CI 调整不单列,查 `git log`。
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/);`0.x` 阶段 minor 位即破坏性变更位。
 
+## [0.12.0] - 2026-09-23
+
+### 新增
+
+- **每次审核可以选 codex 或 pi 来跑。** 发起表单多了一行 agent 选择,选定之后跟着这次审核走 —— 重跑、续接追问、PR 下的各个提交范围用的都是同一家,设置里存的只是预填。没装好或没就绪的那一家会在选项上写明原因,选不了。模型与推理档位跟着选中的 agent 各走各的:两家的模型名互不通用,各存一份默认;pi 的档位映射到它自己的 `--thinking`。设置屏多了 pi 一节 —— 可执行文件路径(留空走 PATH 里的 pi)与默认模型,凭证与计费仍由 pi 自己配好的 provider 管,Duetlens 只探测就绪与否。pi 侧的只读保证换了一种做法:它没有内置沙箱,所以靠**不给工具** —— 自带的 `bash` / `edit` / `write` 与 `read` / `grep` / `find` / `ls` 一个不开,扩展、skills、prompt 模板也一概不加载(被审仓库里的 `.pi/` 是别人写的代码,审它不等于信任它),只留 Duetlens 自己那几个读钉住版本的工具,读的范围与 codex 那条路完全一致。起会话时会核一遍生效的工具集,对不上就直接失败、不开跑。(#107)
+
+### 升级须知
+
+- 数据库结构升级到 v25(0.11.2 是 v24),旧库首次启动自动迁移,无需操作。
+- **这一版的降级与以往不同:降回去之后应用是坏的。** 此前的迁移都只加列,旧版仍能照常用迁移过的库;这一次把会话 id 列改了名(`codex_thread_id` → `agent_session_id`),装回 0.11.x 之后**新建审核会直接报错**,历史里的审核也续接不了。真要留降级的余地,升级前先备份 `~/Library/Application Support/Duetlens/duetlens.db`,降级时用备份覆盖回去。
+- 想用 pi 得自己先装好它、配好 provider;不装不影响 codex 那条路,一切照旧。
+- 更新由应用内 updater 接手,无需重新下载 dmg。
+
 ## [0.11.2] - 2026-09-07
 
 ### 修复
@@ -254,6 +267,7 @@
 
 首个公开版本。
 
+[0.12.0]: https://github.com/xieziyu/duetlens/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/xieziyu/duetlens/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.1
 [0.10.0]: https://github.com/xieziyu/duetlens/compare/v0.9.1...v0.10.0
