@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { ReviewRound } from '@shared/domain';
+import type { AgentKind, ReviewRound } from '@shared/domain';
 import { deriveScanSteps, activeScanStepLabel, type ScanStep } from './scan-progress';
 import { ScanActivityFeed, ScanLiveRow, type ScanCoverage } from './ScanActivity';
 import type { Activity } from './scan-activity';
@@ -14,7 +14,9 @@ export interface ScanProgressBarProps {
   currentRound: number;
   /** 本轮失败时的轮次记录(含原因);跑得好好的为 null */
   failedRound: ReviewRound | null;
-  /** agent 正在自行重试(codex 退避重试期);计数是我们数到的次数,非 codex 上报 */
+  /** 跑这条 review 的 agent;失败处置的措辞随它 */
+  agent: AgentKind;
+  /** agent 正在自行重试(退避重试期);计数是我们数到的次数,非 agent 上报 */
   retrying: { count: number; error: string } | null;
   /** 重试本轮;抛错即由本条自行提示 */
   onRetry: () => Promise<void>;
@@ -44,6 +46,7 @@ export function ScanProgressBar({
   sessionReady,
   currentRound,
   failedRound,
+  agent,
   retrying,
   onRetry,
   onStop,
@@ -76,7 +79,7 @@ export function ScanProgressBar({
 
   const steps = deriveScanSteps({ findingCount, diffReady, sessionReady, failed });
   const roundLabel = currentRound > 1 ? `第 ${currentRound} 轮机审` : '首轮机审';
-  const copy = describeRoundError(failedRound?.errorKind ?? null);
+  const copy = describeRoundError(failedRound?.errorKind ?? null, agent);
 
   const stop = async () => {
     if (!onStop) return;

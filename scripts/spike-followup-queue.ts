@@ -67,7 +67,6 @@ class GatedAgent extends EventEmitter implements ConversationalAgent {
     return () => this.off('event', handler);
   }
   async interrupt(): Promise<void> {}
-  approve(): void {}
   dispose(): void {}
 }
 
@@ -86,8 +85,8 @@ function fakeStore(review: Review, discussion: Discussion) {
       messages.push(m);
       return m;
     },
-    setCodexThreadId: (_id: string, threadId: string) => {
-      review.codexThreadId = threadId;
+    setAgentSessionId: (_id: string, threadId: string) => {
+      review.agentSessionId = threadId;
     },
     setRoundThreadId: () => undefined,
     setReviewStatus: () => undefined,
@@ -105,7 +104,8 @@ function fixture() {
     headRef: null,
     parentReviewId: null,
     repoPath: null,
-    codexThreadId: null,
+    agent: 'codex',
+    agentSessionId: null,
     model: null,
     reasoningEffort: null,
     intensity: 'standard',

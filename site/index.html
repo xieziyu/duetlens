@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Duetlens — 和 agent 看透每一处改动</title>
-<meta name="description" content="Duetlens 是一个 macOS 桌面应用:把一次 code review 变成你和 codex agent 的双人对话。每条 finding 都是可以继续追问的讨论线程。">
+<meta name="description" content="Duetlens 是一个 macOS 桌面应用:把一次 code review 变成你和 agent(codex 或 pi)的双人对话。每条 finding 都是可以继续追问的讨论线程。">
 <link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <script type="module" src="./main.js"></script>
 </head>
@@ -30,7 +30,7 @@
 
 <header class="lp-hero" id="top">
   <span class="lp-pill up" style="--d:.02s">
-    <span class="glyph" aria-hidden="true"></span> codex · read-only sandbox
+    <span class="glyph" aria-hidden="true"></span> codex / pi · read-only
   </span>
   <h1 class="up" style="--d:.1s">和 agent<br><span class="hl">看透每一处改动</span></h1>
   <p class="lead up" style="--d:.2s">
@@ -41,7 +41,7 @@
     <a class="lp-btn solid lg" data-link="releases">下载 macOS 版</a>
     <a class="lp-btn ghost lg" href="#flow">看它怎么工作 ↓</a>
   </div>
-  <div class="lp-meta up" style="--d:.4s">macOS · Apple Silicon · GPL-3.0 · 需要已 codex login 的 codex CLI</div>
+  <div class="lp-meta up" style="--d:.4s">macOS · Apple Silicon · GPL-3.0 · 需要 codex 或 pi 其一</div>
   <div class="lp-scroll" aria-hidden="true"><i></i>SCROLL</div>
 </header>
 
@@ -541,7 +541,7 @@
 
     <div class="lp-final">
       <h2>下一次 review，带上 agent 一起</h2>
-      <p>macOS · Apple Silicon · 需要已 <code>codex login</code> 的 codex CLI<br>
+      <p>macOS · Apple Silicon · 需要已 <code>codex login</code> 的 codex CLI,或配好 provider 的 pi<br>
         首次启动会逐项自检前置，缺什么给一条可复制的修复命令。</p>
       <div class="lp-cta">
         <a class="lp-btn solid lg" data-link="releases">下载最新版本</a>

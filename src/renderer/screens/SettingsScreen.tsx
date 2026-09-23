@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppInfo } from '@shared/ipc';
 import type { UpdateStatus } from '@shared/update';
-import type { CodexModelInfo, SourceKind, UiSettings } from '@shared/domain';
-import { DATA_MODE_LABELS, DEFAULT_UI_SETTINGS, REASONING_EFFORTS, REVIEW_INTENSITIES } from '@shared/domain';
-import type { EnvironmentReport } from '@shared/environment';
+import type { AgentKind, AgentModelInfo, SourceKind, UiSettings } from '@shared/domain';
+import {
+  AGENT_DEFAULT_MODEL_LABELS,
+  AGENT_KINDS,
+  AGENT_LABELS,
+  DATA_MODE_LABELS,
+  DEFAULT_UI_SETTINGS,
+  REASONING_EFFORTS,
+  REVIEW_INTENSITIES,
+} from '@shared/domain';
+import { agentUnavailableReason, type EnvironmentReport } from '@shared/environment';
 import { AUTHOR, PROJECT_LINKS, newIssueUrl } from '@shared/links';
 import { useSettings } from '../settings/SettingsProvider';
 import { useUpdateStatus } from '../update/useUpdateStatus';
@@ -25,6 +33,7 @@ const NAV: { group: string; items: { id: SectionId; icon: string; label: string 
     group: '环境',
     items: [
       { id: 'codex', icon: '◆', label: 'codex' },
+      { id: 'pi', icon: 'π', label: 'pi' },
       { id: 'github', icon: '⑂', label: 'GitHub CLI' },
     ],
   },
@@ -37,8 +46,8 @@ const NAV: { group: string; items: { id: SectionId; icon: string; label: string 
   },
 ];
 
-type SectionId = 'appearance' | 'review' | 'shortcuts' | 'codex' | 'github' | 'rules' | 'about';
-const SECTION_IDS: SectionId[] = ['appearance', 'review', 'shortcuts', 'codex', 'github', 'rules', 'about'];
+type SectionId = 'appearance' | 'review' | 'shortcuts' | 'codex' | 'pi' | 'github' | 'rules' | 'about';
+const SECTION_IDS: SectionId[] = ['appearance', 'review', 'shortcuts', 'codex', 'pi', 'github', 'rules', 'about'];
 
 // 入口只有两档;本地这档统一存 local-branch,普通分支还是虚拟分支由发起时的仓库探测决定
 const SOURCE_CHOICES: { v: SourceKind; label: string }[] = [
@@ -59,8 +68,8 @@ export function SettingsScreen({
   const { settings, update } = useSettings();
   const [active, setActive] = useState<SectionId>('appearance');
   const [env, setEnv] = useState<EnvironmentReport | null>(null);
-  const [checkingCodex, setCheckingCodex] = useState(false);
-  const [models, setModels] = useState<CodexModelInfo[] | null>(null);
+  const [checkingEnv, setCheckingEnv] = useState(false);
+  const [models, setModels] = useState<Partial<Record<AgentKind, AgentModelInfo[]>>>({});
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -68,19 +77,26 @@ export function SettingsScreen({
   const updateReady = updateStatus.phase === 'ready';
 
   const runEnvCheck = useCallback(async () => {
-    setCheckingCodex(true);
+    setCheckingEnv(true);
     try {
       setEnv(await window.duetlens.checkEnvironment({ deep: true }));
     } finally {
-      setCheckingCodex(false);
+      setCheckingEnv(false);
+    }
+  }, []);
+
+  const loadModels = useCallback(() => {
+    for (const agent of AGENT_KINDS) {
+      const settle = (list: AgentModelInfo[]) => setModels((m) => ({ ...m, [agent]: list }));
+      window.duetlens.agent.listModels(agent).then(settle).catch(() => settle([]));
     }
   }, []);
 
   useEffect(() => {
     void runEnvCheck();
-    window.duetlens.agent.listModels().then(setModels).catch(() => setModels([]));
+    loadModels();
     window.duetlens.getAppInfo().then(setAppInfo).catch(() => setAppInfo(null));
-  }, [runEnvCheck]);
+  }, [runEnvCheck, loadModels]);
 
   // 左导航滚动定位 + 滚动高亮(scroll-spy);按 data-sec 现取 DOM,避免 ref map 时序问题。
   const secEl = (id: SectionId): HTMLElement | null =>
@@ -120,14 +136,20 @@ export function SettingsScreen({
     onFocusHandled?.();
   }, [focusSection, onFocusHandled]);
 
-  // codex 路径 / gh 路径先落库(即时应用到 exec 解析),再自检,使「检测」反映刚填的路径。
-  const detectCodex = async (): Promise<void> => {
+  // CLI 路径先落库(即时应用到 exec 解析),再自检,使「检测」反映刚填的路径。
+  // 模型列表也要跟着重拉:换路径前那次多半因为找不到二进制而拉成了空,不重拉就一直空着
+  const detectAgents = async (): Promise<void> => {
     await window.duetlens.ui.saveSettings(settings);
+    loadModels();
     await runEnvCheck();
   };
   const pickCodexPath = async (): Promise<void> => {
     const f = await window.duetlens.dialog.pickFile();
     if (f) update({ codexPath: f });
+  };
+  const pickPiPath = async (): Promise<void> => {
+    const f = await window.duetlens.dialog.pickFile();
+    if (f) update({ piPath: f });
   };
   const pickGhPath = async (): Promise<void> => {
     const f = await window.duetlens.dialog.pickFile();
@@ -139,6 +161,7 @@ export function SettingsScreen({
     `Electron ${appInfo?.electron ?? '—'} · Chrome ${appInfo?.chrome ?? '—'} · Node ${appInfo?.node ?? '—'}`,
     `平台 ${appInfo?.platform ?? '—'}`,
     `codex ${env?.codex.version ?? '未检测到'}`,
+    `pi ${env?.pi.version ?? '未检测到'}`,
   ]);
 
   const resetDefaults = (): void => {
@@ -204,6 +227,45 @@ export function SettingsScreen({
             <div className="desc">
               发起与进入审核时的默认选择。diff 视图与文件列表视图是全局偏好,在审核内切换会写回这里。
             </div>
+            <Row label="默认 agent" hint="发起表单预填;每次发起时仍可换,选定后这条审核就一直用它。">
+              <select
+                className="field mono"
+                value={settings.defaultAgent}
+                onChange={(e) => update({ defaultAgent: e.target.value as AgentKind })}
+              >
+                {AGENT_KINDS.map((k) => {
+                  // 置灰而不隐藏:设置里要看得见还有另一家、以及它差在哪;已选中的那项照常可见
+                  const why = env ? agentUnavailableReason(env, k, models.pi) : null;
+                  return (
+                    <option key={k} value={k} disabled={why !== null && k !== settings.defaultAgent}>
+                      {why ? `${AGENT_LABELS[k]} · ${why}` : AGENT_LABELS[k]}
+                    </option>
+                  );
+                })}
+              </select>
+            </Row>
+            <Row label="默认 effort">
+              <select
+                className="field mono"
+                value={settings.defaultEffort}
+                onChange={(e) => update({ defaultEffort: e.target.value as UiSettings['defaultEffort'] })}
+              >
+                {REASONING_EFFORTS.map((eff) => (
+                  <option key={eff} value={eff}>{eff}</option>
+                ))}
+              </select>
+            </Row>
+            <Row label="默认强度" hint="对抗档:agent 以证伪立场构造反例并自检一轮,更准但 token 成倍。">
+              <select
+                className="field"
+                value={settings.defaultIntensity}
+                onChange={(e) => update({ defaultIntensity: e.target.value as UiSettings['defaultIntensity'] })}
+              >
+                {REVIEW_INTENSITIES.map((v) => (
+                  <option key={v} value={v}>{v === 'adversarial' ? '对抗' : '标准'}</option>
+                ))}
+              </select>
+            </Row>
             <Row label="默认来源">
               <Choice
                 value={settings.defaultSource === 'github-pr' ? 'github-pr' : 'local-branch'}
@@ -272,7 +334,7 @@ export function SettingsScreen({
           {/* codex */}
           <section className="set-sec" data-sec="codex">
             <h2><span className="ic">◆</span> codex</h2>
-            <div className="desc">审核 agent 由 codex app-server 常驻会话驱动;沙箱固定只读,不可改。</div>
+            <div className="desc">codex 链路由 app-server 常驻会话驱动;沙箱固定只读,不可改。</div>
             <Row label="可执行文件路径" hint="留空则用 PATH 中的 codex。" col>
               <div className="path-row">
                 <input
@@ -283,13 +345,13 @@ export function SettingsScreen({
                   onChange={(e) => update({ codexPath: e.target.value })}
                 />
                 <button className="btn-sm" onClick={() => void pickCodexPath()}>选择…</button>
-                <button className="btn-sm" onClick={() => void detectCodex()} disabled={checkingCodex}>
-                  {checkingCodex ? '检测中…' : '检测'}
+                <button className="btn-sm" onClick={() => void detectAgents()} disabled={checkingEnv}>
+                  {checkingEnv ? '检测中…' : '检测'}
                 </button>
               </div>
             </Row>
             <Row label="app-server 状态">
-              <CodexStat env={env} checking={checkingCodex} />
+              <CodexStat env={env} checking={checkingEnv} />
             </Row>
             <Row label="模型" hint="发起表单默认模型(空=账号默认)。">
               <select
@@ -297,36 +359,55 @@ export function SettingsScreen({
                 value={settings.defaultModel}
                 onChange={(e) => update({ defaultModel: e.target.value })}
               >
-                <option value="">账号默认</option>
-                {(models ?? []).map((m) => (
+                <option value="">{AGENT_DEFAULT_MODEL_LABELS.codex}</option>
+                {(models.codex ?? []).map((m) => (
                   <option key={m.id} value={m.model}>{m.displayName || m.model}</option>
-                ))}
-              </select>
-            </Row>
-            <Row label="默认 effort">
-              <select
-                className="field mono"
-                value={settings.defaultEffort}
-                onChange={(e) => update({ defaultEffort: e.target.value as UiSettings['defaultEffort'] })}
-              >
-                {REASONING_EFFORTS.map((eff) => (
-                  <option key={eff} value={eff}>{eff}</option>
-                ))}
-              </select>
-            </Row>
-            <Row label="默认强度" hint="对抗档:agent 以证伪立场构造反例并自检一轮,更准但 token 成倍。">
-              <select
-                className="field"
-                value={settings.defaultIntensity}
-                onChange={(e) => update({ defaultIntensity: e.target.value as UiSettings['defaultIntensity'] })}
-              >
-                {REVIEW_INTENSITIES.map((v) => (
-                  <option key={v} value={v}>{v === 'adversarial' ? '对抗' : '标准'}</option>
                 ))}
               </select>
             </Row>
             <Row label="沙箱">
               <span className="stat lock"><span className="d" />read-only · 锁定</span>
+            </Row>
+          </section>
+
+          {/* pi */}
+          <section className="set-sec" data-sec="pi">
+            <h2><span className="ic">π</span> pi</h2>
+            <div className="desc">
+              pi 链路由 rpc 子进程驱动,只读靠只给 Duetlens 自己的工具。凭证与计费走 pi 自己配好的 provider(订阅登录或 API key),Duetlens 只读不管。
+            </div>
+            <Row label="可执行文件路径" hint="留空则用 PATH 中的 pi。" col>
+              <div className="path-row">
+                <input
+                  className="field mono"
+                  spellCheck={false}
+                  placeholder="~/.local/bin/pi"
+                  value={settings.piPath}
+                  onChange={(e) => update({ piPath: e.target.value })}
+                />
+                <button className="btn-sm" onClick={() => void pickPiPath()}>选择…</button>
+                <button className="btn-sm" onClick={() => void detectAgents()} disabled={checkingEnv}>
+                  {checkingEnv ? '检测中…' : '检测'}
+                </button>
+              </div>
+            </Row>
+            <Row label="凭证状态">
+              <PiStat env={env} checking={checkingEnv} />
+            </Row>
+            <Row label="模型" hint="发起表单默认模型(空=pi 设置里的默认)。单价按 provider 的公开价标注。">
+              <select
+                className="field mono"
+                value={settings.piDefaultModel}
+                onChange={(e) => update({ piDefaultModel: e.target.value })}
+              >
+                <option value="">{AGENT_DEFAULT_MODEL_LABELS.pi}</option>
+                {(models.pi ?? []).map((m) => (
+                  <option key={m.id} value={m.model} title={m.description}>{m.displayName}</option>
+                ))}
+              </select>
+            </Row>
+            <Row label="只读保证" hint="pi 自带的文件工具一个不开,只能经 Duetlens 的工具读被审的那一版代码。">
+              <span className="stat lock"><span className="d" />只读工具集 · 锁定</span>
             </Row>
           </section>
 
@@ -354,7 +435,7 @@ export function SettingsScreen({
           {/* 审核规则提示词 */}
           <section className="set-sec" data-sec="rules">
             <h2><span className="ic">▦</span> 审核规则提示词</h2>
-            <div className="desc">project ▸ global ▸ builtin 三层提示词,决定 codex 的审核侧重;在独立编辑器中管理。</div>
+            <div className="desc">project ▸ global ▸ builtin 三层提示词,决定 agent 的审核侧重;在独立编辑器中管理。</div>
             <Row label="三层提示词编辑器">
               <button className="btn-sm" onClick={onOpenPrompt}>打开编辑器 →</button>
             </Row>
@@ -370,6 +451,7 @@ export function SettingsScreen({
                 <div className="sub mono">
                   Electron {appInfo?.electron ?? '—'}
                   {env?.codex.version ? ` · codex ${env.codex.version}` : ''}
+                  {env?.pi.version ? ` · pi ${env.pi.version}` : ''}
                 </div>
               </div>
               <span className="lic mono">GPL-3.0</span>
@@ -507,6 +589,20 @@ function CodexStat({ env, checking }: { env: EnvironmentReport | null; checking:
     return <span className="stat ok"><span className="d" />已连通{env.codex.version ? ` · v${env.codex.version}` : ''}</span>;
   }
   return <span className="stat err"><span className="d" />未连通</span>;
+}
+
+function PiStat({ env, checking }: { env: EnvironmentReport | null; checking: boolean }): React.JSX.Element {
+  if (checking || !env) return <span className="stat checking"><span className="d" />检测中…</span>;
+  if (env.pi.status !== 'ok') return <span className="stat err"><span className="d" />未检测到 pi</span>;
+  if (env.pi.ready === 'ok') {
+    return (
+      <span className="stat ok">
+        <span className="d" />可用 {env.pi.models} 个模型{env.pi.version ? ` · v${env.pi.version}` : ''}
+      </span>
+    );
+  }
+  if (env.pi.ready === 'fail') return <span className="stat err"><span className="d" />没有配好凭证的 provider</span>;
+  return <span className="stat checking"><span className="d" />已安装{env.pi.version ? ` · v${env.pi.version}` : ''}</span>;
 }
 
 function GhStat({ env }: { env: EnvironmentReport | null }): React.JSX.Element {

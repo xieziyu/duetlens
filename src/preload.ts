@@ -116,7 +116,7 @@ const api: DuetlensApi = {
     },
   },
   agent: {
-    listModels: () => ipcRenderer.invoke(IpcChannels.agentListModels),
+    listModels: (agent) => ipcRenderer.invoke(IpcChannels.agentListModels, agent),
   },
   source: {
     checkGhAuth: () => ipcRenderer.invoke(IpcChannels.sourceCheckGhAuth),

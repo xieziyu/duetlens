@@ -1,9 +1,9 @@
 /**
- * 外部 CLI 可执行文件路径的进程内覆盖:设置屏可为 codex / gh 指定绝对路径,
- * 覆盖 PATH 默认。exec.run 与 codex app-server 启动时经 resolveTool 取实际二进制。
+ * 外部 CLI 可执行文件路径的进程内覆盖:设置屏可为各 CLI 指定绝对路径,
+ * 覆盖 PATH 默认。exec.run 与 agent 子进程启动时经 resolveTool 取实际二进制。
  * 未设置(空串)即回落到命令名,行为与旧版一致。
  */
-type Tool = 'codex' | 'gh' | 'but';
+type Tool = 'codex' | 'pi' | 'gh' | 'but';
 
 const overrides: Partial<Record<Tool, string>> = {};
 

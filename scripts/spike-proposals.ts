@@ -527,7 +527,6 @@ class StubAgent implements ConversationalAgent {
     return () => this.handlers.delete(handler);
   }
   async interrupt(): Promise<void> {}
-  approve(): void {}
   dispose(): void {
     this.handlers.clear();
   }

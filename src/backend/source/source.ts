@@ -1,4 +1,4 @@
-import type { ReviewIntensity, SourceKind } from '@shared/domain';
+import type { AgentKind, ReviewIntensity, SourceKind } from '@shared/domain';
 import type { CommitPosition } from '@shared/source-discovery';
 
 /** 一次审核的目标定位(三种 source 共用)。 */
@@ -16,9 +16,11 @@ export interface ReviewTarget {
    * 得出一份既不是「这个 commit」也不是「整个 PR」的第三种改动面。
    */
   headRef?: string;
-  /** codex 模型(空=账号默认);仅审核配置,不影响 source 定位 */
+  /** 跑这条 review 的 agent(缺省 codex);仅审核配置,不影响 source 定位 */
+  agent?: AgentKind;
+  /** 模型(空 = agent 自己的默认);仅审核配置,不影响 source 定位 */
   model?: string | null;
-  /** reasoning effort(缺省 codex medium) */
+  /** reasoning effort(缺省由 agent 定) */
   reasoningEffort?: string | null;
   /** 审核强度(标准 / 对抗);仅审核配置,不影响 source 定位 */
   intensity?: ReviewIntensity;

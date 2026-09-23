@@ -304,9 +304,22 @@ CREATE INDEX idx_reviews_parent ON reviews(parent_review_id);
 ALTER TABLE review_ui_state ADD COLUMN active_scope TEXT;
 `;
 
+// 审核 agent 可选(codex / pi)。会话 id 列改中立名:它存的是哪家 agent 的会话,由 agent 列说了算。
+// 存量行都是 codex 跑的,DEFAULT 即回填。agent 在建行时定死 —— 续接要找回的是同一家的会话,
+// 中途换家等于拿 codex 的 thread id 去问 pi。
+// ui_settings 的新列留 NULL/空串让读取回落到 DEFAULT_UI_SETTINGS,新旧库拿到同一个默认。
+const V25 = `
+ALTER TABLE reviews RENAME COLUMN codex_thread_id TO agent_session_id;
+ALTER TABLE review_rounds RENAME COLUMN codex_thread_id TO agent_session_id;
+ALTER TABLE reviews ADD COLUMN agent TEXT NOT NULL DEFAULT 'codex';
+ALTER TABLE ui_settings ADD COLUMN default_agent TEXT;
+ALTER TABLE ui_settings ADD COLUMN pi_default_model TEXT NOT NULL DEFAULT '';
+ALTER TABLE ui_settings ADD COLUMN pi_path TEXT NOT NULL DEFAULT '';
+`;
+
 const MIGRATIONS: string[] = [
   V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20,
-  V21, V22, V23, V24,
+  V21, V22, V23, V24, V25,
 ];
 
 export function migrate(db: Database): void {

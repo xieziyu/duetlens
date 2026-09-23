@@ -10,14 +10,14 @@
   <a href="https://github.com/xieziyu/duetlens/releases/latest"><img src="https://img.shields.io/github/v/release/xieziyu/duetlens?color=brightgreen&label=release" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-black.svg" alt="Platform" />
-  <img src="https://img.shields.io/badge/agent-codex%20app--server-38bdf8.svg" alt="codex app-server" />
+  <img src="https://img.shields.io/badge/agent-codex%20%7C%20pi-38bdf8.svg" alt="agent: codex | pi" />
 </p>
 
 <p align="center">
   <a href="https://xieziyu.github.io/duetlens/">Website</a> · <a href="README.md">简体中文</a> · English
 </p>
 
-Duetlens is a macOS desktop app that turns a code review into a **conversation** between you and a codex agent, instead of a report you read after the fact.
+Duetlens is a macOS desktop app that turns a code review into a **conversation** between you and an agent (codex or pi), instead of a report you read after the fact.
 
 Every finding the agent reports is a discussion thread you can keep asking into. You can also start one anywhere in the diff — on a line, on a selected block, or on nothing at all when the question is about the change as a whole. When you're done, triage the findings and submit them as a GitHub PR review, or export a Markdown report.
 
@@ -31,7 +31,7 @@ Every finding the agent reports is a discussion thread you can keep asking into.
 
 **Re-reviews don't overwrite your calls.** Each round is a fresh session with a full re-scan, and the agent must take an explicit position on every finding from the previous round — `fixed` / `wont_fix` / `still_present`. What you dismissed stays dismissed, suppressed both through the prompt and through deduplication.
 
-**Review only, never edit.** The agent runs in a read-only sandbox; there is no "just fix it for me". A `suggestion` is only ever a GitHub suggestion block offered to the author.
+**Review only, never edit.** codex runs in a read-only sandbox and pi only gets Duetlens's own read-only tools; there is no "just fix it for me". A `suggestion` is only ever a GitHub suggestion block offered to the author.
 
 **Three sources.** GitHub PR (paste a link, it resolves as you paste), local git branch, and GitButler virtual branch. For a local repository, which of the two paths applies is detected from the repository's current state.
 
@@ -54,7 +54,9 @@ Also: review history in a local SQLite database (kept for 30 days) · light/dark
 ### Prerequisites
 
 - macOS on Apple Silicon
-- [codex CLI](https://github.com/openai/codex), logged in via `codex login` — the review agent is built on `codex app-server` (verified against 0.144.x / 0.145)
+- One review agent — either works, and each review picks which one to use:
+  - [codex CLI](https://github.com/openai/codex), logged in via `codex login` — driven through `codex app-server` (verified against 0.144.x / 0.145)
+  - [pi](https://github.com/earendil-works/pi/tree/main/packages/coding-agent) with at least one provider configured (subscription login or API key) — driven through `pi --mode rpc`
 - Optional: [`gh`](https://cli.github.com) with `gh auth login` — only needed for the GitHub PR source and for submitting reviews
 - Optional: [GitButler](https://gitbutler.com)'s `but` — only needed for the virtual branch source
 
@@ -81,17 +83,17 @@ For a local build of your own: `npm run package` (ad-hoc signed, runs on this ma
 ## Using it
 
 1. Pick a source — paste a PR link, or choose a local repository and branch.
-2. Start the review: Duetlens fetches the diff and opens a live codex session for the first scan. Findings come back over MCP tools and land on the diff as they arrive; you don't wait for the scan to finish.
+2. Start the review: Duetlens fetches the diff and opens a live agent session for the first scan. Findings come back through tools Duetlens provides and land on the diff as they arrive; you don't wait for the scan to finish.
 3. Follow up, triage, add findings of your own. Want another pass at a different intensity or model? Re-run a round.
 4. Submit a review on a GitHub PR, or export Markdown for a local branch.
 
-Every scan spends your codex account's quota. The status bar keeps the model, effort and context usage in view.
+Every scan spends your codex account's quota or your pi provider's (API keys bill per use). The status bar keeps the model, effort and context usage in view.
 
 ## Design and docs
 
 The goals, the decisions that have been settled, and the reasoning behind them live in [docs/README.md](docs/README.md); engineering conventions are in [CLAUDE.md](CLAUDE.md) (both in Simplified Chinese).
 
-Stack: Electron + React + TypeScript with the backend in the main process; the review agent is a long-lived JSON-RPC session to codex app-server; findings come back through an in-process HTTP MCP server; local storage is better-sqlite3.
+Stack: Electron + React + TypeScript with the backend in the main process; the review agent is a long-lived JSON-RPC session to codex app-server or a pi rpc subprocess; findings come back through an in-process HTTP MCP server (pi reaches it through a thin extension bridge); local storage is better-sqlite3.
 
 Duetlens is a 2.0 full rewrite of [better-review](https://github.com/xieziyu/better-review). 1.0 was one-way and one-shot: a single `codex exec` ran, wrote `findings.json`, and that was that — you could only consume the result. Making it answerable meant the agent session had to stay alive, and that is where the rewrite started.
 

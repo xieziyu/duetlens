@@ -69,7 +69,6 @@ class StubAgent extends EventEmitter implements ConversationalAgent {
     return () => this.off('event', handler);
   }
   async interrupt(): Promise<void> {}
-  approve(): void {}
   dispose(): void {}
 }
 

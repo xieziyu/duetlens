@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { isProposalUndoBlocked, isUnscanned, REVIEW_RETENTION_MS, scanDoneStatus } from '@shared/domain';
 import type {
-  CodexModelInfo,
+  AgentKind,
+  AgentModelInfo,
   Discussion,
   Finding,
   FindingProposal,
@@ -21,13 +22,15 @@ import type { AgentErrorKind } from '@shared/agent-events';
 import type { PrContext } from '@shared/github-context';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
 import type { AddFindingInput, BusyReview, DiffStatInput, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewScopes, ReviewStartStage, ScopeState, StartScanInput, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
-import { LIVE_SESSION_LIMIT_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
+import { LIVE_SESSION_LIMIT_CODE, PI_TOOLSET_NOT_READ_ONLY_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 import { isCodexProtocolError } from '@shared/codex';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
 import { buildPrReviewPayload, hasAnchor, isSubmittable, submitBlocker } from '@shared/github-review';
 import type { McpContentProviders } from '../mcp/duetlens-mcp-server';
 import type { ReviewStore } from '../db/review-store';
 import { CodexAgent } from '../agent/codex/codex-agent';
+import { PiAgent, probePi, type PiAgentOptions as PiAgentConfig } from '../agent/pi/pi-agent';
+import type { ConversationalAgent } from '../agent/conversational-agent';
 import { loadBaseInstructions, loadReviewPrompt, saveReviewLayer } from '../prompt/review-prompt';
 import { buildRerunPrompt } from '../prompt/rerun-prompt';
 import { buildScanPrompt } from '../prompt/scan-prompt';
@@ -173,6 +176,9 @@ const SESSION_FORWARDERS: {
 const ROUND_INTERRUPTED_BY_EXIT =
   '上次退出 Duetlens 时这一轮机审还在跑,进程结束后就中断了 —— 不是 agent 报的错。';
 
+/** 子进程的可执行文件不存在(Node 的原文,两家 agent 同形)。 */
+const SPAWN_MISSING = /spawn \S+ ENOENT/;
+
 /**
  * 轮次失败的落库形态。turn 失败带得到 agent 归因;编排层自己抛的(source/网络/gh)只有原文,
  * 归到 'other' —— 宁可不分类,也不按 message 猜。
@@ -184,12 +190,16 @@ export function describeRoundFailure(cause: unknown): {
   if (cause instanceof AgentTurnError) return { errorMessage: cause.detail, errorKind: cause.errorKind };
   const message = cause instanceof Error ? cause.message : String(cause ?? '');
   // 建会话阶段抛的是普通 Error(没有 turn,也就没有 codexErrorInfo 可映射)。不在这里认出来的话,
-  // 这两类都落成 'other' —— 文案泛泛,还带 retryable,把用户往「再试一次」上引,而这两类重试必然复现。
-  const kind: AgentErrorKind = message.includes(SANDBOX_NOT_APPLIED_CODE)
-    ? 'sandbox-not-applied'
-    : isCodexProtocolError(message)
-      ? 'codex-version-mismatch'
-      : 'other';
+  // 这几类都落成 'other' —— 文案泛泛,还带 retryable,把用户往「再试一次」上引,而它们重试必然复现。
+  const kind: AgentErrorKind = SPAWN_MISSING.test(message)
+    ? 'agent-not-installed'
+    : message.includes(SANDBOX_NOT_APPLIED_CODE)
+      ? 'sandbox-not-applied'
+      : message.includes(PI_TOOLSET_NOT_READ_ONLY_CODE)
+        ? 'toolset-not-read-only'
+        : isCodexProtocolError(message)
+          ? 'codex-version-mismatch'
+          : 'other';
   return { errorMessage: message || '未知错误', errorKind: kind };
 }
 
@@ -230,22 +240,36 @@ export class ReviewManager extends EventEmitter {
   /** 正在提交的 review;PR review 是原子提交,并发两份就是把同一批评论发给作者两遍。 */
   private readonly submitting = new Set<string>();
 
+  /** pi 的装配参数;缺省时选 pi 的 review 起不来(spike 只测 codex 那条时不必给)。 */
+  private readonly pi?: PiAgentConfig;
+
   constructor(
     private readonly store: ReviewStore,
     private readonly codexHome?: string,
-    opts?: { maxLiveSessions?: number; submitter?: GitHubSubmitter },
+    opts?: { maxLiveSessions?: number; submitter?: GitHubSubmitter; pi?: PiAgentConfig },
   ) {
     super();
-    // 每个活跃会话 = 一个 codex 子进程 + MCP server;上限避免长时运行泄漏进程。
+    // 每个活跃会话 = 一个 agent 子进程 + MCP server;上限避免长时运行泄漏进程。
     this.maxLiveSessions = opts?.maxLiveSessions ?? 4;
     this.submitter = opts?.submitter ?? new GhReviewSubmitter();
+    this.pi = opts?.pi;
     this.applyToolPaths(this.store.getUiSettings());
   }
 
-  /** 把设置里的 codex / gh 路径覆盖同步到进程内解析器(exec 与 codex 启动据此取二进制)。 */
+  /** 把设置里的 CLI 路径覆盖同步到进程内解析器(exec 与 agent 启动据此取二进制)。 */
   private applyToolPaths(s: UiSettings): void {
     setToolPath('codex', s.codexPath);
+    setToolPath('pi', s.piPath);
     setToolPath('gh', s.ghPath);
+  }
+
+  /** 按 review 落库的 agent 种类造实例。续接必须造回同一家:会话 id 只在那一家那里有意义。 */
+  private createAgent(kind: AgentKind): ConversationalAgent {
+    if (kind === 'pi') {
+      if (!this.pi) throw new Error('这个进程没有装配 pi,无法跑选了 pi 的审核');
+      return new PiAgent(this.pi);
+    }
+    return new CodexAgent({ codexHome: this.codexHome });
   }
 
   listReviews(): Review[] {
@@ -257,7 +281,7 @@ export class ReviewManager extends EventEmitter {
     return this.store.listRecentReviews();
   }
 
-  /** 首启环境自检(codex / app-server / gh);沿用本 manager 的 codexHome。 */
+  /** 首启环境自检(codex / pi / gh);沿用本 manager 的 codexHome。 */
   checkEnvironment(opts?: EnvCheckOptions): Promise<EnvironmentReport> {
     return checkEnvironment({ codexHome: this.codexHome, deep: opts?.deep });
   }
@@ -764,7 +788,7 @@ export class ReviewManager extends EventEmitter {
     this.forward({ reviewId, type: 'messages-cleared', discussionId });
   }
 
-  /** 向某条 discussion 追问;会话不在内存时先按 codexThreadId 续接。 */
+  /** 向某条 discussion 追问;会话不在内存时先按 agentSessionId 续接。 */
   async sendMessage(reviewId: string, discussionId: string, text: string): Promise<Message> {
     const session = this.sessions.get(reviewId) ?? (await this.resumeSession(reviewId));
     this.touch(reviewId);
@@ -870,8 +894,9 @@ export class ReviewManager extends EventEmitter {
     this.store.saveReviewUiState(reviewId, state);
   }
 
-  /** 列举账号可用 codex 模型(发起表单下拉);未登录/出错向上抛,前端降级为手填。 */
-  async listModels(): Promise<CodexModelInfo[]> {
+  /** 列举某个 agent 可用的模型(发起表单下拉);未登录/出错向上抛,前端降级为手填。 */
+  async listModels(agent: AgentKind): Promise<AgentModelInfo[]> {
+    if (agent === 'pi') return (await probePi()).models;
     const models = await CodexAgent.listModels({ codexHome: this.codexHome });
     return models.map((m) => ({
       model: m.model,
@@ -940,6 +965,7 @@ export class ReviewManager extends EventEmitter {
         headRef: null,
         repoPath: target.repoPath || null,
         title: prepared.title,
+        agent: target.agent ?? 'codex',
         model: target.model || null,
         reasoningEffort: target.reasoningEffort || null,
         intensity: target.intensity ?? 'standard',
@@ -983,6 +1009,7 @@ export class ReviewManager extends EventEmitter {
         parentReviewId,
         repoPath: target.repoPath || null,
         title: prepared.title,
+        agent: target.agent ?? 'codex',
         model: target.model || null,
         reasoningEffort: target.reasoningEffort || null,
         intensity: target.intensity ?? 'standard',
@@ -1112,7 +1139,8 @@ export class ReviewManager extends EventEmitter {
         parentReviewId: parentId,
         repoPath: parent.repoPath,
         title: prepared.title,
-        // 审核配置继承容器:同一个 PR 的几个范围用不同模型/强度审,结论之间就没法比
+        // 审核配置继承容器:同一个 PR 的几个范围用不同 agent/模型/强度审,结论之间就没法比
+        agent: parent.agent,
         model: parent.model,
         reasoningEffort: parent.reasoningEffort,
         intensity: parent.intensity,
@@ -1470,7 +1498,7 @@ export class ReviewManager extends EventEmitter {
   private async startResume(reviewId: string): Promise<ReviewSession> {
     const review = this.store.getReview(reviewId);
     if (!review) throw new Error(`review 不存在: ${reviewId}`);
-    if (!review.codexThreadId) throw new Error(`review 无 codex thread,无法续接: ${reviewId}`);
+    if (!review.agentSessionId) throw new Error(`review 没有 agent 会话,无法续接: ${reviewId}`);
 
     const epoch = this.teardownEpoch(reviewId);
     const source = createSource(targetOf(review));
@@ -1535,9 +1563,10 @@ export class ReviewManager extends EventEmitter {
     // 代次已变:这条 review 在我们准备的途中被释放/删除了。登记回去就再没人来拆它 ——
     // codex 子进程活到进程退出,deleteReview 的话还指着一批已经没有的行。
     if (this.teardownEpoch(reviewId) !== epoch) throw new SessionReleasedError(reviewId);
+    const review = this.store.getReview(reviewId);
+    if (!review) throw new SessionReleasedError(reviewId);
     this.evictExcess();
-    const agent = new CodexAgent({ codexHome: this.codexHome });
-    const session = new ReviewSession(reviewId, this.store, agent);
+    const session = new ReviewSession(reviewId, this.store, this.createAgent(review.agent));
     this.sessions.set(reviewId, session);
     if (onDispose) this.cleanups.set(reviewId, onDispose);
 

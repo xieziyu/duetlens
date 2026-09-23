@@ -56,6 +56,20 @@ export class CodexAppServer extends EventEmitter {
     this.trusted = new Set(opts.trustedMcpServers ?? []);
   }
 
+  /**
+   * 进程起不来或中途退出时 reject。一次性用法(列模型、自检)拿它与每一步赛跑。
+   * 同时它就是那个 'error' 订阅者:没人订阅时 EventEmitter 会把 spawn 失败(没装 codex)
+   * 升级成进程级异常,在主进程里就是一个弹窗。要在 start 之前取。
+   */
+  failure(): Promise<never> {
+    const failed = new Promise<never>((_, reject) => {
+      this.once('error', reject);
+      this.once('exit', (code: number | null) => reject(new Error(`codex app-server 已退出(code=${code ?? '?'})`)));
+    });
+    failed.catch(() => undefined);
+    return failed;
+  }
+
   start(extraEnv?: Record<string, string>): void {
     const bin = this.opts.codexBin ?? resolveTool('codex');
     const env = { ...process.env, ...extraEnv };

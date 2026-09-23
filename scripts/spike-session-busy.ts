@@ -59,7 +59,6 @@ class GatedAgent extends EventEmitter implements ConversationalAgent {
     return () => this.off('event', handler);
   }
   async interrupt(): Promise<void> {}
-  approve(): void {}
   dispose(): void {}
 }
 
@@ -71,8 +70,8 @@ function fakeStore(review: Review) {
   const statuses: string[] = [];
   const store = {
     getReview: () => review,
-    setCodexThreadId: (_id: string, threadId: string) => {
-      review.codexThreadId = threadId;
+    setAgentSessionId: (_id: string, threadId: string) => {
+      review.agentSessionId = threadId;
     },
     setRoundThreadId: () => undefined,
     setReviewStatus: (_id: string, status: string) => {
@@ -92,7 +91,8 @@ function fixture() {
     headRef: null,
     parentReviewId: null,
     repoPath: null,
-    codexThreadId: null,
+    agent: 'codex',
+    agentSessionId: null,
     model: null,
     reasoningEffort: null,
     intensity: 'standard',
@@ -140,7 +140,7 @@ async function busyWhileStarting(): Promise<() => Promise<void>> {
 /** 2. 续接(app 重启后)同理:恢复 thread 的那段一个 turn 都没有,照样拆不得。 */
 async function busyWhileResuming(): Promise<() => Promise<void>> {
   const f = fixture();
-  f.review.codexThreadId = 'stub-thread';
+  f.review.agentSessionId = 'stub-thread';
 
   const resumed = f.session.resume({ cwd: process.cwd(), providers: f.providers });
   assert.equal(f.session.isBusy(), true, 'resume 一进来就算忙');

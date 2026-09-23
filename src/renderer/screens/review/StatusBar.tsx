@@ -1,12 +1,12 @@
-import { REVIEW_STATUS_LABELS, UNSCANNED_LABEL, type ReviewStatus } from '@shared/domain';
+import { AGENT_DEFAULT_MODEL_LABELS, AGENT_LABELS, REVIEW_STATUS_LABELS, UNSCANNED_LABEL, type AgentKind, type ReviewStatus } from '@shared/domain';
 import type { TokenUsage } from '@shared/agent-events';
 
 /**
  * review 屏底部状态栏:agent 运行态从顶栏下沉到此,顶栏只留导航与上下文。
  * diff 视图切换与通读进度归中栏列头(.diff-bar),此处不再重复。
  */
-function agentTitle(model: string | null, effort: string | null): string {
-  const parts = ['审阅 agent:codex', `模型 ${model ?? '账号默认'}`];
+function agentTitle(agent: AgentKind, model: string | null, effort: string | null): string {
+  const parts = [`审阅 agent:${AGENT_LABELS[agent]}`, `模型 ${model ?? AGENT_DEFAULT_MODEL_LABELS[agent]}`];
   if (effort) parts.push(`reasoning effort ${effort}`);
   return parts.join(' · ');
 }
@@ -19,9 +19,15 @@ function compactTokens(n: number): string {
   return `${text}${unit}`;
 }
 
-function contextTitle({ used, cumulative, total }: TokenUsage): string {
+/** 两家的占用口径不同,悬停时要说清数字是谁给的、怎么来的 */
+const CONTEXT_SOURCE: Record<AgentKind, string> = {
+  codex: 'codex 上报的有效窗口,已按模型折算',
+  pi: 'pi 估算的当前占用,每段回复后更新',
+};
+
+function contextTitle(agent: AgentKind, { used, cumulative, total }: TokenUsage): string {
   const ctx = total
-    ? `上下文 ${used.toLocaleString()} / ${total.toLocaleString()}(codex 上报的有效窗口,已按模型折算)`
+    ? `上下文 ${used.toLocaleString()} / ${total.toLocaleString()}(${CONTEXT_SOURCE[agent]})`
     : `上下文 ${used.toLocaleString()}`;
   return `${ctx} · 本次会话累计 ${cumulative.toLocaleString()} tokens`;
 }
@@ -30,6 +36,7 @@ export function ReviewStatusBar({
   status,
   unscanned,
   round,
+  agent,
   model,
   effort,
   tokenUsage,
@@ -43,6 +50,7 @@ export function ReviewStatusBar({
   unscanned?: boolean;
   /** 多轮复审时的轮次摘要(如「第 2 轮 · 修复 3 · 新增 1」);单轮为 null */
   round: string | null;
+  agent: AgentKind;
   model: string | null;
   effort: string | null;
   tokenUsage: TokenUsage | null;
@@ -84,16 +92,17 @@ export function ReviewStatusBar({
           ↻ {round}
         </span>
       )}
-      <span className="sb-item sb-agent" title={agentTitle(model, effort)}>
+      <span className="sb-item sb-agent" title={agentTitle(agent, model, effort)}>
         <span className="glyph" />
-        codex
-        <span className="sb-model mono">{model ?? '默认模型'}</span>
+        {AGENT_LABELS[agent]}
+        {/* pi 的模型名带 provider 前缀,状态栏只放得下后半;全名在 title 里 */}
+        <span className="sb-model mono">{model ? model.slice(model.indexOf('/') + 1) : '默认模型'}</span>
         {effort && <span className="sb-effort mono">{effort}</span>}
       </span>
       {tokenUsage && (
         <>
           <span className="sb-sep" />
-          <span className="sb-item" title={contextTitle(tokenUsage)}>
+          <span className="sb-item" title={contextTitle(agent, tokenUsage)}>
             {pct !== null && (
               <svg className="ring" viewBox="0 0 18 18" style={{ ['--ctx' as string]: (pct / 100).toString() }}>
                 <circle className="bg" cx="9" cy="9" r="7" />

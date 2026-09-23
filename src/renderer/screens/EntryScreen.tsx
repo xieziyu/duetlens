@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AGENT_DEFAULT_MODEL_LABELS,
+  AGENT_KINDS,
+  AGENT_LABELS,
+  defaultModelFor,
   INTENSITY_HINTS,
   INTENSITY_LABELS,
   REASONING_EFFORTS,
   REVIEW_INTENSITIES,
-  type CodexModelInfo,
+  type AgentKind,
+  type AgentModelInfo,
   type ReasoningEffort,
   type ReviewIntensity,
   type SourceKind,
 } from '@shared/domain';
 import type { LiveCapacity, RecentReview, ReviewStartInput, ReviewStartStage } from '@shared/ipc';
+import { agentUnavailableReason, type EnvironmentReport } from '@shared/environment';
 import { PR_COMMITS_CAP } from '@shared/source-discovery';
 import type {
   LocalBranchList,
@@ -95,12 +101,15 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   const [recentRepos, setRecentRepos] = useState<string[]>([]);
 
   // 审核配置
+  const [agent, setAgent] = useState<AgentKind>('codex');
   const [model, setModel] = useState('');
   const [effort, setEffort] = useState<ReasoningEffort>('medium');
   const [intensity, setIntensity] = useState<ReviewIntensity>('standard');
   const [context, setContext] = useState('');
   const [ctxOpen, setCtxOpen] = useState(false);
-  const [models, setModels] = useState<CodexModelInfo[] | null>(null);
+  // 按 agent 缓存:来回切换不必每次重新拉起子进程去问
+  const [modelsByAgent, setModelsByAgent] = useState<Partial<Record<AgentKind, AgentModelInfo[]>>>({});
+  const models = modelsByAgent[agent] ?? null;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,9 +142,34 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
   useEffect(() => {
     void refreshRecent();
     void refreshCapacity();
-    window.duetlens.agent.listModels().then(setModels).catch(() => setModels([]));
     window.duetlens.source.listRepoPaths().then(setRecentRepos).catch(() => setRecentRepos([]));
   }, [refreshCapacity]);
+
+  // 两家的模型一进屏就都拉:pi 有没有配好凭证只有它的模型列表答得上,下拉框要据此决定显示谁
+  const [env, setEnv] = useState<EnvironmentReport | null>(null);
+  useEffect(() => {
+    let alive = true;
+    window.duetlens
+      .checkEnvironment({ deep: false })
+      .then((r) => alive && setEnv(r))
+      .catch(() => undefined);
+    for (const k of AGENT_KINDS) {
+      const settle = (list: AgentModelInfo[]) => {
+        if (alive) setModelsByAgent((m) => ({ ...m, [k]: list }));
+      };
+      window.duetlens.agent.listModels(k).then(settle).catch(() => settle([]));
+    }
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 用不了的 agent 直接不列。还没查清时只列当前这一项,免得先全列出来、再闪掉一个
+  const agentOptions = useMemo(() => {
+    if (!env) return [agent];
+    const ok = AGENT_KINDS.filter((k) => agentUnavailableReason(env, k, modelsByAgent.pi) === null);
+    return ok.length > 0 ? ok : [agent];
+  }, [env, modelsByAgent.pi, agent]);
 
   // 会话跑完不会有事件通知入口(那是 review 屏的事),故停留期间自己轮询一次容量。
   useEffect(() => {
@@ -160,11 +194,26 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       const repoTab = settings.defaultSource !== 'github-pr';
       setTab(repoTab ? 'repo' : 'github-pr');
       if (repoTab) setRepoPath(settings.lastRepoPath);
-      setModel(settings.defaultModel);
+      setAgent(settings.defaultAgent);
+      setModel(defaultModelFor(settings, settings.defaultAgent));
       setEffort(settings.defaultEffort);
       setIntensity(settings.defaultIntensity);
     }
-  }, [loaded, settings.defaultSource, settings.lastRepoPath, settings.defaultModel, settings.defaultEffort, settings.defaultIntensity]);
+  }, [loaded, settings, settings.defaultSource, settings.lastRepoPath, settings.defaultModel, settings.defaultEffort, settings.defaultIntensity]);
+
+  // 换 agent 就换模型:两家的模型名互不通用,沿用上一家的选择只会得到一个对方不认的名字
+  const onSwitchAgent = (next: AgentKind) => {
+    if (next === agent) return;
+    setAgent(next);
+    setModel(defaultModelFor(settings, next));
+  };
+
+  // 记住的默认 agent 在这台机器上用不了(没装、没配凭证)时换成用得了的那家,
+  // 否则只装了 pi 的人第一次发起就会撞上 codex。只改表单,不回写设置:装上之后默认值还该是原来那个
+  useEffect(() => {
+    if (!agentOptions.includes(agent)) onSwitchAgent(agentOptions[0]);
+    // onSwitchAgent 每次 render 重建,不放进依赖:放了这条 effect 就每帧都跑
+  }, [agentOptions, agent]);
 
   // 切来源时重置该来源无关的选择(仓库路径可跨来源沿用,便于两档指同一仓库)
   const onSwitchTab = (next: EntryTab) => {
@@ -245,6 +294,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       repoPath: repoPath.trim() || undefined,
       baseRef: baseRef.trim() || undefined,
       headRef: headRef.trim() || undefined,
+      agent,
       model: trimmedModel || undefined,
       reasoningEffort: effort,
       intensity,
@@ -252,7 +302,8 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
       startId,
     };
     update({
-      defaultModel: trimmedModel,
+      defaultAgent: agent,
+      ...(agent === 'pi' ? { piDefaultModel: trimmedModel } : { defaultModel: trimmedModel }),
       defaultEffort: effort,
       defaultIntensity: intensity,
       ...(tab === 'repo' && repoPath.trim() ? { lastRepoPath: repoPath.trim() } : {}),
@@ -410,10 +461,24 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
 
           <div className="cfg-row">
             <label className="cfg-field">
+              <span>agent</span>
+              <select
+                className="mono"
+                value={agent}
+                onChange={(e) => onSwitchAgent(e.target.value as AgentKind)}
+              >
+                {agentOptions.map((k) => (
+                  <option key={k} value={k}>
+                    {AGENT_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="cfg-field">
               <span>模型</span>
               {models && models.length > 0 ? (
                 <select className="mono" value={model} onChange={(e) => setModel(e.target.value)}>
-                  <option value="">账号默认</option>
+                  <option value="">{AGENT_DEFAULT_MODEL_LABELS[agent]}</option>
                   {model && !models.some((m) => m.model === model) && (
                     <option value={model}>{model}(自定义)</option>
                   )}
@@ -429,7 +494,11 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
                   className="mono"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  placeholder={models === null ? '加载模型…' : 'codex 模型(留空=账号默认)'}
+                  placeholder={
+                    models === null
+                      ? '加载模型…'
+                      : `${AGENT_LABELS[agent]} 模型(留空=${AGENT_DEFAULT_MODEL_LABELS[agent]})`
+                  }
                 />
               )}
             </label>

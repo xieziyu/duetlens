@@ -72,12 +72,12 @@ async function main() {
     log('────────────────────────');
     log(`session 返回 findings: ${findings.length};store 持久化: ${persisted.length}`);
     log(`review 状态: ${store.getReview(review.id)!.status}`);
-    log(`codex threadId 已存: ${store.getReview(review.id)!.codexThreadId ? 'yes' : 'no'}`);
+    log(`codex threadId 已存: ${store.getReview(review.id)!.agentSessionId ? 'yes' : 'no'}`);
 
     assert.ok(persisted.length > 0, 'store 应至少有一条 finding');
     assert.equal(findings.length, persisted.length);
     assert.equal(store.getReview(review.id)!.status, 'completed'); // local-branch:扫完即终态
-    assert.ok(store.getReview(review.id)!.codexThreadId, 'threadId 应落库');
+    assert.ok(store.getReview(review.id)!.agentSessionId, 'threadId 应落库');
     for (const f of persisted) {
       assert.equal(f.origin, 'agent');
       assert.equal(f.triage, 'open');

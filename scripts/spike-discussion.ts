@@ -85,7 +85,7 @@ async function main() {
     assert.ok(userMsgs[1].text.trim().length > 0, 'agent 回复非空');
 
     // 两轮追问复用同一 thread(未新起会话)
-    assert.ok(store.getReview(review.id)!.codexThreadId, 'threadId 应稳定落库');
+    assert.ok(store.getReview(review.id)!.agentSessionId, 'threadId 应稳定落库');
 
     log('✅ PASS — 多轮回路打通:扫描 → 追问 → user/agent 消息成对落库(同一 thread)');
     process.exitCode = 0;
