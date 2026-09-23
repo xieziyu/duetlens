@@ -4,6 +4,40 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.12.0] - 2026-09-23
+
+### Added
+
+- **Every review now picks the agent that runs it — codex or pi.** The entry form gained an agent
+  row, and the choice sticks to that review: reruns, follow-up turns and the commit scopes under a
+  PR all use the same one, while Settings only holds the prefill. An agent that isn't installed or
+  isn't ready says why on its own option and can't be picked. Model and reasoning effort follow the
+  selected agent — the two don't share model names, so each keeps its own default, and pi's effort
+  maps onto its `--thinking` levels. Settings gained a pi section: executable path (blank means the
+  `pi` on your PATH) and default model. Credentials and billing stay with whatever provider pi is
+  configured against; Duetlens only probes whether it's ready. The read-only guarantee works
+  differently on pi: it has no built-in sandbox, so the guarantee comes from **withholding tools** —
+  none of its own `bash` / `edit` / `write` or `read` / `grep` / `find` / `ls` are enabled, and no
+  extensions, skills or prompt templates are loaded (the `.pi/` directory inside the repo under
+  review is someone else's code, and reviewing it is not the same as trusting it). All that's left
+  are Duetlens' own tools, which read the pinned revision — the same boundary codex already had.
+  The active toolset is checked when the session starts, and the review fails closed rather than
+  running against an unexpected one. (#107)
+
+### Upgrade notes
+
+- The database schema moves up to v25 (0.11.2 was v24). Existing databases migrate on first launch,
+  with nothing to do by hand.
+- **Downgrading is different this time: the older app is broken afterwards.** Past migrations only
+  added columns, so older releases kept working against a migrated database. This one renames the
+  session id column (`codex_thread_id` to `agent_session_id`), so on 0.11.x **starting a new review
+  fails outright**, and existing reviews can no longer be resumed. If you want the option to go
+  back, copy `~/Library/Application Support/Duetlens/duetlens.db` aside before upgrading and restore
+  that copy when downgrading.
+- Using pi means installing it and configuring its provider yourself. Skipping it changes nothing
+  about the codex path.
+- The in-app updater handles this release; there is no need to download the dmg again.
+
 ## [0.11.2] - 2026-09-07
 
 ### Fixed
@@ -629,6 +663,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.12.0]: https://github.com/xieziyu/duetlens/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/xieziyu/duetlens/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.1
 [0.10.0]: https://github.com/xieziyu/duetlens/compare/v0.9.1...v0.10.0
