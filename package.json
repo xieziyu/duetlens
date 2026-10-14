@@ -84,7 +84,7 @@
     "vite": "^7.3.6"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "better-sqlite3": "^12.11.1",
     "electron-updater": "^6.8.9",
     "zod": "^4.4.3"
