@@ -356,7 +356,7 @@ export function EntryScreen({ onOpenReview }: { onOpenReview: (id: string) => vo
         <LogoMark size={64} className="entry-mark" />
         <div className="entry-logo mono">
           duet<i>lens</i>
-          <span className="cur">_</span>
+          <span className="wordmark-cursor">_</span>
         </div>
         <div className="entry-tag">
           和 <span className="a">agent</span> 看透每一处改动

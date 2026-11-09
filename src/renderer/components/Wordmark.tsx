@@ -3,7 +3,7 @@ export function Wordmark({ className }: { className?: string } = {}) {
   return (
     <span className={className ? `wordmark mono ${className}` : 'wordmark mono'}>
       duet<i>lens</i>
-      <span className="cur">_</span>
+      <span className="wordmark-cursor">_</span>
     </span>
   );
 }

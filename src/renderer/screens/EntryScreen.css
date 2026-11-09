@@ -24,15 +24,9 @@
   font-style: normal;
   color: var(--agent-2);
 }
-.entry-logo .cur {
-  color: var(--human);
+.entry-logo .wordmark-cursor {
   font-weight: 400;
   margin-left: 2px;
-  animation: entry-blink 1.15s step-end infinite;
-}
-@keyframes entry-blink {
-  0%, 60%, 100% { opacity: 0.25; }
-  30% { opacity: 1; }
 }
 .entry-tag {
   margin-top: 9px;
@@ -1145,12 +1139,7 @@
 .recent-rev .meta .find.zero { color: var(--text-faint); }
 .recent-rev .meta .sub { color: var(--add); }
 .recent-rev .stat { display: flex; align-items: center; gap: 6px; font-size: 11px; flex: none; }
-.recent-rev .stat .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--agent); animation: entry-pulse 2s infinite; }
-@keyframes entry-pulse {
-  0% { box-shadow: 0 0 0 0 var(--agent-line); }
-  70% { box-shadow: 0 0 0 6px transparent; }
-  100% { box-shadow: 0 0 0 0 transparent; }
-}
+.recent-rev .stat .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--agent); }
 .recent-rev .stat.scanning, .recent-rev .stat.review { color: var(--agent-2); }
 .recent-rev .stat.done { color: var(--text-dim); }
 .recent-rev .stat.submitted { color: var(--add); }

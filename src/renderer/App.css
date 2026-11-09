@@ -76,13 +76,19 @@
   font-style: normal;
   color: var(--agent-2);
 }
-.wordmark .cur {
-  color: var(--human);
+.wordmark .wordmark-cursor {
   font-weight: 400;
   margin-left: 1px;
-  animation: blink 1.15s step-end infinite;
 }
-@keyframes blink {
+.wordmark-cursor {
+  color: var(--human);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wordmark-cursor {
+    animation: wordmark-blink 1.15s step-end 2;
+  }
+}
+@keyframes wordmark-blink {
   0%,
   60%,
   100% {

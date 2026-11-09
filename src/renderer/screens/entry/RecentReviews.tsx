@@ -105,9 +105,9 @@ function SourceBadge({ source, sourceRef }: { source: SourceKind; sourceRef: str
   );
 }
 
-const STATUS_META: Record<ReviewStatus, { cls: string; label: string; pulse?: boolean }> = {
-  scanning: { cls: 'scanning', label: '扫描中', pulse: true },
-  reviewing: { cls: 'review', label: '审核中', pulse: true },
+const STATUS_META: Record<ReviewStatus, { cls: string; label: string; dot?: boolean }> = {
+  scanning: { cls: 'scanning', label: '扫描中', dot: true },
+  reviewing: { cls: 'review', label: '审核中', dot: true },
   completed: { cls: 'done', label: '已完成' },
   submitted: { cls: 'submitted', label: '✓ 已提交' },
   failed: { cls: 'failed', label: '✕ 失败' },
@@ -127,7 +127,7 @@ function StatusChip({
     const m = STATUS_META.scanning;
     return (
       <span className={`stat ${m.cls}`} title={`${scanningScopes} 个提交范围正在机审`}>
-        <span className="pulse" />
+        <span className="status-dot" />
         {m.label}
       </span>
     );
@@ -141,7 +141,7 @@ function StatusChip({
   const m = STATUS_META[status];
   return (
     <span className={`stat ${m.cls}`}>
-      {m.pulse && <span className="pulse" />}
+      {m.dot && <span className="status-dot" />}
       {m.label}
     </span>
   );
