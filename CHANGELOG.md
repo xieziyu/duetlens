@@ -3,6 +3,17 @@
 本文件只记**对使用者可见**的变化。内部重构、文档与 CI 调整不单列,查 `git log`。
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/);`0.x` 阶段 minor 位即破坏性变更位。
 
+## [0.12.1] - 2026-11-09
+
+### 修复
+
+- **首页闲置时不再因审核列表动画持续占用 CPU。** 待提交的 GitHub PR 可以长时间处于「审核中」，原先闪动的状态圆点会让首页持续重绘。最近审核和历史列表改用静态圆点，保留状态文字。应用标识的光标最多闪两次，系统开启「减少动态效果」时保持静止。(#120)
+
+### 升级须知
+
+- 数据库结构仍为 v25，0.12.0 与 0.12.1 可共用同一份数据库，无需迁移。
+- 更新由应用内 updater 接手，无需重新下载 dmg。
+
 ## [0.12.0] - 2026-09-23
 
 ### 新增
@@ -267,6 +278,7 @@
 
 首个公开版本。
 
+[0.12.1]: https://github.com/xieziyu/duetlens/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/xieziyu/duetlens/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/xieziyu/duetlens/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.1

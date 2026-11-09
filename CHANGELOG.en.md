@@ -4,6 +4,22 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.12.1] - 2026-11-09
+
+### Fixed
+
+- **Review list animations no longer use CPU continuously while the home screen is idle.** GitHub
+  PR reviews awaiting submission can stay in the reviewing state for a long time, and their pulsing
+  dots kept repainting the home screen. Recent reviews and history now use static dots and retain
+  their status labels. The wordmark cursor blinks at most twice and stays still when the system's
+  Reduce Motion setting is enabled. (#120)
+
+### Upgrade notes
+
+- The database schema remains at v25. Versions 0.12.0 and 0.12.1 can use the same database without
+  a migration.
+- The in-app updater handles the update. There is no need to download the dmg again.
+
 ## [0.12.0] - 2026-09-23
 
 ### Added
@@ -663,6 +679,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.12.1]: https://github.com/xieziyu/duetlens/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/xieziyu/duetlens/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/xieziyu/duetlens/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/xieziyu/duetlens/compare/v0.10.0...v0.11.1
