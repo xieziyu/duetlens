@@ -445,7 +445,7 @@ export function SettingsScreen({
           <section className="set-sec" data-sec="about">
             <h2><span className="ic">◇</span> 关于与反馈</h2>
             <div className="about">
-              <div className="logo mono">duet<i>lens</i><span className="cur">_</span></div>
+              <div className="logo mono">duet<i>lens</i><span className="wordmark-cursor">_</span></div>
               <div className="vmeta">
                 <div className="v">Duetlens <b>{appInfo?.version ?? '—'}</b></div>
                 <div className="sub mono">

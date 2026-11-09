@@ -327,10 +327,6 @@
   font-style: normal;
   color: var(--agent-2);
 }
-.settings .about .logo .cur {
-  color: var(--human);
-  animation: blink 1.15s step-end infinite;
-}
 .settings .about .vmeta {
   flex: 1;
   min-width: 0;

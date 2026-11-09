@@ -221,12 +221,11 @@
   font-size: 11px;
   flex: none;
 }
-.hist-rev .stat .pulse {
+.hist-rev .stat .status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--agent);
-  animation: hist-pulse 2s infinite;
 }
 .hist-rev .stat.review {
   color: var(--agent-2);
@@ -344,12 +343,3 @@
   font-weight: 600;
 }
 
-@keyframes hist-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}

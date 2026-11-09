@@ -307,9 +307,9 @@ function SourceBadge({ source, sourceRef }: { source: SourceKind; sourceRef: str
   );
 }
 
-const STATUS_META: Record<ReviewStatus, { cls: string; label: string; pulse?: boolean }> = {
-  scanning: { cls: 'review', label: '扫描中', pulse: true },
-  reviewing: { cls: 'review', label: '审核中', pulse: true },
+const STATUS_META: Record<ReviewStatus, { cls: string; label: string; dot?: boolean }> = {
+  scanning: { cls: 'review', label: '扫描中', dot: true },
+  reviewing: { cls: 'review', label: '审核中', dot: true },
   completed: { cls: 'done', label: '已完成' },
   submitted: { cls: 'submitted', label: '✓ 已提交' },
   // 失败与已完成不共用 done:两者都是终态,但失败要你回头看。字形前缀保证不只靠颜色区分
@@ -330,12 +330,12 @@ function StatusChip({
     const m = STATUS_META.scanning;
     return (
       <span className={`stat ${m.cls}`} title={`${scanningScopes} 个提交范围正在机审`}>
-        <span className="pulse" />
+        <span className="status-dot" />
         {m.label}
       </span>
     );
   }
-  // 只拉了 diff 的 PR 容器 status 就是 reviewing,照它画成脉冲的「审核中」等于说有一轮在跑
+  // 只拉了 diff 的 PR 容器 status 就是 reviewing,要和已跑过机审的 PR 分开显示
   if (unscanned)
     return (
       <span className="stat idle" title="只拉了 diff,还没跑过机审">
@@ -345,7 +345,7 @@ function StatusChip({
   const m = STATUS_META[status];
   return (
     <span className={`stat ${m.cls}`}>
-      {m.pulse && <span className="pulse" />}
+      {m.dot && <span className="status-dot" />}
       {m.label}
     </span>
   );
