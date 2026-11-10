@@ -4,6 +4,20 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.12.2] - 2026-11-10
+
+### Fixed
+
+- **Fixed high CPU usage when a PR review was left open and idle.** The status dot kept pulsing
+  after scanning finished, causing the review page to repaint continuously. The dot is now static
+  while the PR is awaiting review submission and pulses only during scanning. (#123)
+
+### Upgrade notes
+
+- The database schema remains at v25. Versions 0.12.1 and 0.12.2 can use the same database without
+  a migration.
+- The update is available through the in-app updater.
+
 ## [0.12.1] - 2026-11-09
 
 ### Fixed
@@ -679,6 +693,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.12.2]: https://github.com/xieziyu/duetlens/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/xieziyu/duetlens/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/xieziyu/duetlens/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/xieziyu/duetlens/compare/v0.11.1...v0.11.2
