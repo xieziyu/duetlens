@@ -713,11 +713,13 @@
   color: var(--sev-high);
   background: var(--del-bg);
 }
-.rev-statusbar .sb-status .pulse {
+.rev-statusbar .sb-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+}
+.rev-statusbar .sb-status.s-scanning .sb-dot {
   animation: pulse 2s infinite;
 }
 .ring {

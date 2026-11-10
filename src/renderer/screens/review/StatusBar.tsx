@@ -61,7 +61,7 @@ export function ReviewStatusBar({
   onOpenHelp: () => void;
 }): React.JSX.Element {
   const st = status ?? 'scanning';
-  const running = !unscanned && (st === 'scanning' || st === 'reviewing');
+  const showStatusDot = st === 'scanning' || st === 'reviewing';
   const pct = tokenUsage?.total
     ? Math.min(100, Math.round((tokenUsage.used / tokenUsage.total) * 100))
     : null;
@@ -83,7 +83,7 @@ export function ReviewStatusBar({
         </span>
       ) : (
         <span className={`sb-status s-${st}`}>
-          {running && <span className="pulse" />}
+          {showStatusDot && <span className="sb-dot" />}
           {REVIEW_STATUS_LABELS[st]}
         </span>
       )}
