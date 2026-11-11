@@ -4,6 +4,21 @@ Only **user-visible** changes are recorded here. Internal refactors, docs and CI
 listed — read `git log` for those. Versions follow [Semantic Versioning](https://semver.org/);
 while on `0.x`, the minor position doubles as the breaking-change position.
 
+## [0.13.0] - 2026-11-11
+
+### Added
+
+- **Copy file paths and jump to your editor from a review.** Copy repository-relative or absolute
+  paths or open local files from the diff header or file tree. Command-click a diff line or open a
+  file from a finding's actions to jump to the relevant line. Set VS Code or Cursor as your default
+  in Settings, or choose an editor when opening a file. (#125)
+
+### Upgrade notes
+
+- On first launch, the database migrates from v25 to v26 and adds a default editor setting.
+  Version 0.12.2 can still use the migrated database and ignores the new setting.
+- The update is available through the in-app updater.
+
 ## [0.12.2] - 2026-11-10
 
 ### Fixed
@@ -693,6 +708,7 @@ while on `0.x`, the minor position doubles as the breaking-change position.
 
 First public release.
 
+[0.13.0]: https://github.com/xieziyu/duetlens/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/xieziyu/duetlens/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/xieziyu/duetlens/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/xieziyu/duetlens/compare/v0.11.2...v0.12.0
