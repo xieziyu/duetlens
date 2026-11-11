@@ -12,6 +12,7 @@ import {
 import type { FindingEditInput } from '@shared/ipc';
 import { imeComposing } from '../../keys';
 import { CategorySelect } from './CategorySelect';
+import { OpenEditorButton, useFileActions } from './FileActions';
 import { renderMarkdown } from './markdown';
 import { currentResolution, currentVerdict, isNewThisRound } from './rounds';
 
@@ -155,6 +156,7 @@ function DismissedCard({
             </button>
           </>
         )}
+        <OpenEditorButton path={finding.file} line={finding.line} />
       </div>
       {/* 自动结案时标题行已说明缘由,这里改挂 agent 的复核说明 —— 那才是新信息 */}
       {!editing && (autoClosed ? finding.resolutionNote : finding.dismissReason) && (
@@ -229,6 +231,7 @@ function CardView({
   onAccept?: () => void;
   onDiscuss?: () => void;
 }) {
+  const fileActions = useFileActions();
   return (
     <div className="c-view">
       <div className="c-head">
@@ -295,7 +298,7 @@ function CardView({
         </div>
       )}
       {/* 追问不受 writable 约束:已提交的 finding 内容锁定,但仍该能接着聊 */}
-      {writable || onDiscuss ? (
+      {writable || onDiscuss || fileActions ? (
         <div className="c-actions">
           {onDiscuss && (
             <button className="btn f-ask" onClick={onDiscuss} title="切到 Discussion 栏就这条 finding 追问">
@@ -319,6 +322,7 @@ function CardView({
               ✕ 剔除
             </button>
           )}
+          <OpenEditorButton path={finding.file} line={finding.line} />
           {offDiff && <span className="reply-hint mono anchor-tag">L{finding.line}</span>}
           {submitted && <span className="sub-tag">✓ 已提交</span>}
         </div>

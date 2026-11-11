@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { DEFAULT_UI_SETTINGS, type UiSettings } from '@shared/domain';
+import type { EditorInfo } from '@shared/editor';
 
 // 两个正交主题轴,见 theme/tokens.css
 export type Mode = UiSettings['dataMode'];
@@ -22,11 +23,14 @@ interface SettingsState {
   update: (patch: Partial<UiSettings>) => void;
   /** 首帧加载完成后为 true(在此之前用默认值渲染,避免闪烁) */
   loaded: boolean;
+  editors: EditorInfo[];
+  editorsLoaded: boolean;
 }
 
 const SettingsContext = createContext<SettingsState | null>(null);
 
 const SAVE_DEBOUNCE_MS = 400;
+const NO_EDITORS: EditorInfo[] = [];
 
 const SYSTEM_DARK = '(prefers-color-scheme: dark)';
 
@@ -58,8 +62,10 @@ export function readThemeQuery(): Partial<Pick<UiSettings, 'dataMode' | 'dataThe
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<UiSettings>(() => ({ ...DEFAULT_UI_SETTINGS, ...readThemeQuery() }));
   const [loaded, setLoaded] = useState(false);
+  const [editors, setEditors] = useState<EditorInfo[] | null>(null);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia(SYSTEM_DARK).matches);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorsRequest = useRef<Promise<EditorInfo[]> | null>(null);
 
   // 「跟随系统」要在运行中跟着 OS 切,不能只在启动时读一次
   useEffect(() => {
@@ -78,6 +84,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         setSettings(s);
         setLoaded(true);
       }
+    });
+    // StrictMode 会重跑 effect，复用检测请求以避免重复读取应用图标。
+    editorsRequest.current ??= window.duetlens.ui.listEditors().catch(() => NO_EDITORS);
+    void editorsRequest.current.then((list) => {
+      if (alive) setEditors(list);
     });
     return () => {
       alive = false;
@@ -107,7 +118,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SettingsContext.Provider value={{ settings, update, loaded }}>{children}</SettingsContext.Provider>
+    <SettingsContext.Provider value={{ settings, update, loaded, editors: editors ?? NO_EDITORS, editorsLoaded: editors !== null }}>
+      {children}
+    </SettingsContext.Provider>
   );
 }
 

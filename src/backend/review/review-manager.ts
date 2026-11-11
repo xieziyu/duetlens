@@ -19,9 +19,10 @@ import type {
   UiSettings,
 } from '@shared/domain';
 import type { AgentErrorKind } from '@shared/agent-events';
+import { EDITOR_LABELS, isEditorId, preferredEditor, type EditorId } from '@shared/editor';
 import type { PrContext } from '@shared/github-context';
 import { changedFilesBetween, parseUnifiedDiff, type DiffFile } from '@shared/diff';
-import type { AddFindingInput, BusyReview, DiffStatInput, FindingEditInput, LatestDiffResult, LiveCapacity, RecentReview, RerunInput, ReviewEvent, ReviewScopes, ReviewStartStage, ScopeState, StartScanInput, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
+import type { AddFindingInput, BusyReview, DiffStatInput, FindingEditInput, LatestDiffResult, LiveCapacity, OpenInEditorResult, RecentReview, RerunInput, ResolveFilePathResult, ReviewEvent, ReviewScopes, ReviewStartStage, ScopeState, StartScanInput, SubmitReviewInput, SubmitReviewResult } from '@shared/ipc';
 import { LIVE_SESSION_LIMIT_CODE, PI_TOOLSET_NOT_READ_ONLY_CODE, SANDBOX_NOT_APPLIED_CODE } from '@shared/ipc';
 import { isCodexProtocolError } from '@shared/codex';
 import type { PromptSaveInput, ReviewPromptView } from '@shared/prompt';
@@ -37,8 +38,10 @@ import { buildScanPrompt } from '../prompt/scan-prompt';
 import { createSource } from '../source/create-source';
 import { fetchPrContextForReview } from '../source/github-pr-context';
 import { checkEnvironment } from '../env/environment-check';
+import { listInstalledEditors } from '../env/editors';
 import type { EnvCheckOptions, EnvironmentReport } from '@shared/environment';
 import { setToolPath } from '../config/tool-paths';
+import { run } from '../source/exec';
 import type { ReviewTarget, Source } from '../source/source';
 import {
   checkGhAuth,
@@ -64,6 +67,7 @@ import {
   type RepoRemoteInfo,
 } from '@shared/source-discovery';
 import { GhReviewSubmitter, type GitHubSubmitter } from './github-submitter';
+import { resolveLocalReviewFile } from './local-file';
 import { AgentTurnError, ReviewSession, type ReviewSessionEvents } from './review-session';
 
 /**
@@ -343,6 +347,50 @@ export class ReviewManager extends EventEmitter {
 
   getReview(id: string): Review | null {
     return this.store.getReview(id);
+  }
+
+  async resolveFilePath(reviewId: string, filePath: string): Promise<ResolveFilePathResult> {
+    const review = this.store.getReview(reviewId);
+    if (!review) return { ok: false, message: '找不到该审核' };
+    const file = await resolveLocalReviewFile(review.repoPath, filePath);
+    return file.ok ? { ok: true, path: file.path } : file;
+  }
+
+  async openInEditor(reviewId: string, filePath: string, line?: number, editor?: EditorId | null): Promise<OpenInEditorResult> {
+    const review = this.store.getReview(reviewId);
+    if (!review) return { ok: false, message: '找不到该审核' };
+    const file = await resolveLocalReviewFile(review.repoPath, filePath);
+    if (!file.ok) return file;
+    if (!file.realPath) return { ok: false, message: '本地文件不存在，可能已删除或当前工作区未包含此文件' };
+    if (line !== undefined && (!Number.isSafeInteger(line) || line < 1)) {
+      return { ok: false, message: '无效的文件行号' };
+    }
+
+    const setting = editor === undefined ? this.store.getUiSettings().defaultEditor : editor;
+    if (setting !== null && !isEditorId(setting)) return { ok: false, message: '不支持该编辑器' };
+    const selected = preferredEditor(setting, await listInstalledEditors());
+    if (!selected) {
+      return { ok: false, message: setting ? `未检测到 ${EDITOR_LABELS[setting]}` : '未检测到 VS Code 或 Cursor' };
+    }
+
+    // CLI 会将路径中以冒号分隔的纯数字段解释成行列号。
+    const ambiguousLine = line !== undefined && file.realPath.split(':').slice(1).some((part) => !Number.isNaN(Number(part)));
+    const args = line === undefined || ambiguousLine ? [file.realPath] : ['--goto', `${file.realPath}:${line}`];
+    const sha = this.store.getRound(reviewId, review.currentRound)?.headSha ?? review.headRef;
+    const fileChanged = sha && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i.test(sha) && review.repoPath
+      ? run('git', ['-C', review.repoPath, '--literal-pathspecs', 'diff', '--name-only', '--no-ext-diff', '--no-textconv', sha, '--', filePath])
+          .then((output) => output.length > 0, () => false)
+      : Promise.resolve(false);
+    try {
+      const [, changed] = await Promise.all([run(selected.executable, args), fileChanged]);
+      const warnings = [
+        ...(changed ? ['本地文件与审核版本不同，行号可能有偏差'] : []),
+        ...(ambiguousLine ? ['该文件名无法通过编辑器命令定位行号'] : []),
+      ];
+      return warnings.length ? { ok: true, warning: warnings.join('。') } : { ok: true };
+    } catch {
+      return { ok: false, message: `无法在 ${EDITOR_LABELS[selected.id]} 中打开文件` };
+    }
   }
 
   getFindings(reviewId: string): Finding[] {

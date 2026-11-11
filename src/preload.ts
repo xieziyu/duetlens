@@ -63,6 +63,9 @@ const api: DuetlensApi = {
       ipcRenderer.invoke(IpcChannels.reviewUpdateFinding, reviewId, input),
     submit: (reviewId, input) => ipcRenderer.invoke(IpcChannels.reviewSubmit, reviewId, input),
     openInBrowser: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewOpenInBrowser, reviewId),
+    resolveFilePath: (reviewId, path) => ipcRenderer.invoke(IpcChannels.reviewResolveFilePath, reviewId, path),
+    openInEditor: (reviewId, path, line, editor) =>
+      ipcRenderer.invoke(IpcChannels.reviewOpenInEditor, reviewId, path, line, editor),
     getUiState: (reviewId) => ipcRenderer.invoke(IpcChannels.reviewGetUiState, reviewId),
     saveUiState: (reviewId, state) =>
       ipcRenderer.invoke(IpcChannels.reviewSaveUiState, reviewId, state),
@@ -104,6 +107,7 @@ const api: DuetlensApi = {
   ui: {
     getSettings: () => ipcRenderer.invoke(IpcChannels.uiGetSettings),
     saveSettings: (settings: UiSettings) => ipcRenderer.invoke(IpcChannels.uiSaveSettings, settings),
+    listEditors: () => ipcRenderer.invoke(IpcChannels.uiListEditors),
   },
   update: {
     getStatus: () => ipcRenderer.invoke(IpcChannels.updateGetStatus),

@@ -7,11 +7,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 import type { DiffFile, DiffHunk, DiffLine } from '@shared/diff';
 import type { Discussion, Finding, Triage } from '@shared/domain';
 import type { DiscussionAnchor, FindingEditInput } from '@shared/ipc';
 import { InlineCard } from './InlineCard';
+import { FileCopySplit, OpenEditorButton, useFileActions } from './FileActions';
 import { AnnotateComposer, type NewFindingDraft } from './AnnotateComposer';
 import { PencilIcon } from './PencilIcon';
 import { SelectionPopover } from './SelectionPopover';
@@ -205,6 +207,7 @@ export interface DiffPaneProps {
  * 发起后交由 ReviewScreen 落库并在 Discussion 栏承载对话。
  */
 export function DiffPane(props: DiffPaneProps) {
+  const fileActions = useFileActions();
   const {
     files,
     findings,
@@ -573,8 +576,8 @@ export function DiffPane(props: DiffPaneProps) {
 
   // ---- 框选 → popover:解析选区新侧锚点 + 定位 ----
   const canStart = !!onStartDiscussion;
-  const onMouseUp = useCallback(() => {
-    if (!canStart) return;
+  const onMouseUp = useCallback((e: ReactMouseEvent) => {
+    if (!canStart || e.metaKey) return;
     // 等浏览器把 selection 敲定后再读
     setTimeout(() => {
       const pane = ref.current;
@@ -620,6 +623,20 @@ export function DiffPane(props: DiffPaneProps) {
       setSel({ pick, top, left });
     }, 0);
   }, [canStart]);
+
+  const onCodeClick = (e: ReactMouseEvent) => {
+    if (!e.metaKey || !fileActions || !(e.target instanceof Element)) return;
+    if (e.target.closest('button, a, .anchor')) return;
+    const cell = e.target.closest<HTMLTableCellElement>('.code.unified td, .code.split td.new');
+    const row = cell?.closest<HTMLElement>('tr.row');
+    if (!row) return;
+    const path = row.closest<HTMLElement>('.diff-file')?.dataset.path;
+    const line = rowNewLine(row);
+    if (!path || line === null) return;
+    e.preventDefault();
+    setSel(null);
+    void fileActions.open(path, line);
+  };
 
   // 浮层坐标是按当时的视口算死的,隐藏期间 diff 还可能被别处滚走 —— 与其留一枚回来就错位的浮层,
   // 不如变为不可见时就收掉;两条全局监听也随之不再注册。
@@ -667,7 +684,7 @@ export function DiffPane(props: DiffPaneProps) {
     // 检索条是 .diff-col 的绝对定位子元素,**不能**放进滚动容器:
     // 放进去它会随内容滚开,点上一处 / 下一处时搜索条自己先跑掉
     <div className="diff-col">
-    <div className="diff pane" ref={ref} onMouseUp={onMouseUp}>
+    <div className="diff pane" ref={ref} onMouseUp={onMouseUp} onClick={onCodeClick}>
       <div className="diff-bar">
         <span className="db-stat mono" title="本次改动总量">
           <span className="a">+{totals.a}</span>
@@ -1080,6 +1097,7 @@ function DiffFileView({
   revealOf: (gapKey: string) => number;
   onExpand: (gap: Gap) => void;
 }) {
+  const fileActions = useFileActions();
   // 新侧存在的行号集合;锚点不在其中的 finding 归 off-diff
   const newLines = useMemo(() => {
     const s = new Set<number>();
@@ -1164,7 +1182,11 @@ function DiffFileView({
       <div className="file-header" id={fileAnchorId(file.path)}>
         <div className="fh-id">
           <div className="fh-line1">
-            <span className="fh-name" title={file.path}>{basename(file.path)}</span>
+            {fileActions ? (
+              <OpenEditorButton path={file.path} filename={basename(file.path)} />
+            ) : (
+              <span className="fh-name" title={file.path}>{basename(file.path)}</span>
+            )}
             {FILE_STATUS_LABEL[file.status] && (
               <span className={`fstat ${file.status}`}>{FILE_STATUS_LABEL[file.status]}</span>
             )}
@@ -1180,6 +1202,12 @@ function DiffFileView({
             </bdi>
           </div>
         </div>
+        {fileActions && (
+          <div className="fh-file-actions">
+            <FileCopySplit path={file.path} />
+            <OpenEditorButton path={file.path} />
+          </div>
+        )}
         <div className="fh-meta">
           {findings.length > 0 && <span className="fh-fnd">⚑ {findings.length}</span>}
           {!file.binary && (
@@ -1207,6 +1235,7 @@ function DiffFileView({
             <button
               className="fh-btn"
               title={collapsed ? '展开文件内容' : '折叠文件内容'}
+              aria-expanded={!collapsed}
               onClick={onToggleCollapsed}
             >
               <span className="fb-ic" aria-hidden="true">{collapsed ? '+' : '−'}</span>
@@ -1477,7 +1506,7 @@ function LineRow({
       className={`row${line.kind === 'add' ? ' add' : line.kind === 'del' ? ' del' : ''}`}
       data-new-line={line.newLine ?? undefined}
     >
-      <td className="ln">
+      <td className="ln" title={line.newLine == null ? undefined : '⌘ + 点击在编辑器中打开'}>
         {lineNo}
         {line.newLine != null && <AddThread line={line.newLine} text={line.text} onAddThread={onAddThread} />}
       </td>
@@ -1522,7 +1551,10 @@ function SplitCell({
   const html = line.text === '' ? '&nbsp;' : highlightLine(line.text, lang);
   return (
     <>
-      <td className={`${lnBase}${mod}${mark ? ' has-anchor' : ''}`}>
+      <td
+        className={`${lnBase}${mod}${mark ? ' has-anchor' : ''}`}
+        title={side === 'new' && lineNo != null ? '⌘ + 点击在编辑器中打开' : undefined}
+      >
         {mark && onAnchorClick && <AnchorDot mark={mark} onClick={onAnchorClick} />}
         {lineNo}
         {side === 'new' && line.newLine != null && (

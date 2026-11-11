@@ -12,6 +12,7 @@ import {
   REVIEW_INTENSITIES,
 } from '@shared/domain';
 import { agentUnavailableReason, type EnvironmentReport } from '@shared/environment';
+import { EDITOR_IDS, EDITOR_LABELS, preferredEditor, type EditorId } from '@shared/editor';
 import { AUTHOR, PROJECT_LINKS, newIssueUrl } from '@shared/links';
 import { useSettings } from '../settings/SettingsProvider';
 import { useUpdateStatus } from '../update/useUpdateStatus';
@@ -65,7 +66,7 @@ export function SettingsScreen({
   focusSection?: SectionId | null;
   onFocusHandled?: () => void;
 }): React.JSX.Element {
-  const { settings, update } = useSettings();
+  const { settings, update, loaded, editors, editorsLoaded } = useSettings();
   const [active, setActive] = useState<SectionId>('appearance');
   const [env, setEnv] = useState<EnvironmentReport | null>(null);
   const [checkingEnv, setCheckingEnv] = useState(false);
@@ -75,6 +76,8 @@ export function SettingsScreen({
   const contentRef = useRef<HTMLDivElement>(null);
   const updateStatus = useUpdateStatus();
   const updateReady = updateStatus.phase === 'ready';
+  const automaticEditor = preferredEditor(null, editors);
+  const automaticEditorLabel = automaticEditor ? `自动（${EDITOR_LABELS[automaticEditor.id]}）` : '自动（无可用编辑器）';
 
   const runEnvCheck = useCallback(async () => {
     setCheckingEnv(true);
@@ -272,6 +275,25 @@ export function SettingsScreen({
                 options={SOURCE_CHOICES.map((s) => ({ v: s.v, label: s.label }))}
                 onPick={(v) => update({ defaultSource: v as SourceKind })}
               />
+            </Row>
+            <Row label="默认编辑器">
+              <select
+                className="field"
+                aria-label="默认编辑器"
+                disabled={!loaded || !editorsLoaded}
+                value={settings.defaultEditor ?? ''}
+                onChange={(e) => update({ defaultEditor: (e.target.value || null) as EditorId | null })}
+              >
+                <option value="">{editorsLoaded ? automaticEditorLabel : '自动'}</option>
+                {EDITOR_IDS.map((id) => {
+                  const unavailable = editorsLoaded && !editors.some((editor) => editor.id === id);
+                  return (
+                    <option key={id} value={id} disabled={unavailable}>
+                      {EDITOR_LABELS[id]}{unavailable ? ' · 未安装' : ''}
+                    </option>
+                  );
+                })}
+              </select>
             </Row>
             <Row label="默认 diff 视图">
               <Choice

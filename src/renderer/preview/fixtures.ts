@@ -7,6 +7,7 @@ import { parseUnifiedDiff } from '@shared/diff';
 import type { AgentEvent } from '@shared/agent-events';
 import { MCP_TOOL } from '@shared/mcp-contract';
 import { FOLLOWUP_REPLY_FAILED_CODE } from '@shared/ipc';
+import { EDITOR_IDS } from '@shared/editor';
 import type {
   BusyReview,
   CompletionNotice,
@@ -516,6 +517,7 @@ const UI_SETTINGS: UiSettings = {
   rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
+  defaultEditor: null,
   fileListView: 'tree',
   defaultSource: 'github-pr',
   lastRepoPath: '/Users/dev/podcast-go',
@@ -1509,6 +1511,16 @@ export function installPreviewApi(): void {
         window.open(url, '_blank', 'noopener');
         return { ok: true, url };
       },
+      resolveFilePath: async (_id, path) => review.repoPath
+        ? { ok: true, path: `${review.repoPath}/${path}` }
+        : { ok: false, message: '此审核未关联本地仓库' },
+      openInEditor: async (_id, path) => {
+        if (!review.repoPath) return { ok: false, message: '此审核未关联本地仓库' };
+        if (diff.some((file) => file.path === path && file.status === 'deleted')) {
+          return { ok: false, message: '本地文件不存在，可能已删除或当前工作区未包含此文件' };
+        }
+        return { ok: true };
+      },
       getUiState: async () => reviewUiState,
       getActiveScope: async () => activeScope,
       setActiveScope: async (_r, scope) => {
@@ -1615,6 +1627,7 @@ export function installPreviewApi(): void {
       saveSettings: async (s) => {
         uiSettings = s;
       },
+      listEditors: async () => EDITOR_IDS.map((id) => ({ id, icon: null })),
     },
     // ?upd=current|checking|downloading|ready|error|unsupported(缺省 current)
     update: {
