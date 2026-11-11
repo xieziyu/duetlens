@@ -60,6 +60,29 @@ function stripPrefix(p: string): string {
   return p.replace(/^[ab]\//, '');
 }
 
+const GIT_PATH_ESCAPES: Record<string, string> = {
+  a: '\x07', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', '"': '"', '\\': '\\',
+};
+const utf8 = new TextDecoder('utf-8', { ignoreBOM: true });
+
+function decodeGitPath(path: string): string {
+  if (!path.startsWith('"') || !path.endsWith('"')) return path;
+  return path.slice(1, -1).replace(/(?:\\[0-3][0-7]{2})+|\\([abfnrtv"\\])/g, (escaped, char?: string) => {
+    if (char) return GIT_PATH_ESCAPES[char];
+    const bytes = escaped.split('\\').slice(1).map((octal) => Number.parseInt(octal, 8));
+    return utf8.decode(Uint8Array.from(bytes));
+  });
+}
+
+function pathFromGitHeader(header: string): string {
+  // Git 不为路径中的空格加引号，同名路径可按两侧重复的名字定位分隔符。
+  const samePath = /^a\/(.*) b\/\1$/.exec(header);
+  if (samePath) return samePath[1];
+  const prefixed = /^(?:"(?:[^"\\]|\\.)*"|[^"]+) ("(?:[^"\\]|\\.)*"|b\/[^"]+)$/.exec(header);
+  const path = prefixed?.[1] ?? /^.+ (.+)$/.exec(header)?.[1] ?? '';
+  return stripPrefix(decodeGitPath(path));
+}
+
 /**
  * 解析 git 风格 unified diff 原文为 DiffFile[]。
  * 支持:新增/删除/修改/重命名、二进制、多 hunk、\ No newline at end of file。
@@ -82,11 +105,8 @@ export function parseUnifiedDiff(raw: string): DiffFile[] {
 
     if (line.startsWith('diff --git ')) {
       pushFile();
-      const m = /^diff --git (.+) (.+)$/.exec(line);
-      const oldP = m ? stripPrefix(m[1]) : '';
-      const newP = m ? stripPrefix(m[2]) : '';
       file = {
-        path: newP || oldP,
+        path: pathFromGitHeader(line.slice('diff --git '.length).replace(/\r$/, '')),
         oldPath: null,
         status: 'modified',
         binary: false,
@@ -99,39 +119,6 @@ export function parseUnifiedDiff(raw: string): DiffFile[] {
     }
     if (!file) continue;
 
-    if (line.startsWith('new file mode')) {
-      file.status = 'added';
-      continue;
-    }
-    if (line.startsWith('deleted file mode')) {
-      file.status = 'deleted';
-      continue;
-    }
-    if (line.startsWith('rename from ')) {
-      file.status = 'renamed';
-      file.oldPath = stripPrefix(line.slice('rename from '.length));
-      continue;
-    }
-    if (line.startsWith('rename to ')) {
-      file.status = 'renamed';
-      file.path = stripPrefix(line.slice('rename to '.length));
-      continue;
-    }
-    if (line.startsWith('Binary files ') || line.startsWith('GIT binary patch')) {
-      file.binary = true;
-      continue;
-    }
-    if (line.startsWith('--- ')) {
-      const p = stripPrefix(line.slice(4).trim());
-      if (p !== '/dev/null' && !file.oldPath) file.oldPath = p;
-      continue;
-    }
-    if (line.startsWith('+++ ')) {
-      const p = stripPrefix(line.slice(4).trim());
-      if (p !== '/dev/null') file.path = p;
-      continue;
-    }
-
     const header = parseHunkHeader(line);
     if (header) {
       hunk = { ...header, lines: [] };
@@ -140,7 +127,28 @@ export function parseUnifiedDiff(raw: string): DiffFile[] {
       newNo = header.newStart;
       continue;
     }
-    if (!hunk) continue;
+    if (!hunk) {
+      if (line.startsWith('new file mode')) {
+        file.status = 'added';
+      } else if (line.startsWith('deleted file mode')) {
+        file.status = 'deleted';
+      } else if (line.startsWith('rename from ')) {
+        file.status = 'renamed';
+        file.oldPath = decodeGitPath(line.slice('rename from '.length));
+      } else if (line.startsWith('rename to ')) {
+        file.status = 'renamed';
+        file.path = decodeGitPath(line.slice('rename to '.length));
+      } else if (line.startsWith('Binary files ') || line.startsWith('GIT binary patch')) {
+        file.binary = true;
+      } else if (line.startsWith('--- ') || line.startsWith('+++ ')) {
+        const path = stripPrefix(decodeGitPath(line.slice(4).split('\t', 1)[0].replace(/\r$/, '')));
+        if (line[0] === '-') {
+          if (path !== '/dev/null' && !file.oldPath) file.oldPath = path;
+        } else if (path !== '/dev/null') file.path = path;
+        else if (file.oldPath) file.path = file.oldPath;
+      }
+      continue;
+    }
 
     // \ No newline at end of file:注记行,不占行号
     if (line.startsWith('\\')) continue;

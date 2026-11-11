@@ -25,6 +25,7 @@ import type { GhReviewEvent } from './github-review';
 import type { PromptSaveInput, ReviewPromptView } from './prompt';
 import type { EnvCheckOptions, EnvironmentReport } from './environment';
 import type { UpdateStatus } from './update';
+import type { EditorId, EditorInfo } from './editor';
 import type {
   DiffStat,
   LocalBranchList,
@@ -77,12 +78,15 @@ export const IpcChannels = {
   reviewUpdateFinding: 'review:update-finding',
   reviewSubmit: 'review:submit',
   reviewOpenInBrowser: 'review:open-in-browser',
+  reviewResolveFilePath: 'review:resolve-file-path',
+  reviewOpenInEditor: 'review:open-in-editor',
   reviewGetUiState: 'review:get-ui-state',
   reviewSaveUiState: 'review:save-ui-state',
   reviewGetActiveScope: 'review:get-active-scope',
   reviewSetActiveScope: 'review:set-active-scope',
   uiGetSettings: 'ui:get-settings',
   uiSaveSettings: 'ui:save-settings',
+  uiListEditors: 'ui:list-editors',
   agentListModels: 'agent:list-models',
   sourceCheckGhAuth: 'source:check-gh-auth',
   sourcePreviewPr: 'source:preview-pr',
@@ -162,6 +166,9 @@ export interface RerunInput {
 }
 
 /** 交给系统默认浏览器打开的结果;失败原因回前端做提示,不抛异常。 */
+export type ResolveFilePathResult = { ok: true; path: string } | { ok: false; message: string };
+export type OpenInEditorResult = { ok: true; warning?: string } | { ok: false; message: string };
+
 export interface OpenExternalResult {
   ok: boolean;
   url?: string;
@@ -506,6 +513,8 @@ export interface DuetlensApi {
     submit(reviewId: string, input: SubmitReviewInput): Promise<SubmitReviewResult>;
     /** 用系统默认浏览器打开该 review 的来源页面(目前仅 github-pr 有网页可开)。 */
     openInBrowser(reviewId: string): Promise<OpenExternalResult>;
+    resolveFilePath(reviewId: string, path: string): Promise<ResolveFilePathResult>;
+    openInEditor(reviewId: string, path: string, line?: number, editor?: EditorId | null): Promise<OpenInEditorResult>;
     /** 读某 review 的 per-review UI 进度态(已看文件等);无记录返回默认空态。 */
     getUiState(reviewId: string): Promise<ReviewUiState>;
     /** 写某 review 的 per-review UI 进度态(前端去抖调用)。 */
@@ -538,6 +547,7 @@ export interface DuetlensApi {
   ui: {
     getSettings(): Promise<UiSettings>;
     saveSettings(settings: UiSettings): Promise<void>;
+    listEditors(): Promise<EditorInfo[]>;
   };
   update: {
     /** 当前状态(挂载时取一次,之后靠 onStatus 推)。 */

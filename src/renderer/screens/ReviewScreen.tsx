@@ -17,6 +17,7 @@ import { useIsActiveTab } from '../review/TabVisibility';
 import { useReviewStream, type ReplyStream } from '../review/useReviewStream';
 import { useReviewUiState } from '../review/useReviewUiState';
 import { FileTree } from './review/FileTree';
+import { ExternalIcon, FileActionsProvider, OpenEditorButton } from './review/FileActions';
 import { DiffPane, type DiffView } from './review/DiffPane';
 import { DiscussionTab } from './review/DiscussionTab';
 import type { UnsentDraft } from './review/Composer';
@@ -397,7 +398,7 @@ function ReviewPane({
   // 轮次要早于下面的重置 effect 可见(它按 currentRound 作废跨轮失效的本地态)
   const currentRound = review?.currentRound ?? 1;
   // 布局 / diff 视图 = 全局持久化偏好(后端 ui_settings);改动去抖写回。
-  const { settings, update } = useSettings();
+  const { settings, update, editors, editorsLoaded } = useSettings();
   const [activePath, setActivePath] = useState<string | null>(null);
   const [focusFindingId, setFocusFindingId] = useState<string | null>(null);
   // 定位是「请求」不是「状态」:滚走之后再点同一处,值没变则 DiffPane 的定位 effect 不会重跑,
@@ -1051,7 +1052,7 @@ function ReviewPane({
     );
   }
 
-  return (
+  const screen = (
     <div
       className="rev-root"
       ref={rootRef}
@@ -1358,15 +1359,21 @@ function ReviewPane({
       />
     </div>
   );
-}
 
-const ExternalIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <path d="M13.5 4.5H19.5V10.5" />
-    <path d="M19.5 4.5 11 13" />
-    <path d="M18 14.5v4a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6h4" />
-  </svg>
-);
+  return (
+    <FileActionsProvider
+      reviewId={reviewId}
+      repoPath={review?.repoPath}
+      files={diff}
+      defaultEditor={settings.defaultEditor}
+      editors={editors}
+      editorsLoaded={editorsLoaded}
+      active={active}
+    >
+      {screen}
+    </FileActionsProvider>
+  );
+}
 
 const SEV_ORDER: Severity[] = ['high', 'medium', 'low'];
 const SEV_LABEL: Record<Severity, string> = { high: 'High', medium: 'Med', low: 'Low' };
@@ -1945,6 +1952,7 @@ function FindingRow({
         </span>
         {f.suggestion && <span className="sugg-tag">◇ suggestion</span>}
         <div className="fr-actions">
+          <OpenEditorButton path={f.file} line={f.line} />
           {dismissed ? (
             <button className="fr-restore" onClick={triage('open')}>
               ↩ 恢复

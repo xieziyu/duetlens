@@ -1,8 +1,9 @@
-import { Fragment, useMemo, useState, type RefObject } from 'react';
+import { Fragment, useMemo, useRef, useState, type RefObject } from 'react';
 import type { DiffFile, FileStatus } from '@shared/diff';
 import type { Finding, UiSettings } from '@shared/domain';
 import { imeComposing } from '../../keys';
 import { containsHits, matchFilePath, parseFileQuery } from './file-filter';
+import { FileMenuTrigger, useFileActions } from './FileActions';
 import { buildTreeRows, subtreeDirs, type FileHit, type TreeRow } from './file-tree-model';
 
 /** 文件状态字母标记(对齐 GitHub 惯例:A/D/M/R)。 */
@@ -271,26 +272,48 @@ function FileRow({
   onToggleViewed: (path: string) => void;
 }) {
   const name = basename(f.path);
+  const actions = useFileActions();
+  const moreRef = useRef<HTMLButtonElement>(null);
   return (
     <div
       className={`file${active ? ' active' : ''}${viewed ? ' viewed' : ''}`}
       style={{ ['--d' as string]: depth }}
       onClick={() => onSelect(f.path)}
+      onContextMenu={(e) => {
+        if (!actions || !moreRef.current) return;
+        e.preventDefault();
+        actions.showMenu('tree', f.path, moreRef.current, { point: { x: e.clientX, y: e.clientY } });
+      }}
       title={f.oldPath ? `${f.oldPath} → ${f.path}` : f.path}
     >
-      <span className={`tag st-${f.status}`}>{STATUS_TAG[f.status]}</span>
-      <span className="name">
-        <Marked text={name} hits={hits} offset={f.path.length - name.length} />
-      </span>
-      {findings > 0 && <span className="badge f">{findings}</span>}
-      {f.binary ? (
-        <span className="stat dim">bin</span>
-      ) : (
-        <span className="stat">
-          <span className="a">+{f.additions}</span>
-          <span className="d">−{f.deletions}</span>
+      <button
+        type="button"
+        className="file-select"
+        aria-current={active ? true : undefined}
+        aria-label={f.path}
+        onKeyDown={(e) => {
+          if (!actions || !moreRef.current || imeComposing(e)) return;
+          if (e.key !== 'ContextMenu' && !(e.shiftKey && e.key === 'F10')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          actions.showMenu('tree', f.path, moreRef.current);
+        }}
+      >
+        <span className={`tag st-${f.status}`}>{STATUS_TAG[f.status]}</span>
+        <span className="name">
+          <Marked text={name} hits={hits} offset={f.path.length - name.length} />
         </span>
-      )}
+        {findings > 0 && <span className="badge f">{findings}</span>}
+        {f.binary ? (
+          <span className="stat dim">bin</span>
+        ) : (
+          <span className="stat">
+            <span className="a">+{f.additions}</span>
+            <span className="d">−{f.deletions}</span>
+          </span>
+        )}
+      </button>
+      <FileMenuTrigger kind="tree" path={f.path} name={name} triggerRef={moreRef} />
       <span
         className="vtick"
         title={viewed ? '取消已看' : '标记已看'}

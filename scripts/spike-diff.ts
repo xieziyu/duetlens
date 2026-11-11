@@ -134,6 +134,33 @@ function main(): void {
   assert.equal(bin.hunks.length, 0);
   log('binary ✓');
 
+  const quoted = String.raw`b/\344\270\255\346\226\207 \\\"`;
+  const decoded = String.raw`b/中文 \"`;
+  const [text, quotedBinary, spacedBinary, renamedQuoted] = parseUnifiedDiff(`diff --git "a/${quoted}.ts" "b/${quoted}.ts"
+--- "a/${quoted}.ts"
++++ "b/${quoted}.ts"
+@@ -1 +1 @@
+--- old content
++++ new content
+diff --git "a/${quoted}.png" "b/${quoted}.png"
+Binary files "a/${quoted}.png" and "b/${quoted}.png" differ
+diff --git a/assets b/banner copy.png b/assets b/banner copy.png
+Binary files a/assets b/banner copy.png and b/assets b/banner copy.png differ
+diff --git a/a/old name.ts "b/${quoted}-renamed.ts"
+similarity index 100%
+rename from a/old name.ts
+rename to "${quoted}-renamed.ts"
+`);
+  assert.deepEqual(
+    [text.path, text.oldPath, quotedBinary.path, spacedBinary.path, renamedQuoted.oldPath, renamedQuoted.path],
+    [`${decoded}.ts`, `${decoded}.ts`, `${decoded}.png`, 'assets b/banner copy.png', 'a/old name.ts', `${decoded}-renamed.ts`],
+  );
+  assert.deepEqual(text.hunks[0].lines.map((line) => [line.oldLine, line.newLine, line.text]), [
+    [1, null, '-- old content'],
+    [null, 1, '++ new content'],
+  ]);
+  log('Git 文件路径与 hunk 内的标记 ✓');
+
   // ---- 多文件一次解析 ----
   const multi = parseUnifiedDiff(ADD + DEL + MODIFY);
   assert.equal(multi.length, 3);

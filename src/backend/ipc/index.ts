@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron';
 import { writeFile } from 'node:fs/promises';
 import process from 'node:process';
 import {
@@ -18,11 +18,13 @@ import {
   type SubmitReviewInput,
 } from '@shared/ipc';
 import type { AgentKind, ReviewUiState, Triage, UiSettings } from '@shared/domain';
+import type { EditorId, EditorInfo } from '@shared/editor';
 import type { EnvCheckOptions } from '@shared/environment';
 import type { PromptSaveInput } from '@shared/prompt';
 import type { ReviewManager } from '../review/review-manager';
 import type { Updater } from '../update/updater';
 import { resolvePrUrl } from '../source/source-discovery';
+import { listInstalledEditors } from '../env/editors';
 
 export interface IpcDeps {
   manager: ReviewManager;
@@ -167,6 +169,12 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
       return { ok: false, message: (e as Error).message };
     }
   });
+  ipcMain.handle(IpcChannels.reviewResolveFilePath, (_e, reviewId: string, path: string) =>
+    manager.resolveFilePath(reviewId, path),
+  );
+  ipcMain.handle(IpcChannels.reviewOpenInEditor, (_e, reviewId: string, path: string, line?: number, editor?: EditorId | null) =>
+    manager.openInEditor(reviewId, path, line, editor),
+  );
   ipcMain.handle(IpcChannels.reviewGetUiState, (_e, reviewId: string) =>
     manager.getReviewUiState(reviewId),
   );
@@ -182,6 +190,13 @@ export function registerIpcHandlers({ manager, broadcast, updater }: IpcDeps): v
 
   ipcMain.handle(IpcChannels.uiGetSettings, () => manager.getUiSettings());
   ipcMain.handle(IpcChannels.uiSaveSettings, (_e, settings: UiSettings) => manager.saveUiSettings(settings));
+  ipcMain.handle(IpcChannels.uiListEditors, async (): Promise<EditorInfo[]> => {
+    const editors = await listInstalledEditors();
+    return Promise.all(editors.map(async ({ id, iconPath }) => {
+      const image = await nativeImage.createThumbnailFromPath(iconPath, { width: 64, height: 64 }).catch(() => null);
+      return { id, icon: image && !image.isEmpty() ? image.toDataURL() : null };
+    }));
+  });
 
   ipcMain.handle(IpcChannels.updateGetStatus, () => updater.getStatus());
   ipcMain.handle(IpcChannels.updateCheck, () => updater.check());

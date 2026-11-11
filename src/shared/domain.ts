@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import type { AgentErrorKind } from './agent-events';
+import type { EditorId } from './editor';
 
 // ---- 枚举 ----
 export const SOURCE_KINDS = ['github-pr', 'local-branch', 'gitbutler-vbranch'] as const;
@@ -723,6 +724,7 @@ export interface UiSettings {
   rightWidth: number;
   defaultTab: 'discussion' | 'findings' | 'summary';
   defaultDiffView: 'unified' | 'split';
+  defaultEditor: EditorId | null;
   /** 左栏文件列表的视图:平铺分组 / 可逐级折叠的目录树 */
   fileListView: 'flat' | 'tree';
   /** 发起表单预填的默认来源(入口只分 github-pr / 本地仓库两档,本地档统一存 local-branch) */
@@ -789,6 +791,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   rightWidth: 420,
   defaultTab: 'findings',
   defaultDiffView: 'unified',
+  defaultEditor: null,
   fileListView: 'tree',
   defaultSource: 'github-pr',
   lastRepoPath: '',
