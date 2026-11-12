@@ -37,6 +37,7 @@ import { buildRerunPrompt } from '../prompt/rerun-prompt';
 import { buildScanPrompt } from '../prompt/scan-prompt';
 import { createSource } from '../source/create-source';
 import { fetchPrContextForReview } from '../source/github-pr-context';
+import { resolveGitButlerCheckout } from '../source/gitbutler-workspace';
 import { checkEnvironment } from '../env/environment-check';
 import { listInstalledEditors } from '../env/editors';
 import type { EnvCheckOptions, EnvironmentReport } from '@shared/environment';
@@ -352,14 +353,25 @@ export class ReviewManager extends EventEmitter {
   async resolveFilePath(reviewId: string, filePath: string): Promise<ResolveFilePathResult> {
     const review = this.store.getReview(reviewId);
     if (!review) return { ok: false, message: '找不到该审核' };
-    const file = await resolveLocalReviewFile(review.repoPath, filePath);
+    const file = await this.resolveReviewFile(review, filePath);
     return file.ok ? { ok: true, path: file.path } : file;
+  }
+
+  private async resolveReviewFile(review: Review, filePath: string) {
+    let repoPath = review.repoPath;
+    if (repoPath && review.source === 'gitbutler-vbranch') {
+      const checkout = await resolveGitButlerCheckout(repoPath, review.sourceRef);
+      if (!checkout.ok) return checkout;
+      repoPath = checkout.repoPath;
+    }
+    const file = await resolveLocalReviewFile(repoPath, filePath);
+    return file.ok ? { ...file, repoPath } : file;
   }
 
   async openInEditor(reviewId: string, filePath: string, line?: number, editor?: EditorId | null): Promise<OpenInEditorResult> {
     const review = this.store.getReview(reviewId);
     if (!review) return { ok: false, message: '找不到该审核' };
-    const file = await resolveLocalReviewFile(review.repoPath, filePath);
+    const file = await this.resolveReviewFile(review, filePath);
     if (!file.ok) return file;
     if (!file.realPath) return { ok: false, message: '本地文件不存在，可能已删除或当前工作区未包含此文件' };
     if (line !== undefined && (!Number.isSafeInteger(line) || line < 1)) {
@@ -377,8 +389,8 @@ export class ReviewManager extends EventEmitter {
     const ambiguousLine = line !== undefined && file.realPath.split(':').slice(1).some((part) => !Number.isNaN(Number(part)));
     const args = line === undefined || ambiguousLine ? [file.realPath] : ['--goto', `${file.realPath}:${line}`];
     const sha = this.store.getRound(reviewId, review.currentRound)?.headSha ?? review.headRef;
-    const fileChanged = sha && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i.test(sha) && review.repoPath
-      ? run('git', ['-C', review.repoPath, '--literal-pathspecs', 'diff', '--name-only', '--no-ext-diff', '--no-textconv', sha, '--', filePath])
+    const fileChanged = sha && /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/i.test(sha) && file.repoPath
+      ? run('git', ['-C', file.repoPath, '--literal-pathspecs', 'diff', '--name-only', '--no-ext-diff', '--no-textconv', sha, '--', filePath])
           .then((output) => output.length > 0, () => false)
       : Promise.resolve(false);
     try {

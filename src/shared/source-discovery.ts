@@ -123,11 +123,15 @@ export interface VbranchSummary {
   stackId: string;
   /** 在 stack 内自顶向下的位次:0 = 栈顶。序号大的在下方,才可作序号小的 base */
   stackOrder: number;
+  /** 独立 worktree 的名称和栈底提交。主工作区的分支省略此字段 */
+  worktree?: { name: string; baseCommit: string | null };
 }
 
 /** GitButler workspace 探测结果。 */
 export interface GitButlerStatus {
   isWorkspace: boolean;
+  /** GitButler 项目的主工作区路径 */
+  repoPath: string;
   /** workspace 根目录名(展示用) */
   repoName: string;
   branches: VbranchSummary[];
@@ -143,7 +147,7 @@ export type RepoDegradeReason = 'but-missing' | 'not-setup';
 
 /**
  * 选定本地仓库后的一次性探测:入口据此决定是按 GitButler 虚拟分支还是普通 git 分支审核。
- * 判据以 HEAD 分支名为主(不依赖 but),`but status` 只作可用性副判据。
+ * GitButler 模式涵盖主工作区与 GitButler 管理的活动 worktree。
  */
 export interface RepoInspection {
   /** 归一到 git 顶层目录的路径(选到子目录时回写);非 git 仓库时为传入原值 */

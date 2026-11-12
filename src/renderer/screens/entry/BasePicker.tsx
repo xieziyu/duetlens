@@ -10,6 +10,7 @@ import { Busy } from './Busy';
  */
 export interface BaseOption {
   ref: string;
+  displayRef?: string;
   /** 这条 ref 在结构里是什么(同 stack 下层分支 / workspace base / 仓库默认分支) */
   label: string;
   /** 覆盖范围的短语(「只审这一层」/「含 2 条分支」) */
@@ -29,17 +30,20 @@ export function BaseRow({
   value,
   onChange,
   stat,
+  invalid,
 }: {
   options: BaseOption[];
   /** 空串 = 用该 source 的默认基线(落库也存空,见 Review.baseRef) */
   value: string;
   onChange: (ref: string) => void;
   stat: DiffStatState;
+  invalid?: boolean;
 }) {
   const fallback = options.find((o) => o.isDefault) ?? options[0];
-  const current = value || fallback?.ref || '';
+  const current = invalid ? '' : value || fallback?.ref || '';
   const picks: BranchOption[] = options.map((o) => ({
     name: o.ref,
+    label: o.displayRef,
     kind: 'git',
     tag: o.scope,
     meta: o.label,
@@ -56,9 +60,9 @@ export function BaseRow({
         // 选中默认那条就落空串:让「跟随该 source 的默认基线」与「钉死在这条 ref 上」可分,
         // 否则默认分支后来改了名,旧 review 会拿着一条不再存在的 ref 复审。
         onChange={(ref) => onChange(ref === fallback?.ref ? '' : ref)}
-        emptyHint="没有可选的对比基线"
+        emptyHint={invalid ? '选择对比基线' : '没有可选的对比基线'}
       />
-      <DiffMetric stat={stat} />
+      {!invalid && <DiffMetric stat={stat} />}
     </div>
   );
 }
@@ -149,7 +153,15 @@ export function BaseSection({
  *
  * 不换行、横向滚动 —— 深 stack 加长分支名会把连接线断在半空,一条断掉的线比不画更误导。
  */
-export function StackLadder({ nodes, baseIndex }: { nodes: string[]; baseIndex: number }) {
+export function StackLadder({
+  nodes,
+  baseIndex,
+  bottomLabel,
+}: {
+  nodes: string[];
+  baseIndex: number;
+  bottomLabel?: string;
+}) {
   if (nodes.length < 2) return null;
   return (
     <div className="stackbar derived">
@@ -159,7 +171,9 @@ export function StackLadder({ nodes, baseIndex }: { nodes: string[]; baseIndex: 
         {nodes.map((n, i) => (
           <span key={n} className="sb-part">
             {i > 0 && <span className={i > baseIndex ? 'sb-seg in' : 'sb-seg'} />}
-            <span className={`sb-node mono${nodeClass(i, baseIndex, nodes.length)}`}>{n}</span>
+            <span className={`sb-node mono${nodeClass(i, baseIndex, nodes.length)}`} title={i === 0 && bottomLabel ? n : undefined}>
+              {i === 0 && bottomLabel ? bottomLabel : n}
+            </span>
           </span>
         ))}
       </div>

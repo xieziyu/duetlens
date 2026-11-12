@@ -17,7 +17,7 @@ import type {
   ReviewStartProgress,
   ReviewStartStage,
 } from '@shared/ipc';
-import { PR_COMMITS_CAP, type PrCommit, type PrSummary } from '@shared/source-discovery';
+import { PR_COMMITS_CAP, type GitButlerStatus, type PrCommit, type PrSummary } from '@shared/source-discovery';
 import { isStillPresent, scanDoneStatus } from '@shared/domain';
 import { hasAnchor, isSubmittable } from '@shared/github-review';
 import type { Discussion, Finding, FindingProposal, Message, ProposalUpdateBefore, ProposalUpdatePatch, Review, ReviewRound, ReviewUiState, UiSettings } from '@shared/domain';
@@ -751,6 +751,15 @@ export function installPreviewApi(): void {
   const diff = parseUnifiedDiff(RAW_DIFF);
   // ?source=github 切到 github-pr 以自查提交屏;?submit=invalid|failed 强制模拟提交结果
   const params = new URLSearchParams(window.location.search);
+  const entryState = params.get('entry-state');
+  const mainCheckout = UI_SETTINGS.lastRepoPath;
+  const linkedBranch = 'virtual-streaming';
+  const linkedCheckout = `/Users/dev/.gitbutler/worktrees/podcast-go/${linkedBranch}`;
+  const linkedBase = 'd52e4d8c141dd73115d71cadde197b4f52c9e830';
+  const withWorktrees = entryState === 'gb-worktrees' || entryState === 'gb-linked';
+  // 刷新后模拟 worktree 移除、列表恢复、模式降级或栈底变化。
+  const worktreeRefresh = params.get('worktree-refresh');
+  const inspectionCounts = new Map<string, number>();
   const asGithub = (params.get('source') ?? '').startsWith('github');
   const forceSubmit = params.get('submit');
   // ?scan 让 demo review 处于首轮机审态,用于自查扫描 timeline
@@ -793,7 +802,8 @@ export function installPreviewApi(): void {
   // SettingsProvider 拿同一个查询串播首帧种子,这里再喂给「持久化值」,免得种子被这份 stub 覆盖回来。
   let uiSettings: UiSettings = {
     ...UI_SETTINGS,
-    ...(params.get('entry-state') === 'pick' ? { lastRepoPath: '' } : {}),
+    ...(entryState === 'pick' ? { lastRepoPath: '' } : {}),
+    ...(entryState === 'gb-linked' ? { lastRepoPath: linkedCheckout } : {}),
     ...readThemeQuery(),
   };
   // 预置一个已看文件,证明启动即从后端恢复 per-review 进度(非组件默认空态)
@@ -993,6 +1003,9 @@ export function installPreviewApi(): void {
       // ?start 模拟大 PR 的慢启动(阶段按真实顺序推进,diff 停够久能看到「拉取偏慢」提示);
       // ?start=error 在 diff 阶段失败,自查浮层的错误态
       start: async (input) => {
+        if (input.source === 'gitbutler-vbranch' && input.ref === linkedBranch && input.repoPath !== mainCheckout) {
+          throw new Error('虚拟分支必须从主工作区审核');
+        }
         const mode = params.get('start');
         if (mode === null) return review;
         const at = (stage: ReviewStartStage, ms: number) => stageAt(input.startId, stage, ms);
@@ -1725,11 +1738,11 @@ export function installPreviewApi(): void {
       }),
       // entry-state:no-branches 演示没有领先 base 的分支(选择器禁用);many-branches 演示长列表(浮层定高/上翻)
       // 留一点延迟:列举中途切走仓库/模式的竞态,只有异步才复现得出来
-      listLocalBranches: async (_repoPath, base) => {
+      listLocalBranches: async (repoPath, base) => {
         await new Promise((r) => setTimeout(r, 400));
         const state = params.get('entry-state');
         const branches = [
-          { name: 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
+          { name: repoPath === linkedCheckout ? linkedBranch : 'feat/stream-transcode', isHead: true, ahead: 4, updatedAt: Date.now() - 12 * 60_000, subject: 'wire streaming encoder' },
           { name: 'fix/feed-encoding', isHead: false, ahead: 2, updatedAt: Date.now() - 3 * 3600_000, subject: 'guard non-utf8 titles' },
           // 默认分支自己也在库里:换个 base 就该能审它(后端按 base 剔除,见下面的 filter)
           { name: 'main', isHead: false, ahead: 0, updatedAt: Date.now() - 26 * 3600_000, subject: 'release 2.0' },
@@ -1761,6 +1774,9 @@ export function installPreviewApi(): void {
       // 钉了 commit 时数明显更小 —— 一个提交的改动面本就该远小于整个 PR,数没变小就是没重算
       diffStat: async (input) => {
         await new Promise((r) => setTimeout(r, 260));
+        if (input.source === 'gitbutler-vbranch' && input.ref === linkedBranch && input.repoPath !== mainCheckout) {
+          throw new Error('虚拟分支必须从主工作区计量');
+        }
         if (input.headRef) {
           const s = [...input.headRef].reduce((n, c) => n + c.charCodeAt(0), 0);
           return { files: 1 + (s % 4), additions: 6 + (s % 40), deletions: 1 + (s % 12) };
@@ -1770,16 +1786,17 @@ export function installPreviewApi(): void {
       },
       // entry-state=no-gb 演示普通 git 分支模式;gb-degraded 演示 HEAD 在 workspace 但 but 不可用
       inspectRepo: async (repoPath) => {
+        const count = (inspectionCounts.get(repoPath) ?? 0) + 1;
+        inspectionCounts.set(repoPath, count);
         await new Promise((r) => setTimeout(r, 250));
-        const state = params.get('entry-state');
-        // 一条两层的 stack(streaming 叠在 api-cleanup 上)+ 一条独立 lane:
-        // 前者才有可选 base,后者用来验「跨 stack 的分支不互为 base」
-        const gitbutler = {
+        const linked = repoPath === linkedCheckout;
+        const gitbutler: GitButlerStatus = {
           isWorkspace: true,
+          repoPath: linked ? mainCheckout : repoPath,
           repoName: 'podcast-go',
           // gb-no-target:读不到 workspace 目标分支。此时独立 lane 那条的 base 候选**合法地为空**,
           // 是「换分支后旧 base 必须清掉」唯一没有候选可判的场景
-          targetRef: state === 'gb-no-target' ? null : 'origin/main',
+          targetRef: entryState === 'gb-no-target' ? null : 'origin/main',
           // 三层才够用:两层时栈顶只有一个候选、而它就是默认档,选不出「非默认 base」这个状态
           branches: [
             { name: 'virtual/streaming', fileCount: 7, commitCount: 2, hasUncommitted: true, stackId: 'g0', stackOrder: 0 },
@@ -1789,18 +1806,41 @@ export function installPreviewApi(): void {
             { name: 'virtual/docs-pass', fileCount: null, commitCount: 1, hasUncommitted: false, stackId: 'h0', stackOrder: 0 },
           ],
         };
+        if (withWorktrees && gitbutler.repoPath === mainCheckout) {
+          const missingBase = worktreeRefresh === 'base-missing' && count > 1;
+          const worktree = {
+            name: linkedBranch,
+            baseCommit: worktreeRefresh === 'base' && count > 1
+              ? '0fab932de70c98437784d08777c1ae4ef72e870f'
+              : missingBase ? null : linkedBase,
+          };
+          if (worktreeRefresh !== 'remove' || count === 1) {
+            gitbutler.branches.push({ name: linkedBranch, fileCount: 6, commitCount: 2, hasUncommitted: true, stackId: 'w0', stackOrder: 0, worktree });
+            if (!missingBase) {
+              gitbutler.branches.push({ name: 'virtual/worker-base', fileCount: 2, commitCount: 1, hasUncommitted: false, stackId: 'w0', stackOrder: 1, worktree });
+            }
+          }
+          gitbutler.branches.push({
+            name: 'virtual/notes-worktree', fileCount: 1, commitCount: 1, hasUncommitted: false,
+            stackId: 'w1', stackOrder: 0, worktree: { name: 'virtual/notes-worktree', baseCommit: null },
+          });
+          if (worktreeRefresh === 'fill' && count === 1) gitbutler.branches = [];
+        }
         const base = { repoPath, repoName: 'podcast-go', isGit: true, gitbutler: null, degraded: null } as const;
         // ?repo=gone 演示目录已被移走/删除(git rev-parse 失败即 isGit=false)
         if (params.get('repo') === 'gone')
           return { ...base, isGit: false, head: null, mode: 'local' };
-        if (state === 'no-gb' || state === 'no-branches' || state === 'many-branches')
+        if (entryState === 'no-gb' || entryState === 'no-branches' || entryState === 'many-branches')
           return { ...base, head: 'feat/stream-transcode', mode: 'local' };
-        if (state === 'gb-degraded')
+        if (entryState === 'gb-degraded')
           return { ...base, head: 'gitbutler/workspace', mode: 'local', degraded: 'but-missing' };
-        return { ...base, head: 'gitbutler/workspace', mode: 'gitbutler', gitbutler };
+        if (withWorktrees && worktreeRefresh === 'degrade' && count === 2)
+          return { ...base, head: linked ? linkedBranch : 'gitbutler/workspace', mode: 'local' };
+        return { ...base, head: linked ? linkedBranch : 'gitbutler/workspace', mode: 'gitbutler', gitbutler };
       },
       listRepoPaths: async () => [
-        '/Users/dev/podcast-go',
+        mainCheckout,
+        ...(withWorktrees ? [linkedCheckout] : []),
         '/Users/dev/GitHub/backend-podcast-node',
         '/Users/dev/duetlens',
         '/Users/dev/GitHub/xiaoyuzhou/xyz-web',
