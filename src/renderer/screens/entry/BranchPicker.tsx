@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { imeComposing } from '../../keys';
 import { Busy } from './Busy';
 import { GitButlerIcon, LocalBranchIcon } from './icons';
@@ -9,6 +9,7 @@ export interface BranchOption {
   name: string;
   /** 行内与触发器上实际显示的文字;不给则显示 name。身份与显示分开,短 sha 才不会成为身份 */
   label?: string;
+  group?: string;
   kind: 'git' | 'vbranch';
   /** 数据位:普通 git 分支里 HEAD 所在那条(默认选中用),不直接决定渲染 */
   isHead?: boolean;
@@ -33,42 +34,51 @@ export function BranchPicker({
   onChange,
   emptyHint,
   loading,
+  onOpen,
 }: {
   options: BranchOption[];
   value: string;
   onChange: (name: string) => void;
   emptyHint: string;
   loading?: boolean;
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState('');
   const [place, setPlace] = useState<{ up: boolean; rowsMax: number } | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
-  const rowsRef = useRef<HTMLDivElement>(null);
   const trigRef = useRef<HTMLButtonElement>(null);
   // 焦点留在筛选框里,所以「选中哪一项」只能经 aria-activedescendant 报给读屏
   const listId = useId();
-  const optId = (i: number) => `${listId}-o${i}`;
+  const optId = (name: string) => `${listId}-o-${encodeURIComponent(name)}`;
 
   const selected = options.find((o) => o.name === value) ?? null;
   const disabled = loading || options.length === 0;
 
   // 身份与显示分开后筛选要两边都认:name 是完整 oid(输入短前缀仍命中),
   // label 才是屏上那串短 sha / 「整个 PR」这类只存在于显示层的字
-  const shown = useMemo(() => {
+  const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter(
-      (o) => o.name.toLowerCase().includes(q) || (o.label?.toLowerCase().includes(q) ?? false),
-    );
+    const result = new Map<string | undefined, BranchOption[]>();
+    for (const option of options) {
+      if (![option.name, option.label, option.group].some((value) => value?.toLowerCase().includes(q))) continue;
+      const group = result.get(option.group) ?? [];
+      group.push(option);
+      result.set(option.group, group);
+    }
+    return result;
   }, [options, query]);
+  const shown = Array.from(groups.values()).flat();
+  const activeIndex = Math.max(0, shown.findIndex((o) => o.name === active));
+  const activeOption = shown[activeIndex];
+  const activeId = activeOption && optId(activeOption.name);
 
   // 候选变空(换仓库 / 改 base)时收起,免得浮层挂在一个不再存在的列表上
   useEffect(() => {
-    if (disabled) setOpen(false);
-  }, [disabled]);
+    if (disabled && !onOpen) setOpen(false);
+  }, [disabled, onOpen]);
 
   // 浮层落在会裁切的祖先(入口卡片 overflow:hidden)里,按可用空间定高、必要时上翻
   useLayoutEffect(() => {
@@ -89,9 +99,8 @@ export function BranchPicker({
   }, [open, options.length]);
 
   useEffect(() => {
-    if (!open) return;
-    (rowsRef.current?.children[active] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' });
-  }, [open, active]);
+    if (open && activeId) document.getElementById(activeId)?.scrollIntoView({ block: 'nearest' });
+  }, [open, activeId, activeIndex]);
 
   useEffect(() => {
     if (!open) return;
@@ -109,14 +118,15 @@ export function BranchPicker({
   };
 
   const toggle = () => {
-    if (disabled) return;
     if (open) {
       close();
       return;
     }
+    if (disabled) return;
     setOpen(true);
     setQuery('');
-    setActive(Math.max(0, options.findIndex((o) => o.name === value)));
+    setActive(value);
+    onOpen?.();
   };
 
   const pick = (name: string) => {
@@ -148,13 +158,39 @@ export function BranchPicker({
       e.preventDefault();
       if (!shown.length) return;
       const step = e.key === 'ArrowDown' ? 1 : -1;
-      setActive((i) => (i + step + shown.length) % shown.length);
+      setActive(shown[(activeIndex + step + shown.length) % shown.length].name);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const hit = shown[active];
-      if (hit) pick(hit.name);
+      if (activeOption) pick(activeOption.name);
     }
   };
+
+  const renderOption = (option: BranchOption) => (
+    <div
+      key={option.name}
+      id={optId(option.name)}
+      role="option"
+      aria-selected={option.name === value}
+      className={`bp-row${option.name === value ? ' sel' : ''}${option === activeOption ? ' active' : ''}`}
+      onMouseEnter={() => setActive(option.name)}
+      // 行不可聚焦,不拦下 mousedown 的话焦点会掉出筛选框,浮层在 mouseup 前就拆了、click 永不派发
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => pick(option.name)}
+    >
+      <BranchIcon kind={option.kind} />
+      <div className="m">
+        <div className="bn mono">
+          {option.label ?? option.name}
+          {option.badge && <span className="headtag mono">{option.badge}</span>}
+        </div>
+        {(option.meta || option.detail) && (
+          <div className="bd">{[option.meta, option.detail].filter(Boolean).join(' · ')}</div>
+        )}
+      </div>
+      {option.tag && <span className="cmp mono">{option.tag}</span>}
+      <span className="tick">{option.name === value ? '✓' : ''}</span>
+    </div>
+  );
 
   return (
     <div className={open ? 'bpick open' : 'bpick'} ref={boxRef} onKeyDown={onKeyDown} onBlur={onBlur}>
@@ -163,7 +199,7 @@ export function BranchPicker({
         className="bp-trig"
         ref={trigRef}
         onClick={toggle}
-        disabled={disabled}
+        disabled={disabled && !open}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -196,41 +232,25 @@ export function BranchPicker({
               aria-expanded
               aria-controls={listId}
               aria-autocomplete="list"
-              aria-activedescendant={shown[active] ? optId(active) : undefined}
+              aria-activedescendant={activeId}
               onChange={(e) => {
                 setQuery(e.target.value);
-                setActive(0);
+                setActive('');
               }}
             />
           </div>
-          <div className="bp-rows" id={listId} role="listbox" ref={rowsRef}>
+          <div className="bp-rows" id={listId} role="listbox">
             {shown.length === 0 && <div className="bp-none">没有匹配的分支。</div>}
-            {shown.map((o, i) => (
-              <div
-                key={o.name}
-                id={optId(i)}
-                role="option"
-                aria-selected={o.name === value}
-                className={`bp-row${o.name === value ? ' sel' : ''}${i === active ? ' active' : ''}`}
-                onMouseEnter={() => setActive(i)}
-                // 行不可聚焦,不拦下 mousedown 的话焦点会掉出筛选框,浮层在 mouseup 前就拆了、click 永不派发
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(o.name)}
-              >
-                <BranchIcon kind={o.kind} />
-                <div className="m">
-                  <div className="bn mono">
-                    {o.label ?? o.name}
-                    {o.badge && <span className="headtag mono">{o.badge}</span>}
-                  </div>
-                  {(o.meta || o.detail) && (
-                    <div className="bd">{[o.meta, o.detail].filter(Boolean).join(' · ')}</div>
-                  )}
+            {Array.from(groups, ([group, entries]) =>
+              group ? (
+                <div key={group} className="bp-group" role="group" aria-label={group}>
+                  <div className="bp-group-label mono" aria-hidden="true" title={group}>{group}</div>
+                  {entries.map(renderOption)}
                 </div>
-                {o.tag && <span className="cmp mono">{o.tag}</span>}
-                <span className="tick">{o.name === value ? '✓' : ''}</span>
-              </div>
-            ))}
+              ) : (
+                <Fragment key="ungrouped">{entries.map(renderOption)}</Fragment>
+              ),
+            )}
           </div>
         </div>
       )}

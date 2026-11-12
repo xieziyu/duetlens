@@ -21,10 +21,18 @@ import type {
 } from '@shared/source-discovery';
 import { parseUnifiedDiff } from '@shared/diff';
 import { BASE_ORDER, detectBaseRef, refExists } from './base-ref';
-import { butJson } from './but-cli';
 import { createSource } from './create-source';
 import { run } from './exec';
 import { gitButlerDiff } from './gitbutler-source';
+import {
+  gitHeadRef,
+  gitToplevel,
+  readGitButlerStatus,
+  readGitButlerWorktrees,
+  readMainGitWorktree,
+  realWorktreePath,
+  type ButStatus,
+} from './gitbutler-workspace';
 import { fetchPrCommits, parsePrRef, resolvePrRef } from './github-pr-source';
 import type { ReviewTarget } from './source';
 
@@ -299,14 +307,8 @@ export async function listLocalBranches(
   return { base, detectedBase, baseCandidates, branches };
 }
 
-/** GitButler 把整个 workspace 的改动挂在这条分支上;HEAD 在它上面即说明该按虚拟分支审核。 */
 const WORKSPACE_BRANCH = 'gitbutler/workspace';
 
-/**
- * 选定本地仓库后的模式探测:HEAD 在 workspace 分支且 GitButler 可用 → 按虚拟分支审,其余按普通 git 分支审。
- * 主判据用 `git symbolic-ref`(不依赖 but、detached HEAD 自然落到 local),
- * `but status` 只在主判据命中后跑一次,兼作可用性检查 —— 不可用则降级并说明原因。
- */
 export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   const root = await gitToplevel(repoPath);
   const resolved = root ?? repoPath;
@@ -321,30 +323,33 @@ export async function inspectRepo(repoPath: string): Promise<RepoInspection> {
   };
   if (!root) return base;
 
-  const head = await headBranch(root);
-  if (head !== WORKSPACE_BRANCH) return { ...base, head };
+  const [headRef, main] = await Promise.all([gitHeadRef(root), readMainGitWorktree(root)]);
+  const head = headRef?.replace(/^refs\/heads\//, '') ?? null;
+  const local = { ...base, head };
+  if (head !== WORKSPACE_BRANCH && !main?.hasLinked) return local;
 
-  const gitbutler = await detectGitButler(root);
-  if (gitbutler.isWorkspace) return { ...base, head, mode: 'gitbutler', gitbutler };
-  return { ...base, head, degraded: (await butInstalled()) ? 'not-setup' : 'but-missing' };
-}
-
-/** git 顶层目录;非 git 仓库返回 null。 */
-async function gitToplevel(dir: string): Promise<string | null> {
-  try {
-    return (await run('git', ['-C', dir, 'rev-parse', '--show-toplevel'])).trim() || null;
-  } catch {
-    return null;
+  const mainPath = main?.repoPath ?? root;
+  const isMain = root === mainPath;
+  const status = await readGitButlerStatus(mainPath);
+  if (status) {
+    let isWorkspace = isMain && (head === WORKSPACE_BRANCH || !!status.worktrees?.length);
+    if (!isWorkspace && main?.hasLinked) {
+      const paths = await readGitButlerWorktrees(mainPath);
+      if (paths.kind === 'available') {
+        if (isMain) {
+          isWorkspace = paths.active.length > 0;
+        } else {
+          const active = paths.active.find((tree) => tree.refName === headRef);
+          isWorkspace = !!active && (await realWorktreePath(active)) === root;
+        }
+      }
+    }
+    if (isWorkspace) {
+      return { ...local, mode: 'gitbutler', gitbutler: await summarizeGitButler(mainPath, status) };
+    }
   }
-}
-
-/** 当前分支名;detached HEAD 返回 null。 */
-async function headBranch(repoPath: string): Promise<string | null> {
-  try {
-    return (await run('git', ['-C', repoPath, 'symbolic-ref', '--quiet', '--short', 'HEAD'])).trim() || null;
-  } catch {
-    return null;
-  }
+  if (!isMain || head !== WORKSPACE_BRANCH) return local;
+  return { ...local, degraded: (await butInstalled()) ? 'not-setup' : 'but-missing' };
 }
 
 async function butInstalled(): Promise<boolean> {
@@ -356,34 +361,47 @@ async function butInstalled(): Promise<boolean> {
   }
 }
 
-/** 探测目录是否 GitButler workspace,并列举其 applied 虚拟分支。 */
+/** 探测目录是否 GitButler workspace,并列举其活动虚拟分支。 */
 export async function detectGitButler(repoPath: string): Promise<GitButlerStatus> {
-  const repoName = path.basename(path.resolve(repoPath));
-  let json: string;
-  try {
-    json = await butJson(['status'], repoPath);
-  } catch {
-    return { isWorkspace: false, repoName, branches: [], targetRef: null };
-  }
-  let parsed: ButStatus;
-  try {
-    parsed = JSON.parse(json) as ButStatus;
-  } catch {
-    return { isWorkspace: false, repoName, branches: [], targetRef: null };
-  }
-  const listed: Omit<VbranchSummary, 'fileCount'>[] = [];
-  for (const [si, stack] of (parsed.stacks ?? []).entries()) {
+  const inspection = await inspectRepo(repoPath);
+  return inspection.gitbutler ?? {
+    isWorkspace: false,
+    repoPath: inspection.repoPath,
+    repoName: inspection.repoName,
+    branches: [],
+    targetRef: null,
+  };
+}
+
+async function summarizeGitButler(repoPath: string, status: ButStatus): Promise<GitButlerStatus> {
+  const listed = new Map<string, Omit<VbranchSummary, 'fileCount'>>();
+  for (const [si, stack] of status.stacks.entries()) {
     // assignedChanges 是整条 lane 的未提交部分,不含各 branch 已提交的那些
     const hasUncommitted = (stack.assignedChanges?.length ?? 0) > 0;
-    // but 自顶向下列 stack 内的分支,位次即叠加次序:序号大的在下方,才可作上方分支的 base
-    const stackId = stack.cliId || `s${si}`;
-    for (const [bi, b] of (stack.branches ?? []).entries()) {
-      listed.push({
-        name: b.name,
-        commitCount: b.commits?.length ?? 0,
+    for (const [stackOrder, branch] of (stack.branches ?? []).entries()) {
+      if (listed.has(branch.name)) continue;
+      listed.set(branch.name, {
+        name: branch.name,
+        commitCount: branch.commits?.length ?? 0,
         hasUncommitted,
-        stackId,
-        stackOrder: bi,
+        stackId: `main:${si}`,
+        stackOrder,
+      });
+    }
+  }
+  for (const tree of status.worktrees ?? []) {
+    const worktree = { name: tree.name, baseCommit: tree.base?.commitId ?? null };
+    const hasUncommitted = (tree.uncommittedChanges?.length ?? 0) > 0;
+    // status 将主工作区和独立 worktree 的 stack 都按栈顶到栈底排列。
+    for (const [stackOrder, branch] of (tree.branches ?? []).entries()) {
+      if (listed.get(branch.name)?.worktree) continue;
+      listed.set(branch.name, {
+        name: branch.name,
+        commitCount: branch.commits?.length ?? 0,
+        hasUncommitted,
+        stackId: `worktree:${tree.name}`,
+        stackOrder,
+        worktree,
       });
     }
   }
@@ -391,9 +409,15 @@ export async function detectGitButler(repoPath: string): Promise<GitButlerStatus
   // 于是入口卡片上的 N files 与进屏后看到的改动面天然同一个数。
   // 不去并集各 commit 的文件清单 —— 那是"历史触达过",后一个 commit 把前一个改回去时会多算。
   const branches: VbranchSummary[] = await Promise.all(
-    listed.map(async (b) => ({ ...b, fileCount: await countDiffFiles(repoPath, b.name) })),
+    [...listed.values()].map(async (b) => ({ ...b, fileCount: await countDiffFiles(repoPath, b.name) })),
   );
-  return { isWorkspace: true, repoName, branches, targetRef: await gitButlerTargetRef(repoPath) };
+  return {
+    isWorkspace: true,
+    repoPath,
+    repoName: path.basename(repoPath),
+    branches,
+    targetRef: await gitButlerTargetRef(repoPath),
+  };
 }
 
 /**
@@ -426,14 +450,6 @@ export async function diffStat(target: ReviewTarget): Promise<DiffStat> {
   } finally {
     await source.dispose();
   }
-}
-
-interface ButStatus {
-  stacks?: {
-    cliId?: string;
-    assignedChanges?: unknown[];
-    branches?: { name: string; commits?: unknown[] }[];
-  }[];
 }
 
 /**
