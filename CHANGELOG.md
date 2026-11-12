@@ -3,6 +3,17 @@
 本文件只记**对使用者可见**的变化。内部重构、文档与 CI 调整不单列,查 `git log`。
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/);`0.x` 阶段 minor 位即破坏性变更位。
 
+## [0.14.0] - 2026-11-12
+
+### 新增
+
+- **支持审核 GitButler worktree 中的分支。** 分支选择器按 worktree 分组。从独立 worktree 打开 Duetlens 时，默认选中该目录检出的分支。差异预览和审核默认使用所选分支栈的基线，复制绝对路径或在编辑器中打开文件时会定位到分支所在的工作目录。(#127)
+
+### 升级须知
+
+- 数据库结构仍为 v26，0.13.0 与 0.14.0 可共用同一份数据库，无需迁移。
+- 可通过应用内更新安装。
+
 ## [0.13.0] - 2026-11-11
 
 ### 新增
@@ -300,6 +311,7 @@
 
 首个公开版本。
 
+[0.14.0]: https://github.com/xieziyu/duetlens/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/xieziyu/duetlens/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/xieziyu/duetlens/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/xieziyu/duetlens/compare/v0.12.0...v0.12.1
